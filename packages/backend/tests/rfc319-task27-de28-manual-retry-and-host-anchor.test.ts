@@ -1,5 +1,3 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-319 TASK-27 / DE-28 —— 两条被 RFC-359 AC-1 合一顺手丢掉的装配步骤。
 //
 // 两条都只有 `@nightly` 的 e2e 覆盖，推送档看不见，所以红了几天没人认领；这里把它们锁进推送档。
@@ -20,15 +18,24 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 //    工作流**上；`getReviewDetail` 拿 `task.workflowId` 查 workflows 查不到就抛
 //    `review-not-found`——案例一直等着人工评审，评审人点进去打不开。
 
+// RFC-395 II-a A2 update (the original rationale above is retained as history):
+// ② DE-28：历史上缺宿主行会让评审 404。RFC-395 II-a A2 保留这个反例，
+//    改由 taskSubjectProjection 保证列表、角标与详情不依赖 catalog 锚行。
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  listReviewSummaries,
+  countPendingReviews,
+  getReviewDetail,
+} from '@/modules/collaboration/infrastructure/review'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { taskFixture, nodeRunFixture, readWorkflowFixtures } from './helpers/model'
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 
-import {
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME,
-} from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { composeDatabaseDigitalEmployeeExecutionPorts } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import {
   ACTOR_REPLAY_COMMANDS,
@@ -104,42 +111,54 @@ describe('RFC-319 TASK-27 —— 演员发起的仓库准备重试必须带着�
   })
 })
 
-describeEachProvider('RFC-319 DE-28 —— 数字员工宿主工作流的锚行', (harness) => {
-  test('库内缺省端口里的 hostWorkflow.ensure() 真的把 builtin 锚行写进去，且幂等', async () => {
+describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee reviews', (harness) => {
+  test('list, badge and detail remain reachable with no builtin anchor row', async () => {
     const db = harness.db
-    const { workflows } = tablesOf(db)
-    const before = await db
-      .select({ id: workflows.id })
-      .from(workflows)
-      .where(eq(workflows.id, DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID))
-    expect(before.length).toBe(0)
-
+    const host = TASK_DEFINITION_HOSTS['digital-employee']
+    const taskId = 'employee-review',
+      runId = 'employee-review-run'
     const ports = composeDatabaseDigitalEmployeeExecutionPorts(db)
-    await ports.hostWorkflow.ensure()
-    const seeded = await db
-      .select({ id: workflows.id, name: workflows.name, builtin: workflows.builtin })
-      .from(workflows)
-      .where(eq(workflows.id, DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID))
-    expect(seeded).toEqual([
-      {
-        id: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-        name: DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME,
-        builtin: true,
-      },
+    expect(ports).not.toHaveProperty('hostWorkflow')
+    await taskFixture(db, {
+      id: taskId,
+      name: taskId,
+      workflowId: host.id,
+      workflowSnapshot: '{"nodes":[],"edges":[]}',
+      repoPath: '/tmp/r',
+      worktreePath: '/tmp/r',
+      baseBranch: 'main',
+      branch: taskId,
+      inputs: '{}',
+      startedAt: 1,
+      status: 'awaiting_review',
+    })
+    await nodeRunFixture(db, { id: runId, taskId, nodeId: 'review', status: 'awaiting_review' })
+    const { docVersions } = tablesOf(db)
+    await insertOne(db, docVersions, {
+      id: 'employee-document',
+      taskId,
+      reviewNodeId: 'review',
+      reviewNodeRunId: runId,
+      sourceNodeId: 'source',
+      sourcePortName: 'doc',
+      versionIndex: 1,
+      reviewIteration: 0,
+      bodyPath: 'missing.md',
+      decision: 'pending',
+    })
+    expect(await listReviewSummaries(db, { status: 'pending' })).toMatchObject([
+      { workflowId: host.id, workflowName: host.name },
     ])
-
-    // 幂等：执行链上每一轮都会调它。
-    await ports.hostWorkflow.ensure()
-    const again = await db
-      .select({ id: workflows.id })
-      .from(workflows)
-      .where(eq(workflows.id, DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID))
-    expect(again.length).toBe(1)
+    expect(await countPendingReviews(db)).toBe(1)
+    expect(await getReviewDetail(db, '/tmp/aw-no-artifacts', runId)).toMatchObject({
+      summary: { workflowId: host.id, workflowName: host.name },
+    })
+    expect(await readWorkflowFixtures(db, { id: host.id })).toEqual([])
   })
 })
 
-describe('RFC-319 DE-28 —— 启动前必须播种，中立应用图与 SQLite 测试根一个都不许漏', () => {
-  test('执行合一的那份实现在 launch 之前调 hostWorkflow.ensure()', () => {
+describe('RFC-319 DE-28 —— 主体投影替代播种，中立应用图与 SQLite 测试根共用', () => {
+  test('执行合一的那份实现传入数字员工主体，禁止恢复播种', () => {
     const composer = readFileSync(
       resolve(
         ROOT,
@@ -147,16 +166,19 @@ describe('RFC-319 DE-28 —— 启动前必须播种，中立应用图与 SQLite
       ),
       'utf-8',
     )
-    const ensureAt = composer.indexOf('await deps.hostWorkflow.ensure()')
-    const launchAt = composer.indexOf('await deps.launch.launch({')
-    expect(ensureAt).toBeGreaterThan(0)
-    expect(launchAt).toBeGreaterThan(0)
-    // 次序是承重的：launch 那一笔就要写 task 行。
-    expect(ensureAt).toBeLessThan(launchAt)
+    expect(composer).not.toContain('hostWorkflow')
+    expect(composer).toContain("subject: { kind: 'digital-employee', sourceId: null }")
+    const review = readFileSync(
+      resolve(ROOT, 'packages/backend/src/modules/collaboration/infrastructure/review.ts'),
+      'utf-8',
+    )
+    expect(review).toContain('taskSubjectProjection(')
+    expect(review).not.toContain('.from(workflows)')
+    expect(review).not.toContain('.innerJoin(workflows')
   })
 
   test('中立应用图为 HTTP 与守护进程绑定同一个端口', () => {
-    // RFC-383: all three roots select the employee bundle; the execution core supplies its hostWorkflow default once.
+    // RFC-383: all three roots select the employee bundle; RFC-395 keeps its subject-owned launch wiring.
     for (const relative of ['packages/backend/src/bootstrap/daemonApplication.ts']) {
       const source = readFileSync(resolve(ROOT, relative), 'utf-8')
       expect(source).toContain('composeDaemonDigitalEmployeeModules({')
@@ -168,7 +190,7 @@ describe('RFC-319 DE-28 —— 启动前必须播种，中立应用图与 SQLite
     )
     expect(bundle).toContain('composeReactionExecutionProvider({')
     expect(bundle).not.toContain('hostWorkflow:')
-    // 共享端口工厂确实绑到了那份幂等 upsert。
+    // 共享执行工厂确实经启动内核提交数字员工主体，不再播种宿主目录行。
     const composer = readFileSync(
       resolve(
         ROOT,
@@ -176,8 +198,9 @@ describe('RFC-319 DE-28 —— 启动前必须播种，中立应用图与 SQLite
       ),
       'utf-8',
     )
-    expect(composer).toContain(
-      'hostWorkflow: { ensure: () => ensureDigitalEmployeeHostWorkflow(db) }',
-    )
+    expect(composer).not.toContain('hostWorkflow:')
+    expect(composer).toContain('const launched = await deps.launch.launch({')
+    expect(composer).toContain('      subject,')
+    expect(composer).toContain('return { executionRef: launched.id }')
   })
 })

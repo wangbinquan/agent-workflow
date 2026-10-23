@@ -2,9 +2,10 @@
 // code-intelligence reads. The code-capability application never receives a
 // database client or a task table row.
 
+import type { TaskRepositoryCheckpoint } from '@/platform/taskCheckpoint'
+
 export interface CodeWorkspaceRepository {
   readonly mountPath: string
-  readonly worktreeDirName: string
   readonly worktreePath: string
   readonly baseCommit: string | null
 }
@@ -24,8 +25,7 @@ export interface CodeWorkspaceTask {
 export interface CodeNodeRunSnapshot {
   readonly id: string
   readonly seq: number | null
-  readonly preSnapshot: string | null
-  readonly preSnapshotReposJson: string | null
+  readonly checkpoints: readonly TaskRepositoryCheckpoint[]
   readonly startedAt: number | null
   readonly wrapperProgressJson: string | null
 }

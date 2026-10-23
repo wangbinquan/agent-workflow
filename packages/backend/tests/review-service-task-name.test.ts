@@ -2,6 +2,7 @@
 // per row. Mirrors the clarify list test; the inbox merges both source types
 // and needs taskName on both schemas.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -16,8 +17,8 @@ async function seedReview(db: PersistenceDb, taskName: string): Promise<void> {
   const nrId = ulid()
   const dvId = ulid()
   const now = Date.now()
-  const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { docVersions } = tablesOf(db)
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -27,7 +28,7 @@ async function seedReview(db: PersistenceDb, taskName: string): Promise<void> {
     createdAt: now,
     updatedAt: now,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: tId,
     name: taskName,
     workflowId: wfId,
@@ -42,7 +43,7 @@ async function seedReview(db: PersistenceDb, taskName: string): Promise<void> {
     inputs: '{}',
     startedAt: now,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nrId,
     taskId: tId,
     nodeId: 'rev-1',

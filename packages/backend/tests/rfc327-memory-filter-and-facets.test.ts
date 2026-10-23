@@ -10,8 +10,7 @@
 //      本身就泄露了私有 scope 里有哪些记忆存在（这是本 RFC 唯一不可商量的约束）；
 //   3. MCP `resource_read` 的 query 真的透传到路由，`method:'facets'` 打到 facets 端点。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture } from './helpers/model'
 import type { IdentityAccessRuntime } from '@/modules/identity-access/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -21,7 +20,6 @@ import { type Permission } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { ALL_TOOLS, describeResource } from '../src/mcp/tools'
-import {} from '@/modules/collaboration/composition/decisionCommands'
 import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
@@ -260,8 +258,7 @@ describeEachProviderHttpApplication(
           title: 'g',
           tags: ['global-tag'],
         })
-        const { agents } = tablesOf(h.db)
-        await insertOne(h.db, agents, {
+        await agentFixture(h.db, {
           id: 'agt_1',
           name: 'a1',
           ownerUserId: h.adminId,
@@ -283,8 +280,7 @@ describeEachProviderHttpApplication(
       })
 
       test('看不见的 scope 的标签不出现在 facets 里（标签名本身也是泄露）', async () => {
-        const { agents } = tablesOf(h.db)
-        await insertOne(h.db, agents, {
+        await agentFixture(h.db, {
           id: 'agt_private',
           name: 'private-agent',
           ownerUserId: h.adminId,

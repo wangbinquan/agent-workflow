@@ -17,8 +17,7 @@
 //   drizzle INSERTs emit all HEAD columns and break on frozen schemas
 //   ([reference_new_column_breaks_frozen_migration_tests]).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
@@ -54,10 +53,9 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
+  await workflowFixture(db, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'gate-machine',
     workflowId: wfId,

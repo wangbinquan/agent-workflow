@@ -11,6 +11,7 @@
 //   · `updateRuntime(executionProfileChanged)` —— 画像变更要在同一笔事务里把活跃试跑会话拦下。
 // 前两个在 PG 上跑在 SERIALIZABLE、在 SQLite 上跑在 BEGIN IMMEDIATE，判据仍必须相同。
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -106,7 +107,7 @@ describeEachProvider('RFC-359 W4-D28b —— runtime 注册表合一后两引擎
     await registry.insertRuntime(insertRecord(second))
     const agentName = `agent_${ulid()}`
     const { agents } = tablesOf(harness.db)
-    await insertOne(harness.db, agents, { id: ulid(), name: agentName, runtime: second })
+    await agentFixture(harness.db, { id: ulid(), name: agentName, runtime: second })
 
     const inUse = await registry.deleteRuntime({
       name: second,

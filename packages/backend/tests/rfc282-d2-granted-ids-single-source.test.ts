@@ -7,6 +7,7 @@
 //      with the type+userId pair again (grep lock, scoped to the two files
 //      D2 converged — the global lock arrives with A2).
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -50,8 +51,8 @@ describe('RFC-282 D2 — grant-set query single source', () => {
     }
     const a1 = ulid()
     const a2 = ulid()
-    const { agents, resourceGrants } = tablesOf(db)
-    await db.insert(agents).values([
+    const { resourceGrants } = tablesOf(db)
+    await agentFixture(db, [
       { id: a1, name: `a-${a1.toLowerCase()}`, ownerUserId: userB, visibility: 'private' },
       { id: a2, name: `a-${a2.toLowerCase()}`, ownerUserId: userB, visibility: 'private' },
     ])

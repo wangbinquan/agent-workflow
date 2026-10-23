@@ -1,5 +1,4 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { asc, eq } from 'drizzle-orm'
+import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
@@ -8,28 +7,15 @@ import { DrizzleTaskExecutionEffectPersistence } from './taskExecutionEffectPers
 export type NodeRollbackDatabase = PersistenceDb
 
 export async function loadNodeRollbackTarget(db: PersistenceDb, taskId: string) {
-  const { tasks, taskRepos } = tablesOf(db)
-  const taskRows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
-  const task = taskRows[0]
-  if (task === undefined) return null
-  const repoRows = await db
-    .select()
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, taskId))
-    .orderBy(asc(taskRepos.repoIndex))
-  const repos =
-    repoRows.length > 0
-      ? repoRows.map((row) => ({
-          worktreePath: row.worktreePath,
-          worktreeDirName: row.worktreeDirName,
-        }))
-      : [{ worktreePath: task.worktreePath, worktreeDirName: '' }]
-  return {
-    taskId,
-    db,
-    worktreePath: task.worktreePath,
-    repos,
-  }
+  const target = await new DrizzleTaskRollbackQueries(db).load(taskId)
+  return target === null
+    ? null
+    : {
+        taskId: target.taskId,
+        db,
+        worktreePath: target.worktreePath,
+        repos: target.repositories.map((repo) => ({ ...repo })),
+      }
 }
 
 export function createNodeRollbackEffectObserver(input: {

@@ -10,6 +10,7 @@
 //   · 判据 —— 终态化写回行数对不上就 `task-continuation-stale` 整笔回滚，SQLite 不再「写没写进去
 //     都算成功」。
 // Existing companion-record fields are opaque data; no domain decisions are exercised.
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first, rawRows } from '@/platform/persistence/queryHelpers'
@@ -33,14 +34,12 @@ const FAILURE = 'boot-fixture-interrupted'
 
 async function seed(db: PersistenceDb, state: 'pending' | 'claimed' = 'pending') {
   const {
-    workflows,
-    tasks,
     taskExecutionIntents,
     taskExecutionLineageOperationRecords,
     committedEventFamilyCutovers,
   } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'workflow-boot', name: 'workflow-boot', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'workflow-boot', name: 'workflow-boot', definition: '{}' })
+  await taskFixture(db, {
     id: ID,
     name: ID,
     workflowId: 'workflow-boot',
@@ -104,9 +103,9 @@ async function seed(db: PersistenceDb, state: 'pending' | 'claimed' = 'pending')
 }
 
 async function snapshot(db: PersistenceDb) {
-  const { tasks, taskExecutionIntents, taskExecutionLineageOperationRecords, committedEvents } =
+  const { taskExecutionIntents, taskExecutionLineageOperationRecords, committedEvents } =
     tablesOf(db)
-  const task = await first(db.select().from(tasks).where(eq(tasks.id, ID)))
+  const task = (await readTaskFixtures(db, { id: ID }))[0]
   const intent = await first(
     db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.id, 'intent-boot')),
   )

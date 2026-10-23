@@ -2,8 +2,7 @@
 // 任务执行读模型（状态投影 / 执行结果 / 调用图工作区）、任务生命周期 WS 投影、子任务预算查询。
 // 另有一条源码锁：provider 命名的孪生文件不得复活。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { type TaskFixtureSpec, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -19,12 +18,11 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTask(
   db: PersistenceDb,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  over: Partial<TaskFixtureSpec> = {},
 ): Promise<{ id: string; workflowId: string }> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `wf-name-${workflowId.slice(-6)}`,
     description: '',
@@ -32,7 +30,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -66,8 +64,7 @@ describeEachProvider('RFC-359 W4-B1 批 2b —— 任务执行读模型', (harne
     const db = harness.db
     const { id } = await seedTask(db, { status: 'done', finishedAt: 2 })
     const runId = ulid()
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runId,
       taskId: id,
       nodeId: 'n',
@@ -90,7 +87,7 @@ describeEachProvider('RFC-359 W4-B1 批 2b —— 任务执行读模型', (harne
     expect(await reads.callGraphWorkspace.find(id)).toEqual({
       taskId: id,
       worktreePath: `/tmp/worktree/${id}`,
-      repos: [{ worktreeDirName: '', worktreePath: `/tmp/worktree/${id}` }],
+      repos: [{ mountPath: '', worktreePath: `/tmp/worktree/${id}` }],
     })
     expect(await reads.callGraphWorkspace.find(`t_${ulid()}`)).toBeNull()
   })
@@ -99,7 +96,7 @@ describeEachProvider('RFC-359 W4-B1 批 2b —— 任务执行读模型', (harne
 describeEachProvider('RFC-359 W4-B1 批 2b —— 任务生命周期 WS 投影', (harness) => {
   test('findCreatedTask：左连工作流名；未命中 null', async () => {
     const db = harness.db
-    const { id, workflowId } = await seedTask(db, { spaceKind: 'local', repoCount: 1 })
+    const { id, workflowId } = await seedTask(db, { spaceKind: 'local' })
     const projection = createDatabaseTaskLifecycleWsProjection(db)
     expect(await projection.findCreatedTask(id)).toEqual({
       id,

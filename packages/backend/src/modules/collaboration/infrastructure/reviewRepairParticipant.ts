@@ -28,6 +28,8 @@
 // 合一只消掉了这份零调用方的重复，**没有**消掉错位本身：下一步应让 `options-R1.ts` 改为消费本端口，
 // 否则 SQLite 侧会永远保留第二份实现。
 
+import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
@@ -44,7 +46,7 @@ async function loadInspection(
   db: PersistenceDb,
   input: ReviewIdentity,
 ): Promise<ReviewRepairInspection | null> {
-  const { docVersions, nodeRunOutputs } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   const row = (
     await db
       .select({
@@ -64,10 +66,10 @@ async function loadInspection(
       .limit(1)
   )[0]
   if (row === undefined) return null
-  const outputs = await db
-    .select({ portName: nodeRunOutputs.portName })
-    .from(nodeRunOutputs)
-    .where(eq(nodeRunOutputs.nodeRunId, input.nodeRunId))
+  const outputs = await createNodeOutputQueries(db)
+    .listPorts(input.nodeRunId)
+    .then((ports) => ports.map((portName) => ({ portName })))
+    .then((rows) => rows.map((row) => ({ portName: row.portName })))
   return {
     ...row,
     hasApprovedDocOutput: outputs.some(({ portName }) => portName === 'approved_doc'),
@@ -98,21 +100,18 @@ export function createReviewRepairParticipant(db: PersistenceDb): ReviewRepairPa
           reviewIteration: state.reviewIteration,
           versionIndex: state.versionIndex,
         })
-        const { nodeRunOutputs } = tablesOf(transaction)
-        await transaction
-          .insert(nodeRunOutputs)
-          .values({ nodeRunId: input.nodeRunId, portName: 'approved_doc', content })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content },
-          })
-        await transaction
-          .insert(nodeRunOutputs)
-          .values({ nodeRunId: input.nodeRunId, portName: 'approval_meta', content: metadata })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content: metadata },
-          })
+        const taskHumanGate = createHumanGatePersistenceParticipantInTx(transaction)
+
+        await taskHumanGate.writeReviewOutput({
+          nodeRunId: input.nodeRunId,
+          portName: 'approved_doc',
+          content,
+        })
+        await taskHumanGate.writeReviewOutput({
+          nodeRunId: input.nodeRunId,
+          portName: 'approval_meta',
+          content: metadata,
+        })
         return true
       })
     },

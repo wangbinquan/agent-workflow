@@ -32,11 +32,18 @@
 // Deterministic: local git init/commit only (no network, no stash), serial
 // dispatch, no sleeps or polling; temp dirs cleaned in afterEach.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  consumedProducerIds,
+  type NodeRunFixtureRow,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -86,8 +93,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -106,13 +112,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc354-depth3-task',
     id: taskId,
     workflowId,
@@ -152,10 +157,8 @@ function readTrace(h: Harness): Array<{ agent: string; callIndex: number }> {
     .map((line) => JSON.parse(line) as { agent: string; callIndex: number })
 }
 
-function consumedOf(row: { consumedUpstreamRunsJson: string | null }): Record<string, string> {
-  return row.consumedUpstreamRunsJson === null
-    ? {}
-    : (JSON.parse(row.consumedUpstreamRunsJson) as Record<string, string>)
+function consumedOf(row: Pick<NodeRunFixtureRow, 'consumedEdges'>): Record<string, string> {
+  return consumedProducerIds(row.consumedEdges)
 }
 
 describe('RFC-354 — depth 3: loop ⊃ git ⊃ loop ⊃ agent', () => {
@@ -248,15 +251,11 @@ describe('RFC-354 — depth 3: loop ⊃ git ⊃ loop ⊃ agent', () => {
       }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('done')
 
     const rowsOf = (nodeId: string) => {
-      return h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+      return readNodeRunFixtures(h.db, { taskId, nodeId })
     }
 
     // Oracle #1 (process truth): outer 2 × inner 2 = 4 real spawns, and the
@@ -333,10 +332,7 @@ describe('RFC-354 — depth 3: loop ⊃ git ⊃ loop ⊃ agent', () => {
     // the files ITS round produced, even though round 0's two files are still
     // uncommitted when round 1 captures its baseline.
     const diffPaths = async (runId: string): Promise<string[]> => {
-      const rows = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(and(eq(nodeRunOutputs.nodeRunId, runId), eq(nodeRunOutputs.portName, 'git_diff')))
+      const rows = await readNodeRunOutputFixtures(h.db, { nodeRunId: runId, portName: 'git_diff' })
       return (rows[0]?.content ?? '')
         .split('\n')
         .filter((path) => path.length > 0)

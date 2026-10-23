@@ -9,11 +9,16 @@
 // to 'out', so resolveUpstreamInputs found nothing and the agent received an
 // empty `## requirement` section.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -46,8 +51,7 @@ function buildHarness(): Harness {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = `agent-${name}`
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -69,15 +73,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -150,18 +153,14 @@ describe('RFC-004 input-port contract', () => {
       }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(finalTask?.status).toBe('done')
     expect(finalTask?.errorMessage).toBeNull()
 
     // 1. The input node's persisted output row is keyed by inputKey, not 'out'.
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const inRun = runs.find((r) => r.nodeId === 'in')
-    const inOutputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, inRun?.id ?? ''))
+    const inOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: inRun?.id ?? '' })
     expect(inOutputs.find((o) => o.portName === 'requirement')?.content).toBe('build a login page')
     expect(inOutputs.find((o) => o.portName === 'out')).toBeUndefined()
 

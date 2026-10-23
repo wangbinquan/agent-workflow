@@ -17,8 +17,13 @@
 // The complementary "happy path" lock: when the agent ALSO writes the file
 // to disk first, the same envelope succeeds and the new column stays NULL.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
@@ -27,7 +32,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { eq } from 'drizzle-orm'
 import { runNode } from './helpers/runner'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -68,15 +72,14 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -100,8 +103,7 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n1',
@@ -164,11 +166,10 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
     expect(result.errorMessage).toContain('port-validation-path-missing-file')
     expect(result.errorMessage).toContain("'report.md'")
 
-    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     expect(row.status).toBe('failed')
-    expect(row.portValidationFailuresJson).not.toBeNull()
-    const parsed = JSON.parse(row.portValidationFailuresJson!) as Array<{
+    expect(row.portValidationFailures).not.toBeNull()
+    const parsed = JSON.parse(row.portValidationFailures!) as Array<{
       port: string
       kind: string
       subReason: string
@@ -186,10 +187,7 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
     // presence as the ground-truth signal for "agent successfully produced
     // output" — a ghost row here would silently drop prior clarify Q&A on
     // the next attempt.
-    const outputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     expect(outputs).toHaveLength(0)
   })
 
@@ -220,18 +218,14 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
     )
     expect(result.status).toBe('done')
 
-    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     expect(row.status).toBe('done')
-    expect(row.portValidationFailuresJson).toBeNull()
+    expect(row.portValidationFailures).toBeNull()
 
     // Validation passed → the runner persists the port row. Pairs with the
     // missing-file test above to lock the validate-before-insert ordering
     // in both directions.
-    const outputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     expect(outputs).toHaveLength(1)
     expect(outputs[0]!.portName).toBe('docpath')
     expect(outputs[0]!.content).toBe('report.md')
@@ -264,9 +258,8 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
     expect(result.status).toBe('failed')
     expect(result.errorMessage).toContain('port-validation-path-wrong-extension')
 
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
-    const parsed = JSON.parse(row.portValidationFailuresJson!) as Array<{ subReason: string }>
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
+    const parsed = JSON.parse(row.portValidationFailures!) as Array<{ subReason: string }>
     expect(parsed[0]!.subReason).toBe('wrong-extension')
   })
 
@@ -297,9 +290,8 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
     expect(result.status).toBe('failed')
     expect(result.errorMessage).toContain('port-validation-path-empty-file')
 
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
-    const parsed = JSON.parse(row.portValidationFailuresJson!) as Array<{ subReason: string }>
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
+    const parsed = JSON.parse(row.portValidationFailures!) as Array<{ subReason: string }>
     expect(parsed[0]!.subReason).toBe('empty-file')
   })
 })

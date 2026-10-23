@@ -1,5 +1,12 @@
+import {
+  createAgentDependencyReferenceLookup,
+  createWorkflowAgentReferenceLookup,
+} from './referenceLookup'
+import { assertAgentDependencyGraph as validateDependencyGraph } from '../domain/agentDependencies'
+import { createAgentDependencyReadPort } from './agentDependencyRead'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
+  agentReferenceIds,
   TERMINAL_TASK_STATUSES,
   type Agent,
   type AgentSkillRef,
@@ -32,11 +39,7 @@ import {
   type AgentReferenceLabels,
   type AgentReferenceLabelsInput,
 } from '../public/types'
-import { extractWorkflowAgentRefs } from './legacy/resourceRefs'
-import { agentsDependingOnIn } from '../application/agents/agentDependencyValidation'
 import type { AgentPersistenceSemantics } from './agentRepository'
-import { assertAgentDependencyTraversal } from './agentDependencyTraversal'
-import { parseAgentDependencyIds } from './agentDependencyJson'
 import { assertBranchPortsDeclared } from './agentBranchPorts'
 import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 
@@ -52,7 +55,7 @@ function unique(values: readonly string[]): string[] {
 }
 
 function managedSkillIds(refs: readonly AgentSkillRef[]): string[] {
-  return unique(refs.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])))
+  return unique(agentReferenceIds({ skills: refs }, 'skill'))
 }
 
 async function rowsByIds(
@@ -202,20 +205,12 @@ async function assertDependencyGraph(
   candidateId: string,
   dependencyIds: readonly string[],
 ): Promise<void> {
-  if (dependencyIds.includes(candidateId)) {
-    throw new ValidationError('agent-dependency-self', 'agent cannot depend on itself')
-  }
-  await assertAgentDependencyTraversal(candidateId, unique(dependencyIds), async (id) => {
-    const { agents } = tablesOf(transaction)
-    const row = (
-      await transaction
-        .select({ dependsOn: agents.dependsOn })
-        .from(agents)
-        .where(eq(agents.id, id))
-        .limit(1)
-    )[0]
-    if (row === undefined) return undefined
-    return parseAgentDependencyIds(() => JSON.parse(row.dependsOn))
+  await validateDependencyGraph({
+    candidateId: candidateId,
+    dependencies: dependencyIds,
+    roots: unique(dependencyIds),
+    load: createAgentDependencyReadPort(transaction, 'semantics').load,
+    semantics: 'catalog',
   })
 }
 
@@ -310,31 +305,12 @@ async function assertNotReferenced(
       `agent '${current.name}' has a task launch in progress; retry after it completes`,
     )
   }
-  const { workflows, agents, tasks, scheduledTasks } = tablesOf(transaction)
+  const { tasks, scheduledTasks } = tablesOf(transaction)
   // RFC-285 B2 档位：agent 对**任务**引用零检查即是统一中档（任务快照冻结定义），这里
   // 的 agent-in-use 挡的是 **workflow 定义**引用——活的编辑面，删了就当场悬空。
-  const workflowRows = await transaction
-    .select({
-      id: workflows.id,
-      name: workflows.name,
-      definition: workflows.definition,
-      ownerUserId: workflows.ownerUserId,
-      visibility: workflows.visibility,
-    })
-    .from(workflows)
-  const referencingWorkflows = workflowRows.filter((row) => {
-    try {
-      const decoded: unknown = JSON.parse(row.definition)
-      return extractWorkflowAgentRefs(
-        typeof decoded === 'object' && decoded !== null
-          ? (decoded as { readonly nodes?: ReadonlyArray<Record<string, unknown>> })
-          : {},
-      ).has(current.id)
-    } catch {
-      // 坏 JSON 按「无引用」算：保存期的工作流校验器才是它的归口。
-      return false
-    }
-  })
+  const referencingWorkflows = await createWorkflowAgentReferenceLookup(transaction).find(
+    current.id,
+  )
   if (referencingWorkflows.length > 0) {
     throw new ConflictError(
       'agent-in-use',
@@ -348,19 +324,7 @@ async function assertNotReferenced(
   }
   // RFC-022 反向依赖闸：别的代理的 dependsOn 闭包里还提到它就拒，逼调用方先解上游，
   // 免得运行期才炸 `agent-dependency-not-found`。
-  const agentRows = await transaction
-    .select({
-      id: agents.id,
-      name: agents.name,
-      dependsOn: agents.dependsOn,
-      ownerUserId: agents.ownerUserId,
-      visibility: agents.visibility,
-    })
-    .from(agents)
-  const dependents = agentsDependingOnIn(
-    agentRows.filter((row) => row.id !== current.id),
-    current.id,
-  )
+  const dependents = await createAgentDependencyReferenceLookup(transaction).find(current.id)
   if (dependents.length > 0) {
     throw new ConflictError(
       'agent-dependency-still-referenced',
@@ -434,9 +398,9 @@ export function createAgentPersistenceSemantics(input: {
   ): Promise<AgentReferenceLabels> => {
     const visibleAgents = new Set(request.visibleAgentIds)
     const selected = request.agents.filter((agent) => visibleAgents.has(agent.id))
-    const skillIds = managedSkillIds(selected.flatMap((agent) => agent.skills))
-    const mcpIds = unique(selected.flatMap((agent) => agent.mcp))
-    const pluginIds = unique(selected.flatMap((agent) => agent.plugins))
+    const skillIds = unique(selected.flatMap((agent) => agentReferenceIds(agent, 'skill')))
+    const mcpIds = unique(selected.flatMap((agent) => agentReferenceIds(agent, 'mcp')))
+    const pluginIds = unique(selected.flatMap((agent) => agentReferenceIds(agent, 'plugin')))
     const { skills, mcps, plugins } = tablesOf(input.db)
     const [skillRows, mcpRows, pluginRows] = await Promise.all([
       skillIds.length === 0

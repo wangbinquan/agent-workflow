@@ -1,9 +1,9 @@
+import { readWorkflowFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { queryRows, first as firstRow } from '@/platform/persistence/queryHelpers'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { type WorkflowDefinition } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -159,11 +159,9 @@ describeEachProvider('RFC359 W31 legacy workflow async persistence', (harness) =
       harness.session.transaction(async (tx) => {
         const result = await commitWorkflowSaveInTx(tx, prepared)
         expect(result.committed).toBe(true)
-        const { workflows } = tablesOf(tx)
-        expect(
-          (await firstRow(tx.select().from(workflows).where(eq(workflows.id, created.id))))
-            ?.description,
-        ).toBe('rolled-back')
+        expect((await readWorkflowFixtures(tx, { id: created.id }))[0]?.description).toBe(
+          'rolled-back',
+        )
         throw failure
       }),
     ).rejects.toBe(failure)
@@ -219,8 +217,7 @@ describeEachProvider('RFC359 W31 legacy workflow async persistence', (harness) =
             entered.release()
             try {
               await release.promise
-              const { workflows } = tablesOf(tx)
-              observed = await tx.select().from(workflows).where(eq(workflows.id, id))
+              observed = await readWorkflowFixtures(tx, { id })
             } finally {
               finished.release()
             }

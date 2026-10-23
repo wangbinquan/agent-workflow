@@ -5,8 +5,7 @@
 // one platform cancel and waits for the result, transient platform failures only
 // delay, and an unobservable outcome (410, rejected request, identity mismatch)
 // settles the binding as an explicit unknown so it never blocks a volume.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
@@ -803,15 +802,14 @@ describeEachProvider('RFC-370 hosted execution settlement in the background', (h
       current: () => current,
       assertHeld: (tx, value) => control.assertHeld(tx, value),
     }
-    const { workflows, tasks, nodeRuns } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: 'workflow',
       name: 'hosted',
       definition: snapshot,
       version: 1,
       schemaVersion: 2,
     })
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       id: 'task-1',
       name: 'hosted',
       workflowId: 'workflow',
@@ -825,7 +823,7 @@ describeEachProvider('RFC-370 hosted execution settlement in the background', (h
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await harness.db.insert(nodeRuns).values([
+    await nodeRunFixture(harness.db, [
       { id: 'pending-run', taskId: 'task-1', nodeId: 'a', status: 'pending' },
       { id: 'canceled-run', taskId: 'task-1', nodeId: 'b', status: 'canceled' },
       { id: 'done-run', taskId: 'task-1', nodeId: 'c', status: 'done' },

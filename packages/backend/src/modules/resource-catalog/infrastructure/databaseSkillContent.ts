@@ -7,6 +7,12 @@
 // operations is identical in both deployments. Each step is one transaction:
 // publishing swaps the live tree atomically, so recovery never meets a
 // half-swapped tree, and a legacy name-keyed layout never exists here.
+import { LEGACY_DATABASE_SKILL_ROOT } from '@/platform/content/legacySkill'
+import {
+  legacySkillStagingPath,
+  legacySkillTrashPath,
+  decodeLegacySkillStagingPath,
+} from '@/platform/content/legacySkill'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -65,33 +71,23 @@ import {
 import { createDatabaseSkillTreeContent } from './databaseSkillTreeContent'
 
 const MAIN = 'SKILL.md'
-const OPERATION_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/
-const STAGING_REFERENCE = /^skills\/([^/]+)\/files\.op-([0-9A-HJKMNP-TV-Z]{26})\.staged$/
-
-const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
-const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes)
-
-function stagingRef(skillId: string, publicationId: string): string {
-  return `${skillRootRel(skillId)}/files.op-${publicationId}.staged`
-}
-
-function trashRef(skillId: string, operationId: string): string {
-  if (!OPERATION_ID.test(operationId)) {
-    throw new Error(`delete operation has invalid op_id: ${operationId}`)
-  }
-  return `skills/.trash/${skillId}-${operationId}`
-}
+const stagingRef = legacySkillStagingPath
+const trashRef = legacySkillTrashPath
 
 /** `writeFileSkillTree`: files except SKILL.md, then SKILL.md from the main content. */
 function treeOfFiles(content: SkillTreeFiles): SkillTreeFile[] {
   const files = content.files
     .filter((file) => file.path !== MAIN && !file.path.endsWith('/'))
     .map((file) => ({ path: normalizeSkillPath(file.path), bytes: file.content }))
-  return [...files, { path: MAIN, bytes: encode(content.mainContent) }]
+  return [...files, { path: MAIN, bytes: content.mainContent }]
 }
 
-function withFile(files: readonly SkillTreeFile[], path: string, text: string): SkillTreeFile[] {
-  return [...files.filter((file) => file.path !== path), { path, bytes: encode(text) }]
+function withFile(
+  files: readonly SkillTreeFile[],
+  path: string,
+  bytes: Uint8Array,
+): SkillTreeFile[] {
+  return [...files.filter((file) => file.path !== path), { path, bytes }]
 }
 
 function withoutPath(files: readonly SkillTreeFile[], path: string): SkillTreeFile[] {
@@ -120,13 +116,14 @@ export function createDatabaseSkillContent(input: {
       : LIVE_TREE
 
   const content = Object.freeze({
+    textBom: 'strip' as const,
     async readMain(reference) {
       const tree = await readRoot(reference)
       const main = (await readTreeRows(db, reference.id, tree)).find((row) => row.path === MAIN)
       if (main === undefined) {
         throw new NotFoundError('skill-md-missing', `SKILL.md not found for skill ${reference.id}`)
       }
-      return decode(decodeEntry(main))
+      return decodeEntry(main)
     },
     async listFiles(reference) {
       return fileNodesOf(await readTreeRows(db, reference.id, await readRoot(reference)))
@@ -135,7 +132,7 @@ export function createDatabaseSkillContent(input: {
       const path = normalizeSkillPath(relPath)
       const rows = await readTreeRows(db, reference.id, await readRoot(reference))
       const row = rows.find((candidate) => candidate.path === path)
-      if (row !== undefined) return decode(decodeEntry(row))
+      if (row !== undefined) return decodeEntry(row)
       if (rows.some((candidate) => isInsideSkillDirectory(candidate.path, path))) {
         throw new ValidationError('skill-file-is-dir', `'${relPath}' is a directory`)
       }
@@ -147,23 +144,19 @@ export function createDatabaseSkillContent(input: {
   } satisfies SkillContentReader)
 
   const versionReader = Object.freeze({
+    textBom: 'strip' as const,
     async readSnapshot(reference) {
       const rows = await readTreeRows(db, reference.skillId, versionTree(reference.version))
       const main = rows.find((row) => row.path === MAIN)
       return {
-        main: main === undefined ? null : decode(decodeEntry(main)),
+        main: main === undefined ? null : decodeEntry(main),
         files: fileNodesOf(rows),
       }
     },
     async readTree(reference) {
       const out = new Map<string, SkillVersionTreeEntry>()
       for (const file of await readTree(db, reference.skillId, versionTree(reference.version))) {
-        out.set(
-          file.path,
-          file.bytes.includes(0)
-            ? { kind: 'binary', hash: sha256Hex(Buffer.from(file.bytes)) }
-            : { kind: 'text', content: decode(file.bytes) },
-        )
+        out.set(file.path, file.bytes)
       }
       return out
     },
@@ -175,9 +168,7 @@ export function createDatabaseSkillContent(input: {
     },
     async initialize(plan, initial) {
       const files =
-        initial.kind === 'main'
-          ? [{ path: MAIN, bytes: encode(initial.content) }]
-          : treeOfFiles(initial)
+        initial.kind === 'main' ? [{ path: MAIN, bytes: initial.content }] : treeOfFiles(initial)
       await tx((handle) => writeTree(handle, plan.skillId, LIVE_TREE, files, now()))
     },
     async discard(root) {
@@ -383,8 +374,8 @@ export function createDatabaseSkillContent(input: {
 
   const versionRecovery = Object.freeze({
     plan(planInput) {
-      const staging = STAGING_REFERENCE.exec(planInput.stagingReference)
-      if (staging === null || staging[1] !== planInput.skillId) {
+      const staging = decodeLegacySkillStagingPath(planInput.stagingReference)
+      if (staging === null || staging.skillId !== planInput.skillId) {
         throw new Error(
           `version-write ${planInput.operationId} staging path does not match its identity/phase payload`,
         )
@@ -399,7 +390,7 @@ export function createDatabaseSkillContent(input: {
         skillId: planInput.skillId,
         operationId: planInput.operationId,
         version: planInput.version,
-        publicationId: staging[2]!,
+        publicationId: staging.publicationId,
         rootRef: skillRootRel(planInput.skillId),
         liveRef: skillFilesRel(planInput.skillId),
         stagingRef: planInput.stagingReference,
@@ -549,7 +540,7 @@ export function createDatabaseSkillContent(input: {
   } satisfies SkillPackageContentReader)
 
   return Object.freeze({
-    rootReference: 'database:skill_content_entries',
+    rootReference: LEGACY_DATABASE_SKILL_ROOT,
     content,
     versionReader,
     lifecycleContent,

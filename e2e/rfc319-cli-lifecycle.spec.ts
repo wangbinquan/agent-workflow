@@ -20,6 +20,7 @@
 // **本文件没有覆盖 OPS-007（stop 超时 / 强杀时诚实上报非优雅停机）**，原因写在
 // 文件末尾的「未覆盖」注释里——那是一个 e2e 侧的硬墙，不是忘了写。
 
+import { taskFixtureSql } from './fixtures/model'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -694,11 +695,19 @@ test('RFC-319 OPS-031: /health 不带凭据就能读，且每个读数都是活�
     //      不是任务生命周期本身（那由 task-lifecycle-* 系列覆盖）。
     runSqlite(
       join(home, 'db.sqlite'),
-      `INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-         base_branch, branch, status, inputs, started_at)
-       VALUES ('01RFC319HEALTHGAUGE000000', 'rfc319-health-gauge', 'rfc319-wf', '{}',
-         '${join(home, 'fake-repo')}', '${join(home, 'fake-worktree')}',
-         'main', 'agent-workflow/rfc319-health-gauge', 'running', '{}', ${Date.now()});`,
+      taskFixtureSql({
+        id: '01RFC319HEALTHGAUGE000000',
+        name: 'rfc319-health-gauge',
+        workflowId: 'rfc319-wf',
+        workflowSnapshot: '{}',
+        repoPath: join(home, 'fake-repo'),
+        worktreePath: join(home, 'fake-worktree'),
+        baseBranch: 'main',
+        branch: 'agent-workflow/rfc319-health-gauge',
+        status: 'running',
+        inputs: '{}',
+        startedAt: Date.now(),
+      }),
     )
     const withTask = await readHealth(baseUrl)
     expect(

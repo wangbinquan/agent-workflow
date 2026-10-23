@@ -5,6 +5,7 @@
 //   ② 目录自有类型的 ACL 写入提交后必须唤醒实时订阅（`resource-acl-changed`）——被升档 / 降档的观众不刷新页面也要
 //      拿到新的控件（e2e/rfc324-graded-grants.spec.ts「升档后徽标必须自己消失」红的来源）。
 
+import { patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -197,8 +198,8 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     const byWorkflow = await repository.create(owner, agentInput(name()))
     const workflowId = ulid()
     const workflowName = `wf-${workflowId.slice(-6).toLowerCase()}`
-    const { workflows, tasks, scheduledTasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { workflows, scheduledTasks } = tablesOf(db)
+    await workflowFixture(db, {
       id: workflowId,
       name: workflowName,
       definition: JSON.stringify({
@@ -245,7 +246,7 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     // （未经可见性过滤，展示层只渲染计数——这里锁的是后端确实把它交出来了）。
     const byTask = await repository.create(owner, agentInput(name()))
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'live',
       workflowId,
@@ -265,7 +266,7 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     expect(tasksActive.code).toBe('agent-tasks-active')
     expect(tasksActive.details).toMatchObject({ taskIds: [taskId] })
     // 终态任务不拦（RFC-165 §4 接受的限制），否则代理会被永久锁死。
-    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'done' })
     await repository.delete(owner, byTask.id, fenceOf(byTask))
 
     // (d) 被定时任务引用 ⇒ agent-scheduled-referenced，并点名那条定时任务。

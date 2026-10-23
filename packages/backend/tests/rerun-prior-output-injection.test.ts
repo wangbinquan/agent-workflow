@@ -16,8 +16,13 @@
 // and (RFC-141) an ask-back round renders the draft with the ask-back directive
 // variant instead of the update pair.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
@@ -43,8 +48,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${seedUlid()}`
   const wfId = `wf_${taskId}`
   const def = '{"schema_version":1,"nodes":[],"edges":[],"inputs":[]}'
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'rerun-prior-output',
     description: '',
@@ -52,7 +56,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -79,11 +83,10 @@ async function seedRun(
   db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  fields: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = seedUlid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -103,8 +106,7 @@ async function seedOutput(
   content: string,
   kind?: string,
 ): Promise<void> {
-  const { nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId,
     portName,
     content,
@@ -121,7 +123,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'agent',
+          iteration: 0,
+          shardKey: null,
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -144,7 +155,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'agent',
+          iteration: 0,
+          shardKey: null,
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -159,7 +179,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const db = harness.db
     const taskId = await seedTask(db)
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: seedUlid(),
+          taskId,
+          nodeId: 'agent',
+          iteration: 0,
+          shardKey: null,
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -178,7 +207,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
 
     // Current run is at iteration 1 → the iteration-0 output must NOT leak in.
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'agent',
+          iteration: 1,
+          shardKey: null,
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'agent',
       iteration: 1,
@@ -198,7 +236,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'agent',
+          iteration: 0,
+          shardKey: 'shardA',
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -219,7 +266,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'agent',
+          iteration: 0,
+          shardKey: null,
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -246,7 +302,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'aggnode',
+          iteration: 0,
+          shardKey: null,
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'aggnode',
       iteration: 0,
@@ -276,7 +341,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
 
     // Looking up shardKey 'fileA' must return the fileA child, NOT fileB.
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'inner',
+          iteration: 0,
+          shardKey: 'fileA',
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'inner',
       iteration: 0,
@@ -296,7 +370,16 @@ describeEachProvider('RFC-119 — freshestPriorRunWithOutput', (harness) => {
     const currentId = seedUlid()
 
     const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-      seq: null,
+      seq: (
+        await nodeRunFixture(db, {
+          id: currentId,
+          taskId,
+          nodeId: 'agent',
+          iteration: 0,
+          shardKey: null,
+          status: 'pending',
+        })
+      )[0]!.seq,
       taskId,
       nodeId: 'agent',
       iteration: 0,
@@ -383,7 +466,16 @@ describeEachProvider(
       const currentId = seedUlid()
 
       const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-        seq: null,
+        seq: (
+          await nodeRunFixture(db, {
+            id: currentId,
+            taskId,
+            nodeId: 'agent',
+            iteration: 0,
+            shardKey: null,
+            status: 'pending',
+          })
+        )[0]!.seq,
         taskId,
         nodeId: 'agent',
         iteration: 0,
@@ -418,7 +510,16 @@ describeEachProvider(
       const currentId = seedUlid()
 
       const found = await freshestPriorRunWithOutput(nodePersistence(db), {
-        seq: null,
+        seq: (
+          await nodeRunFixture(db, {
+            id: currentId,
+            taskId,
+            nodeId: 'agent',
+            iteration: 0,
+            shardKey: null,
+            status: 'pending',
+          })
+        )[0]!.seq,
         taskId,
         nodeId: 'agent',
         iteration: 0,

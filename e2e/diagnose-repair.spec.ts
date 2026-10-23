@@ -21,6 +21,7 @@
 //
 // Direct DB injection (sqlite3 CLI) — matches lifecycle-diagnose.spec.ts.
 
+import { nodeRunFixtureSql, patchTaskFixtureSql, deleteNodeRunFixturesSql } from './fixtures/model'
 import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -195,13 +196,8 @@ function plantS3Violation(taskId: string): { reviewRunId: string; alertId: strin
     message: 'task running but every node_run is terminal',
     repairHint: { kind: 'review', nodeRunId: reviewRunId },
   }).replace(/'/g, "''")
-  runSql(`
-    UPDATE tasks SET status='running' WHERE id='${taskId}';
-    INSERT INTO node_runs (id, task_id, node_id, parent_node_run_id, iteration,
-      shard_key, retry_index, review_iteration, status,
-      started_at, finished_at)
-    VALUES ('${reviewRunId}', '${taskId}', 'rev_s3', NULL, 0, NULL, 0, 0,
-      'interrupted', ${now - 5000}, ${now - 1000});
+  runSql(`${patchTaskFixtureSql({ id: taskId }, { status: 'running' })};
+    ${nodeRunFixtureSql({ id: reviewRunId, taskId, nodeId: 'rev_s3', parentNodeRunId: null, iteration: 0, shardKey: null, retryIndex: 0, reviewIteration: 0, status: 'interrupted', startedAt: now - 5000, finishedAt: now - 1000 })}
     INSERT INTO lifecycle_alerts
       (id, task_id, rule, severity, detail, detected_at, resolved_at)
     VALUES ('${alertId}', '${taskId}', 'S3', 'warning', '${detail}', ${now}, NULL);
@@ -213,13 +209,8 @@ function plantR1Violation(taskId: string): { nodeRunId: string; docVersionId: st
   const nodeRunId = `nr_r1_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const docVersionId = `dv_r1_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const now = Date.now()
-  runSql(`
-    UPDATE tasks SET status='running' WHERE id='${taskId}';
-    INSERT INTO node_runs (id, task_id, node_id, parent_node_run_id, iteration,
-      shard_key, retry_index, review_iteration, status,
-      started_at, finished_at)
-    VALUES ('${nodeRunId}', '${taskId}', 'rev_r1', NULL, 0, NULL, 0, 0,
-      'awaiting_review', ${now - 1000}, NULL);
+  runSql(`${patchTaskFixtureSql({ id: taskId }, { status: 'running' })};
+    ${nodeRunFixtureSql({ id: nodeRunId, taskId, nodeId: 'rev_r1', parentNodeRunId: null, iteration: 0, shardKey: null, retryIndex: 0, reviewIteration: 0, status: 'awaiting_review', startedAt: now - 1000, finishedAt: null })}
     INSERT INTO doc_versions (id, task_id, review_node_id, review_node_run_id,
       source_node_id, source_port_name, version_index, review_iteration,
       body_path, comments_json, decision, decision_reason, prompt_snapshot,
@@ -240,16 +231,8 @@ function plantU1Violation(taskId: string): { olderId: string; newerId: string } 
   // clarifyIteration) on different retry_index slots so the unique index
   // doesn't reject the second insert.
   runSql(`
-    INSERT INTO node_runs (id, task_id, node_id, parent_node_run_id, iteration,
-      shard_key, retry_index, review_iteration, status,
-      started_at, finished_at)
-    VALUES ('${olderId}', '${taskId}', 'rev_u1', NULL, 0, NULL, 0, 0,
-      'awaiting_review', ${now - 4000}, NULL);
-    INSERT INTO node_runs (id, task_id, node_id, parent_node_run_id, iteration,
-      shard_key, retry_index, review_iteration, status,
-      started_at, finished_at)
-    VALUES ('${newerId}', '${taskId}', 'rev_u1', NULL, 0, NULL, 1, 0,
-      'awaiting_review', ${now - 1000}, NULL);
+    ${nodeRunFixtureSql({ id: olderId, taskId, nodeId: 'rev_u1', parentNodeRunId: null, iteration: 0, shardKey: null, retryIndex: 0, reviewIteration: 0, status: 'awaiting_review', startedAt: now - 4000, finishedAt: null })}
+    ${nodeRunFixtureSql({ id: newerId, taskId, nodeId: 'rev_u1', parentNodeRunId: null, iteration: 0, shardKey: null, retryIndex: 1, reviewIteration: 0, status: 'awaiting_review', startedAt: now - 1000, finishedAt: null })}
   `)
   return { olderId, newerId }
 }
@@ -293,10 +276,7 @@ async function clearStuckState(): Promise<void> {
   // shared launch state.
   runSql(`
     DELETE FROM lifecycle_alerts WHERE task_id='${taskId}';
-    DELETE FROM doc_versions WHERE task_id='${taskId}' AND review_node_id IN ('rev_s3','rev_r1');
-    DELETE FROM node_runs WHERE task_id='${taskId}'
-      AND node_id IN ('rev_s3','rev_r1','rev_u1');
-    UPDATE tasks SET status='done' WHERE id='${taskId}';
+    DELETE FROM doc_versions WHERE task_id='${taskId}' AND review_node_id IN ('rev_s3','rev_r1');${deleteNodeRunFixturesSql({ taskId, nodeId: { $in: ['rev_s3', 'rev_r1', 'rev_u1'] } })};${patchTaskFixtureSql({ id: taskId }, { status: 'done' })};
   `)
 }
 
@@ -394,7 +374,7 @@ test('preflight-stale: option-id unknown after DB drift surfaces error', async (
   // Mutate state out from under the panel so demote-task's preflight
   // fails: flip the task to a non-running terminal state. Apply should
   // then return outcome=preflight-stale; <ErrorBanner> appears.
-  runSql(`UPDATE tasks SET status='canceled' WHERE id='${taskId}';`)
+  runSql(patchTaskFixtureSql({ id: taskId }, { status: 'canceled' }))
 
   // Pick demote-task explicitly to make the failure predictable.
   await page.locator('[role="combobox"]').first().click()

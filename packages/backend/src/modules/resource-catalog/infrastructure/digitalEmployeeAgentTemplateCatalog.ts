@@ -1,6 +1,9 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { assertAgentDependencyGraph as validateDependencyGraph } from '../domain/agentDependencies'
+import { createAgentDependencyReadPort } from './agentDependencyRead'
+import { createAgentReferenceWriteParticipant } from './agentReferenceWrite'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
+import { agentReferenceIds } from '@agent-workflow/shared'
 import type { Agent, AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
 import { and, eq, inArray, ne } from 'drizzle-orm'
 
@@ -14,12 +17,7 @@ import type {
   DigitalEmployeeAgentTemplateRepository,
 } from '../application/agents/digitalEmployeeAgentTemplateCatalog'
 import { PLUGIN_DISABLED_ERROR_CODE } from '../public/types'
-import { parseAgentDependencyIds } from './agentDependencyJson'
-import {
-  agentFromPersistenceRow,
-  createAgentPersistenceValues,
-  updateAgentPersistenceValues,
-} from './agentPersistence'
+import { agentFromPersistenceRow } from './agentPersistence'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
@@ -113,9 +111,7 @@ async function assertAgentResourceRows(input: {
     }
   }
 
-  const skillIds = unique(
-    input.skillRefs.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
-  )
+  const skillIds = unique(agentReferenceIds({ skills: input.skillRefs }, 'skill'))
   if (skillIds.length > 0) {
     const { skills } = tablesOf(input.transaction)
     const known = new Set(
@@ -137,44 +133,18 @@ async function assertAgentResourceRows(input: {
   }
 }
 
-function stringArray(raw: string): string[] {
-  return parseAgentDependencyIds(() => JSON.parse(raw))
-}
-
 async function assertAgentDependencyGraph(
   transaction: ResourceCatalogTransaction,
   agentId: string,
   dependencyIds: readonly string[],
 ): Promise<void> {
-  if (dependencyIds.includes(agentId)) {
-    throw new ValidationError('agent-dependency-self', 'agent cannot depend on itself')
-  }
-  const visited = new Set<string>()
-  const visiting = new Set<string>()
-
-  async function visit(id: string): Promise<void> {
-    if (id === agentId || visiting.has(id)) {
-      throw new ValidationError('agent-dependency-cycle', 'agent dependency graph contains a cycle')
-    }
-    if (visited.has(id)) return
-    visiting.add(id)
-    const { agents } = tablesOf(transaction)
-    const row = await first(
-      transaction.select({ dependsOn: agents.dependsOn }).from(agents).where(eq(agents.id, id)),
-    )
-    if (row === undefined) {
-      throw new ValidationError(
-        'agent-dependency-not-found',
-        `agent dependency '${id}' not found`,
-        { notFound: [id] },
-      )
-    }
-    for (const dependency of stringArray(row.dependsOn)) await visit(dependency)
-    visiting.delete(id)
-    visited.add(id)
-  }
-
-  for (const dependencyId of unique(dependencyIds)) await visit(dependencyId)
+  await validateDependencyGraph({
+    candidateId: agentId,
+    dependencies: dependencyIds,
+    roots: unique(dependencyIds),
+    load: createAgentDependencyReadPort(transaction).load,
+    semantics: 'catalog',
+  })
 }
 
 async function assertAgentDefinition(input: {
@@ -250,13 +220,14 @@ export function createDigitalEmployeeAgentTemplateRepository(
             agentId: input.id,
             definition: input.definition,
           })
-          const values = createAgentPersistenceValues({
+          await createAgentReferenceWriteParticipant(transaction).insert({
             id: input.id,
             agent: input.definition,
             ownerUserId: SYSTEM_USER_ID,
             now: Date.now(),
+            visibility: 'public',
+            builtin: true,
           })
-          await insertOne(transaction, agents, { ...values, visibility: 'public', builtin: true })
         })
       } catch (error) {
         if (isOwnerNameConflict(error)) {
@@ -337,23 +308,17 @@ export function createDigitalEmployeeAgentTemplateRepository(
           },
           ...(current.runtime === undefined ? {} : { previousRuntime: current.runtime }),
         })
-        const changed = await first(
-          transaction
-            .update(agents)
-            .set(
-              updateAgentPersistenceValues(current, input.patch, monotonicNow(current.updatedAt)),
-            )
-            .where(
-              and(
-                eq(agents.id, input.id),
-                eq(agents.ownerUserId, SYSTEM_USER_ID),
-                eq(agents.builtin, true),
-                eq(agents.updatedAt, input.expectedUpdatedAt),
-                eq(agents.aclRevision, input.expectedAclRevision),
-              ),
-            )
-            .returning({ id: agents.id }),
-        )
+        const changed = (
+          await createAgentReferenceWriteParticipant(transaction).update({
+            current,
+            patch: input.patch,
+            updatedAt: monotonicNow(current.updatedAt),
+            ownerUserId: SYSTEM_USER_ID,
+            builtin: true,
+            expectedUpdatedAt: input.expectedUpdatedAt,
+            expectedAclRevision: input.expectedAclRevision,
+          })
+        )[0]
         if (changed === undefined) throw stale(input.id)
       })
     },

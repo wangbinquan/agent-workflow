@@ -118,7 +118,7 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // RFC-359 W9：这一对多了第二份双引擎对拍——W8 那份问的是「哪些 journal 行会被收、收完账面
   // 什么样」，W9 这份问的是门后的**落盘结果**：崩溃到收敛之间账面代际变了（用户又发了一版 /
   // 删了技能 / 库更旧），live 目录里最后是哪一代内容。判据缺口 13b 就是被它照出来并销掉的。
-  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite + postgresql — verified by rfc359-w8-resource-package-maintenance-conformance.test.ts, rfc359-w9-resource-package-skill-recovery-conformance.test.ts',
+  // RFC-395 II-a A6：该 provider pair 已由同一 codec 注册表取代；W8/W9 与十二格格式矩阵继续保留。
   // RFC-359 W12：共同流程和每目标事务 atom 已合一，两个 applyOne 副本退役。
   // 留下两侧既有的提交后事件/停止位置与 SQLite 无 driver 收尾机制，真实对拍继续锁定。
   // RFC-359 AC-1（第 14 刀）**销账**：`SourceTerminationParticipant` 这一对已合一。W12 判
@@ -253,7 +253,7 @@ export const DECLARED_CROSS_DIRECTORY_PAIRS: readonly ProviderPair[] = []
 // `{{event_type}}` 随之展不开）。见证测试 `rfc359-w8-child-launch-conformance` 留任，
 // 本分从「见证分叉」翻成「锁住合一」。
 // RFC-395 adds the explicitly approved pair of provider DDL compilers; both have a shared conformance witness.
-export const PROVIDER_PAIR_COUNT = 4
+export const PROVIDER_PAIR_COUNT = 3
 
 /** 其中「连一份双引擎对拍都没有」的对数。**只降不升**——补一份对拍就减一。 */
 export const UNVERIFIED_PAIR_COUNT = 0
@@ -662,3 +662,6 @@ describe('RFC-359 W5 —— 判据自变异（内存 fixture，不碰真实树�
     expect(HARNESS_BINDING.test(real) && HARNESS_CALL.test(real)).toBe(true)
   })
 })
+
+// 2026-10-22 RFC-395 II-a A6：上述 ~976 为原始测量；当前场景迁入 resource-catalog。
+// ResourcePackage maintenance 已通过共享机制和格式 codec 合一，provider pair 从 4 降为 3。

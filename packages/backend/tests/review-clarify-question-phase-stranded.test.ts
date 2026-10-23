@@ -17,6 +17,7 @@
 // Driven end-to-end through the REAL scheduler + REAL clarify-answer driver
 // (autoDispatchClarifyRound) — same harness as clarify-review-combination-scenarios.
 
+import { readTaskFixtures, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
@@ -159,16 +160,11 @@ async function runTaskWithDeadline(taskId: string): Promise<void> {
   }
 }
 async function topLevel(nodeId: string, taskId: string) {
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  const rows = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId }] })
   return rows.filter((r) => r.parentNodeRunId === null)
 }
 async function taskStatus(taskId: string): Promise<string> {
-  const { tasks } = tablesOf(db)
-  const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+  const t = (await readTaskFixtures(db, { id: taskId }))[0]
   return t?.status ?? '??'
 }
 async function awaitingReviewRun(taskId: string, nodeId: string) {

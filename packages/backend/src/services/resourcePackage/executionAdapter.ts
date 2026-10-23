@@ -62,10 +62,7 @@ interface ResourcePackageReadProvider {
 }
 
 type ResourcePackagePersistedReceipt = Omit<BundleReceipt, 'applied' | 'skippedSecrets'> & {
-  readonly applied: readonly (
-    | BundleAppliedOp
-    | (Omit<BundleAppliedOp, 'opId'> & { readonly operationId: string })
-  )[]
+  readonly applied: readonly (Omit<BundleAppliedOp, 'opId'> & { readonly operationId: string })[]
   readonly skippedSecrets?: readonly BundleSkippedSecret[]
 }
 
@@ -75,7 +72,6 @@ function resourcePackageReceiptDocument(receipt: ResourcePackagePersistedReceipt
   return JSON.stringify({
     ...receipt,
     applied: receipt.applied.map((item) => {
-      if ('opId' in item) return item
       const { operationId, ...resource } = item
       return { opId: operationId, ...resource }
     }),

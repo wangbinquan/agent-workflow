@@ -5,10 +5,16 @@
 // adopts the same platform subtask instead of paying for a second model call.
 // The earlier shape (adopt-and-wait inside `reap`) blocked activation on a
 // running model call and crash-looped on a 410/gap; these cases lock that out.
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import {
   createTaskExecutionPersistence,
@@ -36,15 +42,15 @@ const proof = createExclusiveDaemonLockProof({
 describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harness) => {
   async function fixture(options: { binding?: boolean; runStatus?: 'running' | 'done' } = {}) {
     const db = harness.db
-    const { workflows, tasks, nodeRuns, runtimeSessionLeases } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { runtimeSessionLeases } = tablesOf(db)
+    await workflowFixture(db, {
       id: 'workflow',
       name: 'hosted',
       definition: snapshot,
       version: 1,
       schemaVersion: 2,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: 'task',
       name: 'hosted',
       workflowId: 'workflow',
@@ -62,7 +68,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
         { stableNodeKey: 'task-root', frozenOccurrenceKey: 'task', workflowRevision: 1 },
       ]),
     })
-    await db.insert(nodeRuns).values([
+    await nodeRunFixture(db, [
       {
         id: 'wrapper',
         taskId: 'task',
@@ -178,8 +184,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
     return { family, recovery, persistence, context, store, run }
   }
   const nodeRun = async (id: string) => {
-    const { nodeRuns } = tablesOf(harness.db)
-    return (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+    return (await readNodeRunFixtures(harness.db, { id }))[0]!
   }
 
   test('an unsettled remote execution is handed off without any platform call and keeps its original run', async () => {
@@ -278,8 +283,7 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
 
   test('a hosted orphan with a local process id is a contract violation, not a silent kill', async () => {
     const f = await fixture()
-    const { nodeRuns } = tablesOf(harness.db)
-    await harness.db.update(nodeRuns).set({ pid: 4242 }).where(eq(nodeRuns.id, 'run'))
+    await patchNodeRunFixture(harness.db, { id: 'run' }, { pid: 4242 })
     await f.family.prepare()
     await expect(Promise.resolve(f.family.reap())).rejects.toThrow(
       'hosted-recovery-unexpected-local-process',

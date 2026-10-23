@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-359 W9 —— System Operations「应用侧资产」读面的双引擎对拍。
@@ -93,8 +93,7 @@ async function seedWorkflow(
   db: PersistenceDb,
   input: { readonly id: string; readonly name?: string; readonly definition?: string },
 ): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: input.id,
     name: input.name ?? `workflow-${input.id}`,
     description: 'seeded by the W9 conformance harness',
@@ -112,8 +111,7 @@ async function seedTask(
     readonly baseCommit?: string | null
   },
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: input.id,
     name: input.id,
     workflowId: 'workflow-w9',
@@ -304,7 +302,7 @@ describeEachProvider('RFC-359 W9 System Operations application-asset reads', (ha
     expect(captured.captured.sort()).toEqual([liveId, terminalId, goneId].sort())
 
     const { tasks } = tablesOf(db)
-    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, terminalId))
+    await patchTaskFixture(db, { id: terminalId }, { status: 'done' })
     await db.delete(tasks).where(eq(tasks.id, goneId))
 
     const result = await reconstructWorktrees(db, staging)

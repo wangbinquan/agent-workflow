@@ -15,7 +15,29 @@ import {
   intentApplyCommitMutationOf,
   requireOpForPlan,
 } from '../src/modules/intent/application/applyCommitPlan'
-import { intentApplyReplayOutcomeOf } from '../src/modules/intent/application/applyReplay'
+import { resolveAtomicApplyReplay } from '../src/platform/atomic-apply/replay'
+import { intentApplyErrors } from '../src/modules/intent/infrastructure/intentApplyErrors'
+import type { AtomicApplyRow } from '../src/platform/contracts/atomicApply'
+const intentApplyReplayOutcomeOf = (
+  row: Pick<AtomicApplyRow, 'id' | 'receiptJson' | 'error'> & { state: string },
+) =>
+  resolveAtomicApplyReplay(row, {
+    decode: JSON.parse,
+    failedReplay: (value) =>
+      intentApplyErrors.failedReplay({
+        ...value,
+        state: 'failed',
+        preparedArtifactsJson: '[]',
+        updatedAt: 1,
+      }),
+    unsettledReplay: (value) =>
+      intentApplyErrors.unsettledReplay({
+        ...value,
+        state: 'prepared',
+        preparedArtifactsJson: '[]',
+        updatedAt: 1,
+      }),
+  })
 import type { ResolvedIntentOp } from '../src/modules/intent/application/resolveChangeset'
 import type { IntentContextManifest } from '../src/modules/intent/application/manifest'
 

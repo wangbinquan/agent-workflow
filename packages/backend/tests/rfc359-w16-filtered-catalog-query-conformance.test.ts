@@ -1,6 +1,7 @@
 // RFC-359 AC11: full HTTP run 34196371681 showed 100,000 correlated alert
 // lookups and a whole-task scan for a 51-root family. Keep the complete
 // catalog-filtered page, cursor and facet contract while changing that SQL.
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -49,7 +50,7 @@ const ROWS: readonly SeedTask[] = [
 ]
 
 async function seed(db: PersistenceDb): Promise<void> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
@@ -58,12 +59,12 @@ async function seed(db: PersistenceDb): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, { id: 'wf', name: '雪 workflow', definition: '{}' })
+  await workflowFixture(db, { id: 'wf', name: '雪 workflow', definition: '{}' })
   const backfill = computeForestBackfill(
     ROWS.map((row) => ({ ...row, parentTaskId: row.parent ?? null })),
   )
   for (const row of ROWS) {
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: row.id,
       name: `task ${row.id}`,
       workflowId: 'wf',

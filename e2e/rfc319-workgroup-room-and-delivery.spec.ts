@@ -83,6 +83,7 @@
 //
 // 「服务端到底怎么样了」一律回读 GET /api/workgroup-tasks/{id}/room，不只信界面、也不只信回执。
 
+import { nodeRunFixtureSql } from './fixtures/model'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -930,11 +931,7 @@ test('RFC-319 WG-35: 房间右栏花名册 —— 四种状态各按自己的数
     dbPath(),
     `PRAGMA foreign_keys=ON;
      BEGIN IMMEDIATE;
-     INSERT INTO node_runs
-       (id, task_id, node_id, iteration, shard_key, retry_index, wg_round,
-        review_iteration, status, started_at, agent_override_id)
-     VALUES
-       (${sqlLiteral(builderRunId)},${sqlLiteral(taskId)},'__wg_member__',0,${sqlLiteral(builderAssignmentId)},0,1,0,'running',${now},${sqlLiteral(builder.agentId)});
+     ${nodeRunFixtureSql({ id: builderRunId, taskId, nodeId: '__wg_member__', iteration: 0, shardKey: builderAssignmentId, retryIndex: 0, wgRound: 1, reviewIteration: 0, status: 'running', startedAt: now, agentOverrideId: builder.agentId })}
      INSERT INTO workgroup_assignments
        (id, task_id, round, source, assignee_member_id, title, brief_md, status, node_run_id, created_at, updated_at)
      VALUES

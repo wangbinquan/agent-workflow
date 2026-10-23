@@ -22,7 +22,13 @@
 //   lifecycle. A park without an owner keeps the exact prepared revision as its
 //   only fence (locked by rfc359-w4-d25-adapters.test.ts).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+  readTaskFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -105,8 +111,7 @@ function question(id: string): ClarifyQuestion {
 async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
   const definition = siblingAskersDefinition()
   const workflowId = `wf-${taskId}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -114,7 +119,7 @@ async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -131,7 +136,8 @@ async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath(slotPath(taskId)),
   })
-  await db.insert(nodeRuns).values(
+  await nodeRunFixture(
+    db,
     (['a', 'b'] as const).map((side) => ({
       id: `${taskId}-designer-${side}`,
       taskId,
@@ -216,8 +222,7 @@ function parker(db: PersistenceDb): DatabaseHumanGateTaskLifecyclePersistence {
 }
 
 async function taskRow(db: PersistenceDb, taskId: string) {
-  const { tasks } = tablesOf(db)
-  return (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]!
+  return (await readTaskFixtures(db, { id: taskId }, { limit: 1 }))[0]!
 }
 
 async function operationState(db: PersistenceDb, operationId: string) {
@@ -322,13 +327,9 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
     const first = await prepareSiblingGate(db, taskId, 'a', 1)
     const second = await prepareSiblingGate(db, taskId, 'b', 1)
     await parker(db).parkPrepared({ prepared: first.prepared, token, now: NOW + 2 })
-    const { tasks } = tablesOf(db)
     // The first gate was answered while the second asker was still settling:
     // the same owner keeps driving, and the task is running again.
-    await db
-      .update(tasks)
-      .set({ status: 'running', lifecycleEventRevision: 3 })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'running', lifecycleEventRevision: 3 })
 
     const parked = await parker(db).parkPrepared({
       prepared: second.prepared,
@@ -351,11 +352,15 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
     const first = await prepareSiblingGate(db, taskId, 'a', 1)
     const second = await prepareSiblingGate(db, taskId, 'b', 1)
     await parker(db).parkPrepared({ prepared: first.prepared, token, now: NOW + 2 })
-    const { tasks, clarifyRounds } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({ status: 'canceled', lifecycleEventRevision: 3 })
-      .where(eq(tasks.id, taskId))
+    const { clarifyRounds } = tablesOf(db)
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      {
+        status: 'canceled',
+        lifecycleEventRevision: 3,
+      },
+    )
 
     await expect(
       parker(db).parkPrepared({ prepared: second.prepared, token, now: NOW + 4 }),

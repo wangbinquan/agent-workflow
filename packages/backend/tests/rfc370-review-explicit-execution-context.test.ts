@@ -12,7 +12,14 @@
 // refused it; the standalone SQLite daemon never showed it. The dispatch now
 // fences with the explicit context first (explicit > ambient > ownerless, as
 // `fenceTaskWrite`), and the public lookup is the provider-neutral one.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -87,8 +94,7 @@ function launch(taskId: string): CanonicalContinuationRequest {
 async function seedClaimedReviewTask(db: PersistenceDb) {
   const taskId = `t370rv_${ulid()}`
   const snapshot = JSON.stringify(definition())
-  const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc370-review-context',
     description: '',
@@ -96,7 +102,7 @@ async function seedClaimedReviewTask(db: PersistenceDb) {
     version: 1,
     schemaVersion: 6,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -113,7 +119,7 @@ async function seedClaimedReviewTask(db: PersistenceDb) {
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const writerRun = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: writerRun,
     taskId,
     nodeId: WRITER,
@@ -121,7 +127,7 @@ async function seedClaimedReviewTask(db: PersistenceDb) {
     retryIndex: 0,
     iteration: 0,
   })
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId: writerRun,
     portName: 'answer',
     content: 'The report uses **red**.',
@@ -163,16 +169,14 @@ describeEachProvider(
           executionContext: seeded.context,
         }),
       ).resolves.toMatchObject({ kind: 'awaiting_review', message: 'awaiting_review' })
-      const { tasks, nodeRuns, docVersions } = tablesOf(harness.db)
-      const task = await harness.db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, seeded.taskId))
+      const { docVersions } = tablesOf(harness.db)
+      const task = await readTaskFixtures(harness.db, { id: seeded.taskId }).then((rows) =>
+        rows.map((row) => ({ status: row.status })),
+      )
       expect(task[0]?.status).toBe('awaiting_review')
-      const review = await harness.db
-        .select({ status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.nodeId, REVIEW))
+      const review = await readNodeRunFixtures(harness.db, { nodeId: REVIEW }).then((rows) =>
+        rows.map((row) => ({ status: row.status })),
+      )
       expect(review.filter((row) => row.status === 'awaiting_review')).toHaveLength(1)
       const documents = await harness.db
         .select({ decision: docVersions.decision })
@@ -192,11 +196,9 @@ describeEachProvider(
           mechanics.dispatchReviewNode(request(seeded.taskId)),
         ),
       ).resolves.toMatchObject({ kind: 'awaiting_review' })
-      const { tasks } = tablesOf(harness.db)
-      const task = await harness.db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, seeded.taskId))
+      const task = await readTaskFixtures(harness.db, { id: seeded.taskId }).then((rows) =>
+        rows.map((row) => ({ status: row.status })),
+      )
       expect(task[0]?.status).toBe('awaiting_review')
     })
 
@@ -216,11 +218,9 @@ describeEachProvider(
       await expect(mechanics.dispatchReviewNode(request(seeded.taskId))).rejects.toThrow(
         'ownerless task mutation refused durable owner',
       )
-      const { tasks } = tablesOf(harness.db)
-      const task = await harness.db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, seeded.taskId))
+      const task = await readTaskFixtures(harness.db, { id: seeded.taskId }).then((rows) =>
+        rows.map((row) => ({ status: row.status })),
+      )
       expect(task[0]?.status).toBe('running')
     })
   },

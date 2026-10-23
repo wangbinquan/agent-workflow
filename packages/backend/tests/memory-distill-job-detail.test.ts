@@ -1,5 +1,12 @@
 // RFC-043 T4 — getDistillJobDetail aggregator unit tests.
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -11,17 +18,17 @@ import {
   summarizeClarifyQuestions,
 } from '../src/modules/memory/application/distillQueries'
 import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function getDistillJobDetail(db: PersistenceDb, jobId: string) {
-  return composeMemoryDistillQueries(db).getJobDetail(jobId)
+  return composeMemoryDistillQueries(db, createClarifyAnswerQueries(db)).getJobDetail(jobId)
 }
 
 async function seedTaskWithReviewRun(
   db: PersistenceDb,
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const wfId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: '{}',
@@ -30,7 +37,7 @@ async function seedTaskWithReviewRun(
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -45,7 +52,7 @@ async function seedTaskWithReviewRun(
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'r1',
@@ -92,8 +99,8 @@ describe('getDistillJobDetail', () => {
 
     test('happy path: returns job + siblings + sourceEvents + candidates + dedupSnapshot', async () => {
       const taskId = ulid()
-      const { workflows, tasks, taskFeedback, memories } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { taskFeedback, memories } = tablesOf(db)
+      await workflowFixture(db, {
         id: ulid(),
         name: 'w',
         definition: '{}',
@@ -101,10 +108,10 @@ describe('getDistillJobDetail', () => {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 't',
-        workflowId: (await db.select().from(workflows))[0]!.id,
+        workflowId: (await readWorkflowFixtures(db))[0]!.id,
         workflowSnapshot: '{}',
         repoPath: '/tmp/r',
         worktreePath: '/tmp/wt',
@@ -199,8 +206,7 @@ describe('getDistillJobDetail', () => {
     test('clarify source event resolves to its first question title', async () => {
       const { taskId, nodeRunId } = await seedTaskWithReviewRun(db)
       const sessId = ulid()
-      const { clarifyRounds } = tablesOf(db)
-      await insertOne(db, clarifyRounds, {
+      await clarifyRoundFixture(db, {
         kind: 'self' as const,
         id: sessId,
         taskId,
@@ -210,10 +216,10 @@ describe('getDistillJobDetail', () => {
         intermediaryNodeId: 'c1',
         intermediaryNodeRunId: nodeRunId,
         iteration: 0,
-        questionsJson: JSON.stringify([
+        questions: JSON.stringify([
           { id: 'q1', title: 'Which framework should we use?', kind: 'single', options: [] },
         ]),
-        answersJson: null,
+        answers: null,
         status: 'awaiting_human',
       })
       const jobId = await seedJob(db, {

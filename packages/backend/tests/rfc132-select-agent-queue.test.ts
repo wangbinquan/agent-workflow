@@ -13,6 +13,13 @@
 //
 // selectAgentQueue is UNWIRED in PR-1 (no scheduler caller); these are direct DB fixtures.
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -53,8 +60,7 @@ function ans(qid: string) {
 }
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -62,7 +68,7 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -91,8 +97,7 @@ async function seedRun(
   } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -104,7 +109,7 @@ async function seedRun(
     ...(over.shardKey !== undefined ? { shardKey: over.shardKey } : {}),
   })
   if (over.hasOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -132,8 +137,7 @@ async function seedAnsweredRound(
     status: 'awaiting_human',
     ...(opts.askingShardKey !== undefined ? { shardKey: opts.askingShardKey } : {}),
   })
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: ulid(),
     taskId,
     kind: opts.kind,
@@ -143,8 +147,8 @@ async function seedAnsweredRound(
     intermediaryNodeRunId: intRunId,
     targetConsumerNodeId: opts.kind === 'cross' ? D : null,
     iteration: opts.iteration ?? 0,
-    questionsJson: JSON.stringify(opts.questions),
-    answersJson: opts.noAnswers ? null : JSON.stringify(opts.questions.map((q) => ans(q.id))),
+    questions: JSON.stringify(opts.questions),
+    answers: opts.noAnswers ? null : JSON.stringify(opts.questions.map((q) => ans(q.id))),
     directive: 'continue',
     status: opts.status ?? 'answered',
     answeredAt: Date.now(),

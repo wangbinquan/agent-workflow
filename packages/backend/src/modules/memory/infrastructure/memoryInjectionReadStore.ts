@@ -1,7 +1,10 @@
 // RFC-359 W4-B4 —— 记忆注入读存储：一份实现，两个 provider 共用。
 
+import { createTaskKnowledgeQueries } from '@/modules/task-execution/public/queries'
+import { existingRepositoryIds } from '@/modules/source-control/public/queries'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
@@ -50,46 +53,15 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
   constructor(private readonly db: PersistenceDb) {}
 
   async findTaskContext(taskId: string) {
-    const { tasks } = tablesOf(this.db)
-    const rows = await this.db
-      .select({
-        workflowId: tasks.workflowId,
-        cachedRepoId: tasks.cachedRepoId,
-        repoGroupId: tasks.repoGroupId,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-    const row = rows[0]
-    return row === undefined
-      ? null
-      : {
-          workflowId: row.workflowId,
-          cachedRepoId: row.cachedRepoId,
-          repoGroupId: row.repoGroupId,
-        }
+    return createTaskKnowledgeQueries(this.db).injectionContext(taskId)
   }
 
   async listTaskRepositoryIds(taskId: string): Promise<readonly string[]> {
-    const { taskRepos } = tablesOf(this.db)
-    return (
-      await this.db
-        .select({ cachedRepoId: taskRepos.cachedRepoId })
-        .from(taskRepos)
-        .where(eq(taskRepos.taskId, taskId))
-    ).flatMap((row) => (row.cachedRepoId === null ? [] : [row.cachedRepoId]))
+    return createTaskKnowledgeQueries(this.db).repositoryIds(taskId)
   }
 
   async filterExistingRepositoryIds(repositoryIds: readonly string[]): Promise<readonly string[]> {
-    if (repositoryIds.length === 0) return []
-    const { cachedRepos } = tablesOf(this.db)
-    return (
-      await this.db
-        .select({ id: cachedRepos.id })
-        .from(cachedRepos)
-        .where(inArray(cachedRepos.id, [...repositoryIds]))
-        .limit(repositoryIds.length)
-    ).map((row) => row.id)
+    return existingRepositoryIds(this.db, repositoryIds)
   }
 
   async listApprovedMemories(
@@ -112,26 +84,16 @@ export class DrizzleMemoryInjectionReadStore implements MemoryInjectionReadStore
   }
 
   async listRunRecords(input: Parameters<MemoryInjectionReadStore['listRunRecords']>[0]) {
-    const { nodeRuns } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: nodeRuns.id,
-        seq: nodeRuns.seq,
-        status: nodeRuns.status,
-        injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
-      })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, input.taskId),
-          eq(nodeRuns.nodeId, input.nodeId),
-          eq(nodeRuns.iteration, input.iteration),
-          input.shardKey === null
-            ? isNull(nodeRuns.shardKey)
-            : eq(nodeRuns.shardKey, input.shardKey),
-          eq(nodeRuns.reviewIteration, input.reviewIteration),
-          isNull(nodeRuns.parentNodeRunId),
-        ),
-      )
+    return createNodeRunQueries(this.db).listFields(
+      {
+        taskId: input.taskId,
+        nodeId: input.nodeId,
+        iteration: input.iteration,
+        shardKey: input.shardKey,
+        reviewIteration: input.reviewIteration,
+        parentNodeRunId: null,
+      },
+      ['id', 'seq', 'status', 'injectedMemoriesJson'],
+    )
   }
 }

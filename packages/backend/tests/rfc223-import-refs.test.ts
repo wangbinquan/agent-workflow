@@ -1,3 +1,9 @@
+import {
+  agentFixture,
+  patchAgentFixture,
+  readWorkflowFixtures,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import ts from 'typescript'
@@ -158,8 +164,7 @@ async function seedAgent(
   name = 'shared',
   visibility: 'public' | 'private' = 'public',
 ) {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, { id, name, ownerUserId, visibility })
+  await agentFixture(db, { id, name, ownerUserId, visibility })
 }
 
 function portableWorkflowYaml(input?: { id?: string; name?: string; agentName?: string }): string {
@@ -272,8 +277,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
     const resolved = await resolveImportRefs(db, viewer, [selection.selector], [selection])
     expect(resolved.bySelector.get(JSON.stringify(['agent', 'shared', null]))).toBe('agent-b')
 
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, 'agent-b'))
+    await patchAgentFixture(db, { id: 'agent-b' }, { visibility: 'private' })
     await expect(
       resolveImportRefs(db, viewer, [selection.selector], [selection]),
     ).rejects.toMatchObject({
@@ -292,8 +296,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       resourceId: 'agent-a',
       expectedAclRevision: 0,
     }
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+    await patchAgentFixture(db, { id: 'agent-a' }, { aclRevision: 1 })
 
     await expect(
       resolveImportRefs(db, viewer, [selection.selector], [selection]),
@@ -405,8 +408,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       { kind: 'actor', actor: viewer },
     )
     expect(result.outcome).toBe('created')
-    const { workflows } = tablesOf(db)
-    const rows = await db.select().from(workflows)
+    const rows = await readWorkflowFixtures(db)
     const node = JSON.parse(rows[0]!.definition).nodes[0] as Record<string, unknown>
     expect(node.agentId).toBe('agent-b')
     expect(node.agentName).toBe('shared')
@@ -449,8 +451,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       { kind: 'actor', actor: viewer },
     )
     expect(result.outcome).toBe('created')
-    const { workflows } = tablesOf(db)
-    const row = (await db.select().from(workflows).where(eq(workflows.name, 'portable-owner')))[0]
+    const row = (await readWorkflowFixtures(db, { name: 'portable-owner' }))[0]
     const importedNode = JSON.parse(row!.definition).nodes[0] as Record<string, unknown>
     expect(importedNode.agentId).toBe('agent-b')
     expect(importedNode.agentOwnerUsername).toBeUndefined()
@@ -477,11 +478,11 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         { kind: 'actor', actor: viewer },
         {
           afterResolve: async () => {
-            const { agents } = tablesOf(db)
-            await db
-              .update(agents)
-              .set({ visibility: 'private', aclRevision: 1 })
-              .where(eq(agents.id, 'agent-a'))
+            await patchAgentFixture(
+              db,
+              { id: 'agent-a' },
+              { visibility: 'private', aclRevision: 1 },
+            )
           },
         },
       ),
@@ -490,8 +491,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       status: 422,
       details: { unresolved: [{ type: 'agent', name: 'shared' }] },
     })
-    const { workflows } = tablesOf(db)
-    expect(await db.select().from(workflows)).toHaveLength(0)
+    expect(await readWorkflowFixtures(db)).toHaveLength(0)
   })
 
   test('create import rejects same-id owner transfer and exposes only the fresh visible candidate', async () => {
@@ -504,11 +504,11 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         { kind: 'actor', actor: viewer },
         {
           afterResolve: async () => {
-            const { agents } = tablesOf(db)
-            await db
-              .update(agents)
-              .set({ ownerUserId: 'owner-b', aclRevision: 1 })
-              .where(eq(agents.id, 'agent-a'))
+            await patchAgentFixture(
+              db,
+              { id: 'agent-a' },
+              { ownerUserId: 'owner-b', aclRevision: 1 },
+            )
           },
         },
       ),
@@ -532,8 +532,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         ],
       },
     })
-    const { workflows } = tablesOf(db)
-    expect(await db.select().from(workflows)).toHaveLength(0)
+    expect(await readWorkflowFixtures(db)).toHaveLength(0)
   })
 
   test('create import rejects a selected-id rename with an empty fresh candidate set and zero writes', async () => {
@@ -546,8 +545,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         { kind: 'actor', actor: viewer },
         {
           afterResolve: async () => {
-            const { agents } = tablesOf(db)
-            await db.update(agents).set({ name: 'renamed' }).where(eq(agents.id, 'agent-a'))
+            await patchAgentFixture(db, { id: 'agent-a' }, { name: 'renamed' })
           },
         },
       ),
@@ -563,13 +561,12 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         ],
       },
     })
-    const { workflows } = tablesOf(db)
-    expect(await db.select().from(workflows)).toHaveLength(0)
+    expect(await readWorkflowFixtures(db)).toHaveLength(0)
   })
 
   test('create import rejects private-grant revocation as unresolved and writes nothing', async () => {
     await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
-    const { resourceGrants, agents, workflows } = tablesOf(db)
+    const { resourceGrants } = tablesOf(db)
     await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: 'agent-a',
@@ -586,7 +583,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         {
           afterResolve: async () => {
             await db.delete(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a'))
-            await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+            await patchAgentFixture(db, { id: 'agent-a' }, { aclRevision: 1 })
           },
         },
       ),
@@ -595,7 +592,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       status: 422,
       details: { unresolved: [{ type: 'agent', name: 'shared' }] },
     })
-    expect(await db.select().from(workflows)).toHaveLength(0)
+    expect(await readWorkflowFixtures(db)).toHaveLength(0)
   })
 
   test('auto-resolved 1-to-N drift becomes ambiguous inside the create transaction', async () => {
@@ -624,13 +621,12 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         ],
       },
     })
-    const { workflows } = tablesOf(db)
-    expect(await db.select().from(workflows)).toHaveLength(0)
+    expect(await readWorkflowFixtures(db)).toHaveLength(0)
   })
 
   test('overwrite import rechecks grant visibility in its CAS transaction and preserves the target', async () => {
     await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
-    const { resourceGrants, workflows, agents } = tablesOf(db)
+    const { resourceGrants } = tablesOf(db)
     await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: 'agent-a',
@@ -644,7 +640,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       nodes: [],
       edges: [],
     })
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'workflow-target',
       name: 'before-import',
       description: 'untouched',
@@ -675,13 +671,13 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         {
           afterResolve: async () => {
             await db.delete(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a'))
-            await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+            await patchAgentFixture(db, { id: 'agent-a' }, { aclRevision: 1 })
           },
         },
       ),
     ).rejects.toMatchObject({ code: 'import-ref-unresolved', status: 422 })
 
-    const target = (await db.select().from(workflows).where(eq(workflows.id, 'workflow-target')))[0]
+    const target = (await readWorkflowFixtures(db, { id: 'workflow-target' }))[0]
     expect(target).toMatchObject({
       name: 'before-import',
       description: 'untouched',
@@ -692,7 +688,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
 
   test('stale-version logical-same overwrite cannot bypass the final reference guard', async () => {
     await seedAgent(db, 'agent-a', 'owner-a', 'shared', 'private')
-    const { resourceGrants, workflows, agents } = tablesOf(db)
+    const { resourceGrants } = tablesOf(db)
     await insertOne(db, resourceGrants, {
       resourceType: 'agent',
       resourceId: 'agent-a',
@@ -713,7 +709,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       ],
       edges: [],
     })
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'logical-same-target',
       name: 'logical-same',
       description: '',
@@ -744,7 +740,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
         {
           afterResolve: async () => {
             await db.delete(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a'))
-            await db.update(agents).set({ aclRevision: 1 }).where(eq(agents.id, 'agent-a'))
+            await patchAgentFixture(db, { id: 'agent-a' }, { aclRevision: 1 })
           },
         },
       ),
@@ -754,9 +750,7 @@ describeEachProvider('RFC-223 AC10 portable import reference resolution', (harne
       details: { unresolved: [{ type: 'agent', name: 'shared' }] },
     })
 
-    const target = (
-      await db.select().from(workflows).where(eq(workflows.id, 'logical-same-target'))
-    )[0]
+    const target = (await readWorkflowFixtures(db, { id: 'logical-same-target' }))[0]
     expect(target).toMatchObject({
       name: 'logical-same',
       definition: currentDefinition,

@@ -23,6 +23,13 @@
 // Preserved verbatim: queued → open (unconditional, 'revivable'); failed/interrupted/pending/
 // running handler → open (revival still owed); dual-queued reject (rfc128-p5-bc three cases).
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -54,8 +61,7 @@ function liveDef(): WorkflowDefinition {
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -63,7 +69,7 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -89,8 +95,7 @@ async function seedRun(
   over: { status?: string; iteration?: number; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -100,7 +105,7 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -114,8 +119,7 @@ async function seedSelfRoundAskedBy(
   askingRunId: string,
 ): Promise<{ intermediaryNodeRunId: string }> {
   const intRunId = await seedRun(db, taskId, CL, { status: 'awaiting_human' })
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -126,8 +130,8 @@ async function seedSelfRoundAskedBy(
     targetConsumerNodeId: null,
     loopIter: 0,
     iteration: 0,
-    questionsJson: JSON.stringify([]),
-    answersJson: JSON.stringify([]),
+    questions: JSON.stringify([]),
+    answers: JSON.stringify([]),
     directive: 'continue',
     status: 'answered',
     answeredAt: Date.now(),
@@ -185,6 +189,13 @@ const TARGET = 'agent_target'
 
 function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
   return {
+    containerRunId: null,
+    shardKey: null,
+    consumedUpstreamRunsJson: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+
     seq: null,
     id: 'run',
     nodeId: TARGET,
@@ -224,28 +235,28 @@ const QUEUED: EntryPick = { ...BOUND, triggerRunId: null }
 const H1_RUNS = [mkRun({ id: 'h1', rerunCause: 'cross-clarify-answer' })]
 
 describe('RFC-139 ① — bound done (regardless of output) = consumed in BOTH modes', () => {
-  test('revivable + done-no-output → consumed (the QMGP5 fix; was open forever)', () => {
+  test('revivable + done-no-output → consumed (the QMGP5 fix; was open forever)', async () => {
     const doneNoOut = [mkLineage({ id: 'h1', hasOutput: false })]
-    expect(isDispatchedEntryConsumed(BOUND, H1_RUNS, doneNoOut, 'revivable')).toBe(true)
-    expect(isDispatchedEntryConsumed(BOUND, H1_RUNS, doneNoOut, 'in-flight')).toBe(true)
+    expect(await isDispatchedEntryConsumed(BOUND, H1_RUNS, doneNoOut, 'revivable')).toBe(true)
+    expect(await isDispatchedEntryConsumed(BOUND, H1_RUNS, doneNoOut, 'in-flight')).toBe(true)
   })
 
-  test('revivable + done+output → consumed (unchanged)', () => {
+  test('revivable + done+output → consumed (unchanged)', async () => {
     const doneOut = [mkLineage({ id: 'h1', hasOutput: true })]
-    expect(isDispatchedEntryConsumed(BOUND, H1_RUNS, doneOut, 'revivable')).toBe(true)
+    expect(await isDispatchedEntryConsumed(BOUND, H1_RUNS, doneOut, 'revivable')).toBe(true)
   })
 
-  test('revivable + failed / interrupted / canceled / pending / running handler → still open (revival owed)', () => {
+  test('revivable + failed / interrupted / canceled / pending / running handler → still open (revival owed)', async () => {
     for (const status of ['failed', 'interrupted', 'canceled', 'pending', 'running'] as const) {
       const lineage = [mkLineage({ id: 'h1', status })]
       const runs = [mkRun({ id: 'h1', rerunCause: 'cross-clarify-answer', status })]
-      expect(isDispatchedEntryConsumed(BOUND, runs, lineage, 'revivable')).toBe(false)
-      expect(isDispatchedEntryConsumed(BOUND, runs, lineage, 'in-flight')).toBe(false)
+      expect(await isDispatchedEntryConsumed(BOUND, runs, lineage, 'revivable')).toBe(false)
+      expect(await isDispatchedEntryConsumed(BOUND, runs, lineage, 'in-flight')).toBe(false)
     }
   })
 
-  test('revivable + queued → open unconditionally (unchanged — the ledger of its own pending rerun)', () => {
-    expect(isDispatchedEntryConsumed(QUEUED, [], [], 'revivable')).toBe(false)
+  test('revivable + queued → open unconditionally (unchanged — the ledger of its own pending rerun)', async () => {
+    expect(await isDispatchedEntryConsumed(QUEUED, [], [], 'revivable')).toBe(false)
   })
 })
 

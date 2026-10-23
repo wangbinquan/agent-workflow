@@ -4,6 +4,7 @@
 // (invisible/builtin → error) + rejects required-upload workflows + computes the
 // initial next_run_at; update re-gates when the result is enabled + recomputes
 // next_run_at + resets consecutive_failures; row corruption is caught.
+import { patchWorkflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
@@ -144,8 +145,7 @@ describeEachProvider('RFC-159 scheduled-task CRUD', (harness) => {
       { name: 'p', description: '', definition: DEF },
       { ownerUserId: 'bob' },
     )
-    const { workflows } = tablesOf(db)
-    await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, priv.id))
+    await patchWorkflowFixture(db, { id: priv.id }, { visibility: 'private' })
     await expect(
       createScheduledTask(
         db,

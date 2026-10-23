@@ -410,7 +410,8 @@ describe('RFC-370 complete selected repository Git workspace', () => {
           readonly: true,
           worktreePath: f.ref,
           repoPath: 'readonly-repo',
-          repoIndex: 3,
+          // RFC-395 II-a: runtime repository identity is ordinal; the write port retains repoIndex.
+          ordinal: 3,
           mountPath: 'mount',
         },
         { readonly: false, worktreePath: 'opaque:never', repoPath: 'never' },

@@ -20,18 +20,17 @@
 //
 // `projectExecutionOutcome` is a pure function over pre-fetched rows (unit
 // tested directly); `getExecutionOutcome` is the thin DB assembler.
+import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { workgroupLaunchMode } from '@/modules/task-execution/public/queries'
+import type { TaskWorkgroupConfig } from '@/modules/task-execution/public/types'
+import { decodeTaskSubject } from '@/modules/task-execution/public/queries'
 import type { TaskExecutionOutcomeReadModel } from '@/modules/task-execution/public/types'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
-import { pickLatestSettledRun } from '@/services/freshness'
+import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
 import { CODE_ROUND_NODE_ID } from '@/services/codeRoundContract'
-import {
-  isTerminalTaskStatus,
-  taskExecutionKind,
-  workgroupModeOf,
-  type TaskStatus,
-} from '@agent-workflow/shared'
+import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { ExecutionOutcome } from './types'
 
 export type OutcomeTaskRow = {
@@ -40,13 +39,14 @@ export type OutcomeTaskRow = {
   errorSummary: string | null
   errorMessage: string | null
   failedNodeId: string | null
+  workflowId: string
   workflowSnapshot: string | null
   workgroupId?: string | null
-  workgroupConfigJson?: string | null
+  workgroupConfig?: TaskWorkgroupConfig | null
   sourceAgentName?: string | null
   /**
    * RFC-304. MUST be selected by every caller that builds this row: the
-   * discriminator fields of `taskExecutionKind` are all optional, so a caller
+   * optional discriminator fields alone cannot identify a subject, so a caller
    * that forgets one gets a silent misclassification rather than a type error
    * (a code-round task would read as `workflow` and project outputs from a
    * snapshot that has no output nodes). Locked by rfc304-code-round-outcome.
@@ -135,18 +135,22 @@ function outputNodesOfSnapshot(
   }
 }
 
-function projectOutputNodePorts(
+async function projectOutputNodePorts(
   outputNodes: ReadonlyArray<{ id: string; portNames: readonly string[] }>,
   runs: readonly OutcomeRunRow[],
   outputs: readonly OutcomeOutputRow[],
   warnings: string[],
-): ExecutionOutcome['outputs'] {
+): Promise<ExecutionOutcome['outputs']> {
   const result: ExecutionOutcome['outputs'] = {}
   for (const { id: nodeId, portNames } of outputNodes) {
-    const rows = runs.filter((r) => r.nodeId === nodeId)
     // RFC-354: a task-boundary projection sits outside every frame of the task —
     // the answer is the node's latest settled row, whatever frame produced it.
-    const picked = pickLatestSettledRun(rows)
+    const picked = (
+      await createRunSelectionOracleSnapshot(
+        runs.map((row) => ({ ...row, taskId: '' })),
+        { scope: { kind: 'rows' } },
+      ).familyHistory('', { nodeId }, { topLevelOnly: true, statusIn: ['done', 'skipped'] })
+    ).at(-1)
     if (picked === undefined) {
       // task done ⟹ every output node has a settled row (lifecycle invariant T3);
       // defensive for hand-edited fixtures / historical rows.
@@ -177,7 +181,7 @@ function projectOutputNodePorts(
       result[o.portName] = {
         content: o.content,
         kind: o.kind,
-        ...(o.archiveJson != null ? { archiveJson: o.archiveJson } : {}),
+        ...(o.archiveJson != null ? { archiveJson: copyLegacyPortArchive(o.archiveJson) } : {}),
         // RFC-306: an ACTIVE output node can still project an inactive port when
         // only one of its bindings sat on a closed branch (joinMode 'any').
         ...(o.active === false ? { active: false } : {}),
@@ -187,12 +191,12 @@ function projectOutputNodePorts(
   return result
 }
 
-export function projectExecutionOutcome(args: {
+export async function projectExecutionOutcome(args: {
   task: OutcomeTaskRow
   runs: readonly OutcomeRunRow[]
   outputs: readonly OutcomeOutputRow[]
   workgroup: WorkgroupOutcomeInput | null
-}): ExecutionOutcome {
+}): Promise<ExecutionOutcome> {
   const { task } = args
   const status = task.status as TaskStatus
   const terminal = isTerminalTaskStatus(status)
@@ -202,16 +206,16 @@ export function projectExecutionOutcome(args: {
 
   let outputs: ExecutionOutcome['outputs'] = {}
   if (status === 'done') {
-    const kind = taskExecutionKind(task)
-    if (kind === 'workflow') {
-      outputs = projectOutputNodePorts(
+    const kind = decodeTaskSubject(task).kind
+    if (kind === 'workflow' || kind === 'digital-employee') {
+      outputs = await projectOutputNodePorts(
         outputNodesOfSnapshot(task.workflowSnapshot, warnings),
         args.runs,
         args.outputs,
         warnings,
       )
     } else if (kind === 'agent') {
-      outputs = projectOutputNodePorts(
+      outputs = await projectOutputNodePorts(
         // An agent-host task has one synthetic node and no declared output-node
         // ports; the empty list only matters for the skipped branch above, which
         // a host node never takes.
@@ -226,26 +230,26 @@ export function projectExecutionOutcome(args: {
       //
       // This branch is not optional bookkeeping. Before it existed, a
       // code-round task fell through to the workgroup arm below, where
-      // `workgroupModeOf(null)` returns null and the outcome came back
+      // `workgroupLaunchMode(undefined)` returns null and the outcome came back
       // `status: 'done'` with `outputs: {}` and a `workgroup-config-unparsable`
       // warning — a successful-looking result, with empty outputs, blamed on a
       // workgroup config the task never had. Note the failure was in the arm
       // NOBODY would think to check, which is why the kind test below is now
       // explicit rather than an `else`.
-      outputs = projectOutputNodePorts(
+      outputs = await projectOutputNodePorts(
         [{ id: CODE_ROUND_NODE_ID, portNames: [] }],
         args.runs,
         args.outputs,
         warnings,
       )
     } else if (kind === 'workgroup') {
-      const mode = workgroupModeOf(task.workgroupConfigJson)
+      const mode = workgroupLaunchMode(task.workgroupConfig?.launch)
       const wg = args.workgroup
       if (mode === null || wg === null) {
         warnings.push('workgroup-config-unparsable')
       } else if (mode === 'dynamic_workflow') {
         if (wg.dwPhase === 'executing') {
-          outputs = projectOutputNodePorts(
+          outputs = await projectOutputNodePorts(
             outputNodesOfSnapshot(task.workflowSnapshot, warnings),
             args.runs,
             args.outputs,

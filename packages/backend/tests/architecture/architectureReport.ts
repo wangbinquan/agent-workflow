@@ -2328,7 +2328,12 @@ function buildGovernedFieldSurfaces(allUnits: readonly SourceUnit[]): GovernedFi
       ],
       consumers: [
         anchor({
-          file: 'packages/backend/src/services/task.ts',
+          // RFC-395 II-a A7: choose the row projector from this immutable corpus.
+          file: byPath.has(
+            'packages/backend/src/modules/task-execution/infrastructure/taskDetailQueries.ts',
+          )
+            ? 'packages/backend/src/modules/task-execution/infrastructure/taskDetailQueries.ts'
+            : 'packages/backend/src/services/task.ts',
           symbol: 'rowToTask',
           sourceToken: 'digitalEmployeeCaseId: row.digitalEmployeeCaseId ?? null',
         }),

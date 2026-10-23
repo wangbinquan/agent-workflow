@@ -5,6 +5,8 @@
 // （`composition/taskExecutionPersistence.ts`），其余读 / 写共用；`recordAutoRecoveryAttempt` 取 PG 的
 // 事务形态（读 + 写同一事务，SQLite 侧此前是两条自动提交语句）。
 
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
+import { decodeTaskSubject } from '../domain/taskSubject'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
@@ -35,8 +37,49 @@ import type {
   TaskRecoveryRunRecord,
   TaskRecoveryStuckTaskSnapshot,
 } from '../application/ports/taskRecoveryOperations'
-import { hasUndispatchedDesignerRecoveryEvidence } from '../application/ports/taskRecoveryOperations'
+import { resolveHandlerRun } from './runSelection/oracle/handlerHistory'
 import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinuation'
+
+/** Exact RFC-120 designer-park evidence used by stuck detection. Keeping the
+ * lineage partition pure lets both provider adapters expose the same closed
+ * boolean without importing Collaboration infrastructure across contexts. */
+async function hasUndispatchedDesignerRecoveryEvidence(input: {
+  readonly entries: readonly TaskRecoveryQuestionParkEntry[]
+  readonly runs: readonly TaskRecoveryQuestionRunLineage[]
+}): Promise<boolean> {
+  const hasUndispatched = new Set<string>()
+  const hasInFlight = new Set<string>()
+  for (const entry of input.entries) {
+    const target = entry.overrideTargetNodeId ?? entry.defaultTargetNodeId
+    if (target === null || target === '') continue
+    if (entry.dispatchedAt === null) {
+      hasUndispatched.add(target)
+      continue
+    }
+    if (entry.triggerRunId === null) {
+      hasInFlight.add(target)
+      continue
+    }
+    const anchor = input.runs.find((run) => run.id === entry.triggerRunId)
+    if (anchor === undefined) {
+      hasInFlight.add(target)
+      continue
+    }
+    const handler = await resolveHandlerRun({
+      effectiveTargetNodeId: anchor.nodeId,
+      iteration: anchor.iteration,
+      loopIter: anchor.loopIter,
+      triggerRunId: entry.triggerRunId,
+      runs: [...input.runs],
+      ...(anchor.shardKey === null ? {} : { shardKey: anchor.shardKey }),
+    })
+    if (handler === null || handler.status !== 'done') hasInFlight.add(target)
+  }
+  for (const target of hasUndispatched) {
+    if (!hasInFlight.has(target)) return true
+  }
+  return false
+}
 
 const CLARIFY_RERUN_CAUSES = ['clarify-answer', 'cross-clarify-questioner-rerun'] as const
 const LIFECYCLE_INVARIANT_QUERY_CHUNK_SIZE = 400
@@ -183,7 +226,7 @@ async function hasUndispatchedDesignerQuestions(
     parentNodeRunId: run.parentNodeRunId,
     shardKey: run.shardKey,
   }))
-  return hasUndispatchedDesignerRecoveryEvidence({ entries, runs: lineage })
+  return await hasUndispatchedDesignerRecoveryEvidence({ entries, runs: lineage })
 }
 
 async function loadLifecycleInvariantSnapshots(
@@ -347,7 +390,7 @@ async function loadLifecycleInvariantSnapshots(
       snapshots.push(
         Object.freeze({
           ...task,
-          hasUndispatchedDesignerQuestions: hasUndispatchedDesignerRecoveryEvidence({
+          hasUndispatchedDesignerQuestions: await hasUndispatchedDesignerRecoveryEvidence({
             entries,
             runs: lineage,
           }),
@@ -422,6 +465,10 @@ async function loadStuckTaskSnapshots(
       startedAt: tasks.startedAt,
       ownerUserId: tasks.ownerUserId,
       workgroupId: tasks.workgroupId,
+      workflowId: tasks.workflowId,
+      codeRoundId: tasks.codeRoundId,
+      sourceAgentId: tasks.sourceAgentId,
+      sourceAgentName: tasks.sourceAgentName,
       worktreePath: tasks.worktreePath,
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePrunedAt: tasks.workspacePrunedAt,
@@ -515,6 +562,7 @@ async function loadStuckTaskSnapshots(
     snapshots.push(
       Object.freeze({
         ...row,
+        subject: decodeTaskSubject(row),
         hasRepoPrepRow: prepIds.has(row.taskId),
         latestEventTs: latestTaskEventTs,
         hasPendingDocVersion: pendingDoc !== undefined,
@@ -707,7 +755,7 @@ export function createTaskRecoveryOperations(
       const projection = {
         id: tasks.id,
         workgroupId: tasks.workgroupId,
-        workgroupConfigJson: tasks.workgroupConfigJson,
+        workgroupConfig: taskWorkgroupConfigSelection(db),
         worktreePath: tasks.worktreePath,
         workspacePruningAt: tasks.workspacePruningAt,
         workspacePrunedAt: tasks.workspacePrunedAt,

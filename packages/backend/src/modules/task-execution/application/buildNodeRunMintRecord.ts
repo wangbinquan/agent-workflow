@@ -1,6 +1,9 @@
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 
+import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
+import { inheritTaskPreSnapshots } from '../domain/taskCheckpoint'
 import { sha256Hex } from '../domain/digest'
 import { decodeLineageSlotPath, encodeLineageSlotPath } from '../domain/executionIntent'
 import type { NodeRunMintInput, NodeRunMintRecord } from './ports/nodeRunLifecyclePersistence'
@@ -30,7 +33,9 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
   const id = input.id ?? ulid()
   const now = Date.now()
   const inherited = input.inheritFrom ?? null
-  const overrides = input.overrides ?? {}
+  const overrides = input.overrides?.identity ?? {}
+  const config = input.overrides?.config ?? {}
+  const inputs = input.overrides?.inputs ?? {}
 
   const parentNodeRunId =
     overrides.parentNodeRunId !== undefined
@@ -42,8 +47,9 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
     overrides.reviewIteration !== undefined
       ? overrides.reviewIteration
       : (inherited?.reviewIteration ?? 0)
-  const preSnapshot =
-    overrides.preSnapshot !== undefined ? overrides.preSnapshot : (inherited?.preSnapshot ?? null)
+  const checkpoints = inheritTaskPreSnapshots(
+    input.overrides?.checkpoint?.checkpoints ?? inherited?.checkpointInheritance ?? [],
+  )
   const continuationSlotKey =
     overrides.continuationSlotKey !== undefined
       ? overrides.continuationSlotKey
@@ -68,6 +74,10 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
     input.containerRunId !== undefined ? input.containerRunId : (inherited?.containerRunId ?? null)
   const scopePath = containerRunId === null ? '' : (input.scopePath ?? null)
 
+  const derived = deriveNodeRunRole({ nodeId: input.nodeId, rerunCause: input.cause })
+  if (input.role !== derived.role || input.syntheticKind !== derived.syntheticKind) {
+    throw new Error(`mintNodeRun: role mismatch for node '${input.nodeId}' (task ${input.taskId})`)
+  }
   if (input.status === 'running' && parentNodeRunId === null) {
     throw new Error(
       `mintNodeRun: refusing to mint a top-level 'running' row for node '${input.nodeId}' ` +
@@ -76,22 +86,32 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
     )
   }
 
+  if (input.role === 'node-attempt' && input.status === 'running' && containerRunId === null) {
+    throw new Error(
+      `mintNodeRun: refusing to mint a top-level 'running' row for node '${input.nodeId}' ` +
+        `(task ${input.taskId}) — born-running node attempts must carry containerRunId ` +
+        `(frontier invisibility, RFC-098 revision #10)`,
+    )
+  }
+
   return Object.freeze({
+    role: input.role,
+    syntheticKind: input.syntheticKind,
     id,
     taskId: input.taskId,
     nodeId: input.nodeId,
     status: input.status,
     rerunCause: input.cause,
-    retryIndex: input.retryIndex ?? 0,
+    retryIndex: nodeRunAttemptIndex({ kind: 'explicit', attempt: input.retryIndex }),
     iteration: input.iteration ?? 0,
     reviewIteration,
     shardKey,
     parentNodeRunId,
     containerRunId,
     scopePath,
-    preSnapshot,
-    shardValueHash: overrides.shardValueHash ?? null,
-    consumedUpstreamRunsJson: overrides.consumedUpstreamRunsJson ?? null,
+    checkpoints,
+    shardValueHash: config.shardValueHash ?? null,
+    consumedUpstreamRunsJson: inputs.consumedUpstreamRunsJson ?? null,
     errorMessage: overrides.errorMessage ?? null,
     forceActivated: overrides.forceActivated ?? false,
     startedAt: overrides.startedAt !== undefined ? overrides.startedAt : now,
@@ -101,8 +121,8 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
         : input.status === 'done'
           ? now
           : null,
-    agentOverrideName: overrides.agentOverrideName ?? null,
-    agentOverrideId: overrides.agentOverrideId ?? null,
+    agentOverrideName: config.agentOverrideName ?? null,
+    agentOverrideId: config.agentOverrideId ?? null,
     wgRound: overrides.wgRound ?? null,
     envelopeNonce: overrides.envelopeNonce ?? generateNodeRunEnvelopeNonce(),
     continuationSlotKey,

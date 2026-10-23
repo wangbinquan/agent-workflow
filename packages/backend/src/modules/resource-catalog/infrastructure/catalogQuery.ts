@@ -1,6 +1,7 @@
 // RFC-359 W4-B2 —— 目录摘要查询（分页 / 搜索 / 可见性）：一份实现，两个 provider 共用。
 // 此前 sqlite / postgresql 两份只差客户端类型与搜索谓词的方言写法；SQLite 侧另有三个无消费者的便捷函数一并删除。
 
+import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, or, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
@@ -179,7 +180,9 @@ async function listKind(
           version: workflows.version,
         })
         .from(workflows)
-        .where(catalogWhere(db, actor, kind, workflows, query))
+        .where(
+          workflowCatalogPredicate(workflows.id, catalogWhere(db, actor, kind, workflows, query)),
+        )
         .orderBy(asc(workflows.name), asc(workflows.id))
         .limit(query.limit)
 

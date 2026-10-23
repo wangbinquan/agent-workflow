@@ -18,8 +18,12 @@
 // 外加源码文本锁，兜住 scheduler runHostNode / workgroupRunner 三处接线（真实 runHostNode
 // 需 iso+git，单测难触，故文本锁兜底）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import type { Agent, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import {
   WG_PORT_ASSIGNMENTS,
@@ -32,7 +36,6 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -188,15 +191,14 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -220,8 +222,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n1',
@@ -291,8 +292,7 @@ function runLeader(
 }
 
 async function outputRows(db: PersistenceDb, nodeRunId: string) {
-  const { nodeRunOutputs } = tablesOf(db)
-  return db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+  return readNodeRunOutputFixtures(db, { nodeRunId })
 }
 
 describeEachProvider('RFC-184 — host projection over real runNode', (harness) => {

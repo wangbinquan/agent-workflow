@@ -29,10 +29,14 @@ const E2E_DIR = resolve(import.meta.dir, '..', '..', '..', 'e2e')
 
 /** The files Playwright's Node runner loads: `e2e/*.ts`, fixtures excluded. */
 function nodeLoadedFiles(): string[] {
-  return readdirSync(E2E_DIR, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
-    .map((entry) => entry.name)
-    .sort()
+  return (
+    readdirSync(E2E_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+      .map((entry) => entry.name)
+      // RFC-395 II-a A1: the one Node-side SQL codec is an explicit scanned entry.
+      .concat('fixtures/model.ts')
+      .sort()
+  )
 }
 
 // Every spelling that reaches a `bun:` module, not just the static one:
@@ -90,9 +94,26 @@ describe('RFC-254 — the Playwright-loaded e2e files stay Node-compatible', () 
     // pulls a fixture into its import graph, and a single
     // `import { x } from './fixtures/…'` in a spec reopens the outage.
     const offenders = nodeLoadedFiles().filter((name) =>
-      /\bfrom\s*['"]\.[./]*\/?fixtures\//.test(readFileSync(join(E2E_DIR, name), 'utf8')),
+      // RFC-395 II-a A1: only the pure projection codec can cross this boundary.
+      /\bfrom\s*['"]\.[./]*\/?fixtures\/(?!model(?:\.ts)?['"])/.test(
+        readFileSync(join(E2E_DIR, name), 'utf8'),
+      ),
     )
     expect(offenders, 'fixtures are executed by Bun — Node must not import them').toEqual([])
+  })
+
+  test('RFC-395 II-a: the model fixture and every bundled dependency remain Node compatible', async () => {
+    const result = await Bun.build({
+      entrypoints: [join(E2E_DIR, 'fixtures/model.ts')],
+      target: 'node',
+    })
+    expect(result.success, result.logs.map(String).join('\n')).toBe(true)
+    expect(result.outputs.length).toBeGreaterThan(0)
+    for (const output of result.outputs) {
+      const source = await output.text()
+      expect(BUN_MODULE_IMPORT.test(source)).toBe(false)
+      expect(BUN_GLOBAL_USE.test(withoutCommentsOrStrings(source))).toBe(false)
+    }
   })
 
   test('the Bun-side runner it delegates to is still there', () => {

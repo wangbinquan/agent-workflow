@@ -59,11 +59,11 @@ SQL 文件数只统计目录下 `*.sql`，不把 metadata / JSON 快照文件算
 
 | 问题 | 证据 | 设计裁决 |
 | --- | --- | --- |
-| 非 Workflow 任务需要假宿主 | [schema.ts](../../packages/backend/src/db/schema.ts) `tasks`（约 1099）；[workgroup/launch.ts](../../packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts) `ensureWorkgroupHostWorkflow`（151）；[taskRouteLaunchOperations.ts](../../packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts) Agent / Workgroup launch | 是 NOT NULL 和旧执行表示的问题；`workflow_id` 当前不是实际 FK，不误诊成外键限制 |
+| 非 Workflow 任务需要假宿主 | [schema.ts](../../packages/backend/src/db/schema.ts) `tasks`（约 1099）；workgroup/launch.ts（`packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts`） `ensureWorkgroupHostWorkflow`（151）；[taskRouteLaunchOperations.ts](../../packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts) Agent / Workgroup launch | 是 NOT NULL 和旧执行表示的问题；`workflow_id` 当前不是实际 FK，不误诊成外键限制 |
 | 主仓镜像与目录双身份 | schema `task_repos`（约 2024）；`worktree_dir_name` 注释；`tasks` 主仓字段 | 单一挂载权威，API 投影保兼容 |
 | 回滚双形态 | [nodeRollback.ts](../../packages/backend/src/services/nodeRollback.ts) `planNodeRunRollbackTargets` | 统一 per-repo checkpoint，保留无快照的真实语义 |
 | 排序回退与角色多义 | [nodeRunOrder.ts](../../packages/shared/src/nodeRunOrder.ts)；[buildNodeRunMintRecord.ts](../../packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts)；[nodeRunMintParticipant.ts](../../packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts) | 保留 seq allocator；补齐 role / generation / selected / provenance 后退出运行时回退 |
-| supersession 两处表达 | [domain/nodeRunSupersession.ts](../../packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts)、[infrastructure/nodeRunSupersession.ts](../../packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts) | 先保留现有 shard 包含关系语义，再统一选择合同；不能用简单 MAX 替代 |
+| supersession 两处表达 | [domain/nodeRunSupersession.ts](../../packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts)、infrastructure/nodeRunSupersession.ts（`packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts`） | 先保留现有 shard 包含关系语义，再统一选择合同；不能用简单 MAX 替代 |
 | 澄清整包修改 | [clarifyRounds.ts](../../packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts) 答案 / attribution / draft 更新；[seal.ts](../../packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts) | 只对独立编辑状态关系化；问题 snapshot 与 round 不拆成大材料系统 |
 | 资源扫描与注释漂移 | [resourceRefs.ts](../../packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs.ts) 约 435 的 LIKE + parse；[ref/codecs.ts](../../packages/shared/src/ref/codecs.ts) 与 Agent schema | 当前 Agent 引用落库是 ID；保留便携导入名称和 Workflow call 的有意名称选择语义 |
 | 从 SQLite 投影全部 provider | `packages/backend/src/db/providerSchema.ts`（I-b 已删除）、[query.ts](../../packages/backend/src/db/query.ts)、[postgresqlDatabaseClient.ts](../../packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts)、[postgresqlSql.ts](../../packages/backend/src/platform/persistence/postgresqlSql.ts) | 显式合同 + 原生 provider，不让业务类型伪装成 SQLite |
@@ -84,3 +84,5 @@ owner 校正的直接读写证据还包括：`code-capability/infrastructure/cap
 ## 6. 结论的限制
 
 本 RFC 是源代码与一个本机快照支持的阶段目标设计，不是生产部署普查。正式迁移前仍须对每个真实实例重新 fingerprint、预检、演练和审批操作计划；特别是非空 PostgreSQL、活动进程、外部内容完整性、托管切换与备份恢复，没有由本次文档得到通过证据。
+
+> 更正（2026-10-23，RFC-395 II-a）：上文 `legacy/workgroup/launch.ts` 已删除（宿主快照与工作组运行配置的生产实现在 `packages/backend/src/modules/task-execution/infrastructure/workgroupRuntimeConfig.ts`）；`infrastructure/nodeRunSupersession.ts` 已删除（SQL 形态在 `packages/backend/src/modules/task-execution/infrastructure/runSelection/oracle/supersessionSql.ts`）。两处原链接改为纯文本路径，以免链接检查指向不存在的文件。

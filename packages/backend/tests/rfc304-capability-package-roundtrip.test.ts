@@ -19,6 +19,7 @@
 // This drives the whole trip: export from one database, import into another,
 // and check the far end can actually use what arrived.
 
+import { agentFixture, type AgentFixtureSpec } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -61,7 +62,7 @@ const ACTOR = {
 } as never
 
 async function seedSource(db: PersistenceDb): Promise<{ templateId: string }> {
-  const { users, agents, capabilityTemplates } = tablesOf(db)
+  const { users, capabilityTemplates } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -73,7 +74,7 @@ async function seedSource(db: PersistenceDb): Promise<{ templateId: string }> {
   } as PersistenceTables['users']['$inferInsert'])
 
   const agentId = ulid()
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId,
     name: 'department-reviewer',
     description: 'reviews',
@@ -83,7 +84,7 @@ async function seedSource(db: PersistenceDb): Promise<{ templateId: string }> {
     visibility: 'private',
     createdAt: 1,
     updatedAt: 1,
-  } as PersistenceTables['agents']['$inferInsert'])
+  } as AgentFixtureSpec)
 
   // RFC-309 — one template carries both halves. The pair this replaced existed
   // so a package had to pull the framework along with the binding; there is
@@ -270,7 +271,7 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
         //    apply 引擎的 capability-template 臂自己做。判据因此从「lower 出来的 payload」
         //    改成**落库那一行**：更强，而且走的是用户真会走的那条路。
         const destination = freshDb()
-        const { users, agents, capabilityTemplates } = tablesOf(destination)
+        const { users, capabilityTemplates } = tablesOf(destination)
         await insertOne(destination, users, {
           id: 'u1',
           username: 'u1',
@@ -280,7 +281,7 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
           createdAt: 1,
           updatedAt: 1,
         } as PersistenceTables['users']['$inferInsert'])
-        await insertOne(destination, agents, {
+        await agentFixture(destination, {
           id: destinationAgentId,
           name: 'department-reviewer',
           description: 'destination agent',
@@ -290,7 +291,7 @@ describe('RFC-304 T17a → RFC-309 — exporting a capability template', () => {
           visibility: 'public',
           createdAt: 1,
           updatedAt: 1,
-        } as PersistenceTables['agents']['$inferInsert'])
+        } as AgentFixtureSpec)
 
         const appHome = freshHome()
         const box = createSecretBoxFromKey(randomBytes(32))

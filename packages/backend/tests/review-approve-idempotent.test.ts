@@ -7,9 +7,16 @@
 // signal lost. Result: review row stayed `awaiting_review` forever even
 // though the doc_version was approved.
 
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -56,8 +63,8 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
       edges: [],
     }
     const workflowId = ulid()
-    const { workflows, tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { nodeRuns, docVersions } = tablesOf(db)
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify(definition),
@@ -69,7 +76,7 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     const lineageSlotPathJson = JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ])
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 'rfc-052-approve',
       id: taskId,
       workflowId,
@@ -86,20 +93,19 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     })
     // Both providers must start from the original SQLite-materialized row.
     expect(
-      await first(
-        db
-          .select({
-            executionLineageId: tasks.executionLineageId,
-            lineageSlotPathJson: tasks.lineageSlotPathJson,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId)),
-      ),
+      (
+        await readTaskFixtures(db, { id: taskId }).then((rows) =>
+          rows.map((row) => ({
+            executionLineageId: row.executionLineageId,
+            lineageSlotPathJson: row.lineageSlotPathJson,
+          })),
+        )
+      )[0],
     ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
 
     // Review run currently awaiting a decision.
     const reviewRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -130,12 +136,12 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     // The smoking gun: a prior crashed-approve already wrote both output
     // rows. Without RFC-052's upsert, the next approve would throw PK on
     // these.
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: reviewRunId,
       portName: 'approved_doc',
       content: '[stale leftover from a prior crashed approve]',
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: reviewRunId,
       portName: 'approval_meta',
       content: '{"stale":true}',
@@ -159,10 +165,7 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     expect(typeof after.finishedAt).toBe('number')
 
     // Outputs got overwritten by the upsert.
-    const outs = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, reviewRunId))
+    const outs = await readNodeRunOutputFixtures(db, { nodeRunId: reviewRunId })
     expect(outs.length).toBe(2)
     const approvedDoc = outs.find((o) => o.portName === 'approved_doc')!
     expect(approvedDoc.content).not.toContain('stale leftover')

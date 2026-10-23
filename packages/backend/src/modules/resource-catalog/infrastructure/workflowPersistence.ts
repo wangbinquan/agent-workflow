@@ -1,4 +1,5 @@
 import {
+  collectWorkflowDependencyRefs,
   RESOURCE_DISPLAY_NAME_MSG,
   WorkflowDefinitionSchema,
   WorkflowDraftSnapshotSchema,
@@ -50,10 +51,12 @@ export function workflowReferenceFromPersistenceRow(
 
 /** The editor and YAML resolver stamp canonical ids before the write boundary. */
 export function assertCanonicalWorkflowAgentIds(definition: WorkflowDefinition): void {
-  const nodeIds = (definition.nodes ?? [])
-    .filter((node) => node.kind === 'agent-single')
-    .filter((node) => typeof node.agentId !== 'string' || node.agentId.length === 0)
-    .map((node) => node.id)
+  const nodeIds = collectWorkflowDependencyRefs(definition, {
+    includeMissingAgentIds: true,
+    throwOnNullNode: true,
+  })
+    .filter((ref) => ref.resourceType === 'agent' && ref.value.length === 0)
+    .map((ref) => ref.nodeId)
     .sort()
   if (nodeIds.length === 0) return
   throw new ValidationError(

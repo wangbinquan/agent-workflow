@@ -4,9 +4,8 @@
 // PostgreSQL room adapters therefore share one history/current-run/budget
 // grammar without either provider importing the other's infrastructure.
 
+import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
 import {
-  compareNodeRunMintOrder,
-  nodeRunOrderAnchor,
   parseBatchShardKey,
   parseMsgShardKey,
   type WorkgroupMemberCurrentRun,
@@ -22,6 +21,7 @@ import { resolveMessageTurnTriggerId } from './workgroupTurnContext'
 
 /** Minimal host-run snapshot consumed by the room projection. */
 export interface WorkgroupRoomHostRun {
+  readonly selection: WorkgroupRunSelectionProjection
   readonly seq: number | null
   readonly id: string
   readonly nodeId: string
@@ -155,10 +155,8 @@ function isBetter(
   const incumbentRunning = incumbent.status === 'running'
   return candidateRunning !== incumbentRunning
     ? candidateRunning
-    : compareNodeRunMintOrder(
-        nodeRunOrderAnchor(hostRuns, candidate.nodeRunId),
-        nodeRunOrderAnchor(hostRuns, incumbent.nodeRunId),
-      ) > 0
+    : hostRuns.find((run) => run.id === candidate.nodeRunId)!.selection.sequence >
+        hostRuns.find((run) => run.id === incumbent.nodeRunId)!.selection.sequence
 }
 
 function noteOf(run: WorkgroupRoomHostRun): WorkgroupRunEntry['note'] {
@@ -193,7 +191,7 @@ export function deriveWorkgroupRunHistory(
     const entry = classify(run, leaderMemberId, assignmentIds, uniqueAgentMemberById)
     if (entry !== null) classified.push(entry)
   }
-  classified.sort((left, right) => compareNodeRunMintOrder(left.run, right.run))
+  classified.sort((left, right) => left.run.selection.sequence - right.run.selection.sequence)
 
   const leaderRoundOfLegacy = (runId: string): number => {
     let maxRound = 0
@@ -270,6 +268,7 @@ export function deriveMemberCurrentRuns(
 
 /** Minimal host-ledger row consumed by the round-budget projection. */
 export interface RoundLedgerRow {
+  readonly selection: WorkgroupRunSelectionProjection
   readonly seq: number | null
   readonly id: string
   readonly nodeId: string
@@ -288,22 +287,12 @@ export function roundedModeOf(mode: WorkgroupMode): RoundedWorkgroupMode | null 
 const CLARIFY_CONTINUATION_CAUSES = new Set(['clarify-answer', 'cross-clarify-questioner-rerun'])
 
 function supersededKilledClarifyIds(rows: readonly RoundLedgerRow[]): Set<string> {
-  const groupKey = (row: RoundLedgerRow): string => `${row.nodeId}\x00${row.shardKey ?? ''}`
-  const newestByGroup = new Map<string, RoundLedgerRow>()
-  for (const row of rows) {
-    const key = groupKey(row)
-    const current = newestByGroup.get(key)
-    if (current === undefined || compareNodeRunMintOrder(row, current) > 0)
-      newestByGroup.set(key, row)
-  }
-
   const superseded = new Set<string>()
   for (const row of rows) {
     if (row.status !== 'interrupted' || !CLARIFY_CONTINUATION_CAUSES.has(row.rerunCause ?? '')) {
       continue
     }
-    if (compareNodeRunMintOrder(newestByGroup.get(groupKey(row)) ?? row, row) > 0)
-      superseded.add(row.id)
+    if (!row.selection.legacyGroupCurrent) superseded.add(row.id)
   }
   return superseded
 }

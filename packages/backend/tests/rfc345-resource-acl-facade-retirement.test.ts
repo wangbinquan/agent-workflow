@@ -346,14 +346,7 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'digital-employee tool visibility',
     REMOVE_OWNERS.digitalEmployeeTools,
   ),
-  edge(
-    'services/resourceAcl.ts',
-    // RFC-359 W1-T3：agent / script 动作执行器合一到 actionExecutionRunners.ts。
-    'modules/task-execution/composition/actionExecutionRunners.ts',
-    ['initialBuiltinResourceAcl'],
-    'built-in Agent execution ACL seed',
-    REMOVE_OWNERS.taskExecution,
-  ),
+  // RFC-395 II-a A5: action runner delegates the built-in agent write to the catalog participant; the facade edge is gone.
   edge(
     'services/resourceAcl.ts',
     'modules/task-execution/infrastructure/legacyCallClosure.ts',

@@ -13,7 +13,14 @@
 // the stale row and the task failed with
 // `review-source-port-missing: upstream 'agent_p69bj1' did not emit port 'docpath'`.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -21,7 +28,6 @@ import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -49,8 +55,8 @@ describeEachProvider(
 
     test('picks the (clarifyIteration=1, retryIndex=0) run over the stale (clarifyIteration=0, retryIndex=1) run', async () => {
       const agentId = ulid()
-      const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
-      await insertOne(db, agents, {
+      const { docVersions } = tablesOf(db)
+      await agentFixture(db, {
         id: agentId,
         name: 'doc',
         description: '',
@@ -78,7 +84,7 @@ describeEachProvider(
         ],
       }
       const workflowId = ulid()
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'w',
         description: '',
@@ -87,7 +93,7 @@ describeEachProvider(
       })
 
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         name: 'clarify-rerun-task',
         id: taskId,
         workflowId,
@@ -100,13 +106,13 @@ describeEachProvider(
         inputs: '{}',
         startedAt: Date.now(),
       })
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]!
 
       // Stale row: process retry that ran BEFORE the clarify session. retryIndex
       // is higher than the clarify-rerun's, but clarifyIteration is 0. No
       // docpath port was emitted on this attempt.
       const staleRunId = '01A_STALE' // RFC-074 PR-C: causal ids (clarify rerun minted later wins by id)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: staleRunId,
         taskId,
         nodeId: 'doc',
@@ -123,7 +129,7 @@ describeEachProvider(
       // clarifyIteration=1 (the clarify-answer rerun mint + isFresherNodeRun in
       // packages/backend/src/modules/task-execution/composition/nodeMechanics.ts). Emitted docpath.
       const clarifyRunId = '01B_CLARIFY'
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: clarifyRunId,
         taskId,
         nodeId: 'doc',
@@ -133,7 +139,7 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: clarifyRunId,
         portName: 'docpath',
         content: '# approved doc body',

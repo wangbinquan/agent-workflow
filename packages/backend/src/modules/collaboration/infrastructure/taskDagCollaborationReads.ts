@@ -1,4 +1,5 @@
-import { resolveHandlerRun, type RunLineageView } from '@agent-workflow/shared'
+import { resolveHandlerRun } from '@/modules/task-execution/public/queries'
+import { type RunLineageView } from '@agent-workflow/shared'
 
 export interface TaskDagParkEntry {
   readonly dispatchedAt: number | null
@@ -24,11 +25,11 @@ export interface TaskDagNodeRun {
  * parks only while it has undispatched work and no unconsumed dispatched rerun
  * across any collaboration role.
  */
-export function partitionTaskDagParkTargets(
+export async function partitionTaskDagParkTargets(
   entries: readonly TaskDagParkEntry[],
   runs: readonly TaskDagNodeRun[],
   outputRunIds: ReadonlySet<string>,
-): ReadonlySet<string> {
+): Promise<ReadonlySet<string>> {
   if (entries.length === 0) return new Set()
   const lineageViews: RunLineageView[] = runs.map((run) => ({
     id: run.id,
@@ -61,7 +62,7 @@ export function partitionTaskDagParkTargets(
       inFlight.add(target)
       continue
     }
-    const handler = resolveHandlerRun({
+    const handler = await resolveHandlerRun({
       effectiveTargetNodeId: anchor.nodeId,
       iteration: anchor.iteration,
       loopIter: 0,

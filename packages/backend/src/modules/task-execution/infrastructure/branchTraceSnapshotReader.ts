@@ -3,10 +3,18 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { BranchTraceSnapshotReader } from '../application/ports/branchTraceSnapshotReader'
+import type {
+  BranchTraceRunSnapshot,
+  BranchTraceSnapshotReader,
+} from '../application/ports/branchTraceSnapshotReader'
+import { createRunHistorySnapshot } from './runSelection/oracle/historySnapshot'
 
 export class DrizzleBranchTraceSnapshotReader implements BranchTraceSnapshotReader {
   constructor(private readonly db: PersistenceDb) {}
+
+  history(taskId: string, runs: readonly BranchTraceRunSnapshot[]) {
+    return createRunHistorySnapshot(taskId, runs)
+  }
 
   async read(taskId: string) {
     const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(this.db)

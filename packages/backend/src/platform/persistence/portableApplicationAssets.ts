@@ -27,6 +27,7 @@
 // `resource-catalog` 的 `rowToWorkflow` 逐字同形——那是「读一行 workflow」在全仓的既有
 // 契约，备份路径没有理由自己发明一个。
 
+import { workflowCatalogPredicate } from '@/platform/persistence/workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import {
@@ -151,6 +152,7 @@ export function createPortableBackupApplicationAssets(input: {
           definition: workflows.definition,
         })
         .from(workflows)
+        .where(workflowCatalogPredicate(workflows.id))
         .orderBy(workflows.id)
       for (const row of rows) {
         writeFileSync(

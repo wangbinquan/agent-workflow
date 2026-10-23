@@ -1,5 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { createCrewStationExecutionWorkspaces } from '@/modules/task-execution/composition/crewstationExecution'
 import { createHostedIsolationWorkspaces } from '@/modules/source-control/infrastructure/crewstation/isolationWorkspace'
@@ -15,15 +14,15 @@ import type { WorkspaceTaskRecord } from '@/modules/source-control/application/p
 describeEachProvider('RFC-370 inherited task volume ownership', (harness) => {
   test('call/fusion children resolve the persisted workspace owner while fresh and System tasks retain their identity', async () => {
     const snapshot = JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] })
-    const { workflows, tasks } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: 'workflow',
       name: 'hosted',
       definition: snapshot,
       version: 1,
       schemaVersion: 2,
     })
-    await harness.db.insert(tasks).values(
+    await taskFixture(
+      harness.db,
       ['parent', 'child', 'fresh'].map((id) => ({
         id,
         name: id,

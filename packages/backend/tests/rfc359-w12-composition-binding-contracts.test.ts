@@ -27,6 +27,7 @@ import {
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 const roots: string[] = []
 afterEach(() => {
@@ -75,6 +76,7 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   test('memory: a catalog binding yields a usable catalog through every composition name', async () => {
     const options = {
       db: harness.db,
+      clarifyAnswers: createClarifyAnswerQueries(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),
@@ -110,6 +112,7 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   test('memory: omitted or optional bindings keep the distill-only contract', async () => {
     const options = {
       db: harness.db,
+      clarifyAnswers: createClarifyAnswerQueries(harness.db),
       nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       systemAgentBinding: memorySystemAgentBindingForTest(),

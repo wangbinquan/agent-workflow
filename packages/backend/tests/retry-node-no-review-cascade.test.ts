@@ -7,7 +7,7 @@
 //
 // Locks the upstream half of the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
@@ -86,15 +86,14 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       ],
     }
     const workflowId = ulid()
-    const { workflows, tasks, nodeRuns } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify(definition),
     })
 
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 'rfc-052-retry',
       id: taskId,
       workflowId,
@@ -112,7 +111,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
 
     // Latest agent run: done, what the user clicks "Retry" on.
     const agentRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: agentRunId,
       taskId,
       nodeId: 'agent_1',
@@ -123,7 +122,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       finishedAt: Date.now() - 100,
     })
     // Pre-existing rows for downstream nodes (will be in `downstream` set).
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: 'clarify_1',
@@ -133,7 +132,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       startedAt: Date.now() - 90,
       finishedAt: Date.now() - 80,
     })
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: 'rev_1',
@@ -151,7 +150,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
 
     // The fresh placeholder must exist for agent_1 (retryIndex=1, failed),
     // but NOT for clarify_1 / rev_1 / out_1.
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(db, { taskId })
     const placeholders = rows.filter((r) => r.errorMessage === 'queued for retry')
     const placeholderNodes = new Set(placeholders.map((r) => r.nodeId))
 
@@ -183,14 +182,14 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       ],
     }
     const workflowId = ulid()
-    const { workflows, tasks, nodeRuns } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { nodeRuns } = tablesOf(db)
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 'rfc-052-nocascade',
       id: taskId,
       workflowId,
@@ -205,7 +204,7 @@ describeEachProvider('retry cascade skips non-process kinds (RFC-052)', (harness
       finishedAt: Date.now(),
     })
     const aRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: aRunId,
       taskId,
       nodeId: 'agent_a',

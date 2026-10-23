@@ -9,7 +9,7 @@
 // Mirrors `tests/tasks-visibility.test.ts` but targets the two RFC-053
 // routes explicitly.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -69,8 +69,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const daveToken = (await createSession({ db, userId: dave.id })).token
 
   const wfId = 'wf-vis'
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
@@ -78,7 +78,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
 
   const bobTaskId = 'task-bob-vis'
   const now = Date.now()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: bobTaskId,
     name: 't',
     workflowId: wfId,

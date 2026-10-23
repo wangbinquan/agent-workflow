@@ -1,6 +1,6 @@
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import {
@@ -262,13 +262,12 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       expect(settled).toBe(false)
       expect(existsSync(join(worktreePath, 'owned.txt'))).toBe(true)
       expect(drives).toBe(0)
-      const { tasks } = tablesOf(harness.db)
-      expect(await harness.db.select().from(tasks)).toEqual([])
+      expect(await readTaskFixtures(harness.db)).toEqual([])
       cleanupRelease.resolve()
       expect(await pending).toMatchObject({ code: 'workflow-not-found' })
       expect(existsSync(worktreePath)).toBe(false)
       expect(drives).toBe(0)
-      expect(await harness.db.select().from(tasks)).toEqual([])
+      expect(await readTaskFixtures(harness.db)).toEqual([])
     } finally {
       cleanupRelease.resolve()
       await pending
@@ -413,13 +412,13 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       taskId = ulid(),
       intentId = ulid()
     const snapshot = JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] })
-    const { workflows, tasks, taskExecutionIntents } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    const { taskExecutionIntents } = tablesOf(harness.db)
+    await workflowFixture(harness.db, {
       id: workflowId,
       name: 'continuation config',
       definition: snapshot,
     })
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       id: taskId,
       name: 'continuation config',
       workflowId,

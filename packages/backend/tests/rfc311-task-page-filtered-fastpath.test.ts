@@ -21,6 +21,7 @@
 // （`helpers/taskForestBackfill.ts`），SQLite 那侧另有一条「迁移 SQL == 复算」的对拍
 // （见 `rfc311-task-page-fastpath.test.ts`），所以「oracle 顺带验收回填算法」没有丢。
 
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -72,9 +73,8 @@ async function seedBase(db: Db): Promise<void> {
       updatedAt: 1,
     })
   }
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'wf1', name: 'nightly-audit', definition: '{}' })
-  await insertOne(db, workflows, { id: 'wf2', name: 'release-train', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'nightly-audit', definition: '{}' })
+  await workflowFixture(db, { id: 'wf2', name: 'release-train', definition: '{}' })
 }
 
 async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
@@ -83,8 +83,8 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
     rows.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
   )
   for (const r of rows) {
-    const { tasks, taskRepos, lifecycleAlerts } = tablesOf(db)
-    await insertOne(db, tasks, {
+    const { lifecycleAlerts } = tablesOf(db)
+    await taskFixture(db, {
       id: r.id,
       name: `task ${r.id}`,
       workflowId: r.id.endsWith('3') ? 'wf2' : 'wf1',
@@ -112,7 +112,7 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
       branchStartedAt: backfill.branchStartedAt.get(r.id) ?? r.startedAt,
       rootTaskId: backfill.rootTaskId.get(r.id) ?? r.id,
     })
-    await insertOne(db, taskRepos, {
+    await taskRepoFixture(db, {
       taskId: r.id,
       repoIndex: 0,
       repoPath: r.repoPath,
@@ -328,7 +328,7 @@ describeEachProvider('RFC-311 G1 — filtered fast path === exhaustive pipeline'
     // 模拟绕过服务层的写入:有父、但没落根。原写法用裸 SQL（无 schema 限定的 INSERT），
     // PostgreSQL 上找不到表；改成 query builder 后两个引擎同一条路径，语义不变。
     const parent = (await db.select({ id: tasks.id }).from(tasks).limit(1))[0]!.id
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: 'orphan',
       name: 'orphan',
       workflowId: 'wf1',

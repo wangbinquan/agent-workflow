@@ -1,6 +1,7 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: exercise both real provider roots, not a stand-in coordinator. Capture
 // the real Task run binding request after live settings ACK and keep original files.
+import { patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -338,7 +339,7 @@ describeEachProviderHttpApplication(
       expect(created.status, await created.clone().text()).toBe(201)
       const skill = (await created.json()) as { id: string },
         memoryId = ulid()
-      const { memories, tasks, fusions } = tablesOf(scope.harness.db)
+      const { memories, fusions } = tablesOf(scope.harness.db)
       await insertOne(scope.harness.db, memories, {
         id: memoryId,
         scopeType: 'global',
@@ -371,7 +372,7 @@ describeEachProviderHttpApplication(
         expect(settled).toBe(false)
         expect(f.drives).toEqual([])
         // RFC-387 freezes and commits the task before the session reads live drive settings.
-        expect(await scope.harness.db.select().from(tasks)).toMatchObject([
+        expect(await readTaskFixtures(scope.harness.db)).toMatchObject([
           { status: 'pending', spaceKind: 'internal' },
         ])
         expect(await scope.harness.db.select().from(fusions)).toEqual([])
@@ -412,12 +413,8 @@ describeEachProviderHttpApplication(
       expect(response.status, await response.clone().text()).toBe(201)
       const task = (await response.json()) as { id: string }
       await f.waitTask(task.id, 'done')
-      const { tasks } = tablesOf(scope.harness.db)
       // A persisted interrupted fixture keeps the real workspace, owner and lineage.
-      await scope.harness.db
-        .update(tasks)
-        .set({ status: 'interrupted' })
-        .where(eq(tasks.id, task.id))
+      await patchTaskFixture(scope.harness.db, { id: task.id }, { status: 'interrupted' })
       f.storage.current = { ...f.storage.current, defaultRuntime: 'opencode' }
       const gate = held()
       f.storage.gate = gate

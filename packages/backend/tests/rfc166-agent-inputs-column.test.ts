@@ -12,10 +12,9 @@
 //  4. inputs never leaks into frontmatter_extra (it is NOT a sidecar).
 //  5. A malformed inputs column degrades to [] (parseInputsColumn guard).
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
-import { eq } from 'drizzle-orm'
 import type { CreateAgent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent, updateAgent } from '../src/services/agent'
@@ -40,8 +39,7 @@ function basePayload(name: string) {
 }
 
 async function readRawRow(db: PersistenceDb, name: string) {
-  const { agents } = tablesOf(db)
-  const rows = await db.select().from(agents).where(eq(agents.name, name))
+  const rows = await readAgentFixtures(db, { name })
   const row = rows[0]
   if (row === undefined) throw new Error(`no agent row '${name}'`)
   return row
@@ -138,9 +136,8 @@ describeEachProvider('RFC-166 — agents.inputs column round-trip', (harness) =>
 
   test('malformed inputs column degrades to [] (parse guard)', async () => {
     await createAgent(db, basePayload('a'))
-    const { agents } = tablesOf(db)
     // corrupt the column out-of-band
-    await db.update(agents).set({ inputs: 'not json' }).where(eq(agents.name, 'a'))
+    await patchAgentFixture(db, { name: 'a' }, { inputs: 'not json' })
     const fetched = await getAgent(db, 'a')
     expect(fetched?.inputs).toEqual([])
   })
@@ -157,9 +154,8 @@ describeEachProvider('RFC-166 — agents.inputs column round-trip', (harness) =>
         ] as unknown as CreateAgentInputs,
       }),
     ).rejects.toThrow()
-    const { agents } = tablesOf(db)
     // nothing was written (create threw before/at the insert)
-    const rows = await db.select().from(agents).where(eq(agents.name, 'a'))
+    const rows = await readAgentFixtures(db, { name: 'a' })
     expect(rows.length).toBe(0)
   })
 })

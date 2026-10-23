@@ -1,5 +1,6 @@
 // Real repository-group launch fixture shared by the 9956ce39d checkpoint
 // regression and the 2026-10-21 single non-root workspace discriminator fix.
+import { agentFixture, workflowFixture } from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect } from 'bun:test'
@@ -41,7 +42,7 @@ export async function singleMemberWorkspaceFixture(
   const userId = ulid(),
     agentId = ulid(),
     workflowId = ulid()
-  const { users, agents, workflows, cachedRepos } = tablesOf(db)
+  const { users, cachedRepos } = tablesOf(db)
   await insertOne(db, users, {
     id: userId,
     username: userId,
@@ -53,14 +54,14 @@ export async function singleMemberWorkspaceFixture(
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, agents, { id: agentId, name: agentId, outputs: '["summary"]' })
+  await agentFixture(db, { id: agentId, name: agentId, outputs: '["summary"]' })
   const definition: WorkflowDefinition = {
     $schema_version: WORKFLOW_SCHEMA_VERSION,
     inputs: [],
     nodes: [{ id: 'A', kind: 'agent-single', agentId, agentName: agentId }],
     edges: [],
   }
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     definition: JSON.stringify(definition),
@@ -141,9 +142,9 @@ export async function singleMemberWorkspaceFixture(
     actor: execution.actor,
     resourceAuthority: execution.launchResources,
     invoker: { type: 'user', launchKind: 'direct-json' },
-    task: { workflowId, name: 'iso regression', inputs: {}, repoGroupId: group.id },
+    task: { name: 'iso regression', inputs: {}, repoGroupId: group.id },
     subject: {
-      workflowId,
+      subject: { kind: 'workflow' as const, sourceId: workflowId },
       workflowName: workflowId,
       workflowVersion: 1,
       workflowSnapshot: definition,

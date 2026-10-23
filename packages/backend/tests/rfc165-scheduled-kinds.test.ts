@@ -19,7 +19,7 @@
 //   K7 compat: create without launchKind defaults to 'workflow' (old
 //      clients keep working byte-for-byte).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -192,8 +192,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
     const builtinId = ulid()
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: builtinId,
       name: 'sys',
       description: '',
@@ -486,7 +485,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { scheduledTasks, users, tasks } = tablesOf(db)
+    const { scheduledTasks, users } = tablesOf(db)
     // Display metadata can be stale/corrupt without changing identity. Fire
     // must resolve solely by agentId and never fall back to this name.
     await db
@@ -518,7 +517,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
       { kind: 'manual' },
     )
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect(task.sourceAgentName).toBe('solo')
     expect(task.scheduledTaskId).toBe(created.id)
     expect(task.spaceKind).toBe('scratch')
@@ -545,7 +544,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { scheduledTasks, tasks } = tablesOf(db)
+    const { scheduledTasks } = tablesOf(db)
     await db
       .update(scheduledTasks)
       .set({
@@ -568,7 +567,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
         { kind: 'manual' },
       ),
     ).rejects.toMatchObject({ code: 'schedule-payload-invalid' })
-    expect(await db.select().from(tasks).where(eq(tasks.scheduledTaskId, created.id))).toEqual([])
+    expect(await readTaskFixtures(db, { scheduledTaskId: created.id })).toEqual([])
   })
 
   test('K5 workgroup row fires through startWorkgroupTask (workgroupId stamped)', async () => {
@@ -600,7 +599,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { scheduledTasks, tasks } = tablesOf(db)
+    const { scheduledTasks } = tablesOf(db)
     await db
       .update(scheduledTasks)
       .set({
@@ -619,7 +618,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
       withIntegrationTriggerResources(db, createIdentityAccessRuntime({ db })),
       { kind: 'manual' },
     )
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect(task.workgroupId).not.toBe(null)
     expect(task.scheduledTaskId).toBe(created.id)
   })

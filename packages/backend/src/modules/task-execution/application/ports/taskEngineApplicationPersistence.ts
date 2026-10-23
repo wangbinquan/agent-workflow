@@ -1,16 +1,22 @@
+import type { TaskWorkgroupConfig } from '../../domain/taskWorkgroupConfig'
+import type { TaskSubject } from '../../domain/taskSubject'
 import type { TaskStatus } from '@agent-workflow/shared'
 
+import type { TaskRepositoryMount } from '../../domain/taskRepository'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
 /** Frozen execution-owned task row; provider storage rows never cross this seam. */
 export interface TaskEngineTaskSnapshot {
   readonly id: string
+  readonly subject: TaskSubject
   readonly workflowId: string
   readonly name: string
   readonly workflowSnapshot: string
   readonly workflowVersion: number | null
   readonly repoPath: string
   readonly repoUrl: string | null
+  readonly cachedRepoId: string | null
+  readonly workingBranch: string | null
   readonly worktreePath: string
   readonly baseBranch: string
   readonly branch: string
@@ -28,23 +34,12 @@ export interface TaskEngineTaskSnapshot {
   readonly triggerContextJson: string | null
   readonly refClosureJson: string | null
   readonly workgroupId: string | null
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
   readonly executionLineageId: string | null
   readonly platformInputPathsJson: string | null
 }
 
-export interface TaskEngineRepositorySnapshot {
-  readonly repoIndex: number
-  readonly repoPath: string
-  readonly worktreePath: string
-  readonly worktreeDirName: string
-  readonly mountPath: string
-  readonly readonly: boolean
-  readonly baseBranch: string
-  readonly baseCommit: string | null
-  readonly workspaceProfileVersion: number | null
-  readonly workspaceProfileDigest: string | null
-}
+export type TaskEngineRepositorySnapshot = TaskRepositoryMount
 
 export interface TaskEngineCollaboratorSnapshot {
   readonly userId: string | null

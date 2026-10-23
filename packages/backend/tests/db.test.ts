@@ -1,7 +1,5 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture, readAgentFixtures } from './helpers/model'
 import { afterAll, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -41,8 +39,7 @@ describe('db client', () => {
     const db = track(openDb({ path: dbPath, migrationsFolder }))
 
     const id = ulid()
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id,
       name: 'test-agent',
       description: 'sample',
@@ -50,7 +47,7 @@ describe('db client', () => {
       bodyMd: '# hello\nbody',
     })
 
-    const rows = await db.select().from(agents).where(eq(agents.id, id))
+    const rows = await readAgentFixtures(db, { id })
     expect(rows.length).toBe(1)
     expect(rows[0]?.name).toBe('test-agent')
     expect(JSON.parse(rows[0]?.outputs ?? '[]')).toEqual(['out1', 'out2'])

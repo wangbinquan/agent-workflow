@@ -5,8 +5,7 @@
 // unauthenticated) for all 7 endpoints, end-to-end promote / supersede /
 // archive / delete flow, and the ?confirm=true guard on DELETE.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
@@ -46,12 +45,11 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   })
   const adminUserToken = (await createSession({ db, userId: admin.id })).token
   const regularUserToken = (await createSession({ db, userId: user.id })).token
-  const { agents } = tablesOf(db)
   // RFC-099 (D12): memory rights follow the scoped resource. Seed a real,
   // PUBLIC, admin-owned agents row for the fixture's scopeId='a1' so the
   // regular user can VIEW agent-scoped candidates (public) but cannot MANAGE
   // them (not the owner) — preserving this file's 403 assertions.
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: 'a1',
     name: 'fixture-agent-a1',
     ownerUserId: admin.id,

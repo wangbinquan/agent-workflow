@@ -76,12 +76,12 @@ import {
 } from '../domain/ownership'
 import {
   humanGateNodeProjectionFence as humanGateNodeProjectionFenceInternal,
-  humanGateNodeProjectionMember as humanGateNodeProjectionMemberInternal,
   isLegacyTaskGateContinuationPayload as isLegacyTaskGateContinuationPayloadInternal,
   type HumanGateContinuationLineage,
   type HumanGateNodeProjectionFence,
   type HumanGateWorkspaceRollbackRef,
 } from '../domain/humanGateContinuation'
+import { humanGateNodeProjectionMember as humanGateNodeProjectionMemberInternal } from '../infrastructure/humanGateProjection'
 import type {
   MaintenanceMemberSnapshot,
   TerminalMaintenanceState,
@@ -400,3 +400,32 @@ export type {
 
 /** RFC-370 v3 V5: Task Execution's hosted restore normalization participant. */
 export { createHostedRestoreTaskNormalization } from '../infrastructure/hostedRestoreNormalization'
+export type {
+  RunSelectionParticipantInTx,
+  SelectionChange,
+  SelectionRevision,
+} from '../application/ports/runSelection'
+export { createRunSelectionParticipantInTx } from '../infrastructure/runSelection/oracle/participant'
+
+export type {
+  ConsumedInputsWrite,
+  ConsumedInputsParticipantInTx,
+} from '../application/ports/consumedInputs'
+export {
+  prepareConsumedInputs,
+  createConsumedInputsParticipantInTx,
+} from '../infrastructure/consumedInputsParticipant'
+
+export { reselectRunInTx } from '../infrastructure/runSelection/selectionWrite'
+
+export { createHumanGatePersistenceParticipantInTx } from '../infrastructure/humanGatePersistenceParticipant'
+export type { HumanGatePersistenceParticipantInTx } from '../application/ports/humanGatePersistenceParticipant'
+
+export { createTaskClarifyDirectivePersistence } from '../infrastructure/taskClarifyDirectivePersistence'
+export type { TaskClarifyDirectivePersistence } from '../application/ports/taskClarifyDirectivePersistence'
+
+export { createTaskDeletionParticipantInTx } from '../infrastructure/taskDeletionParticipant'
+export type { TaskDeletionParticipant } from '../application/ports/taskDeletion'
+
+export { createTaskPreparationParticipantInTx } from '../infrastructure/taskPreparationParticipant'
+export type { TaskPreparationParticipant } from '../application/ports/taskPreparation'

@@ -6,20 +6,7 @@ import { createFileIntentScratchStore } from '../infrastructure/local/fileIntent
 import { createIntentPersistence } from '../infrastructure/intentPersistence'
 import type { IntentMaintenanceCommands } from '../public/commands'
 import type { IntentBootRecoveryInput, IntentScratchSweepInput } from '../public/commands'
-import { composeIntentApplyConvergence } from './applyMaintenance'
 import { INTENT_SCRATCH_DIRNAME } from '../domain/scratchDirectory'
-
-export interface IntentApplyConvergence {
-  converge(input: {
-    readonly activeJournalIds: readonly string[]
-  }): Promise<{ readonly failed: number; readonly rolledForward: number }>
-}
-
-export interface ResourcePackageApplyConvergence {
-  converge(input: {
-    readonly activeApplyIds: readonly string[]
-  }): Promise<{ readonly failed: number; readonly rolledForward: number }>
-}
 
 export interface IntentMaintenanceLog {
   info(message: string, fields: Readonly<Record<string, unknown>>): void
@@ -29,8 +16,6 @@ export interface IntentMaintenanceLog {
 export interface IntentMaintenanceCompositionDependencies {
   readonly persistence: IntentMaintenancePersistence
   readonly scratch: IntentScratchStore
-  readonly intentApplies: IntentApplyConvergence
-  readonly resourcePackages: ResourcePackageApplyConvergence
   readonly log?: IntentMaintenanceLog
 }
 
@@ -116,18 +101,8 @@ export function composeIntentMaintenanceCommands(
           now: input.now ?? Date.now(),
           reason: 'intent-run-daemon-restart',
         })
-        const [intent, bundles, queuedSessionIds] = await Promise.all([
-          dependencies.intentApplies.converge({
-            activeJournalIds: input.activeIntentApplyJournalIds,
-          }),
-          dependencies.resourcePackages.converge({
-            activeApplyIds: input.activeBundleApplyIds,
-          }),
-          dependencies.persistence.listQueuedWorkingSetSessionIds(),
-        ])
+        const queuedSessionIds = await dependencies.persistence.listQueuedWorkingSetSessionIds()
         return {
-          failed: intent.failed + bundles.failed,
-          rolledForward: intent.rolledForward + bundles.rolledForward,
           queuedWorkingSets: queuedSessionIds.length,
           orphanedTurns,
           queuedSessionIds,
@@ -159,24 +134,14 @@ interface ProviderIntentMaintenanceCompositionInput {
   readonly appHome: string
   readonly scratchDirectoryName?: string
   readonly scratch?: IntentScratchStore
-  readonly resourcePackages: ResourcePackageApplyConvergence
   readonly log?: Logger
 }
 
-/**
- * RFC-359 —— 维护侧（boot / hourly 的 journal 收敛）两个 provider 共用这一份装配。
- * 此处此前是一对：SQLite 走 `convergeIntentApplyJournal` + SQLite 工件生命周期，
- * PostgreSQL 走 `createIntentApplyJournalConvergence`。两者收敛的是同一张
- * `intent_apply_journal`、判的是同一套三态。
- */
+/** Intent 自有 turn / working-set 恢复；journal 收敛由维护图的 AtomicApply 注册表驱动。 */
 export function composeIntentMaintenanceCommandsForDatabase(
   input: ProviderIntentMaintenanceCompositionInput & {
     readonly db: PersistenceDb
-    readonly pluginsDir: string
-  } & Pick<
-      Parameters<typeof composeIntentApplyConvergence>[0],
-      'artifacts' | 'content' | 'legacySkillArtifacts'
-    >,
+  },
 ): IntentMaintenanceCommands {
   const log = input.log ?? createLogger('intentMaintenance')
   return composeIntentMaintenanceCommandsForAppHome({
@@ -184,18 +149,6 @@ export function composeIntentMaintenanceCommandsForDatabase(
     appHome: input.appHome,
     scratchDirectoryName: input.scratchDirectoryName ?? INTENT_SCRATCH_DIRNAME,
     ...(input.scratch === undefined ? {} : { scratch: input.scratch }),
-    intentApplies: composeIntentApplyConvergence({
-      db: input.db,
-      appHome: input.appHome,
-      pluginsDir: input.pluginsDir,
-      ...(input.artifacts === undefined ? {} : { artifacts: input.artifacts }),
-      ...(input.content === undefined ? {} : { content: input.content }),
-      ...(input.legacySkillArtifacts === undefined
-        ? {}
-        : { legacySkillArtifacts: input.legacySkillArtifacts }),
-      log,
-    }),
-    resourcePackages: input.resourcePackages,
     log,
   })
 }

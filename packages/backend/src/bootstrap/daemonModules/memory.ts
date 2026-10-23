@@ -1,3 +1,4 @@
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 import type {
   ComposeMemoryOperationsOptions,
   MemoryCatalogBinding,
@@ -9,7 +10,10 @@ import {
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 
 export function composeDaemonMemoryModules(
-  input: Omit<ComposeMemoryOperationsOptions, 'injectionQueries' | 'catalogBinding'> & {
+  input: Omit<
+    ComposeMemoryOperationsOptions,
+    'injectionQueries' | 'catalogBinding' | 'clarifyAnswers'
+  > & {
     readonly contexts: MemoryCatalogBinding['contexts']
   },
 ) {
@@ -17,6 +21,7 @@ export function composeDaemonMemoryModules(
   const memoryOperations = composeMemoryOperationsFor({
     ...input,
     injectionQueries: memoryInjectionQueries,
+    clarifyAnswers: createClarifyAnswerQueries(input.db),
     catalogBinding: {
       contexts: input.contexts,
       authorization: composeResourceScopeAccessParticipant(),

@@ -23,8 +23,8 @@ import {
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
-function decideOutcome(input: WakeInput, wake: WakeSet) {
-  const { snapshot, inflight } = wakeSnapshotOf(input)
+async function decideOutcome(input: WakeInput, wake: WakeSet) {
+  const { snapshot, inflight } = await wakeSnapshotOf(input)
   return decideWorkgroupOutcome(snapshot, inflight, wake)
 }
 
@@ -114,13 +114,13 @@ function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
 const EMPTY = { items: [], capExceeded: false }
 
 describe('RFC-187 §3-2 — continue-no-dispatch recovery (locked, must not regress)', () => {
-  test('an idle leader is auto-nudged, bounded by the limit', () => {
-    const out = decideOutcome(wakeInput({ config: cfg() }), EMPTY)
+  test('an idle leader is auto-nudged, bounded by the limit', async () => {
+    const out = await decideOutcome(wakeInput({ config: cfg() }), EMPTY)
     expect(out).toEqual({ kind: 'leader-nudge' })
   })
 
-  test('nudges are BOUNDED — at the limit it parks instead of nudging forever', () => {
-    const out = decideOutcome(
+  test('nudges are BOUNDED — at the limit it parks instead of nudging forever', async () => {
+    const out = await decideOutcome(
       wakeInput({ config: cfg(), messages: nudge(WG_LEADER_IDLE_NUDGE_LIMIT) }),
       EMPTY,
     )
@@ -129,13 +129,13 @@ describe('RFC-187 §3-2 — continue-no-dispatch recovery (locked, must not regr
 
   // RFC-207 §3.3 — a roster WITH a human gets the same treatment: the nudge is not a
   // substitute for the human, it is a cheap retry before spending the human's attention.
-  test('a roster with a human member nudges first too (no autonomous/supervised split)', () => {
-    const out = decideOutcome(wakeInput({ config: cfgWithHuman() }), EMPTY)
+  test('a roster with a human member nudges first too (no autonomous/supervised split)', async () => {
+    const out = await decideOutcome(wakeInput({ config: cfgWithHuman() }), EMPTY)
     expect(out).toEqual({ kind: 'leader-nudge' })
   })
 
-  test('a roster with a human member still parks once the nudge budget is spent', () => {
-    const out = decideOutcome(
+  test('a roster with a human member still parks once the nudge budget is spent', async () => {
+    const out = await decideOutcome(
       wakeInput({ config: cfgWithHuman(), messages: nudge(WG_LEADER_IDLE_NUDGE_LIMIT) }),
       EMPTY,
     )

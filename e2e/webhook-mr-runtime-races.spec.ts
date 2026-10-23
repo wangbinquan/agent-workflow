@@ -13,6 +13,7 @@
 //   * a daemon crash while terminal control owns a live runtime is recovered
 //     from the durable effect after restart.
 
+import { readTaskFixturesSql, fixtureSqlParameter } from './fixtures/model'
 import { expect, test } from '@playwright/test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -454,12 +455,16 @@ async function launchFromWebhook(
     eventDeliveryId: string | null
   }>(
     join(daemon!.home, 'db.sqlite'),
-    `SELECT launch_origin AS origin,
-            webhook_trigger_id AS legacyTriggerId,
-            webhook_fire_id AS legacyFireId,
-            event_subscription_id AS eventSubscriptionId,
-            event_delivery_id AS eventDeliveryId
-       FROM tasks WHERE id = ?`,
+    readTaskFixturesSql(
+      { id: fixtureSqlParameter },
+      {
+        origin: 'launchOrigin',
+        legacyTriggerId: 'webhookTriggerId',
+        legacyFireId: 'webhookFireId',
+        eventSubscriptionId: 'eventSubscriptionId',
+        eventDeliveryId: 'eventDeliveryId',
+      },
+    ),
     [launched.id],
   )
   expect(provenance).toHaveLength(1)
@@ -957,12 +962,16 @@ test('different-UUID launch-eligible facts serialize, supersede to one live runt
       eventDeliveryId: string | null
     }>(
       join(daemon!.home, 'db.sqlite'),
-      `SELECT launch_origin AS origin,
-              webhook_trigger_id AS legacyTriggerId,
-              webhook_fire_id AS legacyFireId,
-              event_subscription_id AS eventSubscriptionId,
-              event_delivery_id AS eventDeliveryId
-         FROM tasks WHERE id = ?`,
+      readTaskFixturesSql(
+        { id: fixtureSqlParameter },
+        {
+          origin: 'launchOrigin',
+          legacyTriggerId: 'webhookTriggerId',
+          legacyFireId: 'webhookFireId',
+          eventSubscriptionId: 'eventSubscriptionId',
+          eventDeliveryId: 'eventDeliveryId',
+        },
+      ),
       [row.id],
     )
     expect(provenance).toHaveLength(1)

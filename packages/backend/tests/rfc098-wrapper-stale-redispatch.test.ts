@@ -27,11 +27,19 @@
 // task 行翻回 pending（s18-s19 test 2 同款复刻，resumeTask 对 runTask 是
 // fire-and-forget 无法确定性等待）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  consumedProducerIds,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -79,8 +87,7 @@ async function buildHarness(slug: string): Promise<Harness> {
 
 async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -98,15 +105,14 @@ async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]):
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc098-stale-task',
     id: taskId,
     workflowId,
@@ -139,17 +145,17 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 
 /** 复刻 resumeTask 的 DB 侧动作后直接 await runTask（s18-s19 同款）。 */
 async function resetTaskToPending(h: Harness, taskId: string): Promise<void> {
-  const { tasks } = tablesOf(h.db)
-  await h.db
-    .update(tasks)
-    .set({
+  await patchTaskFixture(
+    h.db,
+    { id: taskId },
+    {
       status: 'pending',
       finishedAt: null,
       errorSummary: null,
       errorMessage: null,
       failedNodeId: null,
-    })
-    .where(eq(tasks.id, taskId))
+    },
+  )
 }
 
 /** 模拟上游 clarify rerun：为 nodeId 插入一行更新代 done 行（更大 ULID）+ 输出。 */
@@ -162,8 +168,7 @@ async function mintFresherUpstreamDone(
 ): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id,
     taskId,
     seq: await allocateNodeRunSeq(h.db, taskId, id),
@@ -173,20 +178,16 @@ async function mintFresherUpstreamDone(
     iteration: 0,
     parentNodeRunId: null,
     shardKey: null,
-    consumedUpstreamRunsJson: '{}',
+    consumedEdges: [],
     startedAt: now,
     finishedAt: now,
   })
-  await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: port, content })
+  await nodeRunOutputFixture(h.db, { nodeRunId: id, portName: port, content })
   return id
 }
 
 async function rowsOf(h: Harness, taskId: string, nodeId: string) {
-  const { nodeRuns } = tablesOf(h.db)
-  return h.db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  return readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId }] })
 }
 
 describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重派', () => {
@@ -231,13 +232,12 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
 
     // ---- run 1：consumed 绑到 up 的第一代 done 行。----
     await withEnv(env, () => runTask(runOpts))
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
     const upRun1 = (await rowsOf(h, taskId, 'up')).find((r) => r.status === 'done')!
     const loopGen1 = await rowsOf(h, taskId, 'loop')
     expect(loopGen1.length).toBe(1)
     expect(loopGen1[0]?.status).toBe('done')
-    expect(JSON.parse(loopGen1[0]?.consumedUpstreamRunsJson ?? 'null')).toEqual({
+    expect(consumedProducerIds(loopGen1[0]?.consumedEdges)).toEqual({
       up: upRun1.id,
     })
 
@@ -248,16 +248,16 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
 
     // ---- 后果链断言：done∧stale → 重派 → 全新 wrapper 代（done 是 terminal，
     // findResumableWrapperRun 不复用旧行），新代 consumed 绑到 up 的新行。----
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
     const loopRows = await rowsOf(h, taskId, 'loop')
     expect(loopRows.length).toBe(2)
     const gen2 = loopRows.reduce((a, b) => (a.id > b.id ? a : b))
     expect(gen2.id).not.toBe(loopGen1[0]!.id)
     expect(gen2.status).toBe('done')
-    expect(JSON.parse(gen2.consumedUpstreamRunsJson ?? 'null')).toEqual({ up: upRun2Id })
+    expect(consumedProducerIds(gen2?.consumedEdges)).toEqual({ up: upRun2Id })
     // 第一代行原样保留（历史不可变）。
     const gen1After = loopRows.find((r) => r.id === loopGen1[0]!.id)!
-    expect(JSON.parse(gen1After.consumedUpstreamRunsJson ?? 'null')).toEqual({ up: upRun1.id })
+    expect(consumedProducerIds(gen1After.consumedEdges)).toEqual({ up: upRun1.id })
   }, 20000)
 
   test('git wrapper：第二次调度铸全新 wrapper 代并重抓 baseline（新 HEAD）', async () => {
@@ -291,13 +291,12 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
 
     // ---- run 1。----
     await withEnv(env, () => runTask(runOpts))
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
     const head1 = (await runGit(h.worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()
     const upRun1 = (await rowsOf(h, taskId, 'up')).find((r) => r.status === 'done')!
     const wgGen1 = (await rowsOf(h, taskId, 'wg'))[0]!
     expect(wgGen1.status).toBe('done')
-    expect(JSON.parse(wgGen1.consumedUpstreamRunsJson ?? 'null')).toEqual({ up: upRun1.id })
+    expect(consumedProducerIds(wgGen1.consumedEdges)).toEqual({ up: upRun1.id })
     const prog1 = decodeWrapperProgress(wgGen1.wrapperProgressJson, () => {})
     expect((prog1 as { baseline?: string })?.baseline).toBe(head1)
 
@@ -313,13 +312,13 @@ describe('RFC-098 B3 (S-7) — 上游 rerun 后 loop/git wrapper 判 stale 重�
 
     // ---- 后果链断言：新 wrapper 代重抓 baseline = 新 HEAD（不是沿用旧
     // baseline——那会把代际间的真实 commit 误算进第二代 git_diff）。----
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
     const wgRows = await rowsOf(h, taskId, 'wg')
     expect(wgRows.length).toBe(2)
     const gen2 = wgRows.reduce((a, b) => (a.id > b.id ? a : b))
     expect(gen2.id).not.toBe(wgGen1.id)
     expect(gen2.status).toBe('done')
-    expect(JSON.parse(gen2.consumedUpstreamRunsJson ?? 'null')).toEqual({ up: upRun2Id })
+    expect(consumedProducerIds(gen2?.consumedEdges)).toEqual({ up: upRun2Id })
     const prog2 = decodeWrapperProgress(gen2.wrapperProgressJson, () => {})
     expect((prog2 as { baseline?: string })?.baseline).toBe(head2)
   }, 20000)
@@ -340,8 +339,7 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
   ): Promise<string> {
     const id = ulid()
     const now = Date.now()
-    const { nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id,
       taskId,
       nodeId,
@@ -350,7 +348,7 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
       iteration: 0,
       parentNodeRunId: null,
       shardKey: null,
-      consumedUpstreamRunsJson: SENTINEL,
+      consumedEdges: [{ producerNodeId: '__ghost_source__', producerRunId: '01GHOSTRUN' }],
       startedAt: now,
       finishedAt: now,
       ...extra,
@@ -389,13 +387,12 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
       }),
     )
 
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
     const loopRows = await rowsOf(h, taskId, 'loop')
     expect(loopRows.length).toBe(1) // 同行续跑，零新铸
     expect(loopRows[0]?.id).toBe(seededId)
     expect(loopRows[0]?.status).toBe('done')
-    expect(loopRows[0]?.consumedUpstreamRunsJson).toBe(SENTINEL)
+    expect(consumedProducerIds(loopRows[0]?.consumedEdges)).toEqual(JSON.parse(SENTINEL))
   })
 
   test('git wrapper：interrupted 复活续跑后 consumed 原封不动（baseline 沿用 progress）', async () => {
@@ -430,13 +427,12 @@ describe('RFC-098 B3 修订#6 — resume 不覆盖 wrapper 行的 consumed', () 
       }),
     )
 
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
     const wgRows = await rowsOf(h, taskId, 'wg')
     expect(wgRows.length).toBe(1)
     expect(wgRows[0]?.id).toBe(seededId)
     expect(wgRows[0]?.status).toBe('done')
-    expect(wgRows[0]?.consumedUpstreamRunsJson).toBe(SENTINEL)
+    expect(consumedProducerIds(wgRows[0]?.consumedEdges)).toEqual(JSON.parse(SENTINEL))
     // baseline 沿用 progress（resume 不重抓——rfc040 闸的同款语义）。
     const prog = decodeWrapperProgress(wgRows[0]!.wrapperProgressJson, () => {})
     expect((prog as { baseline?: string })?.baseline).toBe(head)

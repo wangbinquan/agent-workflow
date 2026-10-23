@@ -4,6 +4,7 @@
 // controlled copy after the ID for every selected target/fallback kind, plus
 // the all-invalid no-link result, at desktop and 390px widths.
 
+import { patchTaskFixtureSql } from './fixtures/model'
 import { expect, test, type Page } from '@playwright/test'
 import { join } from 'node:path'
 
@@ -203,10 +204,6 @@ let daemon: DaemonHandle
 const webhookTaskIds = new Map<string, string>()
 let ordinaryTaskId = ''
 
-function sqlLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 async function postJson<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${daemon.baseUrl}${path}`, {
     method: 'POST',
@@ -275,7 +272,10 @@ test.beforeAll(async () => {
         },
       },
     })
-    return `UPDATE tasks SET trigger_context_json=${sqlLiteral(context)} WHERE id=${sqlLiteral(sourceTaskId(sourceCase.key))};`
+    return patchTaskFixtureSql(
+      { id: sourceTaskId(sourceCase.key) },
+      { triggerContextJson: context },
+    )
   })
   runSqlite(join(daemon.home, 'db.sqlite'), `BEGIN;\n${updates.join('\n')}\nCOMMIT;`)
 })

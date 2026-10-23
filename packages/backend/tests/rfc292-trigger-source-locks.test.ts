@@ -123,11 +123,16 @@ describe('RFC-292 trigger namespace source locks', () => {
       'export async function getTask(',
       '\nexport async function loadTaskFailureCodes(',
     )
-    const rowProjection = sliceBetween(
-      task,
-      'function rowToTask(',
-      '\nfunction frozenWorkgroupName(',
+    const detail = readFileSync(
+      resolve(BACKEND_SRC, 'modules/task-execution/infrastructure/taskDetailQueries.ts'),
+      'utf8',
     )
+    const detailProjection = sliceBetween(
+      detail,
+      'export function createTaskDetailQueries(',
+      '\nfunction rowToTask(',
+    )
+    const rowProjection = sliceBetween(detail, 'function rowToTask(', '\n}\n')
     // 共用的那份详情 / 列表投影同一条规矩。
     const sharedTaskProjection = sliceBetween(
       shared,
@@ -139,8 +144,9 @@ describe('RFC-292 trigger namespace source locks', () => {
       'function summaryProjection(',
       '\nfunction visibilityCondition(',
     )
-    expect(getTaskProjection).toContain('webhookTaskSourceLinkOf(parsedTriggerContext.value)')
-    expect(getTaskProjection).toContain('row.task.triggerContextJson')
+    expect(getTaskProjection).toContain('createTaskDetailQueries(db).read(id)')
+    expect(detailProjection).toContain('webhookTaskSourceLinkOf(parsedTriggerContext.value)')
+    expect(detailProjection).toContain('row.task.triggerContextJson')
     expect(rowProjection).not.toContain('triggerContextJson')
     expect(rowProjection).toContain('webhookSourceLink')
     expect(rowProjection).not.toMatch(/comment_text|event_json|triggerContext:/)

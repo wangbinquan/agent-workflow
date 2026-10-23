@@ -3,6 +3,8 @@
 // strings in the DB and (un)marshaled at this boundary. Routes upstream see
 // pure JS objects.
 
+import { collectStoredAgentDependents } from '../agentReferenceCodec'
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first, queryWrite } from '@/platform/persistence/queryHelpers'
@@ -30,10 +32,7 @@ import {
   ValidationError,
   staleConflictError,
 } from '@/util/errors'
-import {
-  agentsDependingOnIn,
-  validateAgentDependencies,
-} from '../../application/agents/agentDependencyValidation'
+import { validateAgentDependencies } from '../../application/agents/agentDependencyValidation'
 import {
   agentRefFenceGroups,
   resolveAgentRefsUsable,
@@ -847,6 +846,7 @@ export async function deleteAgent(
         visibility: workflows.visibility,
       })
       .from(workflows)
+      .where(workflowCatalogPredicate(workflows.id))
     // RFC-285 B2 档位说明：agent 对**任务**引用零检查即是统一中档——任务快照
     // 冻结（workflowSnapshot/agent 定义随任务落盘），删除 agent 不影响在跑或
     // 历史任务，展示层容忍悬空 agent 名。此处的 agent-in-use 挡的是 **workflow
@@ -879,7 +879,7 @@ export async function deleteAgent(
       .from(agents)
       // RFC-223 (PR-1): dependsOn stores agent IDS now — match this agent's id.
       .where(like(agents.dependsOn, `%"${existing.id}"%`))
-    const dependents = agentsDependingOnIn(depRows, existing.id)
+    const dependents = collectStoredAgentDependents(depRows, existing.id)
     if (dependents.length > 0) {
       throw new ConflictError(
         'agent-dependency-still-referenced',

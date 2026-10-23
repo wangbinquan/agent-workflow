@@ -194,16 +194,30 @@ describe('RFC-247 — every redactor has an outlet', () => {
     // AC-38 is explicitly ALL channels, not token-only: a repo URL with an
     // embedded credential has no reader who benefits from seeing it.
     //
-    // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 / 3 刀）：任务行的投影**搬了家**——纯读三件
-    // 与列表三件两个引擎合一之后，`rowToSummary` 已删除，详情 / 列表 / 仓库三处投影都住在
-    // 共用实现里。本条锁的不变量没变（每个吐 `repoUrl` 的投影点都得过 `redactGitUrl`），
-    // 所以把两份源码**合起来**数，总数只增不减：`services/task.ts` 剩 3 处
-    //（`rowToTask` 及其仓库分支），共用那份 4 处（详情 / 列表 / 仓库 / 冻结布局）。
-    const total = [
-      read('services/task.ts'),
-      read('modules/task-execution/infrastructure/taskRouteOperations.ts'),
-    ].reduce((sum, source) => sum + source.split('redactGitUrl(row.repoUrl)').length - 1, 0)
-    expect(total).toBeGreaterThanOrEqual(7)
+    // RFC-395 II-a A2/A7: the seven HEAD outlets (detail, list and both repository
+    // branches) converge on the source and mount codecs. Lock every forwarding
+    // edge and both redactors, including the absent-mount fallback.
+    const detail = read('modules/task-execution/infrastructure/taskDetailQueries.ts')
+    const routes = read('modules/task-execution/infrastructure/taskRouteOperations.ts')
+    for (const source of [detail, routes]) {
+      expect(source).toMatch(
+        /projectStoredTaskRepositorySurface\(\s*row(?:\.task)?,\s*repoRows\.map\(decodeTaskRepositoryMount\),\s*(?:frozenNodeRows|nodeRows)\.map\(\(node\) => node\.path\),?\s*\)/,
+      )
+      expect(source).toContain('repoUrl: repository.repoUrl')
+      expect(source).toContain('repos: repository.repos')
+    }
+    expect(routes).toContain('projectStoredTaskRepositorySummary(row)')
+    const stored = read('platform/persistence/taskRepositorySurface.ts')
+    expect(stored).toContain('repoUrl: row.repoUrl == null ? null : redactGitUrl(row.repoUrl)')
+    expect(stored).toContain("urlProjection: 'redacted' | 'stored' = 'redacted'")
+    expect(stored).toContain('const requestedSource = decodeRequestedSource(row)')
+    expect(stored).toContain(
+      "repoUrl: urlProjection === 'stored' ? (row.repoUrl ?? null) : requestedSource.repoUrl",
+    )
+    expect(read('modules/task-execution/infrastructure/taskRepositoryCodec.ts')).toContain(
+      'repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl)',
+    )
+    expect(read('platform/taskRepository.ts')).toContain('repoUrl: source.repoUrl')
   })
 
   test('no redactor in tokenRedaction.ts is left with zero callers', () => {

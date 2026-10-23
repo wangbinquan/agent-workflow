@@ -21,7 +21,7 @@
 // RED until dispatchFanoutShard distinguishes canceled shards and the
 //   wrapper-fanout finalizer marks the wrapper row 'canceled' on cancel.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -60,8 +60,7 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -81,15 +80,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -228,9 +226,9 @@ describe('regression: cancelling a running wrapper-fanout must mark the wrapper 
     await abortOnceFanoutIsLive
     if (abortFailure !== undefined) throw abortFailure
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // Sanity: the task itself ends 'canceled' via the signal short-circuit.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('canceled')
 
     // Headline RED assertion: the wrapper-fanout node_run row (nodeId='fan')

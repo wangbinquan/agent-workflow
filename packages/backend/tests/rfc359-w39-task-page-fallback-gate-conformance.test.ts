@@ -1,3 +1,6 @@
+// RFC-395 II-a rebaseline: HEAD inverse matches the previous pin; only A2 subject/name SQL
+// and A7 catalog-query forwarding changed. Prefix/gate inverses and binding assertions remain exact.
+import { patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
@@ -5,7 +8,7 @@ import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq, SQL, StringChunk, sql } from 'drizzle-orm'
+import { SQL, StringChunk, sql } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   encodeCursor,
@@ -231,7 +234,7 @@ function roots(count = 16): FixtureRow[] {
   }))
 }
 async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<void> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
@@ -241,7 +244,7 @@ async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<voi
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'w27-workflow',
     name: 'W27 workflow',
     definition: '{ "fixture": true }',
@@ -250,7 +253,7 @@ async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<voi
   })
   for (const row of rows) {
     const family = row.root === undefined ? row.id : row.root
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: row.id,
       name: row.name ?? 'match',
       workflowId: 'w27-workflow',
@@ -277,19 +280,19 @@ async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<voi
       ownerUserId: VIEWER.userId,
       launchOrigin: 'manual',
       catalogVisibility: 'public',
-      repoCount: 1,
     })
   }
   // Establish cycles after every FK target exists. Insert triggers fill NULL
   // roots, so also set intended root bytes explicitly on both real providers.
   for (const row of rows) {
-    await db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      db,
+      { id: row.id },
+      {
         parentTaskId: row.parent ?? null,
         rootTaskId: row.root === undefined ? row.id : row.root,
-      })
-      .where(eq(tasks.id, row.id))
+      },
+    )
   }
 }
 
@@ -446,6 +449,6 @@ test('the gate inverse retains the complete published W38 query source', () => {
   expect(source.split(GATE)).toHaveLength(2)
   expect(source.split(GATED_FROM)).toHaveLength(2)
   expect(createHash('sha256').update(restoreText(source)).digest('hex')).toBe(
-    '4548ea7984a159a0947de69f50f7dca6b0ec793012c07a77bf72fbc114ec3b80',
+    '6fde35d8c76cb67c4fb9214181d731687072639fdb376fd90340c508c56ab89e',
   )
 })

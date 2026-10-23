@@ -28,6 +28,7 @@
 // 点名那一项并给非零退出码）。只断言「doctor 跑完了」对任何一次运行都成立，那种
 // 断言在这里一条都没有。
 
+import { taskFixtureSql, workflowFixtureSql } from './fixtures/model'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -651,21 +652,34 @@ test('RFC-319 OPS-011: lifecycle 把停放 / 中断 / 隔离的任务与未解�
       '一个干净的 home 上这一项不明说「什么都没停放」 ⇒ 后面出现的数字没有对照基线',
     ).toBe('no parked / interrupted tasks, no open alerts')
 
-    const task = (id: string, status: string, quarantined: 0 | 1): string =>
-      `('${id}', '${id}', 'rfc319-wf', '{}', '/tmp/rfc319-repo', '/tmp/rfc319-worktree', ` +
-      `'main', 'agent-workflow/${id}', '${status}', '{}', 1, ${quarantined})`
+    const task = (
+      id: string,
+      status: 'interrupted' | 'awaiting_review' | 'awaiting_human' | 'failed' | 'done',
+      quarantined: 0 | 1,
+    ) => ({
+      id,
+      name: id,
+      workflowId: 'rfc319-wf',
+      workflowSnapshot: '{}',
+      repoPath: '/tmp/rfc319-repo',
+      worktreePath: '/tmp/rfc319-worktree',
+      baseBranch: 'main',
+      branch: 'agent-workflow/' + id,
+      status,
+      inputs: '{}',
+      startedAt: 1,
+      autoRecoverySuspended: quarantined === 1,
+    })
     runSqlite(
       dbPathOf(home),
-      `INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-         base_branch, branch, status, inputs, started_at, auto_recovery_suspended)
-       VALUES ${[
-         task('01RFC319LIFEINT1000000000', 'interrupted', 0),
-         task('01RFC319LIFEINT2000000000', 'interrupted', 0),
-         task('01RFC319LIFEREVIEW0000000', 'awaiting_review', 0),
-         task('01RFC319LIFEHUMAN00000000', 'awaiting_human', 0),
-         task('01RFC319LIFEQUARANTINED00', 'failed', 1),
-         task('01RFC319LIFEDONE000000000', 'done', 0),
-       ].join(', ')};
+      `${taskFixtureSql([
+        task('01RFC319LIFEINT1000000000', 'interrupted', 0),
+        task('01RFC319LIFEINT2000000000', 'interrupted', 0),
+        task('01RFC319LIFEREVIEW0000000', 'awaiting_review', 0),
+        task('01RFC319LIFEHUMAN00000000', 'awaiting_human', 0),
+        task('01RFC319LIFEQUARANTINED00', 'failed', 1),
+        task('01RFC319LIFEDONE000000000', 'done', 0),
+      ])}
        INSERT INTO lifecycle_alerts (id, task_id, rule, severity, detail, detected_at, resolved_at)
        VALUES ('01RFC319ALERTOPEN00000000', '01RFC319LIFEINT1000000000', 'R1', 'warning', '{}', 1, NULL),
               ('01RFC319ALERTFIXED0000000', '01RFC319LIFEINT2000000000', 'R2', 'error', '{}', 1, 2);`,
@@ -934,16 +948,37 @@ test('RFC-319 OPS-015: downgrade-audit 逐条点名阻断项、只审在途任�
     // 阻断项等于让每一台跑过一阵子的机器永远降不了级。
     runSqlite(
       dbPathOf(home),
-      `INSERT INTO workflows (id, name, definition, version)
-       VALUES ('01RFC319AUDITWF0000000000', 'rfc319-audit-wf', '{ not json at all', 7);
-       INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, workflow_version, repo_path,
-         worktree_path, base_branch, branch, status, inputs, started_at)
-       VALUES ('01RFC319AUDITLIVE00000000', 'rfc319-live', '01RFC319AUDITWFLIVE000000',
-               '{ neither is this', 3, '/tmp/rfc319-repo', '/tmp/rfc319-worktree', 'main',
-               'agent-workflow/rfc319-live', 'interrupted', '{}', 1),
-              ('01RFC319AUDITDONE00000000', 'rfc319-done', '01RFC319AUDITWFDONE000000',
-               '{ nor this one', 3, '/tmp/rfc319-repo', '/tmp/rfc319-worktree', 'main',
-               'agent-workflow/rfc319-done', 'done', '{}', 1);`,
+      `${workflowFixtureSql({ id: '01RFC319AUDITWF0000000000', name: 'rfc319-audit-wf', definition: '{ not json at all', version: 7 })}
+       ${taskFixtureSql([
+         {
+           id: '01RFC319AUDITLIVE00000000',
+           name: 'rfc319-live',
+           workflowId: '01RFC319AUDITWFLIVE000000',
+           workflowSnapshot: '{ neither is this',
+           workflowVersion: 3,
+           repoPath: '/tmp/rfc319-repo',
+           worktreePath: '/tmp/rfc319-worktree',
+           baseBranch: 'main',
+           branch: 'agent-workflow/rfc319-live',
+           status: 'interrupted',
+           inputs: '{}',
+           startedAt: 1,
+         },
+         {
+           id: '01RFC319AUDITDONE00000000',
+           name: 'rfc319-done',
+           workflowId: '01RFC319AUDITWFDONE000000',
+           workflowSnapshot: '{ nor this one',
+           workflowVersion: 3,
+           repoPath: '/tmp/rfc319-repo',
+           worktreePath: '/tmp/rfc319-worktree',
+           baseBranch: 'main',
+           branch: 'agent-workflow/rfc319-done',
+           status: 'done',
+           inputs: '{}',
+           startedAt: 1,
+         },
+       ])}`,
     )
     const before = sha256Of(dbPathOf(home))
 

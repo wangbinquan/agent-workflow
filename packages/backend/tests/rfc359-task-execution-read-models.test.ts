@@ -1,6 +1,3 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-359 AC-1 / AC-6 —— 任务执行读模型**只有一份实现**，两个引擎跑同一组判据。
 //
 // 这个文件原名 `rfc349-task-execution-read-models-postgresql-adapter.test.ts`，
@@ -20,6 +17,10 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // 而 `harness.recordStatements()` 还能把「几条语句 / 取回几行 / 有没有 ORDER BY」
 // 这些**形状**判据一起锁住，两个引擎同一套。
 
+import { nodeRunFixture, taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { resolve, join } from 'node:path'
@@ -55,13 +56,12 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
         updatedAt: 1,
       })
     }
-    const { workflows, tasks, taskRepos } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: `wf-${input.taskId}`,
       name: `wf-${input.taskId}`,
       definition: '{}',
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: input.taskId,
       name: input.taskId,
       workflowId: `wf-${input.taskId}`,
@@ -76,12 +76,13 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
       ...(input.ownerUserId === null ? {} : { ownerUserId: input.ownerUserId }),
     })
     if (input.repos !== undefined && input.repos.length > 0) {
-      await db.insert(taskRepos).values(
+      await taskRepoFixture(
+        db,
         input.repos.map((repo, index) => ({
           taskId: input.taskId,
           repoIndex: index,
           repoPath: `/src/${repo.dir}`,
-          worktreeDirName: repo.dir,
+          mountPath: repo.dir,
           worktreePath: repo.path,
           baseBranch: 'main',
           branch: `agent-workflow/${input.taskId}`,
@@ -101,8 +102,8 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
         { dir: 'web', path: '/worktrees/task-1/web' },
       ],
     })
-    const { nodeRuns, docVersions } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    const { docVersions } = tablesOf(h.db)
+    await nodeRunFixture(h.db, {
       id: 'run-1',
       taskId: 'task-1',
       nodeId: 'review-1',
@@ -136,8 +137,8 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
         taskId: 'task-1',
         worktreePath: '/worktrees/task-1',
         repos: [
-          { worktreeDirName: 'api', worktreePath: '/worktrees/task-1/api' },
-          { worktreeDirName: 'web', worktreePath: '/worktrees/task-1/web' },
+          { mountPath: 'api', worktreePath: '/worktrees/task-1/api' },
+          { mountPath: 'web', worktreePath: '/worktrees/task-1/web' },
         ],
       })
       await expect(readModels.taskReviewNodes.find('task-1')).resolves.toEqual({
@@ -171,7 +172,7 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
     await expect(readModels.callGraphWorkspace.find('task-2')).resolves.toEqual({
       taskId: 'task-2',
       worktreePath: '/worktrees/task-2',
-      repos: [{ worktreeDirName: '', worktreePath: '/worktrees/task-2' }],
+      repos: [{ mountPath: '', worktreePath: '/worktrees/task-2' }],
     })
     await expect(readModels.taskReviewNodes.find('task-2')).resolves.toEqual({
       taskId: 'task-2',

@@ -26,8 +26,7 @@
 // service function. That's the contract surface — anything below that is
 // implementation detail.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -127,8 +126,7 @@ async function seedTask(db: PersistenceDb, status: 'pending' | 'running' = 'pend
     edges: [],
     outputs: [],
   })
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf-golden',
     definition: def,
@@ -136,7 +134,7 @@ async function seedTask(db: PersistenceDb, status: 'pending' | 'running' = 'pend
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,

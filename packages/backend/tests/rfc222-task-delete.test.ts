@@ -10,8 +10,15 @@
 //   D-5  cleanup failure → 200 with cleanup:'pending', DB already deleted.
 //   D-6  concurrent/front gates: active-in-memory → 409; fusion-internal → 409.
 
+import {
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, afterEach, expect, test } from 'bun:test'
 import { taskExecutionModule, type TaskExecutionModule } from '@/modules/task-execution/composition'
 import type { Hono } from 'hono'
@@ -79,22 +86,18 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<H> {
   }
 }
 
-async function seedTask(
-  db: PersistenceDb,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, over: Partial<TaskFixtureSpec> = {}): Promise<string> {
   const id = ulid()
-  const { workflows, tasks } = tablesOf(db)
   // tasks.workflowId FKs to workflows.id — seed a stub workflow first.
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${id}`,
     name: 'stub',
     description: '',
     definition: '{}',
     version: 1,
     schemaVersion: 4,
-  } as never)
-  await insertOne(db, tasks, {
+  })
+  await taskFixture(db, {
     id,
     name: `task-${id}`,
     workflowId: `wf_${id}`,
@@ -145,13 +148,13 @@ describeEachProviderHttpApplication(
 
     test('admin deletes a terminal task: row + node_runs + task_feedback gone; audit retained', async () => {
       const id = await seedTask(h.db)
-      const { nodeRuns, taskFeedback, recoveryEvents, lifecycleRepairAudit, tasks } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      const { nodeRuns, taskFeedback, recoveryEvents, lifecycleRepairAudit } = tablesOf(h.db)
+      await nodeRunFixture(h.db, {
         id: ulid(),
         taskId: id,
         nodeId: 'n1',
         status: 'done',
-      } as PersistenceTables['nodeRuns']['$inferInsert'])
+      })
       await insertOne(h.db, taskFeedback, {
         id: ulid(),
         taskId: id,
@@ -184,7 +187,7 @@ describeEachProviderHttpApplication(
       const res = await del(h, h.adminToken, id, `task-${id}`)
       expect(res.status).toBe(200)
 
-      expect((await h.db.select().from(tasks).where(eq(tasks.id, id))).length).toBe(0)
+      expect((await readTaskFixtures(h.db, { id })).length).toBe(0)
       expect((await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))).length).toBe(0)
       expect(
         (await h.db.select().from(taskFeedback).where(eq(taskFeedback.taskId, id))).length,
@@ -260,7 +263,7 @@ describeEachProviderHttpApplication(
       expect((await del(h, h.userToken, id, `task-${id}`)).status).toBe(404)
       expect((await del(h, h.managerToken, id, `task-${id}`)).status).toBe(403)
       const memberTaskId = await seedTask(h.db)
-      const { users, taskCollaborators, tasks } = tablesOf(h.db)
+      const { users, taskCollaborators } = tablesOf(h.db)
       const userRow = (await h.db.select().from(users).where(eq(users.username, 'bob')))[0]!
       await insertOne(h.db, taskCollaborators, {
         taskId: memberTaskId,
@@ -270,8 +273,8 @@ describeEachProviderHttpApplication(
         addedBy: userRow.id,
       })
       expect((await del(h, h.userToken, memberTaskId, `task-${memberTaskId}`)).status).toBe(403)
-      expect((await h.db.select().from(tasks).where(eq(tasks.id, id))).length).toBe(1) // survived
-      expect((await h.db.select().from(tasks).where(eq(tasks.id, memberTaskId))).length).toBe(1)
+      expect((await readTaskFixtures(h.db, { id })).length).toBe(1) // survived
+      expect((await readTaskFixtures(h.db, { id: memberTaskId })).length).toBe(1)
     })
 
     test('missing task → 404; replay after delete → 404', async () => {
@@ -289,8 +292,7 @@ describeEachProviderHttpApplication(
       const wrong = await del(h, h.adminToken, id, 'not-the-name')
       expect(wrong.status).toBe(422)
       expect(((await wrong.json()) as { code: string }).code).toBe('delete-confirm-mismatch')
-      const { tasks } = tablesOf(h.db)
-      expect((await h.db.select().from(tasks).where(eq(tasks.id, id))).length).toBe(1)
+      expect((await readTaskFixtures(h.db, { id })).length).toBe(1)
     })
   },
 )
@@ -421,9 +423,8 @@ describeEachProviderHttpApplication(
         const id = await seedTask(h.db, { worktreePath: wt, repoPath: '/tmp/aw-rfc222-nonrepo' })
         const res = await del(h, h.adminToken, id, `task-${id}`)
         expect(res.status).toBe(200)
-        const { tasks } = tablesOf(h.db)
         // DB deletion is authoritative regardless of cleanup outcome.
-        expect((await h.db.select().from(tasks).where(eq(tasks.id, id))).length).toBe(0)
+        expect((await readTaskFixtures(h.db, { id })).length).toBe(0)
         expect(existsSync(wt)).toBe(false)
       } finally {
         if (existsSync(wt)) rmSync(wt, { recursive: true, force: true })

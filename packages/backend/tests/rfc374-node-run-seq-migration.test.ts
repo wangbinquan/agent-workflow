@@ -12,7 +12,7 @@ import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrat
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { replayPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
 import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
+import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { freezeAt, MIGRATIONS } from './migration-freeze'
 import { seedSequenceTask } from './helpers/rfc374Fixtures'

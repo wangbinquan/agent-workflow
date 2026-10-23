@@ -12,6 +12,7 @@
 //   1. 根仍是**父**会话（朴素保尾会在这里变成子代理，是本测试存在的全部理由）；
 //   2. 最近的内容还在（尾巴没被前缀挤掉）。
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -25,7 +26,7 @@ const PARENT = 'ses_parent'
 const CHILD = 'ses_child'
 
 async function seed(db: PersistenceDb, childEventCount: number): Promise<void> {
-  const { users, workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+  const { users, nodeRunEvents } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -38,8 +39,8 @@ async function seed(db: PersistenceDb, childEventCount: number): Promise<void> {
     nodes: [{ id: 'n1', kind: 'agent-single', data: { agentName: 'worker' } }],
     edges: [],
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: snapshot })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: snapshot })
+  await taskFixture(db, {
     id: 't1',
     name: 't1',
     workflowId: 'wf1',
@@ -58,7 +59,7 @@ async function seed(db: PersistenceDb, childEventCount: number): Promise<void> {
     branchStartedAt: 1,
     rootTaskId: 't1',
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'nr1',
     taskId: 't1',
     nodeId: 'n1',

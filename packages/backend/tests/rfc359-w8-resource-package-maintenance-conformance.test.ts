@@ -13,7 +13,7 @@
 //   · `ResourcePackageApplyArtifactRecoveryPort`（`rollForward` / `compensate`）——**机制本质不同**，
 //     不该合。`prepared_artifacts_json` 这一列被两套互不认识的格式写着（写出点
 //     `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts:287` vs
-//     `platform/persistence/postgresqlResourcePackageAtomicApply.ts:881`；字段名 `opId`/`generationDir`
+//     `modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts:881`；字段名 `opId`/`generationDir`
 //     vs `operationId`/`generationDirectory`，`skill-version-stage` 一个嵌套一个扁平），两侧解码器
 //     又都是 zod `.strict()`。这条已由 `tests/architecture/rfc359-w5-artifact-format-portability.test.ts`
 //     的 12 格全矩阵钉住（6 格 `rejects`），本文件不重复它。
@@ -58,6 +58,8 @@
 // `{ failed: 0, rolledForward: 1 }` + `warnings: []`——即账本 13a 写的「回执缺失 / 与 journal
 // 错配也照样 roll-forward」。补上中立信封门之后两侧逐字相同。
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { createResourcePackageRecoveryScene } from '@/modules/resource-catalog/infrastructure/resourcePackageRecovery'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -70,7 +72,6 @@ import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
-  createResourcePackageApplyMaintenanceCommand,
   type ResourcePackageApplyArtifactRecoveryPort,
   type ResourcePackageApplyJournalPort,
 } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
@@ -79,7 +80,7 @@ import {
 // 会让这份对拍在账本里看不见。
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
 import { createResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/resourcePackageApplyJournal'
-import { createSqliteResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
+import { createLegacyResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -95,6 +96,22 @@ const OPERATION_ID = '01JW8RPM0000000000000000OP'
 interface Ports {
   readonly journal: ResourcePackageApplyJournalPort
   readonly artifacts: ResourcePackageApplyArtifactRecoveryPort
+}
+
+/** RFC-395 II-a A6：原有 journal CAS 对拍直接调用统一 CAS 端口。 */
+function settleFailed(
+  journal: ResourcePackageApplyJournalPort,
+  command: {
+    readonly id: string
+    readonly expectedState: 'prepared' | 'applying'
+    readonly error: string
+    readonly updatedAt: number
+  },
+) {
+  return journal.compareAndSet(
+    { id: command.id, state: command.expectedState },
+    { state: 'failed', error: command.error, updatedAt: command.updatedAt },
+  )
 }
 
 interface Warning {
@@ -113,7 +130,7 @@ function portsFor(
     const client = db as unknown as DbClient
     return {
       journal,
-      artifacts: createSqliteResourcePackageApplyArtifactRecovery({
+      artifacts: createLegacyResourcePackageApplyArtifactRecovery({
         db: client,
         appHome: paths.appHome,
         pluginsDir: paths.pluginsDir,
@@ -235,16 +252,18 @@ async function readJournal(
 }
 
 function convergeCommand(ports: Ports, warnings: Warning[]) {
-  return createResourcePackageApplyMaintenanceCommand({
-    journal: ports.journal,
-    artifacts: ports.artifacts,
-    now: () => NOW,
-    log: {
-      warn(message, fields) {
-        warnings.push({ message, fields })
+  return createAtomicApplyRecovery([
+    createResourcePackageRecoveryScene({
+      journal: ports.journal,
+      artifacts: ports.artifacts,
+      now: () => NOW,
+      log: {
+        warn(message, fields) {
+          warnings.push({ message, fields })
+        },
       },
-    },
-  })
+    }),
+  ])
 }
 
 describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对拍', (harness) => {
@@ -302,7 +321,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
 
       // 状态不符：不动。
       expect(
-        await ports.journal.settleFailed({
+        await settleFailed(ports.journal, {
           id: 'w8rpm-cas',
           expectedState: 'prepared',
           error: 'nope',
@@ -314,7 +333,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
 
       // 行不存在：不动，也不抛。
       expect(
-        await ports.journal.settleFailed({
+        await settleFailed(ports.journal, {
           id: 'w8rpm-missing',
           expectedState: 'prepared',
           error: 'nope',
@@ -324,7 +343,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
 
       // 状态相符：结算，并且只结算这一行。
       expect(
-        await ports.journal.settleFailed({
+        await settleFailed(ports.journal, {
           id: 'w8rpm-cas',
           expectedState: 'applying',
           error: 'converged: crashed before commit',
@@ -339,7 +358,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
 
       // 二次结算：`failed` 不再匹配 `applying`，幂等地返回 false。
       expect(
-        await ports.journal.settleFailed({
+        await settleFailed(ports.journal, {
           id: 'w8rpm-cas',
           expectedState: 'applying',
           error: 'again',
@@ -362,7 +381,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       const recording = harness.recordStatements()
       try {
         expect(
-          await ports.journal.settleFailed({
+          await settleFailed(ports.journal, {
             id: 'w8rpm-statement',
             expectedState: 'prepared',
             error: 'settled once',
@@ -411,7 +430,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
         },
       ]
       const settled = await Promise.all(
-        commands.map((command) => ports.journal.settleFailed(command)),
+        commands.map((command) => settleFailed(ports.journal, command)),
       )
       expect(settled.filter(Boolean)).toHaveLength(1)
       const winner = commands[settled.indexOf(true)]!
@@ -434,7 +453,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       await expect(
         harness.session.transaction(async () => {
           expect(
-            await ports.journal.settleFailed({
+            await settleFailed(ports.journal, {
               id: 'w8rpm-rollback',
               expectedState: 'applying',
               error: 'must roll back',
@@ -472,7 +491,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
 
       const warnings: Warning[] = []
       const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
-      const receipt = await convergeCommand(ports, warnings).converge({ activeApplyIds: [] })
+      const receipt = await convergeCommand(ports, warnings).converge({ 'resource-package': [] })
 
       expect(receipt).toEqual({ failed: 1, rolledForward: 0 })
       expect(existsSync(generationDirectory)).toBe(false)
@@ -516,7 +535,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       const warnings: Warning[] = []
       const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
       const receipt = await convergeCommand(ports, warnings).converge({
-        activeApplyIds: ['w8rpm-active'],
+        'resource-package': ['w8rpm-active'],
       })
 
       expect(receipt).toEqual({ failed: 0, rolledForward: 0 })
@@ -562,7 +581,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
 
       const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
       const warnings: Warning[] = []
-      expect(await convergeCommand(ports, warnings).converge({ activeApplyIds: [] })).toEqual({
+      expect(await convergeCommand(ports, warnings).converge({ 'resource-package': [] })).toEqual({
         failed: 0,
         rolledForward: 1,
       })
@@ -573,7 +592,9 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       // 发布物从磁盘上消失：两侧都必须记成**可重试**的告警，而不是把行结算掉。
       rmSync(cachedPath, { force: true })
       const afterWarnings: Warning[] = []
-      expect(await convergeCommand(ports, afterWarnings).converge({ activeApplyIds: [] })).toEqual({
+      expect(
+        await convergeCommand(ports, afterWarnings).converge({ 'resource-package': [] }),
+      ).toEqual({
         failed: 0,
         rolledForward: 0,
       })
@@ -630,7 +651,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
 
         const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
         const warnings: Warning[] = []
-        const receipt = await convergeCommand(ports, warnings).converge({ activeApplyIds: [] })
+        const receipt = await convergeCommand(ports, warnings).converge({ 'resource-package': [] })
 
         expect(receipt).toEqual({ failed: 0, rolledForward: 0 })
         expect(warnings.map((entry) => entry.message)).toEqual([
@@ -686,7 +707,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       // SQLite 喂的是 PostgreSQL 形状的 `applied[]`（`operationId`）。信封门与载荷无关，所以它过。
       // 谁把 PG 的 `.strict()` 载荷 schema 一并搬进 SQLite，这一条当场红。
       // PostgreSQL 喂自己的形状：它的载荷层本来就要求 `operationId`，这一半是正向对照。
-      expect(await convergeCommand(ports, warnings).converge({ activeApplyIds: [] })).toEqual({
+      expect(await convergeCommand(ports, warnings).converge({ 'resource-package': [] })).toEqual({
         failed: 0,
         rolledForward: 1,
       })

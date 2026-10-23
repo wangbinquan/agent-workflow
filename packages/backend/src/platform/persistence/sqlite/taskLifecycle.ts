@@ -39,6 +39,7 @@
 // snaps back on refresh. Callers of these helpers place their
 // broadcastNodeStatus AFTER the helper returns; never the other way around.
 
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
@@ -56,7 +57,9 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { type DbTxSync } from '@/db/txSync'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '@/modules/task-execution/public/commands'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
+export type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '@/modules/task-execution/public/commands'
 import {
   assertTaskExecutionContext,
   appendTaskLifecycleTransitionCommittedEvent,
@@ -81,11 +84,11 @@ import type { CommittedEventRef } from '@/platform/events/committed/types'
 import {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,
-  type NodeRunStatusUpdateExtra,
 } from '../nodeRunLifecycleCore'
 // RFC-359 W8 —— 中立异步孪生（两个引擎共用）。别名区分：本文件同名的 `*Tx` 是 bun:sqlite 专属的
 // **同步**版，仍被 `cancelOpenNodeRunsTx` / `services/task.ts:6039` 的同步事务体直调，本波不退役。
 import {
+  nodeRunLifecycleWriteColumns,
   setNodeRunStatusTx as setNodeRunStatusInTransaction,
   transitionNodeRunStatusTx as transitionNodeRunStatusInTransaction,
 } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
@@ -96,7 +99,6 @@ import {
 export {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,
-  type NodeRunStatusUpdateExtra,
 } from '../nodeRunLifecycleCore'
 
 /**
@@ -212,7 +214,7 @@ export function transitionNodeRunStatusTx(args: {
   const updated = queryRows(
     args.tx
       .update(nodeRuns)
-      .set({ status: to, ...(args.extra ?? {}) })
+      .set({ status: to, ...nodeRunLifecycleWriteColumns(args.extra) })
       .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
       .returning({ id: nodeRuns.id }),
   )
@@ -315,7 +317,7 @@ export async function setNodeRunStatus(args: {
   // rfc053-allow-direct-status-write -- single allowlisted writer
   const updated = await args.db
     .update(nodeRuns)
-    .set({ status: args.to, ...(args.extra ?? {}) })
+    .set({ status: args.to, ...nodeRunLifecycleWriteColumns(args.extra) })
     .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
     .returning({ id: nodeRuns.id })
   if (updated.length === 0) {
@@ -377,7 +379,7 @@ export function setNodeRunStatusTx(args: {
   const updated = queryRows(
     args.tx
       .update(nodeRuns)
-      .set({ status: args.to, ...(args.extra ?? {}) })
+      .set({ status: args.to, ...nodeRunLifecycleWriteColumns(args.extra) })
       .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
       .returning({ id: nodeRuns.id }),
   )
@@ -511,7 +513,12 @@ export async function cancelOpenNodeRuns(args: {
       tx: args.tx,
       nodeRunId: row.id,
       event: { kind: 'mark-canceled', reason: args.errorMessage },
-      extra: { finishedAt: args.finishedAt, errorMessage: args.errorMessage },
+      extra: {
+        identity: {
+          finishedAt: args.finishedAt,
+          errorMessage: args.errorMessage,
+        },
+      },
     })
   }
   return rows
@@ -648,7 +655,7 @@ export async function setTaskStatus(args: {
         `task ${args.taskId} workspace is being reclaimed by GC right now; retry after it finishes (${args.reason})`,
       )
     }
-    if (row.worktreePath !== '' && !existsSync(row.worktreePath)) {
+    if (!isTaskWorkspaceUnbound(row.worktreePath) && !existsSync(row.worktreePath)) {
       await withTaskExecutionWrite(args.db, async (tx) => {
         await fenceTaskWrite(tx, {
           taskId: args.taskId,

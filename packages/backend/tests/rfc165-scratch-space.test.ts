@@ -1,3 +1,4 @@
+import { readTaskFixtures, workflowFixture, readTaskRepoFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTask } from './helpers/productionTaskLaunch'
@@ -35,7 +36,6 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 
@@ -54,11 +54,11 @@ interface Harness {
   cleanup: () => void
 }
 
-function buildHarness(): Harness {
+// RFC-395 II-a: finish async workflow seeding before opening the launch transaction.
+async function buildHarness(): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-scratch-'))
   const db = createInMemoryDb(MIGRATIONS)
-  const { workflows } = tablesOf(db)
-  insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-scratch',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -79,7 +79,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   afterEach(() => h?.cleanup())
 
   test('S1 scratch launch → fresh git repo as workspace, scratch row shape', async () => {
-    h = buildHarness()
+    h = await buildHarness()
     const task = await launchTestTask(
       { ...BODY },
       {
@@ -108,9 +108,8 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const head = await runGit(scratchDir, ['rev-parse', 'HEAD'])
     expect(task.baseCommit).toBe(head.stdout.trim())
 
-    const { taskRepos } = tablesOf(h.db)
     // Single task_repos row mirrors the scratch layout.
-    const rows = await h.db.select().from(taskRepos).where(eq(taskRepos.taskId, task.id))
+    const rows = await readTaskRepoFixtures(h.db, { taskId: task.id })
     expect(rows.length).toBe(1)
     expect(rows[0]!.repoIndex).toBe(0)
     expect(rows[0]!.repoPath).toBe(scratchDir)
@@ -120,7 +119,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   })
 
   test('S2 root-commit identity: platform default, overridden by resolved task identity', async () => {
-    h = buildHarness()
+    h = await buildHarness()
     const plain = await launchTestTask(
       { ...BODY },
       {
@@ -171,7 +170,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   })
 
   test('S3 root commit is a working diff base (all-new-files)', async () => {
-    h = buildHarness()
+    h = await buildHarness()
     const task = await launchTestTask(
       { ...BODY },
       {
@@ -193,7 +192,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   })
 
   test('S4 materialize failure → failed row, tombstone stamped, dir cleaned, lease released', async () => {
-    h = buildHarness()
+    h = await buildHarness()
     // Force mkdir to fail: occupy {appHome}/scratch with a FILE.
     writeFileSync(join(h.appHome, 'scratch'), 'not a dir')
 
@@ -211,8 +210,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(task.worktreePath).toBe('')
     expect(task.errorMessage ?? '').toContain('scratch-')
 
-    const { tasks } = tablesOf(h.db)
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!
+    const row = (await readTaskFixtures(h.db, { id: task.id }))[0]!
     expect(row.spaceKind).toBe('scratch')
     // R3-2-r4: no revivable workspace ⇒ tombstoned atomically with the row.
     expect(row.workspacePrunedAt).not.toBe(null)
@@ -220,7 +218,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   })
 
   test('S4b init failure + rm failure hard-errors with an unleased, GC-recoverable anchor', async () => {
-    h = buildHarness()
+    h = await buildHarness()
     // Install a per-test git template whose pre-commit hook makes the scratch
     // root commit fail after `git init` has created a real residual repo.
     const template = join(h.appHome, 'git-template')
@@ -271,8 +269,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     expect(existsSync(details.path)).toBe(true)
     expect((await runGit(details.path, ['rev-parse', '--git-dir'])).exitCode).toBe(0)
     expect(materializingSpaces.has(details.taskId)).toBe(false)
-    const { tasks } = tablesOf(h.db)
-    expect(await h.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(h.db)).toHaveLength(0)
 
     // No row is committed on this 500 path. Recovery therefore uses the
     // existing unanchored-scratch GC after its safety age floor.
@@ -289,7 +286,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
 
   test('S5 lease released on success', async () => {
     // (recent_repos retired entirely by RFC-165 — nothing to pollute.)
-    h = buildHarness()
+    h = await buildHarness()
     const task = await launchTestTask(
       { ...BODY },
       {
@@ -320,7 +317,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     // went green for the wrong reason. Poison `insert` on the client itself:
     // it is the same handle the transaction body writes through, and
     // `taskRepos` is only ever inserted inside that transaction.
-    h = buildHarness()
+    h = await buildHarness()
     const realDb = h.db
     const poisoned = new Proxy(realDb, {
       get(target, prop, receiver) {
@@ -349,18 +346,17 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       ),
     ).rejects.toThrow('boom-task-repos-insert')
 
-    const { tasks } = tablesOf(realDb)
     // The transaction rolled back — no task row survives, the per-task
     // scratch dir is cleaned (the empty `scratch/` parent may remain),
     // lease freed.
-    const rows = await realDb.select().from(tasks)
+    const rows = await readTaskFixtures(realDb)
     expect(rows.length).toBe(0)
     expect(readdirSync(join(h.appHome, 'scratch'))).toEqual([])
     expect(materializingSpaces.size).toBe(0)
   })
 
   test('S7 materializedSpace success handoff: launchTestTask consumes verbatim (F3)', async () => {
-    h = buildHarness()
+    h = await buildHarness()
     const space = await materializeSpace(
       { ...BODY },
       {
@@ -398,7 +394,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
   })
 
   test('S8 materializedSpace failure handoff: ONE failed row, no re-materialize (F3)', async () => {
-    h = buildHarness()
+    h = await buildHarness()
     writeFileSync(join(h.appHome, 'scratch'), 'not a dir') // force mkdir failure
     const space = await materializeSpace(
       { ...BODY },
@@ -425,8 +421,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     )
     expect(task.id).toBe(space.taskId)
     expect(task.status).toBe('failed')
-    const { tasks } = tablesOf(h.db)
-    const rows = await h.db.select().from(tasks).where(eq(tasks.id, space.taskId))
+    const rows = await readTaskFixtures(h.db, { id: space.taskId })
     expect(rows.length).toBe(1)
     expect(rows[0]!.workspacePrunedAt).not.toBe(null)
     expect(materializingSpaces.size).toBe(0)

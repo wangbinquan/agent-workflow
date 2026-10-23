@@ -1,6 +1,12 @@
 // RFC-386: real provider claims exercise shared profiles, live child settings and epoch-scoped failures.
 // Former wiring controls preserve missing settings/profiles; current epoch wiring and an unscoped
 // negative control distinguish existing behavior from the factory consolidation.
+import {
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskRepoFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, spyOn, test } from 'bun:test'
@@ -115,7 +121,7 @@ async function childRequest(harness: ProviderDatabaseHarness, appHome: string) {
   const parent = await seedBundleTask(harness, appHome, 'running', false)
   const childId = ulid(),
     userId = ulid()
-  const { users, tasks, nodeRuns } = tablesOf(harness.db)
+  const { users } = tablesOf(harness.db)
   await insertOne(harness.db, users, {
     id: userId,
     username: userId,
@@ -124,20 +130,21 @@ async function childRequest(harness: ProviderDatabaseHarness, appHome: string) {
     createdAt: 1,
     updatedAt: 1,
   })
-  await harness.db.update(tasks).set({ ownerUserId: userId }).where(eq(tasks.id, parent.taskId))
+  await patchTaskFixture(harness.db, { id: parent.taskId }, { ownerUserId: userId })
   const run = await mintSequenceRun(harness.db, parent.taskId, {
     nodeId: 'call',
     status: 'pending',
   })
-  await harness.db
-    .update(nodeRuns)
-    .set({
+  await patchNodeRunFixture(
+    harness.db,
+    { id: run },
+    {
       status: 'running',
       childTaskId: childId,
       continuationSlotKey: 'call:node',
       operationGeneration: 0,
-    })
-    .where(eq(nodeRuns.id, run))
+    },
+  )
   const parentConfig = pickInheritableRunConfig({
     appHome,
     daemonGeneration: 'parent-generation',
@@ -379,14 +386,14 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
         await launch.launchWorkflow({ ...request, schedulerDriver: fixture.schedulerDriver })
         const childId = request.materializedSpace.taskId
         await awaitDriverSettled(bundle, childId)
-        const { tasks } = tablesOf(harness.db)
-        const [child] = await harness.db.select().from(tasks).where(eq(tasks.id, childId))
+        const [child] = await readTaskFixtures(harness.db, { id: childId })
         expect(child?.autoCommitPush).toBe(false)
         expect(JSON.parse(child!.workflowSnapshot).nodes).toEqual([])
-        await harness.db
-          .update(tasks)
-          .set({ status: 'interrupted', errorSummary: 'daemon-restart' })
-          .where(eq(tasks.id, childId))
+        await patchTaskFixture(
+          harness.db,
+          { id: childId },
+          { status: 'interrupted', errorSummary: 'daemon-restart' },
+        )
         fixture.update({ commitPushModel: 'resume-live' })
         await resumeTaskProjection(
           resumeDependencies(bundle, fixture, factory),
@@ -672,8 +679,8 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
       fixture = taskBundleInput(harness, appHome),
       bundle = fixture.compose()
     const seeded = await seedBundleTask(harness, appHome)
-    const { tasks, memoryDistillJobs } = tablesOf(harness.db)
-    await harness.db.update(tasks).set({ spaceKind: 'local' }).where(eq(tasks.id, seeded.taskId))
+    const { memoryDistillJobs } = tablesOf(harness.db)
+    await patchTaskFixture(harness.db, { id: seeded.taskId }, { spaceKind: 'local' })
     await bundle.coordinatorFactory
       .coordinatorFor({ runConfig: { kind: 'inherit-parent', parent: { appHome } } })
       .submit({ ...seeded, completionMode: 'await-settle' })
@@ -746,18 +753,15 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
       const fixture = taskBundleInput(harness, appHome)
       const bundle = composeDaemonTaskExecutionModules({ ...fixture.input, testSeams: undefined })
       const seeded = await seedBundleTask(harness, repo)
-      const { taskExecutionIntents, tasks, taskRepos } = tablesOf(harness.db)
+      const { taskExecutionIntents } = tablesOf(harness.db)
       await harness.db
         .update(taskExecutionIntents)
         .set({ kind: 'gate-continuation', payloadJson: JSON.stringify({ v: 1, event: 'resume' }) })
         .where(eq(taskExecutionIntents.id, seeded.intentId))
       // Stop after the real profile stage, like RFC-370's selected-profile fixture.
       // Actual review/clarify decisions and pre-drive ordering are covered by RFC-382's paired cases.
-      await harness.db
-        .update(tasks)
-        .set({ workflowSnapshot: '{}' })
-        .where(eq(tasks.id, seeded.taskId))
-      await insertOne(harness.db, taskRepos, {
+      await patchTaskFixture(harness.db, { id: seeded.taskId }, { workflowSnapshot: '{}' })
+      await taskRepoFixture(harness.db, {
         taskId: seeded.taskId,
         repoIndex: 0,
         repoPath: repo,
@@ -820,11 +824,11 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
       if (entry === 'child-resume') {
         await launch.launchWorkflow({ ...request, schedulerDriver: fixture.schedulerDriver })
         await awaitDriverSettled(bundle, childId)
-        const { tasks } = tablesOf(harness.db)
-        await harness.db
-          .update(tasks)
-          .set({ status: 'interrupted', errorSummary: 'daemon-restart' })
-          .where(eq(tasks.id, childId))
+        await patchTaskFixture(
+          harness.db,
+          { id: childId },
+          { status: 'interrupted', errorSummary: 'daemon-restart' },
+        )
       }
       const taskId =
         entry === 'root-resume'
@@ -850,8 +854,8 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
             ),
           ).rejects.toThrow('entry-drive-failed')
         }
-        const { tasks, taskExecutionIntents } = tablesOf(harness.db)
-        const [task] = await harness.db.select().from(tasks).where(eq(tasks.id, taskId))
+        const { taskExecutionIntents } = tablesOf(harness.db)
+        const [task] = await readTaskFixtures(harness.db, { id: taskId })
         expect(task).toMatchObject({ status: 'failed', errorSummary: failure.errorSummary })
         expect(transition.mock.calls[0]![0].reason).toBe(failure.reason)
         const terminal = terminalize.mock.calls[0]![0]

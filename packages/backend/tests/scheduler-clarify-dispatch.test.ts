@@ -21,6 +21,17 @@
 // Together with clarify-options-cap.test.ts (CLI limits guard) this rounds
 // out the 7-case T11 unit budget per RFC-023 design.md §13.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  patchClarifyRoundFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -127,17 +138,17 @@ async function mirrorClarifyAnswered(
   sessionId: string,
   fields: { answersJson: string; directive?: 'continue' | 'stop' },
 ): Promise<void> {
-  const { clarifyRounds } = tablesOf(db)
-  await db
-    .update(clarifyRounds)
-    .set({
+  await patchClarifyRoundFixture(
+    db,
+    { id: sessionId },
+    {
       status: 'answered',
       answeredAt: Date.now(),
       answeredBy: 'local',
       directive: fields.directive ?? null,
-      answersJson: fields.answersJson,
-    })
-    .where(eq(clarifyRounds.id, sessionId))
+      answers: fields.answersJson,
+    },
+  )
 }
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -189,8 +200,7 @@ async function seedAgent(
   name: string,
   outputs: string[] = ['summary'],
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -210,13 +220,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -336,8 +345,8 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { clarifyRounds } = tablesOf(h.db)
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('awaiting_human')
 
     const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -346,7 +355,7 @@ function registerCases(provider: ProviderHarness) {
     expect(sessions[0]?.askingNodeId).toBe('d')
     expect(sessions[0]?.askingShardKey).toBeNull()
 
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const dRun = runs.find((r) => r.nodeId === 'd' && r.parentNodeRunId === null)
     const cRun = runs.find((r) => r.nodeId === 'c')
     expect(dRun?.status).toBe('done') // agent expressed an ask successfully
@@ -397,8 +406,8 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, clarifyRounds } = tablesOf(h.db)
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { clarifyRounds } = tablesOf(h.db)
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('failed')
     expect(taskRow?.errorMessage ?? '').toContain('clarify-required')
 
@@ -444,8 +453,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks } = tablesOf(h.db)
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('failed')
     expect(taskRow?.errorMessage ?? '').toContain('clarify-no-channel')
   }, 20_000)
@@ -491,7 +499,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     // Step 2: synthesize an answer + a rerun row (this is what the unified
     // answer dispatch normally does — we exercise scheduler->runner here
     // without invoking the REST path).
@@ -506,27 +514,24 @@ function registerCases(provider: ProviderHarness) {
         customText: '',
       },
     ])
-    await h.db
-      .update(clarifyRounds)
-      .set({
-        status: 'answered',
-        answeredAt: Date.now(),
-        answeredBy: 'local',
-        answersJson: ANSWERS_JSON_S2,
-      })
-      .where(eq(clarifyRounds.id, sessRow.id))
+    await patchClarifyRoundFixture(
+      h.db,
+      { id: sessRow.id },
+      { status: 'answered', answeredAt: Date.now(), answeredBy: 'local', answers: ANSWERS_JSON_S2 },
+    )
     // RFC-100: directive='stop' so this rerun is the finalize round — the agent
     // is released from ask-back mode and its <workflow-output> is accepted.
     await mirrorClarifyAnswered(h.db, sessRow.id, {
       answersJson: ANSWERS_JSON_S2,
       directive: 'stop',
     })
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: sessRow.intermediaryNodeRunId },
+      { status: 'done', finishedAt: Date.now() },
+    )
     const rerunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -548,7 +553,7 @@ function registerCases(provider: ProviderHarness) {
       rerunId,
     )
     await setNodeClarifyDirective(h.db, taskId, 'd', 'stop', 'u1')
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'with pg' }) }, () =>
       runTask({
@@ -565,7 +570,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const rerunRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunId)))[0]!
+    const rerunRow = (await readNodeRunFixtures(h.db, { id: rerunId }))[0]!
     expect(rerunRow.status).toBe('done')
     // RFC-132 (PR-C): the flat `## Clarify Q&A` block carries the answer as an equal peer.
     expect(readNodeRunPrompt(rerunRow, join(h.appHome, 'runs')) ?? '').toContain('Clarify Q&A')
@@ -634,8 +639,7 @@ function registerCases(provider: ProviderHarness) {
     // This is what production task 01KRT38TKXQGKEDHCPQXPXTB9J actually had:
     // retry=6 / clarify=0 / done from process retries that succeeded.
     const staleId = ulid()
-    const { nodeRuns, clarifyRounds, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: staleId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, staleId),
@@ -647,6 +651,7 @@ function registerCases(provider: ProviderHarness) {
       finishedAt: Date.now() - 500,
     })
 
+    const { clarifyRounds } = tablesOf(h.db)
     // Step 3: synthesize an answered clarify session + a rerun row at the
     // tuple the then-current immediate mint produced (retry=0, clarifyIter=1
     // — the production incident's exact shape; the comparator must beat it
@@ -663,27 +668,29 @@ function registerCases(provider: ProviderHarness) {
         customText: '',
       },
     ])
-    await h.db
-      .update(clarifyRounds)
-      .set({
+    await patchClarifyRoundFixture(
+      h.db,
+      { id: sessRow.id },
+      {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
         // RFC-100: stop = finalize round, so the rerun's <workflow-output> is accepted.
         directive: 'stop',
-        answersJson: ANSWERS_JSON_S3A,
-      })
-      .where(eq(clarifyRounds.id, sessRow.id))
+        answers: ANSWERS_JSON_S3A,
+      },
+    )
     await mirrorClarifyAnswered(h.db, sessRow.id, {
       answersJson: ANSWERS_JSON_S3A,
       directive: 'stop',
     })
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: sessRow.intermediaryNodeRunId },
+      { status: 'done', finishedAt: Date.now() },
+    )
     const rerunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -707,7 +714,7 @@ function registerCases(provider: ProviderHarness) {
       rerunId,
     )
     await setNodeClarifyDirective(h.db, taskId, 'd', 'stop', 'u1')
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'with pg' }) }, () =>
       runTask({
@@ -725,13 +732,13 @@ function registerCases(provider: ProviderHarness) {
     )
 
     // The fresh rerun must actually run — not be shadowed by the retry=6 row.
-    const rerunRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunId)))[0]!
+    const rerunRow = (await readNodeRunFixtures(h.db, { id: rerunId }))[0]!
     expect(rerunRow.status).toBe('done')
     expect(readNodeRunPrompt(rerunRow, join(h.appHome, 'runs')) ?? '').toContain('Postgres')
 
     // And the task must reach done via the rerun, not by short-circuiting on
     // the stale retry=6 done row.
-    const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(finalTask.status).toBe('done')
   })
 
@@ -788,7 +795,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     // Step 2: synthesize the answered session + the clarify-rerun row the
     // answer channel normally mints (synthesized here at retry=0).
     const sessRow = (
@@ -802,9 +809,10 @@ function registerCases(provider: ProviderHarness) {
         customText: '',
       },
     ])
-    await h.db
-      .update(clarifyRounds)
-      .set({
+    await patchClarifyRoundFixture(
+      h.db,
+      { id: sessRow.id },
+      {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
@@ -816,19 +824,20 @@ function registerCases(provider: ProviderHarness) {
         // asks again (driven by the clarify body below). The STOP-revival sibling
         // test locks the other half: a revived 'stop' round stays RELEASED.
         directive: 'continue',
-        answersJson: ANSWERS_JSON_S2B,
-      })
-      .where(eq(clarifyRounds.id, sessRow.id))
+        answers: ANSWERS_JSON_S2B,
+      },
+    )
     await mirrorClarifyAnswered(h.db, sessRow.id, {
       answersJson: ANSWERS_JSON_S2B,
       directive: 'continue',
     })
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: sessRow.intermediaryNodeRunId },
+      { status: 'done', finishedAt: Date.now() },
+    )
     const rerunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -853,11 +862,12 @@ function registerCases(provider: ProviderHarness) {
 
     // Step 3: simulate the daemon restart sweep — the rerun row never got a
     // chance to run; orphans.ts flips pending/running rows to 'interrupted'.
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'interrupted', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, rerunId))
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: rerunId },
+      { status: 'interrupted', finishedAt: Date.now() },
+    )
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     // Step 4: re-enter the scheduler (what /resume or runTask after restart
     // does). The scheduler must mint a fresh attempt that INHERITS
@@ -880,7 +890,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const allRuns = await readNodeRunFixtures(h.db, { taskId })
     // The fresh attempt is the most recent agent-d row (retry=1, ci=1).
     const dRuns = allRuns
       .filter((r) => r.nodeId === 'd' && r.parentNodeRunId === null)
@@ -945,7 +955,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     // Step 2: synthesize the answered session with directive='stop' (the user
     // clicked Stop → finalize round) + the clarify-rerun row.
     const sessRow = (
@@ -959,23 +969,25 @@ function registerCases(provider: ProviderHarness) {
         customText: '',
       },
     ])
-    await h.db
-      .update(clarifyRounds)
-      .set({
+    await patchClarifyRoundFixture(
+      h.db,
+      { id: sessRow.id },
+      {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
         directive: 'stop',
-        answersJson: ANSWERS_JSON,
-      })
-      .where(eq(clarifyRounds.id, sessRow.id))
+        answers: ANSWERS_JSON,
+      },
+    )
     await mirrorClarifyAnswered(h.db, sessRow.id, { answersJson: ANSWERS_JSON, directive: 'stop' })
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, sessRow.intermediaryNodeRunId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: sessRow.intermediaryNodeRunId },
+      { status: 'done', finishedAt: Date.now() },
+    )
     const rerunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: rerunId,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, rerunId),
@@ -998,11 +1010,12 @@ function registerCases(provider: ProviderHarness) {
     await setNodeClarifyDirective(h.db, taskId, 'd', 'stop', 'u1')
 
     // Step 3: simulate the daemon restart sweep → the rerun row is interrupted.
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'interrupted', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, rerunId))
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: rerunId },
+      { status: 'interrupted', finishedAt: Date.now() },
+    )
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     // Step 4: re-enter the scheduler. The revived stop-round run must be RELEASED
     // → it sees the <workflow-output> format → emits output → done. The mock
@@ -1022,7 +1035,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const allRuns = await readNodeRunFixtures(h.db, { taskId })
     const fresh = allRuns
       .filter((r) => r.nodeId === 'd' && r.parentNodeRunId === null)
       .sort((a, b) => b.retryIndex - a.retryIndex)[0]!
@@ -1090,7 +1103,7 @@ function registerCases(provider: ProviderHarness) {
         sessionRestartBudget: 0,
       }),
     )
-    const { clarifyRounds, nodeRuns, tasks } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     const round1Sess = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
@@ -1102,28 +1115,30 @@ function registerCases(provider: ProviderHarness) {
         customText: '',
       },
     ])
-    await h.db
-      .update(clarifyRounds)
-      .set({
+    await patchClarifyRoundFixture(
+      h.db,
+      { id: round1Sess.id },
+      {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
         directive: 'continue',
-        answersJson: ANSWERS_JSON_R1,
-      })
-      .where(eq(clarifyRounds.id, round1Sess.id))
+        answers: ANSWERS_JSON_R1,
+      },
+    )
     await mirrorClarifyAnswered(h.db, round1Sess.id, {
       answersJson: ANSWERS_JSON_R1,
       directive: 'continue',
     })
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, round1Sess.intermediaryNodeRunId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: round1Sess.intermediaryNodeRunId },
+      { status: 'done', finishedAt: Date.now() },
+    )
 
     // Round 2 (ci=1): mint rerun row, drive it through to ask "Which env?".
     const ci1Id = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: ci1Id,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, ci1Id),
@@ -1146,7 +1161,7 @@ function registerCases(provider: ProviderHarness) {
       'd',
       ci1Id,
     )
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
     const ROUND2_BODY = JSON.stringify({
       questions: [
         {
@@ -1182,9 +1197,10 @@ function registerCases(provider: ProviderHarness) {
         customText: '',
       },
     ])
-    await h.db
-      .update(clarifyRounds)
-      .set({
+    await patchClarifyRoundFixture(
+      h.db,
+      { id: round2Sess.id },
+      {
         status: 'answered',
         answeredAt: Date.now(),
         answeredBy: 'local',
@@ -1193,21 +1209,22 @@ function registerCases(provider: ProviderHarness) {
         // re-enters mandatory ask-back regardless of this directive and asks
         // again — locking Round 1 + Round 2 Q&A rendering, the test's intent.
         directive: 'continue',
-        answersJson: ANSWERS_JSON_R2,
-      })
-      .where(eq(clarifyRounds.id, round2Sess.id))
+        answers: ANSWERS_JSON_R2,
+      },
+    )
     await mirrorClarifyAnswered(h.db, round2Sess.id, {
       answersJson: ANSWERS_JSON_R2,
       directive: 'continue',
     })
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, round2Sess.intermediaryNodeRunId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: round2Sess.intermediaryNodeRunId },
+      { status: 'done', finishedAt: Date.now() },
+    )
 
     // Mint the ci=2 rerun row, immediately mark interrupted (daemon restart).
     const ci2Id = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: ci2Id,
       taskId,
       seq: await allocateNodeRunSeq(h.db, taskId, ci2Id),
@@ -1227,7 +1244,7 @@ function registerCases(provider: ProviderHarness) {
       'd',
       ci2Id,
     )
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     // Re-enter scheduler. Fresh row must inherit ci=2 and prompt must carry
     // BOTH 'Postgres' (Round 1) and 'Staging' (Round 2). RFC-100: the revived
@@ -1247,7 +1264,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const allRuns = await readNodeRunFixtures(h.db, { taskId })
     const dRuns = allRuns
       .filter((r) => r.nodeId === 'd' && r.parentNodeRunId === null)
       .sort((a, b) => b.retryIndex - a.retryIndex)

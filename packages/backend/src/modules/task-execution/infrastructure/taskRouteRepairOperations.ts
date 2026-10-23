@@ -1,15 +1,22 @@
+import { createNodeRunQueries } from './nodeRunQueries'
+import { createRunHistorySnapshot } from './runSelection/oracle/historySnapshot'
+import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
+import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
+import {
+  decodeTaskSubject,
+  isTurnEngineTaskSubject,
+  type StoredTaskSubject,
+} from '../domain/taskSubject'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
-  compareNodeRunMintOrder,
   CANCELABLE_TASK_STATUSES,
   REPAIR_OPTION_IDS,
   WorkflowDefinitionSchema,
   isLifecycleAlertRule,
   isTerminalTaskStatus,
-  isTurnEngineWorkgroupTask,
   migrateWorkflowDefinitionToLatest,
   ruleForOptionId,
   type LifecycleAlertRule,
@@ -24,7 +31,7 @@ import {
   type WorkflowNode,
 } from '@agent-workflow/shared'
 
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
@@ -87,13 +94,13 @@ interface ParsedAlert {
   readonly resolvedAt: number | null
 }
 
-interface RepairTask {
+interface RepairTask extends StoredTaskSubject {
   readonly id: string
   readonly status: TaskStatus
   readonly workflowSnapshot: string
   readonly worktreePath: string
   readonly workgroupId: string | null
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
 }
 
 interface RepairNodeRun {
@@ -426,11 +433,11 @@ function isClarifyNode(node: WorkflowNode): boolean {
  *   （`lifecycle-repair-T2` 的「newer generation is stuck → resurrect the NEWER (max id)」
  *   用例照出了这处：gen0=done / gen1=interrupted 同属 iteration 0，被判成无候选）。
  */
-function latestCandidate(
+async function latestCandidate(
   runs: readonly RepairNodeRun[],
   nodeIds: ReadonlySet<string>,
   grouping: 'review' | 'clarify',
-): RepairNodeRun | null {
+): Promise<RepairNodeRun | null> {
   const groups = new Map<string, RepairNodeRun[]>()
   for (const run of runs) {
     if (!nodeIds.has(run.nodeId)) continue
@@ -440,20 +447,24 @@ function latestCandidate(
     group.push(run)
     groups.set(key, group)
   }
-  let candidate: RepairNodeRun | null = null
+  const selection = createRunSelectionOracleSnapshot(runs, { scope: { kind: 'rows' } })
+  const taskId = runs[0]?.taskId ?? ''
+  const candidates: RepairNodeRun[] = []
   for (const group of groups.values()) {
-    const latest = group.reduce((left, right) =>
-      compareNodeRunMintOrder(right, left) > 0 ? right : left,
-    )
-    // 评审看整组，澄清只看最新那一代。
+    const selected = (
+      await selection.familyHistory(taskId, { runIds: group.map((run) => run.id) })
+    ).at(-1)
+    const latest = group.find((run) => run.id === selected?.id)!
     if (
       grouping === 'review' ? group.some((run) => run.status === 'done') : latest.status === 'done'
     )
       continue
-    if (!TERMINAL_NON_DONE_SET.has(latest.status)) continue
-    if (candidate === null || compareNodeRunMintOrder(latest, candidate) > 0) candidate = latest
+    if (TERMINAL_NON_DONE_SET.has(latest.status)) candidates.push(latest)
   }
-  return candidate
+  const selected = (
+    await selection.familyHistory(taskId, { runIds: candidates.map((run) => run.id) })
+  ).at(-1)
+  return candidates.find((run) => run.id === selected?.id) ?? null
 }
 
 async function loadAlert(db: PersistenceDb, taskId: string, alertId: string): Promise<ParsedAlert> {
@@ -503,8 +514,11 @@ async function loadTask(db: PersistenceDb, taskId: string): Promise<RepairTask> 
         status: tasks.status,
         workflowSnapshot: tasks.workflowSnapshot,
         worktreePath: tasks.worktreePath,
+        workflowId: tasks.workflowId,
+        codeRoundId: tasks.codeRoundId,
+        sourceAgentName: tasks.sourceAgentName,
         workgroupId: tasks.workgroupId,
-        workgroupConfigJson: tasks.workgroupConfigJson,
+        workgroupConfig: taskWorkgroupConfigSelection(db),
       })
       .from(tasks)
       .where(eq(tasks.id, taskId))
@@ -600,14 +614,15 @@ async function deriveScopeRoot(
   if (ctx.definition === null) return taskWorktreePath
   const wrapperId = buildContainerMap(ctx.definition).get(reviewNodeId)
   if (wrapperId === undefined) return taskWorktreePath
-  const { nodeRuns } = tablesOf(dependencies.db)
-  const rows = await dependencies.db
-    .select({ id: nodeRuns.id, seq: nodeRuns.seq, isoWorktreePath: nodeRuns.isoWorktreePath })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, ctx.task.id), eq(nodeRuns.nodeId, wrapperId)))
-    .orderBy(engineOf(dependencies.db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
-    .limit(1)
-  const wrapperRun = rows[0]
+  const [wrapperRun] = await createNodeRunQueries(dependencies.db).listFields(
+    {
+      taskId: ctx.task.id,
+      nodeId: wrapperId,
+      order: 'seq-desc',
+      limit: 1,
+    },
+    ['id', 'seq', 'isoWorktreePath'],
+  )
   if (wrapperRun === undefined) return taskWorktreePath
   const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const isoRoot = await workspaceReads.isolationRoot({
@@ -874,12 +889,19 @@ async function preflight(
       }
       const { nodeRuns } = tablesOf(dependencies.db)
       const rows = await dependencies.db
-        .select({ id: nodeRuns.id, seq: nodeRuns.seq, status: nodeRuns.status })
+        .select({
+          id: nodeRuns.id,
+          nodeId: nodeRuns.nodeId,
+          seq: nodeRuns.seq,
+          status: nodeRuns.status,
+        })
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, ctx.task.id), inArray(nodeRuns.id, [...ids])))
-      const active = rows
-        .filter((row) => row.status === 'awaiting_review' || row.status === 'awaiting_human')
-        .sort((left, right) => compareNodeRunMintOrder(left, right))
+      const active = await createRunHistorySnapshot(ctx.task.id, rows).familyHistory(
+        ctx.task.id,
+        {},
+        { statusIn: ['awaiting_review', 'awaiting_human'] },
+      )
       if (active.length < 2) {
         return unavailable('diagnose.repair.U1.unavailable.notMultipleActive')
       }
@@ -951,9 +973,15 @@ async function preflight(
       // 于是零评审节点的工作流被报成 `noAwaitingReviewRun`（`lifecycle-repair-S1` 的
       // 「workflow has no review nodes」用例照出了这处）。
       if (reviewIds.size === 0) return unavailable('diagnose.repair.S1.unavailable.noReviewNode')
-      const candidates = (await loadNodeRuns(dependencies.db, ctx.task.id))
-        .filter((run) => run.status === 'awaiting_review' && reviewIds.has(run.nodeId))
-        .sort((left, right) => compareNodeRunMintOrder(right, left))
+      const reviewRows = (await loadNodeRuns(dependencies.db, ctx.task.id)).filter(
+        (run) => run.status === 'awaiting_review' && reviewIds.has(run.nodeId),
+      )
+      const reviewHistory = await createRunHistorySnapshot(ctx.task.id, reviewRows).familyHistory(
+        ctx.task.id,
+        {},
+        { direction: 'desc' },
+      )
+      const candidates = reviewHistory.map((ref) => reviewRows.find((row) => row.id === ref.id)!)
       const run =
         (hinted === null ? undefined : candidates.find((candidate) => candidate.id === hinted)) ??
         candidates[0]
@@ -1012,10 +1040,13 @@ async function preflight(
       let run: RepairNodeRun | null =
         hinted === null ? null : await loadNodeRun(dependencies.db, ctx.task.id, hinted)
       if (run === null) {
-        const rows = (await loadNodeRuns(dependencies.db, ctx.task.id))
-          .filter((candidate) => candidate.status === 'awaiting_human')
-          .sort((left, right) => compareNodeRunMintOrder(right, left))
-        run = rows[0] ?? null
+        const rows = await loadNodeRuns(dependencies.db, ctx.task.id)
+        const history = await createRunHistorySnapshot(ctx.task.id, rows).familyHistory(
+          ctx.task.id,
+          {},
+          { statusIn: ['awaiting_human'], direction: 'desc' },
+        )
+        run = rows.find((row) => row.id === history[0]?.id) ?? null
       }
       if (run === null || run.status !== 'awaiting_human') {
         return unavailable('diagnose.repair.S2.reopenSession.unavailable.noAwaitingRun')
@@ -1204,8 +1235,10 @@ async function applyAction(
         allowedFrom: action.from,
         ...(action.allowTerminal === true ? { allowTerminal: true } : {}),
         extra: {
-          finishedAt: action.to === 'done' ? now() : null,
-          errorMessage: null,
+          identity: {
+            finishedAt: action.to === 'done' ? now() : null,
+            errorMessage: null,
+          },
         },
         reason: optionId,
       })
@@ -1221,7 +1254,12 @@ async function applyAction(
         to: action.nodeTo,
         allowedFrom: action.nodeFrom,
         allowTerminal: true,
-        extra: { finishedAt: null, errorMessage: null },
+        extra: {
+          identity: {
+            finishedAt: null,
+            errorMessage: null,
+          },
+        },
         reason: optionId,
       })
       await setTask(dependencies, {
@@ -1262,7 +1300,12 @@ async function applyAction(
         to: 'done',
         allowedFrom: action.nodeFrom,
         allowTerminal: true,
-        extra: { finishedAt: now(), errorMessage: null },
+        extra: {
+          identity: {
+            finishedAt: now(),
+            errorMessage: null,
+          },
+        },
         reason: optionId,
       })
       return {
@@ -1322,7 +1365,11 @@ async function applyAction(
         await dependencies.persistence.nodeRuns.transition({
           nodeRunId,
           event: { kind: 'cancel-by-supersede', reason: action.reason },
-          extra: { finishedAt: now() },
+          extra: {
+            identity: {
+              finishedAt: now(),
+            },
+          },
         })
       }
       return {
@@ -1470,7 +1517,13 @@ export function createTaskRouteRepairOperations(
     const options: RepairOption[] = []
     for (const optionId of REPAIR_OPTION_IDS[ctx.alert.rule]) {
       const definition = OPTION_DEFINITIONS[optionId]
-      if (isTurnEngineWorkgroupTask(ctx.task) && definition.revivesExecution === true) {
+      if (
+        isTurnEngineTaskSubject(
+          decodeTaskSubject(ctx.task),
+          ctx.task.workgroupConfig?.launch.mode,
+        ) &&
+        definition.revivesExecution === true
+      ) {
         options.push({
           ...definition,
           available: false,
@@ -1511,7 +1564,10 @@ export function createTaskRouteRepairOperations(
       )
     }
     const definition = OPTION_DEFINITIONS[optionId]
-    if (isTurnEngineWorkgroupTask(ctx.task) && definition.revivesExecution === true) {
+    if (
+      isTurnEngineTaskSubject(decodeTaskSubject(ctx.task), ctx.task.workgroupConfig?.launch.mode) &&
+      definition.revivesExecution === true
+    ) {
       throw new ValidationError(
         'workgroup-repair-unsupported',
         `repair option '${optionId}' cannot revive a turn-engine workgroup task`,

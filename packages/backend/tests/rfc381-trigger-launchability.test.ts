@@ -1,5 +1,6 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-381: both provider roots reject invalid saved triggers with the full 422 contract; dispatch classifies the same failure as launch-failed.
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -23,8 +24,7 @@ async function workflow(
   name = `wf-${ulid()}`,
 ) {
   const id = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name,
     definition: JSON.stringify(definition),
@@ -159,8 +159,7 @@ describeEachProviderHttpApplication(
     test('references to built-in agents remain launchable when saving either trigger kind', async () => {
       const h = await setup()
       const agentId = ulid()
-      const { agents } = tablesOf(h.db)
-      await insertOne(h.db, agents, {
+      await agentFixture(h.db, {
         id: agentId,
         name: 'rfc381-builtin-agent',
         builtin: true,

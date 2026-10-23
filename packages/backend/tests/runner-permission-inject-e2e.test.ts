@@ -16,8 +16,7 @@
 // framework-side contract: the config is serialized into the child's env with
 // the load-bearing key order + the anti-revival strip intact.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
@@ -65,15 +64,14 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -97,8 +95,7 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 

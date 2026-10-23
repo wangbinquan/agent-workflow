@@ -9,12 +9,11 @@
 //      reject)只读图上 node id,绝不读归属列(confirmedBy/displayName/...)。
 // 原 buildBorrowedAgent 纯函数锁 + execution wiring 锁随函数/分支删除。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec } from '@/platform/persistence/queryHelpers'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq, sql } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { mintNodeRun } from '../src/services/nodeRunMint'
@@ -26,36 +25,47 @@ describeEachProvider(
     let db: PersistenceDb
     beforeEach(async () => {
       db = harness.db
-      await rawExec(db, sql`INSERT INTO workflows (id, name, definition) VALUES ('wf', 'f', '{}')`)
-      await rawExec(
-        db,
-        sql`
-      INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-        base_branch, branch, status, inputs, started_at, schema_version)
-      VALUES (${TASK_ID}, 'b', 'wf', '{}', '/tmp/r', '/tmp/w', 'main', 'b', 'running', '{}', 1, 1)
-    `,
-      )
+      await workflowFixture(db, { id: 'wf', name: 'f', definition: '{}' })
+      await taskFixture(db, {
+        id: TASK_ID,
+        name: 'b',
+        workflowId: 'wf',
+        workflowSnapshot: '{}',
+        repoPath: '/tmp/r',
+        worktreePath: '/tmp/w',
+        baseBranch: 'main',
+        branch: 'b',
+        status: 'running',
+        inputs: '{}',
+        startedAt: 1,
+        schemaVersion: 1,
+      })
     })
 
     test('override persists; default null', async () => {
       const id = await mintNodeRun(db, {
+        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
         taskId: TASK_ID,
         nodeId: 'n1',
         status: 'pending',
         cause: 'initial',
-        overrides: { agentOverrideName: 'agent-x' },
+        overrides: {
+          config: {
+            agentOverrideName: 'agent-x',
+          },
+        },
       })
-      const { nodeRuns } = tablesOf(db)
-      const row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+      const row = (await readNodeRunFixtures(db, { id }))[0]!
       expect(row.agentOverrideName).toBe('agent-x')
 
       const id2 = await mintNodeRun(db, {
+        ...deriveNodeRunRole({ nodeId: 'n2', rerunCause: 'initial' }),
         taskId: TASK_ID,
         nodeId: 'n2',
         status: 'pending',
         cause: 'initial',
       })
-      const row2 = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id2)))[0]!
+      const row2 = (await readNodeRunFixtures(db, { id: id2 }))[0]!
       expect(row2.agentOverrideName).toBeNull()
     })
   },

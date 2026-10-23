@@ -1,0 +1,1812 @@
+{
+  "version": 1,
+  "rfc": "RFC-395 II-a A1",
+  "columns": [
+    {
+      "table": "tasks",
+      "property": "id",
+      "physical": "id",
+      "target": "tasks.id",
+      "class": "immutable",
+      "spec": "id"
+    },
+    {
+      "table": "tasks",
+      "property": "name",
+      "physical": "name",
+      "target": "tasks.name",
+      "class": "cas-mutable",
+      "spec": "name"
+    },
+    {
+      "table": "tasks",
+      "property": "workflowId",
+      "physical": "workflow_id",
+      "target": "task_definitions.source_id",
+      "class": "cas-mutable",
+      "spec": "workflowId",
+      "note": "Subject discriminant precedence: code-round, workgroup, agent, digital-employee, workflow; non-workflow workflowId is definitionAnchorId projection."
+    },
+    {
+      "table": "tasks",
+      "property": "workflowSnapshot",
+      "physical": "workflow_snapshot",
+      "target": "task_definitions.workflow_snapshot",
+      "class": "cas-mutable",
+      "spec": "workflowSnapshot",
+      "json": true
+    },
+    {
+      "table": "tasks",
+      "property": "workflowVersion",
+      "physical": "workflow_version",
+      "target": "task_definitions.source_revision",
+      "class": "cas-mutable",
+      "spec": "workflowVersion"
+    },
+    {
+      "table": "tasks",
+      "property": "repoPath",
+      "physical": "repo_path",
+      "target": "task_repository_mounts.repo_path",
+      "class": "cas-mutable",
+      "spec": "repoPath",
+      "note": "Ordinal 0 with explicit repos; deferred placeholder uses task_workspaces.requested_source / task_branch. II-b resolves mirrors per migration 4.2; II-a preserves both inputs."
+    },
+    {
+      "table": "tasks",
+      "property": "repoUrl",
+      "physical": "repo_url",
+      "target": "task_repository_mounts.repo_url",
+      "class": "cas-mutable",
+      "spec": "repoUrl",
+      "note": "Ordinal 0 with explicit repos; deferred placeholder uses task_workspaces.requested_source / task_branch. II-b resolves mirrors per migration 4.2; II-a preserves both inputs."
+    },
+    {
+      "table": "tasks",
+      "property": "cachedRepoId",
+      "physical": "cached_repo_id",
+      "target": "task_repository_mounts.cached_repo_id",
+      "class": "cas-mutable",
+      "spec": "cachedRepoId",
+      "note": "Ordinal 0 with explicit repos; deferred placeholder uses task_workspaces.requested_source / task_branch. II-b resolves mirrors per migration 4.2; II-a preserves both inputs."
+    },
+    {
+      "table": "tasks",
+      "property": "repoGroupId",
+      "physical": "repo_group_id",
+      "target": "task_workspaces.repo_group_id",
+      "class": "immutable",
+      "spec": "repoGroupId"
+    },
+    {
+      "table": "tasks",
+      "property": "repoGroupName",
+      "physical": "repo_group_name",
+      "target": "task_workspaces.repo_group_name",
+      "class": "immutable",
+      "spec": "repoGroupName"
+    },
+    {
+      "table": "tasks",
+      "property": "worktreePath",
+      "physical": "worktree_path",
+      "target": "tasks.workspace_root_ref",
+      "class": "cas-mutable",
+      "spec": "worktreePath",
+      "note": "Empty worktreePath becomes NULL in II-b; projection returns ''."
+    },
+    {
+      "table": "tasks",
+      "property": "baseBranch",
+      "physical": "base_branch",
+      "target": "task_repository_mounts.base_branch",
+      "class": "cas-mutable",
+      "spec": "baseBranch",
+      "note": "Ordinal 0 with explicit repos; deferred placeholder uses task_workspaces.requested_source / task_branch. II-b resolves mirrors per migration 4.2; II-a preserves both inputs."
+    },
+    {
+      "table": "tasks",
+      "property": "branch",
+      "physical": "branch",
+      "target": "task_repository_mounts.branch",
+      "class": "cas-mutable",
+      "spec": "branch",
+      "note": "Ordinal 0 with explicit repos; deferred placeholder uses task_workspaces.requested_source / task_branch. II-b resolves mirrors per migration 4.2; II-a preserves both inputs."
+    },
+    {
+      "table": "tasks",
+      "property": "baseCommit",
+      "physical": "base_commit",
+      "target": "task_repository_mounts.base_commit",
+      "class": "cas-mutable",
+      "spec": "baseCommit",
+      "note": "Ordinal 0 with explicit repos; deferred placeholder uses task_workspaces.requested_source / task_branch. II-b resolves mirrors per migration 4.2; II-a preserves both inputs."
+    },
+    {
+      "table": "tasks",
+      "property": "status",
+      "physical": "status",
+      "target": "tasks.status",
+      "class": "cas-mutable",
+      "spec": "status"
+    },
+    {
+      "table": "tasks",
+      "property": "inputs",
+      "physical": "inputs",
+      "target": "task_definitions.inputs",
+      "class": "cas-mutable",
+      "spec": "inputs",
+      "json": true
+    },
+    {
+      "table": "tasks",
+      "property": "maxDurationMs",
+      "physical": "max_duration_ms",
+      "target": "task_definitions.max_duration_ms",
+      "class": "cas-mutable",
+      "spec": "maxDurationMs"
+    },
+    {
+      "table": "tasks",
+      "property": "maxTotalTokens",
+      "physical": "max_total_tokens",
+      "target": "task_definitions.max_total_tokens",
+      "class": "cas-mutable",
+      "spec": "maxTotalTokens"
+    },
+    {
+      "table": "tasks",
+      "property": "startedAt",
+      "physical": "started_at",
+      "target": "tasks.started_at",
+      "class": "immutable",
+      "spec": "startedAt"
+    },
+    {
+      "table": "tasks",
+      "property": "runningMs",
+      "physical": "running_ms",
+      "target": "tasks.running_ms",
+      "class": "cas-mutable",
+      "spec": "runningMs"
+    },
+    {
+      "table": "tasks",
+      "property": "runningSince",
+      "physical": "running_since",
+      "target": "tasks.running_since",
+      "class": "cas-mutable",
+      "spec": "runningSince"
+    },
+    {
+      "table": "tasks",
+      "property": "finishedAt",
+      "physical": "finished_at",
+      "target": "tasks.finished_at",
+      "class": "cas-mutable",
+      "spec": "finishedAt"
+    },
+    {
+      "table": "tasks",
+      "property": "errorSummary",
+      "physical": "error_summary",
+      "target": "tasks.error_summary",
+      "class": "cas-mutable",
+      "spec": "errorSummary"
+    },
+    {
+      "table": "tasks",
+      "property": "errorMessage",
+      "physical": "error_message",
+      "target": "tasks.error_message",
+      "class": "cas-mutable",
+      "spec": "errorMessage"
+    },
+    {
+      "table": "tasks",
+      "property": "failedNodeId",
+      "physical": "failed_node_id",
+      "target": "tasks.failed_node_id",
+      "class": "cas-mutable",
+      "spec": "failedNodeId"
+    },
+    {
+      "table": "tasks",
+      "property": "autoRecoveryAttempts",
+      "physical": "auto_recovery_attempts",
+      "target": "tasks.auto_recovery_attempts",
+      "class": "cas-mutable",
+      "spec": "autoRecoveryAttempts"
+    },
+    {
+      "table": "tasks",
+      "property": "autoRecoverySuspended",
+      "physical": "auto_recovery_suspended",
+      "target": "tasks.auto_recovery_suspended",
+      "class": "cas-mutable",
+      "spec": "autoRecoverySuspended"
+    },
+    {
+      "table": "tasks",
+      "property": "autoRecoveryWindowStartedAt",
+      "physical": "auto_recovery_window_started_at",
+      "target": "tasks.auto_recovery_window_started_at",
+      "class": "cas-mutable",
+      "spec": "autoRecoveryWindowStartedAt"
+    },
+    {
+      "table": "tasks",
+      "property": "expiresAt",
+      "physical": "expires_at",
+      "target": "tasks.expires_at",
+      "class": "cas-mutable",
+      "spec": "expiresAt"
+    },
+    {
+      "table": "tasks",
+      "property": "deletedAt",
+      "physical": "deleted_at",
+      "target": "tasks.deleted_at",
+      "class": "cas-mutable",
+      "spec": "deletedAt"
+    },
+    {
+      "table": "tasks",
+      "property": "schemaVersion",
+      "physical": "schema_version",
+      "target": "task_definitions.schema_version",
+      "class": "cas-mutable",
+      "spec": "schemaVersion"
+    },
+    {
+      "table": "tasks",
+      "property": "ownerUserId",
+      "physical": "owner_user_id",
+      "target": "tasks.owner_user_id",
+      "class": "cas-mutable",
+      "spec": "ownerUserId"
+    },
+    {
+      "table": "tasks",
+      "property": "launchOrigin",
+      "physical": "launch_origin",
+      "target": "task_launch_contexts.launch_origin",
+      "class": "immutable",
+      "spec": "launchOrigin"
+    },
+    {
+      "table": "tasks",
+      "property": "catalogVisibility",
+      "physical": "catalog_visibility",
+      "target": "tasks.catalog_visibility",
+      "class": "cas-mutable",
+      "spec": "catalogVisibility"
+    },
+    {
+      "table": "tasks",
+      "property": "gitUserName",
+      "physical": "git_user_name",
+      "target": "task_workspaces.git_user_name",
+      "class": "immutable",
+      "spec": "gitUserName"
+    },
+    {
+      "table": "tasks",
+      "property": "gitUserEmail",
+      "physical": "git_user_email",
+      "target": "task_workspaces.git_user_email",
+      "class": "immutable",
+      "spec": "gitUserEmail"
+    },
+    {
+      "table": "tasks",
+      "property": "workingBranch",
+      "physical": "working_branch",
+      "target": "task_workspaces.working_branch",
+      "class": "immutable",
+      "spec": "workingBranch"
+    },
+    {
+      "table": "tasks",
+      "property": "autoCommitPush",
+      "physical": "auto_commit_push",
+      "target": "task_workspaces.auto_commit_push",
+      "class": "immutable",
+      "spec": "autoCommitPush"
+    },
+    {
+      "table": "tasks",
+      "property": "repoCount",
+      "physical": "repo_count",
+      "target": "derived",
+      "class": "derived",
+      "spec": "repos",
+      "note": "max(1, number of task repositories), refreshed when repos are added."
+    },
+    {
+      "table": "tasks",
+      "property": "scheduledTaskId",
+      "physical": "scheduled_task_id",
+      "target": "task_launch_contexts.scheduled_task_id",
+      "class": "immutable",
+      "spec": "scheduledTaskId"
+    },
+    {
+      "table": "tasks",
+      "property": "webhookTriggerId",
+      "physical": "webhook_trigger_id",
+      "target": "task_launch_contexts.webhook_trigger_id",
+      "class": "immutable",
+      "spec": "webhookTriggerId"
+    },
+    {
+      "table": "tasks",
+      "property": "webhookFireId",
+      "physical": "webhook_fire_id",
+      "target": "task_launch_contexts.webhook_fire_id",
+      "class": "immutable",
+      "spec": "webhookFireId"
+    },
+    {
+      "table": "tasks",
+      "property": "eventSubscriptionId",
+      "physical": "event_subscription_id",
+      "target": "task_launch_contexts.event_subscription_id",
+      "class": "immutable",
+      "spec": "eventSubscriptionId"
+    },
+    {
+      "table": "tasks",
+      "property": "eventDeliveryId",
+      "physical": "event_delivery_id",
+      "target": "task_launch_contexts.event_delivery_id",
+      "class": "immutable",
+      "spec": "eventDeliveryId"
+    },
+    {
+      "table": "tasks",
+      "property": "lifecycleEventRevision",
+      "physical": "lifecycle_event_revision",
+      "target": "tasks.lifecycle_event_revision",
+      "class": "cas-mutable",
+      "spec": "lifecycleEventRevision"
+    },
+    {
+      "table": "tasks",
+      "property": "sourceTerminationBinding",
+      "physical": "source_termination_binding",
+      "target": "task_launch_contexts.source_termination_binding",
+      "class": "immutable",
+      "spec": "sourceTerminationBinding"
+    },
+    {
+      "table": "tasks",
+      "property": "sourceTerminationLaunchRev",
+      "physical": "source_termination_launch_rev",
+      "target": "task_launch_contexts.source_termination_launch_rev",
+      "class": "immutable",
+      "spec": "sourceTerminationLaunchRev"
+    },
+    {
+      "table": "tasks",
+      "property": "sourceTerminationFence",
+      "physical": "source_termination_fence",
+      "target": "tasks.source_termination_fence",
+      "class": "cas-mutable",
+      "spec": "sourceTerminationFence"
+    },
+    {
+      "table": "tasks",
+      "property": "sourceTerminationEffectRev",
+      "physical": "source_termination_effect_rev",
+      "target": "tasks.source_termination_effect_rev",
+      "class": "cas-mutable",
+      "spec": "sourceTerminationEffectRev"
+    },
+    {
+      "table": "tasks",
+      "property": "workgroupId",
+      "physical": "workgroup_id",
+      "target": "task_definitions.source_id",
+      "class": "cas-mutable",
+      "spec": "workgroupId",
+      "note": "Subject discriminant precedence: code-round, workgroup, agent, digital-employee, workflow; non-workflow workflowId is definitionAnchorId projection."
+    },
+    {
+      "table": "tasks",
+      "property": "workgroupConfigJson",
+      "physical": "workgroup_config_json",
+      "target": "task_definitions.workgroup_config_json",
+      "class": "cas-mutable",
+      "spec": "workgroupConfigJson",
+      "note": "Frozen mode, workgroup id/name, goal and leader in definition; current full config in workgroup_task_state.runtime_config_json.",
+      "json": true
+    },
+    {
+      "table": "tasks",
+      "property": "spaceKind",
+      "physical": "space_kind",
+      "target": "task_workspaces.space_kind",
+      "class": "cas-mutable",
+      "spec": "spaceKind"
+    },
+    {
+      "table": "tasks",
+      "property": "sourceAgentName",
+      "physical": "source_agent_name",
+      "target": "task_definitions.source_name",
+      "class": "cas-mutable",
+      "spec": "sourceAgentName"
+    },
+    {
+      "table": "tasks",
+      "property": "codeRoundId",
+      "physical": "code_round_id",
+      "target": "task_definitions.source_id",
+      "class": "cas-mutable",
+      "spec": "codeRoundId",
+      "note": "Subject discriminant precedence: code-round, workgroup, agent, digital-employee, workflow; non-workflow workflowId is definitionAnchorId projection."
+    },
+    {
+      "table": "tasks",
+      "property": "digitalEmployeeRoundId",
+      "physical": "digital_employee_round_id",
+      "target": "task_launch_contexts.digital_employee_round_id",
+      "class": "immutable",
+      "spec": "digitalEmployeeRoundId"
+    },
+    {
+      "table": "tasks",
+      "property": "digitalEmployeeCaseId",
+      "physical": "digital_employee_case_id",
+      "target": "task_launch_contexts.digital_employee_case_id",
+      "class": "immutable",
+      "spec": "digitalEmployeeCaseId"
+    },
+    {
+      "table": "tasks",
+      "property": "sourceAgentId",
+      "physical": "source_agent_id",
+      "target": "task_definitions.source_id",
+      "class": "cas-mutable",
+      "spec": "sourceAgentId",
+      "note": "Subject discriminant precedence: code-round, workgroup, agent, digital-employee, workflow; non-workflow workflowId is definitionAnchorId projection."
+    },
+    {
+      "table": "tasks",
+      "property": "workspacePruningAt",
+      "physical": "workspace_pruning_at",
+      "target": "tasks.workspace_pruning_at",
+      "class": "cas-mutable",
+      "spec": "workspacePruningAt"
+    },
+    {
+      "table": "tasks",
+      "property": "workspacePruneCause",
+      "physical": "workspace_prune_cause",
+      "target": "tasks.workspace_prune_cause",
+      "class": "cas-mutable",
+      "spec": "workspacePruneCause"
+    },
+    {
+      "table": "tasks",
+      "property": "workspacePrunedAt",
+      "physical": "workspace_pruned_at",
+      "target": "tasks.workspace_pruned_at",
+      "class": "cas-mutable",
+      "spec": "workspacePrunedAt"
+    },
+    {
+      "table": "tasks",
+      "property": "parentTaskId",
+      "physical": "parent_task_id",
+      "target": "tasks.parent_task_id",
+      "class": "immutable",
+      "spec": "parentTaskId"
+    },
+    {
+      "table": "tasks",
+      "property": "parentNodeRunId",
+      "physical": "parent_node_run_id",
+      "target": "task_launch_contexts.parent_node_run_id",
+      "class": "immutable",
+      "spec": "parentNodeRunId"
+    },
+    {
+      "table": "tasks",
+      "property": "invocationDepth",
+      "physical": "invocation_depth",
+      "target": "tasks.invocation_depth",
+      "class": "immutable",
+      "spec": "invocationDepth"
+    },
+    {
+      "table": "tasks",
+      "property": "refClosureJson",
+      "physical": "ref_closure_json",
+      "target": "task_definitions.ref_closure_json",
+      "class": "cas-mutable",
+      "spec": "refClosureJson",
+      "json": true
+    },
+    {
+      "table": "tasks",
+      "property": "triggerContextJson",
+      "physical": "trigger_context_json",
+      "target": "task_launch_contexts.trigger_context_json",
+      "class": "immutable",
+      "spec": "triggerContextJson",
+      "json": true
+    },
+    {
+      "table": "tasks",
+      "property": "platformInputPathsJson",
+      "physical": "platform_input_paths_json",
+      "target": "task_launch_contexts.platform_input_paths_json",
+      "class": "immutable",
+      "spec": "platformInputPathsJson",
+      "json": true
+    },
+    {
+      "table": "tasks",
+      "property": "branchStartedAt",
+      "physical": "branch_started_at",
+      "target": "tasks.branch_started_at",
+      "class": "cas-mutable",
+      "spec": "branchStartedAt"
+    },
+    {
+      "table": "tasks",
+      "property": "rootTaskId",
+      "physical": "root_task_id",
+      "target": "tasks.root_task_id",
+      "class": "immutable",
+      "spec": "rootTaskId"
+    },
+    {
+      "table": "tasks",
+      "property": "executionLineageId",
+      "physical": "execution_lineage_id",
+      "target": "task_launch_contexts.execution_lineage_id",
+      "class": "immutable",
+      "spec": "executionLineageId"
+    },
+    {
+      "table": "tasks",
+      "property": "lineageSlotPathJson",
+      "physical": "lineage_slot_path_json",
+      "target": "task_launch_contexts.lineage_slot_path_json",
+      "class": "immutable",
+      "spec": "lineageSlotPathJson",
+      "json": true
+    },
+    {
+      "table": "task_repos",
+      "property": "taskId",
+      "physical": "task_id",
+      "target": "task_repository_mounts.task_id",
+      "class": "immutable",
+      "spec": "taskId"
+    },
+    {
+      "table": "task_repos",
+      "property": "repoIndex",
+      "physical": "repo_index",
+      "target": "task_repository_mounts.ordinal",
+      "class": "immutable",
+      "spec": "repoIndex",
+      "note": "Stable repo_key assigned separately; reorder never changes identity."
+    },
+    {
+      "table": "task_repos",
+      "property": "repoPath",
+      "physical": "repo_path",
+      "target": "task_repository_mounts.repo_path",
+      "class": "immutable",
+      "spec": "repoPath"
+    },
+    {
+      "table": "task_repos",
+      "property": "repoUrl",
+      "physical": "repo_url",
+      "target": "task_repository_mounts.repo_url",
+      "class": "immutable",
+      "spec": "repoUrl"
+    },
+    {
+      "table": "task_repos",
+      "property": "cachedRepoId",
+      "physical": "cached_repo_id",
+      "target": "task_repository_mounts.cached_repo_id",
+      "class": "immutable",
+      "spec": "cachedRepoId"
+    },
+    {
+      "table": "task_repos",
+      "property": "baseBranch",
+      "physical": "base_branch",
+      "target": "task_repository_mounts.base_branch",
+      "class": "immutable",
+      "spec": "baseBranch"
+    },
+    {
+      "table": "task_repos",
+      "property": "branch",
+      "physical": "branch",
+      "target": "task_repository_mounts.branch",
+      "class": "immutable",
+      "spec": "branch"
+    },
+    {
+      "table": "task_repos",
+      "property": "workingBranch",
+      "physical": "working_branch",
+      "target": "task_repository_mounts.working_branch",
+      "class": "immutable",
+      "spec": "workingBranch"
+    },
+    {
+      "table": "task_repos",
+      "property": "baseCommit",
+      "physical": "base_commit",
+      "target": "task_repository_mounts.base_commit",
+      "class": "immutable",
+      "spec": "baseCommit"
+    },
+    {
+      "table": "task_repos",
+      "property": "worktreePath",
+      "physical": "worktree_path",
+      "target": "task_repository_mounts.worktree_path",
+      "class": "immutable",
+      "spec": "worktreePath"
+    },
+    {
+      "table": "task_repos",
+      "property": "worktreeDirName",
+      "physical": "worktree_dir_name",
+      "target": "deleted-shape",
+      "class": "derived",
+      "spec": "mountPath",
+      "note": "worktreeDirName equals mountPath."
+    },
+    {
+      "table": "task_repos",
+      "property": "mountPath",
+      "physical": "mount_path",
+      "target": "task_repository_mounts.mount_path",
+      "class": "immutable",
+      "spec": "mountPath"
+    },
+    {
+      "table": "task_repos",
+      "property": "subdir",
+      "physical": "subdir",
+      "target": "task_repository_mounts.subdir",
+      "class": "immutable",
+      "spec": "subdir"
+    },
+    {
+      "table": "task_repos",
+      "property": "readonly",
+      "physical": "readonly",
+      "target": "task_repository_mounts.readonly",
+      "class": "immutable",
+      "spec": "readonly"
+    },
+    {
+      "table": "task_repos",
+      "property": "readonlyDirtyCount",
+      "physical": "readonly_dirty_count",
+      "target": "task_repository_mounts.readonly_dirty_count",
+      "class": "mutable",
+      "spec": "readonlyDirtyCount"
+    },
+    {
+      "table": "task_repos",
+      "property": "workspaceProfileVersion",
+      "physical": "workspace_profile_version",
+      "target": "task_repository_mounts.workspace_profile_version",
+      "class": "immutable",
+      "spec": "workspaceProfileVersion"
+    },
+    {
+      "table": "task_repos",
+      "property": "workspaceProfileDigest",
+      "physical": "workspace_profile_digest",
+      "target": "task_repository_mounts.workspace_profile_digest",
+      "class": "immutable",
+      "spec": "workspaceProfileDigest"
+    },
+    {
+      "table": "task_repos",
+      "property": "hasSubmodules",
+      "physical": "has_submodules",
+      "target": "task_repository_mounts.has_submodules",
+      "class": "mutable",
+      "spec": "hasSubmodules"
+    },
+    {
+      "table": "task_repos",
+      "property": "submoduleInitOk",
+      "physical": "submodule_init_ok",
+      "target": "task_repository_mounts.submodule_init_ok",
+      "class": "mutable",
+      "spec": "submoduleInitOk"
+    },
+    {
+      "table": "task_repos",
+      "property": "submoduleInitError",
+      "physical": "submodule_init_error",
+      "target": "task_repository_mounts.submodule_init_error",
+      "class": "mutable",
+      "spec": "submoduleInitError"
+    },
+    {
+      "table": "task_repos",
+      "property": "schemaVersion",
+      "physical": "schema_version",
+      "target": "task_repository_mounts.schema_version",
+      "class": "immutable",
+      "spec": "schemaVersion"
+    },
+    {
+      "table": "node_runs",
+      "property": "id",
+      "physical": "id",
+      "target": "node_runs.id",
+      "class": "immutable",
+      "spec": "id"
+    },
+    {
+      "table": "node_runs",
+      "property": "taskId",
+      "physical": "task_id",
+      "target": "node_runs.task_id",
+      "class": "immutable",
+      "spec": "taskId"
+    },
+    {
+      "table": "node_runs",
+      "property": "nodeId",
+      "physical": "node_id",
+      "target": "node_runs.node_id",
+      "class": "immutable",
+      "spec": "nodeId"
+    },
+    {
+      "table": "node_runs",
+      "property": "parentNodeRunId",
+      "physical": "parent_node_run_id",
+      "target": "node_runs.historical_parent_id",
+      "class": "immutable",
+      "spec": "parentNodeRunId"
+    },
+    {
+      "table": "node_runs",
+      "property": "containerRunId",
+      "physical": "container_run_id",
+      "target": "node_runs.container_run_id",
+      "class": "immutable",
+      "spec": "containerRunId"
+    },
+    {
+      "table": "node_runs",
+      "property": "scopePath",
+      "physical": "scope_path",
+      "target": "node_runs.scope_path",
+      "class": "immutable",
+      "spec": "scopePath"
+    },
+    {
+      "table": "node_runs",
+      "property": "iteration",
+      "physical": "iteration",
+      "target": "node_runs.iteration",
+      "class": "immutable",
+      "spec": "iteration"
+    },
+    {
+      "table": "node_runs",
+      "property": "shardKey",
+      "physical": "shard_key",
+      "target": "node_runs.shard_key",
+      "class": "immutable",
+      "spec": "shardKey"
+    },
+    {
+      "table": "node_runs",
+      "property": "retryIndex",
+      "physical": "retry_index",
+      "target": "node_runs.attempt_index",
+      "class": "immutable",
+      "spec": "retryIndex"
+    },
+    {
+      "table": "node_runs",
+      "property": "wgRound",
+      "physical": "wg_round",
+      "target": "node_runs.wg_round",
+      "class": "immutable",
+      "spec": "wgRound"
+    },
+    {
+      "table": "node_runs",
+      "property": "reviewIteration",
+      "physical": "review_iteration",
+      "target": "node_runs.review_iteration",
+      "class": "cas-mutable",
+      "spec": "reviewIteration"
+    },
+    {
+      "table": "node_runs",
+      "property": "status",
+      "physical": "status",
+      "target": "node_runs.status",
+      "class": "cas-mutable",
+      "spec": "status"
+    },
+    {
+      "table": "node_runs",
+      "property": "startedAt",
+      "physical": "started_at",
+      "target": "node_runs.started_at",
+      "class": "immutable",
+      "spec": "startedAt"
+    },
+    {
+      "table": "node_runs",
+      "property": "finishedAt",
+      "physical": "finished_at",
+      "target": "node_runs.finished_at",
+      "class": "cas-mutable",
+      "spec": "finishedAt"
+    },
+    {
+      "table": "node_runs",
+      "property": "pid",
+      "physical": "pid",
+      "target": "node_run_runtime_states.pid",
+      "class": "mutable",
+      "spec": "pid"
+    },
+    {
+      "table": "node_runs",
+      "property": "spawnBinaryPath",
+      "physical": "spawn_binary_path",
+      "target": "node_run_runtime_states.spawn_binary_path",
+      "class": "mutable",
+      "spec": "spawnBinaryPath"
+    },
+    {
+      "table": "node_runs",
+      "property": "spawnLaunchNonce",
+      "physical": "spawn_launch_nonce",
+      "target": "node_run_runtime_states.spawn_launch_nonce",
+      "class": "mutable",
+      "spec": "spawnLaunchNonce"
+    },
+    {
+      "table": "node_runs",
+      "property": "exitCode",
+      "physical": "exit_code",
+      "target": "node_runs.exit_code",
+      "class": "cas-mutable",
+      "spec": "exitCode"
+    },
+    {
+      "table": "node_runs",
+      "property": "errorMessage",
+      "physical": "error_message",
+      "target": "node_runs.error_message",
+      "class": "cas-mutable",
+      "spec": "errorMessage"
+    },
+    {
+      "table": "node_runs",
+      "property": "failureCode",
+      "physical": "failure_code",
+      "target": "node_runs.failure_code",
+      "class": "cas-mutable",
+      "spec": "failureCode"
+    },
+    {
+      "table": "node_runs",
+      "property": "promptText",
+      "physical": "prompt_text",
+      "target": "node_run_configs.prompt_text",
+      "class": "immutable",
+      "spec": "promptText"
+    },
+    {
+      "table": "node_runs",
+      "property": "promptPath",
+      "physical": "prompt_path",
+      "target": "node_run_configs.prompt_path",
+      "class": "immutable",
+      "spec": "promptPath"
+    },
+    {
+      "table": "node_runs",
+      "property": "envelopeNonce",
+      "physical": "envelope_nonce",
+      "target": "node_runs.envelope_nonce",
+      "class": "immutable",
+      "spec": "envelopeNonce"
+    },
+    {
+      "table": "node_runs",
+      "property": "forceActivated",
+      "physical": "force_activated",
+      "target": "node_runs.force_activated",
+      "class": "immutable",
+      "spec": "forceActivated"
+    },
+    {
+      "table": "node_runs",
+      "property": "tokInput",
+      "physical": "tok_input",
+      "target": "node_run_results.tok_input",
+      "class": "mutable",
+      "spec": "tokInput"
+    },
+    {
+      "table": "node_runs",
+      "property": "tokOutput",
+      "physical": "tok_output",
+      "target": "node_run_results.tok_output",
+      "class": "mutable",
+      "spec": "tokOutput"
+    },
+    {
+      "table": "node_runs",
+      "property": "tokCacheCreate",
+      "physical": "tok_cache_create",
+      "target": "node_run_results.tok_cache_create",
+      "class": "mutable",
+      "spec": "tokCacheCreate"
+    },
+    {
+      "table": "node_runs",
+      "property": "tokCacheRead",
+      "physical": "tok_cache_read",
+      "target": "node_run_results.tok_cache_read",
+      "class": "mutable",
+      "spec": "tokCacheRead"
+    },
+    {
+      "table": "node_runs",
+      "property": "tokTotal",
+      "physical": "tok_total",
+      "target": "node_run_results.tok_total",
+      "class": "mutable",
+      "spec": "tokTotal"
+    },
+    {
+      "table": "node_runs",
+      "property": "preSnapshot",
+      "physical": "pre_snapshot",
+      "target": "node_run_repo_checkpoints.pre_snapshot",
+      "class": "immutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].preSnapshot: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a."
+    },
+    {
+      "table": "node_runs",
+      "property": "opencodeSessionId",
+      "physical": "opencode_session_id",
+      "target": "node_run_runtime_states.opencode_session_id",
+      "class": "mutable",
+      "spec": "opencodeSessionId"
+    },
+    {
+      "table": "node_runs",
+      "property": "runtime",
+      "physical": "runtime",
+      "target": "node_run_configs.runtime",
+      "class": "immutable",
+      "spec": "runtime"
+    },
+    {
+      "table": "node_runs",
+      "property": "runtimeBinary",
+      "physical": "runtime_binary",
+      "target": "node_run_configs.runtime_binary",
+      "class": "immutable",
+      "spec": "runtimeBinary"
+    },
+    {
+      "table": "node_runs",
+      "property": "runtimeParamsJson",
+      "physical": "runtime_params_json",
+      "target": "node_run_configs.runtime_params_json",
+      "class": "immutable",
+      "spec": "runtimeParamsJson",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "inventorySnapshotJson",
+      "physical": "inventory_snapshot_json",
+      "target": "node_run_configs.inventory_snapshot_json",
+      "class": "immutable",
+      "spec": "inventorySnapshotJson",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "runtimeInventoryJson",
+      "physical": "runtime_inventory_json",
+      "target": "node_run_configs.runtime_inventory_json",
+      "class": "immutable",
+      "spec": "runtimeInventoryJson",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "startupVerificationJson",
+      "physical": "startup_verification_json",
+      "target": "node_run_runtime_states.startup_verification_json",
+      "class": "mutable",
+      "spec": "startupVerificationJson",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "wrapperProgressJson",
+      "physical": "wrapper_progress_json",
+      "target": "node_run_runtime_states.wrapper_progress_json",
+      "class": "mutable",
+      "spec": "wrapperProgressJson",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "injectedMemoriesJson",
+      "physical": "injected_memories_json",
+      "target": "node_run_configs.injected_memories_json",
+      "class": "immutable",
+      "spec": "injectedMemories",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "portValidationFailuresJson",
+      "physical": "port_validation_failures_json",
+      "target": "node_run_results.port_validation_failures_json",
+      "class": "mutable",
+      "spec": "portValidationFailures",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "commitPushJson",
+      "physical": "commit_push_json",
+      "target": "node_run_results.commit_push_json",
+      "class": "mutable",
+      "spec": "commitPush",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "preSnapshotReposJson",
+      "physical": "pre_snapshot_repos_json",
+      "target": "node_run_repo_checkpoints.pre_snapshot",
+      "class": "immutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].preSnapshot: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a.",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "isoWorktreePath",
+      "physical": "iso_worktree_path",
+      "target": "node_run_runtime_states.isolation_root_ref",
+      "class": "mutable",
+      "spec": "isoWorktreePath"
+    },
+    {
+      "table": "node_runs",
+      "property": "isoBaseSnapshot",
+      "physical": "iso_base_snapshot",
+      "target": "node_run_repo_checkpoints.isolation_base",
+      "class": "mutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].isolationBase: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a."
+    },
+    {
+      "table": "node_runs",
+      "property": "isoBaseSnapshotReposJson",
+      "physical": "iso_base_snapshot_repos_json",
+      "target": "node_run_repo_checkpoints.isolation_base",
+      "class": "mutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].isolationBase: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a.",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "isoNodeTree",
+      "physical": "iso_node_tree",
+      "target": "node_run_repo_checkpoints.node_tree",
+      "class": "mutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].nodeTree: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a."
+    },
+    {
+      "table": "node_runs",
+      "property": "isoNodeTreeReposJson",
+      "physical": "iso_node_tree_repos_json",
+      "target": "node_run_repo_checkpoints.node_tree",
+      "class": "mutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].nodeTree: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a.",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "isoSubmodulesJson",
+      "physical": "iso_submodules_json",
+      "target": "node_run_repo_checkpoints.submodules",
+      "class": "mutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].submodules: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a.",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "isoSubmodulesReposJson",
+      "physical": "iso_submodules_repos_json",
+      "target": "node_run_repo_checkpoints.submodules",
+      "class": "mutable",
+      "spec": "checkpoints",
+      "note": "checkpoints[].submodules: absent = unrecorded; '' = clean tree; value = recorded. Single root uses scalar, others mountPath-keyed map in II-a.",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "mergeState",
+      "physical": "merge_state",
+      "target": "node_run_runtime_states.merge_state",
+      "class": "cas-mutable",
+      "spec": "mergeState"
+    },
+    {
+      "table": "node_runs",
+      "property": "consumedUpstreamRunsJson",
+      "physical": "consumed_upstream_runs_json",
+      "target": "node_run_inputs.producer_run_id",
+      "class": "immutable",
+      "spec": "consumedEdges",
+      "note": "Ordered producerNodeId / producerRunId / producerShardKey edges; omitted = inputs_recorded false; [] = recorded empty input set.",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "shardValueHash",
+      "physical": "shard_value_hash",
+      "target": "node_run_configs.shard_value_hash",
+      "class": "immutable",
+      "spec": "shardValueHash"
+    },
+    {
+      "table": "node_runs",
+      "property": "rerunCause",
+      "physical": "rerun_cause",
+      "target": "node_runs.rerun_cause",
+      "class": "immutable",
+      "spec": "rerunCause"
+    },
+    {
+      "table": "node_runs",
+      "property": "supersededByReview",
+      "physical": "superseded_by_review",
+      "target": "node_run_results.superseded_by_review",
+      "class": "mutable",
+      "spec": "supersededByReview"
+    },
+    {
+      "table": "node_runs",
+      "property": "rolledBack",
+      "physical": "rolled_back",
+      "target": "node_run_results.rolled_back",
+      "class": "mutable",
+      "spec": "rolledBack"
+    },
+    {
+      "table": "node_runs",
+      "property": "agentOverrideName",
+      "physical": "agent_override_name",
+      "target": "node_run_configs.agent_override_name",
+      "class": "immutable",
+      "spec": "agentOverrideName"
+    },
+    {
+      "table": "node_runs",
+      "property": "agentOverrideId",
+      "physical": "agent_override_id",
+      "target": "node_run_configs.agent_override_id",
+      "class": "immutable",
+      "spec": "agentOverrideId"
+    },
+    {
+      "table": "node_runs",
+      "property": "childTaskId",
+      "physical": "child_task_id",
+      "target": "node_runs.child_task_id",
+      "class": "cas-mutable",
+      "spec": "childTaskId"
+    },
+    {
+      "table": "node_runs",
+      "property": "continuationSlotKey",
+      "physical": "continuation_slot_key",
+      "target": "node_runs.continuation_slot_key",
+      "class": "immutable",
+      "spec": "continuationSlotKey"
+    },
+    {
+      "table": "node_runs",
+      "property": "lineageSlotPathJson",
+      "physical": "lineage_slot_path_json",
+      "target": "node_runs.lineage_slot_path_json",
+      "class": "immutable",
+      "spec": "lineageSlotPathJson",
+      "json": true
+    },
+    {
+      "table": "node_runs",
+      "property": "operationGeneration",
+      "physical": "operation_generation",
+      "target": "node_runs.operation_generation",
+      "class": "immutable",
+      "spec": "operationGeneration"
+    },
+    {
+      "table": "node_runs",
+      "property": "seq",
+      "physical": "seq",
+      "target": "node_runs.seq",
+      "class": "immutable",
+      "spec": "seq",
+      "note": "Allocate in the caller transaction and call order; explicit non-null values only for historical or negative-sequence fixtures."
+    },
+    {
+      "table": "node_run_outputs",
+      "property": "nodeRunId",
+      "physical": "node_run_id",
+      "target": "node_run_outputs.node_run_id",
+      "class": "immutable",
+      "spec": "nodeRunId"
+    },
+    {
+      "table": "node_run_outputs",
+      "property": "portName",
+      "physical": "port_name",
+      "target": "node_run_outputs.port_name",
+      "class": "immutable",
+      "spec": "portName"
+    },
+    {
+      "table": "node_run_outputs",
+      "property": "content",
+      "physical": "content",
+      "target": "node_run_outputs.content_ref",
+      "class": "mutable",
+      "spec": "content",
+      "note": "Inline content or ContentRef; preserve original bytes."
+    },
+    {
+      "table": "node_run_outputs",
+      "property": "kind",
+      "physical": "kind",
+      "target": "node_run_outputs.kind",
+      "class": "immutable",
+      "spec": "kind"
+    },
+    {
+      "table": "node_run_outputs",
+      "property": "archiveJson",
+      "physical": "archive_json",
+      "target": "node_run_outputs.archive_ref",
+      "class": "mutable",
+      "spec": "archiveJson",
+      "note": "Business archive index retains semantics with a ContentRef address.",
+      "json": true
+    },
+    {
+      "table": "node_run_outputs",
+      "property": "active",
+      "physical": "active",
+      "target": "node_run_outputs.active",
+      "class": "mutable",
+      "spec": "active"
+    },
+    {
+      "table": "agents",
+      "property": "id",
+      "physical": "id",
+      "target": "agents.id",
+      "class": "immutable",
+      "spec": "id"
+    },
+    {
+      "table": "agents",
+      "property": "name",
+      "physical": "name",
+      "target": "agents.name",
+      "class": "mutable",
+      "spec": "name"
+    },
+    {
+      "table": "agents",
+      "property": "description",
+      "physical": "description",
+      "target": "agents.description",
+      "class": "mutable",
+      "spec": "description"
+    },
+    {
+      "table": "agents",
+      "property": "outputs",
+      "physical": "outputs",
+      "target": "agents.outputs",
+      "class": "mutable",
+      "spec": "outputs",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "inputs",
+      "physical": "inputs",
+      "target": "agents.inputs",
+      "class": "mutable",
+      "spec": "inputs",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "syncOutputsOnIterate",
+      "physical": "sync_outputs_on_iterate",
+      "target": "agents.sync_outputs_on_iterate",
+      "class": "mutable",
+      "spec": "syncOutputsOnIterate"
+    },
+    {
+      "table": "agents",
+      "property": "runtime",
+      "physical": "runtime",
+      "target": "agents.runtime",
+      "class": "mutable",
+      "spec": "runtime"
+    },
+    {
+      "table": "agents",
+      "property": "permission",
+      "physical": "permission",
+      "target": "agents.permission",
+      "class": "mutable",
+      "spec": "permission",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "skills",
+      "physical": "skills",
+      "target": "agent_skill_refs.target_id",
+      "class": "mutable",
+      "spec": "skills",
+      "note": "Ordered typed relations preserve ordinal, kind and reference parameters, including names and dangling ids.",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "dependsOn",
+      "physical": "depends_on",
+      "target": "agent_dependencies.target_id",
+      "class": "mutable",
+      "spec": "dependsOn",
+      "note": "Ordered typed relations preserve ordinal, kind and reference parameters, including names and dangling ids.",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "mcp",
+      "physical": "mcp",
+      "target": "agent_mcp_refs.target_id",
+      "class": "mutable",
+      "spec": "mcp",
+      "note": "Ordered typed relations preserve ordinal, kind and reference parameters, including names and dangling ids.",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "plugins",
+      "physical": "plugins",
+      "target": "agent_plugin_refs.target_id",
+      "class": "mutable",
+      "spec": "plugins",
+      "note": "Ordered typed relations preserve ordinal, kind and reference parameters, including names and dangling ids.",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "frontmatterExtra",
+      "physical": "frontmatter_extra",
+      "target": "agents.frontmatter_extra",
+      "class": "mutable",
+      "spec": "frontmatterExtra",
+      "json": true
+    },
+    {
+      "table": "agents",
+      "property": "bodyMd",
+      "physical": "body_md",
+      "target": "agents.body_md",
+      "class": "mutable",
+      "spec": "bodyMd"
+    },
+    {
+      "table": "agents",
+      "property": "ownerUserId",
+      "physical": "owner_user_id",
+      "target": "agents.owner_user_id",
+      "class": "mutable",
+      "spec": "ownerUserId"
+    },
+    {
+      "table": "agents",
+      "property": "visibility",
+      "physical": "visibility",
+      "target": "agents.visibility",
+      "class": "mutable",
+      "spec": "visibility"
+    },
+    {
+      "table": "agents",
+      "property": "aclRevision",
+      "physical": "acl_revision",
+      "target": "agents.acl_revision",
+      "class": "mutable",
+      "spec": "aclRevision"
+    },
+    {
+      "table": "agents",
+      "property": "builtin",
+      "physical": "builtin",
+      "target": "agents.builtin",
+      "class": "mutable",
+      "spec": "builtin"
+    },
+    {
+      "table": "agents",
+      "property": "schemaVersion",
+      "physical": "schema_version",
+      "target": "agents.schema_version",
+      "class": "mutable",
+      "spec": "schemaVersion"
+    },
+    {
+      "table": "agents",
+      "property": "createdAt",
+      "physical": "created_at",
+      "target": "agents.created_at",
+      "class": "immutable",
+      "spec": "createdAt"
+    },
+    {
+      "table": "agents",
+      "property": "updatedAt",
+      "physical": "updated_at",
+      "target": "agents.updated_at",
+      "class": "mutable",
+      "spec": "updatedAt"
+    },
+    {
+      "table": "workflows",
+      "property": "id",
+      "physical": "id",
+      "target": "workflows.id",
+      "class": "immutable",
+      "spec": "id"
+    },
+    {
+      "table": "workflows",
+      "property": "name",
+      "physical": "name",
+      "target": "workflows.name",
+      "class": "cas-mutable",
+      "spec": "name"
+    },
+    {
+      "table": "workflows",
+      "property": "description",
+      "physical": "description",
+      "target": "workflows.description",
+      "class": "cas-mutable",
+      "spec": "description"
+    },
+    {
+      "table": "workflows",
+      "property": "definition",
+      "physical": "definition",
+      "target": "workflows.definition",
+      "class": "cas-mutable",
+      "spec": "definition",
+      "note": "Canonical definition remains authoritative; dependency index is derived in the definition transaction.",
+      "json": true
+    },
+    {
+      "table": "workflows",
+      "property": "version",
+      "physical": "version",
+      "target": "workflows.version",
+      "class": "cas-mutable",
+      "spec": "version"
+    },
+    {
+      "table": "workflows",
+      "property": "ownerUserId",
+      "physical": "owner_user_id",
+      "target": "workflows.owner_user_id",
+      "class": "cas-mutable",
+      "spec": "ownerUserId"
+    },
+    {
+      "table": "workflows",
+      "property": "visibility",
+      "physical": "visibility",
+      "target": "workflows.visibility",
+      "class": "cas-mutable",
+      "spec": "visibility"
+    },
+    {
+      "table": "workflows",
+      "property": "aclRevision",
+      "physical": "acl_revision",
+      "target": "workflows.acl_revision",
+      "class": "cas-mutable",
+      "spec": "aclRevision"
+    },
+    {
+      "table": "workflows",
+      "property": "builtin",
+      "physical": "builtin",
+      "target": "workflows.builtin",
+      "class": "cas-mutable",
+      "spec": "builtin"
+    },
+    {
+      "table": "workflows",
+      "property": "schemaVersion",
+      "physical": "schema_version",
+      "target": "workflows.schema_version",
+      "class": "cas-mutable",
+      "spec": "schemaVersion"
+    },
+    {
+      "table": "workflows",
+      "property": "createdAt",
+      "physical": "created_at",
+      "target": "workflows.created_at",
+      "class": "immutable",
+      "spec": "createdAt"
+    },
+    {
+      "table": "workflows",
+      "property": "updatedAt",
+      "physical": "updated_at",
+      "target": "workflows.updated_at",
+      "class": "cas-mutable",
+      "spec": "updatedAt"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "id",
+      "physical": "id",
+      "target": "clarify_rounds.id",
+      "class": "immutable",
+      "spec": "id"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "taskId",
+      "physical": "task_id",
+      "target": "clarify_rounds.task_id",
+      "class": "immutable",
+      "spec": "taskId"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "kind",
+      "physical": "kind",
+      "target": "clarify_rounds.kind",
+      "class": "immutable",
+      "spec": "kind"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "askingNodeId",
+      "physical": "asking_node_id",
+      "target": "clarify_rounds.asking_node_id",
+      "class": "immutable",
+      "spec": "askingNodeId"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "askingNodeRunId",
+      "physical": "asking_node_run_id",
+      "target": "clarify_rounds.asking_node_run_id",
+      "class": "immutable",
+      "spec": "askingNodeRunId"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "askingShardKey",
+      "physical": "asking_shard_key",
+      "target": "clarify_rounds.asking_shard_key",
+      "class": "immutable",
+      "spec": "askingShardKey"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "intermediaryNodeId",
+      "physical": "intermediary_node_id",
+      "target": "clarify_rounds.intermediary_node_id",
+      "class": "immutable",
+      "spec": "intermediaryNodeId"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "intermediaryNodeRunId",
+      "physical": "intermediary_node_run_id",
+      "target": "clarify_rounds.intermediary_node_run_id",
+      "class": "immutable",
+      "spec": "intermediaryNodeRunId"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "targetConsumerNodeId",
+      "physical": "target_consumer_node_id",
+      "target": "clarify_rounds.target_consumer_node_id",
+      "class": "immutable",
+      "spec": "targetConsumerNodeId"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "loopIter",
+      "physical": "loop_iter",
+      "target": "clarify_rounds.loop_iter",
+      "class": "immutable",
+      "spec": "loopIter"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "containerRunId",
+      "physical": "container_run_id",
+      "target": "clarify_rounds.container_run_id",
+      "class": "immutable",
+      "spec": "containerRunId"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "iteration",
+      "physical": "iteration",
+      "target": "clarify_rounds.iteration",
+      "class": "immutable",
+      "spec": "iteration"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "questionsJson",
+      "physical": "questions_json",
+      "target": "clarify_rounds.questions_json",
+      "class": "cas-mutable",
+      "spec": "questions",
+      "json": true
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "answersJson",
+      "physical": "answers_json",
+      "target": "clarify_answers.value",
+      "class": "cas-mutable",
+      "spec": "answers",
+      "json": true
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "directive",
+      "physical": "directive",
+      "target": "clarify_rounds.directive",
+      "class": "mutable",
+      "spec": "directive"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "status",
+      "physical": "status",
+      "target": "clarify_rounds.status",
+      "class": "cas-mutable",
+      "spec": "status"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "truncationWarningsJson",
+      "physical": "truncation_warnings_json",
+      "target": "clarify_rounds.truncation_warnings_json",
+      "class": "mutable",
+      "spec": "truncationWarnings",
+      "json": true
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "designerRunTriggeredAt",
+      "physical": "designer_run_triggered_at",
+      "target": "clarify_rounds.designer_run_triggered_at",
+      "class": "mutable",
+      "spec": "designerRunTriggeredAt"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "abandonedAt",
+      "physical": "abandoned_at",
+      "target": "clarify_rounds.abandoned_at",
+      "class": "mutable",
+      "spec": "abandonedAt"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "createdAt",
+      "physical": "created_at",
+      "target": "clarify_rounds.created_at",
+      "class": "immutable",
+      "spec": "createdAt"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "answeredAt",
+      "physical": "answered_at",
+      "target": "clarify_rounds.answered_at",
+      "class": "mutable",
+      "spec": "answeredAt"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "answeredBy",
+      "physical": "answered_by",
+      "target": "clarify_rounds.answered_by",
+      "class": "mutable",
+      "spec": "answeredBy"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "submittedByRole",
+      "physical": "submitted_by_role",
+      "target": "clarify_rounds.submitted_by_role",
+      "class": "mutable",
+      "spec": "submittedByRole"
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "answerAttributionsJson",
+      "physical": "answer_attributions_json",
+      "target": "clarify_answers.attribution",
+      "class": "cas-mutable",
+      "spec": "answerAttributions",
+      "note": "Per-question final attribution; draft editor attribution lives with clarify_answer_drafts.",
+      "json": true
+    },
+    {
+      "table": "clarify_rounds",
+      "property": "draftAnswersJson",
+      "physical": "draft_answers_json",
+      "target": "clarify_answer_drafts.value",
+      "class": "cas-mutable",
+      "spec": "draftAnswers",
+      "json": true
+    }
+  ]
+}

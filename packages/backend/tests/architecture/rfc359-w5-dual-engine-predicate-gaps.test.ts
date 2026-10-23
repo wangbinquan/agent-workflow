@@ -760,13 +760,13 @@ describe('RFC-359 W8 — 已裁决双引擎分叉 exact 账本', () => {
  *     引用计数不受影响（本文件此前就因为 13a 引用着这两个模块）。
  */
 const RETIRED_13A_PRESENT: Site = {
-  file: 'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
-  fn: ['parseReceipt'],
+  file: 'modules/resource-catalog/infrastructure/resourcePackageArtifactCodec.ts',
+  fn: ['decodeResourcePackageReceipt'],
   anchors: [{ kind: 'identifier', text: 'assertCommittedApplyReceipt' }],
 }
 
 const RETIRED_13A_ABSENT_FILE =
-  'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts'
+  'modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery.ts'
 
 /**
  * ⚠️ 这个作用域**不能写成整文件**（`fn: null`）。`identifier` 锚点数的是所有 `ts.Identifier`
@@ -776,7 +776,7 @@ const RETIRED_13A_ABSENT_FILE =
  * 锚点因此落到门真正该在的那个方法体上。
  */
 const RETIRED_13A_ABSENT_FN: readonly string[] = [
-  'createSqliteResourcePackageApplyArtifactRecovery',
+  'createLegacyResourcePackageApplyArtifactRecovery',
   'rollForward',
 ]
 

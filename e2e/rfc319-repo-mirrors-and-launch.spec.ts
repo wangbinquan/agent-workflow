@@ -93,6 +93,7 @@
 //     REPO-44 读同一个镜像的 refs 相互干扰。
 //   · REPO-06 / REPO-X5 放最后：它们真的删镜像。
 
+import { taskFixtureSql } from './fixtures/model'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -290,10 +291,6 @@ function commitAll(workingDir: string, message: string): void {
   runGit(['-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-q', '-m', message], workingDir)
 }
 
-function sqlText(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 /**
  * 给一个镜像造一条「有任务引用」的事实。
  *
@@ -305,26 +302,23 @@ function sqlText(value: string): string {
  */
 function seedReferencingTask(taskId: string, cachedRepoId: string): void {
   const now = Date.now()
-  const values = [
-    sqlText(taskId),
-    sqlText('RFC-319 mirror-delete control task'),
-    sqlText('rfc319-mirror-delete-control-workflow'),
-    sqlText('{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}'),
-    sqlText('/tmp/rfc319-mirror-fixture/repo'),
-    sqlText(cachedRepoId),
-    sqlText('/tmp/rfc319-mirror-fixture/worktree'),
-    sqlText('main'),
-    sqlText(`agent-workflow/${taskId}`),
-    sqlText('done'),
-    sqlText('{}'),
-    String(now),
-    String(now),
-  ].join(', ')
   runSqlite(
     join(daemon.home, 'db.sqlite'),
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, cached_repo_id,' +
-      ' worktree_path, base_branch, branch, status, inputs, started_at, finished_at)' +
-      ` VALUES (${values});`,
+    taskFixtureSql({
+      id: taskId,
+      name: 'RFC-319 mirror-delete control task',
+      workflowId: 'rfc319-mirror-delete-control-workflow',
+      workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      repoPath: '/tmp/rfc319-mirror-fixture/repo',
+      cachedRepoId,
+      worktreePath: '/tmp/rfc319-mirror-fixture/worktree',
+      baseBranch: 'main',
+      branch: `agent-workflow/${taskId}`,
+      status: 'done',
+      inputs: '{}',
+      startedAt: now,
+      finishedAt: now,
+    }),
   )
 }
 

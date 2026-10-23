@@ -972,7 +972,7 @@ export interface ResourcePackageMutationReceipt<
 // RFC-359（apply 引擎合一，plan §5dy）—— `ResourcePackageApplyScenarioPlan` 随
 // `ResourcePackageApplyScenarioProvider` 一起退役：它描述的是**通用 bundle 引擎**
 // 「把一份 scenario（幂等键 + 串行键 + op 列表）交给引擎」的形状。统一 apply 引擎里
-// 幂等键固定是 `('package', importId)`、串行键由 `resourcePackageApplyLock` 自己管，
+// 幂等键固定是 `('package', importId)`、串行键由场景提供给 `platform/atomic-apply/keyedLock`，
 // op 列表直接由编排层持有，没有一个中间的 plan 对象要跨公共面。
 
 /**
@@ -1069,6 +1069,8 @@ export type PreparedPackageMutation =
  * 合一前 `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts` 与
  * `platform/persistence/postgresqlResourcePackageAtomicApply.ts` 各揣一份**整族七个**逐字相同
  * 的类型谓词，差别只有函数名（`isPreparedAgentPackageMutation` vs `isPreparedAgent`）。
+ *
+ * 2026-10-22 RFC-395 II-a A6：当前 apply 场景已迁入 resource-catalog infrastructure，共用 AtomicApply 机制。
  *
  * 判据本身是上面这个可辨识联合的**性质**，不是任一 provider 的性质：`mutation.kind` 的取值
  * 由公共合同定义，两个应用引擎只是消费者。两份并存的唯一后果是——往联合里加一种 kind 时

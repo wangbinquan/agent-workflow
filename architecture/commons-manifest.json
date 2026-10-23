@@ -368,17 +368,18 @@
     },
     {
       "auditedBy": "resource-acl-catalog",
-      "claimAudit": "Holds. Fully table-driven off ACL_TABLES with an `'id' | 'name'` token-domain tag that RFC-282 D4 made REQUIRED so a mis-tagged group is a compile error. The four delete guards genuinely keep only a matcher + one delegation (services/mcp.ts:372-376, plugin.ts:331-335, skillReferenceGuard.ts:40-47, agentDeps.ts:234). No per-type branch inside the kernel.",
+      "claimAudit": "Save-time reference checks remain table-driven off ACL_TABLES with the required id/name token-domain tag. RFC-395 II-a moves reverse lookups to resource-catalog infrastructure/referenceLookup.ts: MCP, plugin and skill ports share agentJsonLookup (LIKE prefilter plus exact JSON matching); agent-dependency and workflow reverse ports retain their distinct historical matching policies.",
       "core": false,
       "files": [
-        "packages/backend/src/services/resourceRefs.ts"
+        "packages/backend/src/services/resourceRefs.ts",
+        "packages/backend/src/modules/resource-catalog/infrastructure/referenceLookup.ts"
       ],
       "guards": [],
       "id": "resourcerefs-ts",
       "layer": "application",
       "owner": "resource-catalog",
-      "singleSourceOf": "assertNewRefsUsable (async preflight) / assertRefsUsableInTx (the commit-time linearization fence) / resolveRefsUsableById / resolveRefsUsableByName; plus findAgentsReferencingIdInJsonColumn(InTx), the one two-phase LIKE+JSON-parse reverse scan the mcp / plugin / skill / dependsOn delete guards all delegate to.",
-      "title": "resourceRefs.ts — save-time reference fence + agent JSON-column reverse scan"
+      "singleSourceOf": "assertNewRefsUsable (async preflight) / assertRefsUsableInTx (the commit-time linearization fence) / resolveRefsUsableById / resolveRefsUsableByName; reverse lookups now belong to the typed ports in referenceLookup.ts: createAgentMcpReferenceLookup / createAgentPluginReferenceLookup / createAgentSkillReferenceLookup share agentJsonLookup and matchesStoredAgentReference, while createAgentDependencyReferenceLookup / createWorkflowAgentReferenceLookup / createWorkflowCallReferenceLookup preserve their original policies.",
+      "title": "resourceRefs.ts + referenceLookup.ts — save-time reference checks and typed reverse lookups"
     },
     {
       "auditedBy": "runtime-driver-port",

@@ -3,6 +3,8 @@
 // runtime; the script verifies the adapter's actual transaction/fence path and
 // never substitutes a SQLite client or a second business implementation.
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { createResourcePackageRecoveryScene } from '@/modules/resource-catalog/infrastructure/resourcePackageRecovery'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -11,7 +13,6 @@ import { describe, expect, test } from 'bun:test'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
 import {
-  createResourcePackageApplyMaintenanceCommand,
   type ResourcePackageApplyArtifactRecoveryPort,
   type ResourcePackageApplyJournalPort,
   type ResourcePackageApplyJournalSnapshot,
@@ -636,12 +637,14 @@ function recoveryRecorder(log: string[]): ResourcePackageApplyArtifactRecoveryPo
 
 async function applyRecoveryTranscript(journal: ResourcePackageApplyJournalPort) {
   const effects: string[] = []
-  const command = createResourcePackageApplyMaintenanceCommand({
-    journal,
-    artifacts: recoveryRecorder(effects),
-    now: () => 2_000_000,
-  })
-  const receipt = await command.converge({ activeApplyIds: ['apply-active'] })
+  const command = createAtomicApplyRecovery([
+    createResourcePackageRecoveryScene({
+      journal,
+      artifacts: recoveryRecorder(effects),
+      now: () => 2_000_000,
+    }),
+  ])
+  const receipt = await command.converge({ 'resource-package': ['apply-active'] })
   return { receipt, effects }
 }
 

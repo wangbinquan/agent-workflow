@@ -3,7 +3,7 @@
 // # 这一层判什么
 //
 // `resource_bundle_applies` 的一行进入 `committed` 之后，崩溃收敛器每一轮都会对它做一次幂等
-// 回放（`application/resourcePackageMaintenance.ts` 的 `converge`）。回放之前要先问一句：
+// 回放（`platform/atomic-apply/convergence.ts` 的 `converge`）。回放之前要先问一句：
 // **这一行的回执还成不成立**。判据只有两条，且都与落盘格式无关：
 //
 //   · `state='committed'` 就**必须**带回执（`receipt_json IS NOT NULL`）——两个引擎的提交臂
@@ -14,15 +14,18 @@
 //
 // # 为什么只判信封，不判载荷
 //
-// `applied[]` 的逐条形状**两个引擎不一样**，而且这个不一样是被单独钉住的既有事实：SQLite 写
-// `opId`（`services/bundle/provider.ts` 的 `BundleAppliedOp`），PostgreSQL 写 `operationId` 且
+// 历史 `applied[]` 的逐条形状**两个格式不一样**，而且这个不一样是被单独钉住的既有事实：SQLite 写
+// `opId`（旧 `BundleAppliedOp`），当前两种 provider 写 `operationId` 且
 // 读回侧是 zod `.strict()`；同源的落盘工件格式差异由
 // `tests/architecture/rfc359-w5-artifact-format-portability.test.ts` 的 12 格矩阵管着。
 //
 // 所以这份中立判定**只碰两套格式的公共字段 `journalId`**。把载荷层一起收进来会立刻踩到一个
 // 很贵的坑：PostgreSQL 的载荷 schema 拿到 SQLite 的真实回执会逐条 `.strict()` 拒收，全库
-// committed 行当场集体停止 roll-forward。判据缺口账本当年写「不要直接给 SQLite 补
+// 旧格式 committed 行会停止 roll-forward。判据缺口账本当年写「不要直接给 SQLite 补
 // `parseReceipt`」，说的就是这半边——信封那半边该合，载荷那半边不该。
+//
+// 2026-10-22 RFC-395 II-a A6：格式由 resourcePackageArtifactCodec 整行选择；旧格式回执保留
+// opId 且只过本信封判据，两种 provider 行为一致。当前格式及 replay 继续使用严格 payload schema。
 //
 // # 判定为什么是纯函数
 //

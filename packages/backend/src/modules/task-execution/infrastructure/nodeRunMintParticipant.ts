@@ -1,6 +1,8 @@
 // RFC-359 W47 —— one node-run mint program, driven by the existing sync/async entries.
 // The callers retain transaction ownership.
 
+import { consumedInputColumns } from './consumedInputsParticipant'
+import { selectMintedRunInTx } from './runSelection/selectionWrite'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -17,6 +19,7 @@ import {
   nodeRunLineageColumns,
 } from '../application/buildNodeRunMintRecord'
 import type { NodeRunMintInput } from '../application/ports/nodeRunLifecyclePersistence'
+import { taskCheckpointProjectionPatch } from './taskCheckpointCodec'
 import { childScopePath } from '../domain/environmentChain'
 
 /** 在调用方已持有的事务里铸造 node_runs 行。 */
@@ -32,7 +35,7 @@ export interface NodeRunMintParticipantInTx {
  * SERIALIZABLE 下按索引页加谓词锁，同一任务里的任意两次并发铸造几乎必然互判读写依赖、其一被中止
  * （工作组领队 / 成员并发时 CI 上间歇红，本地实验去掉后 8→0 次冲突）。「旧代作废」改由读侧按同一
  * 判据推导：merge 状态机迁移（`mergeStateLifecyclePersistence.ts`）与入口重放
- * （`executionMergeRecovery.ts`），判据见 `domain/nodeRunSupersession.ts`。
+ * （`executionMergeRecovery.ts`），判据由 `runSelection/oracle/supersession.ts` 封装，经 selection port 读取。
  */
 export function* nodeRunMintProgram(
   tx: PersistenceTx,
@@ -90,8 +93,11 @@ export function* nodeRunMintProgram(
     )
   })
   if (allocation === undefined) throw new Error('node-run-seq-allocation-missing')
+  // Epoch-1 mint only copied the scalar historical workspace snapshot; map history and isolation stay absent.
+  const { role: _role, syntheticKind: _syntheticKind, ...storedRecord } = record
   const values = {
-    ...record,
+    ...taskCheckpointProjectionPatch(storedRecord, ['']),
+    ...consumedInputColumns(storedRecord),
     scopePath,
     continuationSlotKey: lineage.continuationSlotKey,
     lineageSlotPathJson: lineage.lineageSlotPathJson,
@@ -101,6 +107,16 @@ export function* nodeRunMintProgram(
     const { nodeRuns } = tablesOf(tx)
     return insertOne(tx, nodeRuns, values)
   })
+  yield* transactionStep(() =>
+    selectMintedRunInTx(
+      tx,
+      {
+        ...record,
+        ...values,
+      },
+      input.cause,
+    ),
+  )
   return values.id
 }
 

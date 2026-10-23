@@ -1,3 +1,4 @@
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
@@ -47,15 +48,14 @@ function buildHarness(db: PersistenceDb): Harness {
 async function seedRunning(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -123,8 +123,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
       },
       300,
     )
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('interrupted')
     // RFC-202 T4: survivors stamp DAEMON_RESTART_ERROR_SUMMARY ('daemon-restart')
     // — the exact summary autoResume's boot pass matches — instead of the old
@@ -139,7 +138,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
       harness.applicationBinding.provider === 'postgresql'
         ? createProviderTaskExecutionModule({ daemonGeneration: 'rfc379', persistence })
         : createTaskExecutionTestModule('rfc379')
-    const { taskExecutionOwners, tasks } = tablesOf(h.db)
+    const { taskExecutionOwners } = tablesOf(h.db)
     await insertOne(h.db, taskExecutionOwners, {
       taskId,
       ownerId: 'driver',
@@ -212,7 +211,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
     expect(module.claimGate.isSealed).toBe(true)
     expect(unrelated.claimGate.isSealed).toBe(false)
     expect(session.state().jobs[0]!.stopOutcome).toBe('timeout')
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const row = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(row.status).toBe('interrupted')
     expect(row.errorSummary).toBe('daemon-restart')
     expect(

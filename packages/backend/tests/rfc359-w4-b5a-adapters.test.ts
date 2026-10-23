@@ -3,6 +3,7 @@
 // 端点 / 连接事实读取、演示种子幂等落库、代码工作区读取（未启动 run 两个引擎都排最前）、轮次尝试投影
 // （bigint 列回 number 不回字符串）、RFC-310 cutover 状态 upsert 与 legacy link、数字员工工作区持久化。
 
+import { nodeRunFixture, taskFixture, taskRepoFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -72,8 +73,7 @@ function template(
 }
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -254,21 +254,19 @@ describeEachProvider(
         repos: [
           {
             mountPath: '',
-            worktreeDirName: '',
             worktreePath: '/tmp/b5a/task-b5a',
             baseCommit: null,
           },
         ],
       })
-      const { taskRepos, nodeRuns, codeAiAttempts } = tablesOf(db)
-      await db.insert(taskRepos).values([
+      await taskRepoFixture(db, [
         {
           taskId: 'task-b5a',
           repoIndex: 1,
           repoPath: '/tmp/b5a/second',
           branch: 'agent-workflow/x',
           worktreePath: '/tmp/b5a/task-b5a/second',
-          worktreeDirName: 'second',
+          mountPath: 'second',
         },
         {
           taskId: 'task-b5a',
@@ -276,10 +274,10 @@ describeEachProvider(
           repoPath: '/tmp/b5a/first',
           branch: 'agent-workflow/x',
           worktreePath: '/tmp/b5a/task-b5a/first',
-          worktreeDirName: 'first',
+          mountPath: 'first',
         },
       ])
-      expect((await read.findTask('task-b5a'))?.repos.map((repo) => repo.worktreeDirName)).toEqual([
+      expect((await read.findTask('task-b5a'))?.repos.map((repo) => repo.mountPath)).toEqual([
         'first',
         'second',
       ])
@@ -293,13 +291,11 @@ describeEachProvider(
         iteration: 0,
         ...(over.startedAt === undefined ? {} : { startedAt: over.startedAt }),
       })
-      await db
-        .insert(nodeRuns)
-        .values([
-          run('nr-b5a-late', { startedAt: NOW + 5 }),
-          run('nr-b5a-early', { startedAt: NOW }),
-          run('nr-b5a-unstarted', { status: 'pending' }),
-        ])
+      await nodeRunFixture(db, [
+        run('nr-b5a-late', { startedAt: NOW + 5 }),
+        run('nr-b5a-early', { startedAt: NOW }),
+        run('nr-b5a-unstarted', { status: 'pending' }),
+      ])
       // 未启动的 run（started_at NULL）两个引擎都排最前。
       expect((await read.listNodeRuns('task-b5a')).map((row) => row.id)).toEqual([
         'nr-b5a-unstarted',
@@ -309,10 +305,11 @@ describeEachProvider(
       expect(await read.findNodeRun('nr-b5a-late')).toMatchObject({
         id: 'nr-b5a-late',
         startedAt: NOW + 5,
-        preSnapshot: null,
+        checkpoints: [],
       })
       expect(await read.findNodeRun('missing')).toBeNull()
 
+      const { codeAiAttempts } = tablesOf(db)
       const attempts = createRoundAttemptsRead(db)
       const attempt = (
         id: string,

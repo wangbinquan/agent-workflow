@@ -75,6 +75,7 @@
 //   · OPS-034 排最后 —— 它会重启 daemon 来证明"重启才生效"，重启之后整库回到
 //     OPS-033 那次备份的时间点，前面所有用例的语料都会消失。
 
+import { taskFixtureSql, patchTaskFixtureSql } from './fixtures/model'
 import { mkdirSync, existsSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gzipSync } from 'node:zlib'
@@ -324,34 +325,25 @@ interface SeedTask {
 
 /** 任务播种语句。列清单与 `e2e/rfc319-task-list-and-filters.spec.ts` 同源。 */
 function seedTaskSql(row: SeedTask): string {
-  const values = [
-    sqlText(row.id),
-    sqlText(row.name),
-    sqlText('rfc319-ops-archive-workflow'),
-    sqlText('{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'),
-    sqlText(join(homeDir, 'fixture-repo')),
-    sqlText(join(homeDir, 'worktrees', row.id)),
-    sqlText('main'),
-    sqlText(`agent-workflow/${row.id}`),
-    sqlText('done'),
-    sqlText('{}'),
-    String(row.finishedAt - 60_000),
-    String(row.finishedAt),
-    sqlText(adminUserId),
-    String(row.finishedAt - 60_000),
-    sqlText(row.parentId ?? row.id),
-    sqlText(row.parentId ?? null),
-    row.parentId === undefined ? '0' : '1',
-  ].join(', ')
-  return (
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,' +
-    ' base_branch, branch, status, inputs, started_at, finished_at, owner_user_id,' +
-    ` branch_started_at, root_task_id, parent_task_id, invocation_depth) VALUES (${values});`
-  )
-}
-
-function sqlText(value: string | null): string {
-  return value === null ? 'NULL' : `'${value.replaceAll("'", "''")}'`
+  return taskFixtureSql({
+    id: row.id,
+    name: row.name,
+    workflowId: 'rfc319-ops-archive-workflow',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    repoPath: join(homeDir, 'fixture-repo'),
+    worktreePath: join(homeDir, 'worktrees', row.id),
+    baseBranch: 'main',
+    branch: `agent-workflow/${row.id}`,
+    status: 'done',
+    inputs: '{}',
+    startedAt: row.finishedAt - 60_000,
+    finishedAt: row.finishedAt,
+    ownerUserId: adminUserId,
+    branchStartedAt: row.finishedAt - 60_000,
+    rootTaskId: row.parentId ?? row.id,
+    parentTaskId: row.parentId ?? null,
+    invocationDepth: row.parentId === undefined ? 0 : 1,
+  })
 }
 
 /**
@@ -883,7 +875,10 @@ test('RFC-319 OPS-X6：被熔断隔离的任务在详情页亮出恢复横幅、
   runSqlite(
     dbPath(),
     [
-      `UPDATE tasks SET auto_recovery_suspended = 1, auto_recovery_attempts = 4 WHERE id = '${RECENT_ROOT}';`,
+      patchTaskFixtureSql(
+        { id: RECENT_ROOT },
+        { autoRecoverySuspended: true, autoRecoveryAttempts: 4 },
+      ),
       'INSERT INTO recovery_events (id, task_id, actor, kind, reason, created_at) VALUES ' +
         `('01JRFC319OPSRECOVEV00001', '${RECENT_ROOT}', 'system', 'auto-resume', 'resumed after boot', ${now - 120_000});`,
       'INSERT INTO recovery_events (id, task_id, actor, kind, reason, created_at) VALUES ' +

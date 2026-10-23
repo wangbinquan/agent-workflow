@@ -24,6 +24,9 @@
 
 import type { BundleResourceType, WorkflowDefinition } from '@agent-workflow/shared'
 import {
+  decodeAgentReferenceDocumentForClosure,
+  collectWorkflowDependencyRefs,
+  collectAgentDependencyRefs,
   privilegedNodeLensFor,
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
@@ -139,32 +142,20 @@ export function directRefsOf(
 ): Array<{ type: BundleResourceType; id: string }> {
   const out: Array<{ type: BundleResourceType; id: string }> = []
   if (type === 'agent') {
-    for (const raw of parseJsonArray(row.skills)) {
-      const ref = raw as { kind?: string; skillId?: string }
-      // project 技能不是资源（无行、无 ACL）——闭包遍历必须跳过它，否则会去查一个
-      // 永远查不到的 id 然后判成「不可见」。
-      if (ref.kind === 'managed' && typeof ref.skillId === 'string') {
-        out.push({ type: 'skill', id: ref.skillId })
-      }
-    }
-    for (const id of parseJsonArray(row.dependsOn)) {
-      if (typeof id === 'string') out.push({ type: 'agent', id })
-    }
-    for (const id of parseJsonArray(row.mcp)) {
-      if (typeof id === 'string') out.push({ type: 'mcp', id })
-    }
-    for (const id of parseJsonArray(row.plugins)) {
-      if (typeof id === 'string') out.push({ type: 'plugin', id })
+    const refs = collectAgentDependencyRefs(decodeAgentReferenceDocumentForClosure(row))
+    for (const ref of refs) {
+      if (ref.selectorKind === 'id' && typeof ref.value === 'string')
+        out.push({ type: ref.resourceType, id: ref.value })
     }
     return out
   }
   if (type === 'workflow') {
     const defn = definitionOf(row)
-    for (const node of defn?.nodes ?? []) {
-      const agentId = (node as unknown as { agentId?: unknown }).agentId
-      if (typeof agentId === 'string' && agentId.length > 0) {
-        out.push({ type: 'agent', id: agentId })
-      }
+    for (const ref of collectWorkflowDependencyRefs(defn ?? {}, {
+      agentOnAnyNode: true,
+      throwOnNullNode: true,
+    })) {
+      if (ref.resourceType === 'agent') out.push({ type: 'agent', id: ref.value })
     }
     return out
   }

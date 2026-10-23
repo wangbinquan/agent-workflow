@@ -1,10 +1,11 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { sha256Hex } from '@/util/hash'
 import { canonicalHumanGateValueJson } from './canonicalGateRequest'
 import { HumanGateOperationError } from './humanGateOperation'
 
 export interface WorkspaceRollbackCandidateTarget {
   readonly worktreePath: string
-  readonly worktreeDirName: string
+  readonly mountPath: string
   readonly snapshot: string
 }
 
@@ -13,7 +14,11 @@ export interface WorkspaceRollbackCandidate {
   readonly targets: readonly WorkspaceRollbackCandidateTarget[]
 }
 
-export interface ValidatedWorkspaceRollbackTarget extends WorkspaceRollbackCandidateTarget {
+export interface ValidatedWorkspaceRollbackTarget extends Omit<
+  WorkspaceRollbackCandidateTarget,
+  'mountPath'
+> {
+  readonly worktreeDirName: string
   readonly sourceNodeRunId: string
   readonly ordinal: number
 }
@@ -47,7 +52,7 @@ export function validatedWorkspaceRollbackPlan(input: {
   for (const target of input.targets) {
     if (
       target.sourceNodeRunId.length === 0 ||
-      target.worktreePath.length === 0 ||
+      isTaskWorkspaceUnbound(target.worktreePath) ||
       target.snapshot.length === 0 ||
       !Number.isSafeInteger(target.ordinal) ||
       target.ordinal < 0 ||

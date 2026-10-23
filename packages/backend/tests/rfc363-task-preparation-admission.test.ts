@@ -1,6 +1,7 @@
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-363: exercise the production Task kernel, real provider transactions and Git adapter.
 // These cases protect the gap between source freezing, a durable SC receipt and Task acceptance.
+import { patchTaskFixture, readTaskFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
@@ -105,8 +106,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       nodes: [],
       edges: [],
     })
-    const { workflows } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: workflowId,
       name: workflowId,
       definition: JSON.stringify(definition),
@@ -166,7 +166,7 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
         inputs: {},
       }),
       subject: {
-        workflowId,
+        subject: { kind: 'workflow' as const, sourceId: workflowId },
         workflowName: workflowId,
         workflowVersion: 1,
         workflowSnapshot: definition,
@@ -213,8 +213,8 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
   test('a group edited after Task admission does not replace the frozen preparation layout', async () => {
     const f = await fixture()
     const single = await f.kernel().launch(f.request)
-    const { tasks, repoGroups, repoGroupNodes } = tablesOf(harness.db)
-    const row = (await harness.db.select().from(tasks).where(eq(tasks.id, single.id)))[0]!
+    const { repoGroups, repoGroupNodes } = tablesOf(harness.db)
+    const row = (await readTaskFixtures(harness.db, { id: single.id }))[0]!
     const groupId = ulid()
     await insertOne(harness.db, repoGroups, {
       id: groupId,
@@ -281,8 +281,8 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
   test('a failure after source freezing rolls back Task, plan, operation and snapshot together', async () => {
     const f = await fixture()
     await expect(f.kernel(true).launch(f.request)).rejects.toThrow('reject-after-source-freeze')
-    const { tasks, scRepositorySnapshots, scPreparationOperations } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    const { scRepositorySnapshots, scPreparationOperations } = tablesOf(harness.db)
+    expect(await readTaskFixtures(harness.db)).toEqual([])
     expect(await harness.db.select().from(scRepositorySnapshots)).toEqual([])
     expect(await harness.db.select().from(scPreparationOperations)).toEqual([])
     expect(f.submitted).toEqual([])
@@ -299,25 +299,17 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     await expect(
       harness.session.transaction(async (tx) => {
         await acceptDurableRepositoryWorkspace(tx, task.id)
-        const { tasks } = tablesOf(tx)
-        await tx
-          .update(tasks)
-          .set({ worktreePath: space!.worktreePath })
-          .where(eq(tasks.id, task.id))
+        await patchTaskFixture(tx, { id: task.id }, { worktreePath: space!.worktreePath })
         throw new Error('projection-rollback')
       }),
     ).rejects.toThrow('projection-rollback')
     expect((await createWorkspacePreparationJournal(harness.db).forTask(task.id))?.state).toBe(
       'prepared',
     )
-    const { tasks } = tablesOf(harness.db)
-    expect(
-      (await harness.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]?.worktreePath,
-    ).toBe('')
+    expect((await readTaskFixtures(harness.db, { id: task.id }))[0]?.worktreePath).toBe('')
     await harness.session.transaction(async (tx) => {
       await acceptDurableRepositoryWorkspace(tx, task.id)
-      const { tasks } = tablesOf(tx)
-      await tx.update(tasks).set({ worktreePath: space!.worktreePath }).where(eq(tasks.id, task.id))
+      await patchTaskFixture(tx, { id: task.id }, { worktreePath: space!.worktreePath })
     })
     expect((await createWorkspacePreparationJournal(harness.db).forTask(task.id))?.state).toBe(
       'admitted',
@@ -381,8 +373,8 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     await expect(
       f.kernel(true).launch({ ...f.request, deferRepoPreparation: false }),
     ).rejects.toThrow('reject-after-source-freeze')
-    const { tasks, scPreparationOperations } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    const { scPreparationOperations } = tablesOf(harness.db)
+    expect(await readTaskFixtures(harness.db)).toEqual([])
     const operations = await harness.db.select().from(scPreparationOperations)
     expect(operations).toHaveLength(1)
     expect(operations[0]?.state).toBe('cleaned')
@@ -400,10 +392,10 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       gitCommitIdentity: null,
     }
     const first = await f.workspace.prepare(input)
-    const { tasks, scRepositorySources, scPreparationOperations, scRepositorySnapshots } = tablesOf(
+    const { scRepositorySources, scPreparationOperations, scRepositorySnapshots } = tablesOf(
       harness.db,
     )
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await readTaskFixtures(harness.db)).toEqual([])
     expect(await createWorkspacePreparationJournal(harness.db).read(taskId)).toMatchObject({
       state: 'prepared',
       lane: 'pre-materialized',
@@ -462,15 +454,14 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     )
     expect(gcInputs[1]).toContain(taskId)
     expect((await maintenance.runGcPhase({ ...gc, activeTaskIds: [] })).removed).toBe(0)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await readTaskFixtures(harness.db)).toEqual([])
   }, 60_000)
   test('multipart uploads land before Task admission and consume the same prepared receipt', async () => {
     const f = await fixture()
     let observed = false
     const task = await f
       .kernel(false, async (path, taskId) => {
-        const { tasks } = tablesOf(harness.db)
-        expect(await harness.db.select().from(tasks).where(eq(tasks.id, taskId))).toEqual([])
+        expect(await readTaskFixtures(harness.db, { id: taskId })).toEqual([])
         expect(readFileSync(join(path, 'inputs', 'attachment.txt'), 'utf8')).toBe(
           'uploaded before Task',
         )
@@ -504,10 +495,9 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
   test('sourceTaskId freezes the Task layout even after its live group is emptied', async () => {
     const f = await fixture()
     const identityTask = await f.kernel().launch(f.request)
-    const { tasks, repoGroups, repoGroupNodes } = tablesOf(harness.db)
-    const cachedRepoId = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, identityTask.id))
-    )[0]!.cachedRepoId!
+    const { repoGroups, repoGroupNodes } = tablesOf(harness.db)
+    const cachedRepoId = (await readTaskFixtures(harness.db, { id: identityTask.id }))[0]!
+      .cachedRepoId!
     const groupId = ulid()
     await insertOne(harness.db, repoGroups, {
       id: groupId,

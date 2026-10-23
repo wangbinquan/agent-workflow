@@ -1,7 +1,14 @@
 // RFC-370: selected scopes must reach real Task receipts, wrappers and replay.
 // The logical transport has no files; runtime execution is outside this A4 fixture.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -61,16 +68,15 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
     intentId = ulid()
   const path = [{ stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 }]
   const slotPathJson = canonicalJson(path)
-  const { workflows, tasks, nodeRuns, taskExecutionEffects, taskExecutionEffectAttempts } =
-    tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: taskId,
     definition: JSON.stringify(EMPTY),
     version: 1,
     schemaVersion: 6,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -80,12 +86,20 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
     worktreePath: `memory:canonical:${taskId}`,
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
-    repoCount: mounts.length,
     status: 'running',
     startedAt: Date.now(),
     inputs: '{}',
     executionLineageId: taskId,
     lineageSlotPathJson: slotPathJson,
+    // RFC-395 II-a: checkpoint decoding reads persisted mounts, not the in-memory mechanics state.
+    repos: mounts.map((mountPath, repoIndex) => ({
+      repoIndex,
+      mountPath,
+      repoPath: `memory:repository:${taskId}:${mountPath}`,
+      worktreePath: `memory:canonical:${taskId}:${mountPath}`,
+      baseBranch: 'main',
+      branch: `agent-workflow/${taskId}`,
+    })),
   })
   const original = createTaskExecutionPersistence(db)
   const module = createProviderTaskExecutionModule({
@@ -218,13 +232,9 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
       throw new Error('unexpected nested drive')
     },
   } as unknown as TaskMechanicsState
-  async function row(
-    nodeId = 'worker',
-    extra: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
-  ) {
+  async function row(nodeId = 'worker', extra: Partial<NodeRunFixtureSpec> = {}) {
     const id = ulid()
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId,
       nodeId,
@@ -238,7 +248,7 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
     return id
   }
   const read = async (id: string) => {
-    return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+    return (await readNodeRunFixtures(db, { id }))[0]!
   }
   const ledger = async () => {
     const records = await db
@@ -386,11 +396,17 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
           try {
             await snapshotEntered.promise
             expect((await f.read(id)).mergeState).toBe('isolating')
-            expect((await f.read(id)).isoNodeTree).toBeNull()
+            expect(
+              (await f.read(id)).checkpoints.find((checkpoint) => checkpoint.mountPath === '')
+                ?.nodeTree ?? null,
+            ).toBeNull()
             snapshotAck.resolve()
             await entered.promise
             expect((await f.read(id)).mergeState).toBe('pending-merge')
-            expect((await f.read(id)).isoNodeTree).toBe(`tree@${id}-2:`)
+            expect(
+              (await f.read(id)).checkpoints.find((checkpoint) => checkpoint.mountPath === '')
+                ?.nodeTree ?? null,
+            ).toBe(`tree@${id}-2:`)
           } finally {
             snapshotAck.resolve()
             ack.resolve()
@@ -399,9 +415,8 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
           expect((await f.read(id)).mergeState).toBe('merged')
           const replayId = await f.row('replay', {
             mergeState: 'pending-merge',
-            isoBaseSnapshot: 'old-base',
-            isoNodeTree: 'pinned-tree',
             isoWorktreePath: 'memory:workspace:lost-physical-2',
+            checkpoints: [{ mountPath: '', isolationBase: 'old-base', nodeTree: 'pinned-tree' }],
           })
           const before = f.store.calls.filter((call) => call.method === 'snapshot').length
           await composeExecutionMergeRecovery(f.state, f.state.log).recoverBeforeScope()
@@ -670,13 +685,19 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
         id = await f.row('human', {
           mergeState: 'conflict-human',
           isoWorktreePath: 'memory:workspace:prior-key-2',
-          isoBaseSnapshot: 'prior-base',
-          isoNodeTree: 'pinned-node',
-          isoSubmodulesJson: JSON.stringify({
-            subBases: { sub: 'sub-base' },
-            poolDirs: { sub: 'opaque:pin' },
-            pendingSubResolves: ['sub'],
-          }),
+          checkpoints: [
+            {
+              mountPath: '',
+              isolationBase: 'prior-base',
+              nodeTree: 'pinned-node',
+              submodules:
+                JSON.stringify({
+                  subBases: { sub: 'sub-base' },
+                  poolDirs: { sub: 'opaque:pin' },
+                  pendingSubResolves: ['sub'],
+                }) ?? undefined,
+            },
+          ],
         })
       try {
         await runWithTaskExecutionContext(f.context, async () => {
@@ -855,8 +876,10 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
               parentNodeRunId: wrapperId,
               containerRunId: wrapperId,
               shardKey: 'one',
-              isoBaseSnapshotReposJson: JSON.stringify({ a: 'base-a', b: 'base-b' }),
-              isoNodeTreeReposJson: JSON.stringify({ a: 'prior-a', b: 'prior-b' }),
+              checkpoints: [
+                { mountPath: 'a', isolationBase: 'base-a', nodeTree: 'prior-a' },
+                { mountPath: 'b', isolationBase: 'base-b', nodeTree: 'prior-b' },
+              ],
             })
             await f.row('worker', {
               status: 'failed',
@@ -929,8 +952,11 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             parentNodeRunId: wrapperId,
             containerRunId: wrapperId,
             shardKey: 'one',
-            isoBaseSnapshotReposJson: JSON.stringify({ b: 'base-b', c: 'base-c' }),
-            isoNodeTreeReposJson: JSON.stringify({ a: 'prior-a', b: 'prior-b' }),
+            checkpoints: [
+              { mountPath: 'b', isolationBase: 'base-b', nodeTree: 'prior-b' },
+              { mountPath: 'c', isolationBase: 'base-c' },
+              { mountPath: 'a', nodeTree: 'prior-a' },
+            ],
           })
           await f.row('worker', {
             status: 'failed',
@@ -1042,7 +1068,8 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             {
               prompt: 'same resolver callback',
               reference: 'memory:resolve:',
-              manifest: [{ worktreeDirName: '', path: 'conflicted', type: 'content' }],
+              // RFC-395 II-a: the isolation port names the repository mount directly.
+              manifest: [{ mountPath: '', path: 'conflicted', type: 'content' }],
             },
           ])
           expect(f.store.calls.filter((call) => call.method === 'bind')).toHaveLength(1)
@@ -1130,34 +1157,33 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
         await runWithTaskExecutionContext(f.context, async () => {
           const wrapperId = await f.row('git-wrapper', {
             mergeState: 'isolating',
-            isoBaseSnapshot: 'wrapper-base',
             isoWorktreePath: 'memory:workspace:wrapper-w',
+            checkpoints: [{ mountPath: '', isolationBase: 'wrapper-base' }],
           })
           const top = await f.row('top', {
             status: 'done',
             mergeState: 'isolating',
-            isoBaseSnapshot: 'base-top',
             isoWorktreePath: 'memory:workspace:kept-top',
+            checkpoints: [{ mountPath: '', isolationBase: 'base-top' }],
           })
           const unfinished = await f.row('unfinished', {
             mergeState: 'isolating',
-            isoBaseSnapshot: 'base-unfinished',
             isoWorktreePath: 'memory:workspace:kept-unfinished',
+            checkpoints: [{ mountPath: '', isolationBase: 'base-unfinished' }],
           })
           const inner = await f.row('inner', {
             status: 'done',
             mergeState: 'isolating',
             containerRunId: wrapperId,
-            isoBaseSnapshot: 'base-inner',
             isoWorktreePath: 'memory:workspace:kept-inner',
+            checkpoints: [{ mountPath: '', isolationBase: 'base-inner' }],
           })
           const innerPinned = await f.row('inner-pinned', {
             status: 'done',
             mergeState: 'pending-merge',
             containerRunId: wrapperId,
-            isoBaseSnapshot: 'base-pinned',
-            isoNodeTree: 'pinned-tree',
             isoWorktreePath: 'memory:workspace:lost-inner',
+            checkpoints: [{ mountPath: '', isolationBase: 'base-pinned', nodeTree: 'pinned-tree' }],
           })
           const targetOf = (id: string) =>
             f.store.merged.find((workspace) => workspace.dbNodeRunId === id)?.repositories[0]
@@ -1166,7 +1192,7 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
           await composeExecutionMergeRecovery(f.state, f.state.log).recoverBeforeScope()
           expect(await f.read(top)).toMatchObject({
             mergeState: 'merged',
-            isoNodeTree: 'tree@kept-top:',
+            checkpoints: [{ mountPath: '', nodeTree: 'tree@kept-top:' }],
           })
           expect(targetOf(top)).toBe(f.state.repos[0]!.worktreePath)
           expect(f.store.discarded.map((workspace) => workspace.dbNodeRunId)).toContain(top)
@@ -1185,7 +1211,7 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
           await completeFrameMerges(body, { containerRunId: wrapperId, iteration: 0 }, f.state.log)
           expect(await f.read(inner)).toMatchObject({
             mergeState: 'merged',
-            isoNodeTree: 'tree@kept-inner:',
+            checkpoints: [{ mountPath: '', nodeTree: 'tree@kept-inner:' }],
           })
           expect((await f.read(innerPinned)).mergeState).toBe('merged')
           expect(targetOf(inner)).toBe('memory:workspace:wrapper-w')
@@ -1213,8 +1239,8 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
           const gone = await f.row('gone', {
             status: 'done',
             mergeState: 'isolating',
-            isoBaseSnapshot: 'base-gone',
             isoWorktreePath: 'memory:workspace:gone',
+            checkpoints: [{ mountPath: '', isolationBase: 'base-gone' }],
           })
           const unrecorded = await f.row('unrecorded', {
             status: 'done',
@@ -1260,11 +1286,10 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             containerRunId: wrapperId,
             shardKey: 'one',
             shardValueHash: sha256Hex('value-one'),
-            isoBaseSnapshot: 'base-one',
             isoWorktreePath: 'memory:workspace:shard-one',
+            checkpoints: [{ mountPath: '', isolationBase: 'base-one' }],
           })
-          const { nodeRunOutputs } = tablesOf(harness.db)
-          await insertOne(harness.db, nodeRunOutputs, {
+          await nodeRunOutputFixture(harness.db, {
             nodeRunId: interrupted,
             portName: 'summary',
             content: 'one finished',
@@ -1275,8 +1300,8 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             parentNodeRunId: wrapperId,
             containerRunId: wrapperId,
             shardKey: 'two',
-            isoBaseSnapshot: 'base-two',
             isoWorktreePath: 'memory:workspace:shard-two',
+            checkpoints: [{ mountPath: '', isolationBase: 'base-two' }],
           })
           const dispatch = (shardKey: string, value: string) =>
             createWrapperMechanicsPorts(f.state, f.state.log).fanoutAttempts.dispatchShard({
@@ -1297,7 +1322,7 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
           })
           expect(await f.read(interrupted)).toMatchObject({
             mergeState: 'merged',
-            isoNodeTree: 'tree@shard-one:',
+            checkpoints: [{ mountPath: '', nodeTree: 'tree@shard-one:' }],
           })
           expect(f.store.merged.map((workspace) => workspace.dbNodeRunId)).toEqual([interrupted])
           // Before RFC-370 a merge-failed shard was replayed as if its delta had landed.

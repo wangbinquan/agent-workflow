@@ -17,7 +17,6 @@
 // ⚠️ 本文件必须保持叶子：只许依赖 `@agent-workflow/shared` / `@/db/schema` 的类型 / `@/util/errors`。
 // 往这里加任何指向 services/ 或 modules/ 的 import 都会把上面那条环装回来。
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { NodeRunStatus } from '@agent-workflow/shared'
 
 import { ConflictError } from '@/util/errors'
@@ -45,38 +44,6 @@ export function assertNodeRunSourceTerminationAdmission(
     `task ${taskId} is fenced by an MR/PR ${fence} event; cannot move a node run to ${to}`,
   )
 }
-
-/**
- * Extra fields that may be written alongside a status transition (mirrors
- * common drizzle .set({}) shapes — runner pid/finishedAt/error, scheduler
- * preSnapshot, review reviewIteration/clarifyIteration, etc.). Whitelisted
- * here so callers can't smuggle `status` through this path.
- */
-export type NodeRunStatusUpdateExtra = Partial<
-  Pick<
-    PersistenceTables['nodeRuns']['$inferInsert'],
-    | 'finishedAt'
-    | 'startedAt'
-    | 'errorMessage'
-    // RFC-145: the structured failure companions ride the same atomic write as
-    // status + errorMessage (runner-exit stamps failureCode; the review
-    // supersede path stamps supersededByReview/rolledBack).
-    | 'failureCode'
-    | 'supersededByReview'
-    | 'rolledBack'
-    | 'exitCode'
-    | 'pid'
-    | 'reviewIteration'
-    | 'consumedUpstreamRunsJson'
-    | 'preSnapshot'
-    | 'opencodeSessionId'
-    | 'tokInput'
-    | 'tokOutput'
-    | 'tokCacheCreate'
-    | 'tokCacheRead'
-    | 'tokTotal'
-  >
->
 
 /**
  * Raised when CAS UPDATE affected 0 rows — the row's status is no longer

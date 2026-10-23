@@ -14,9 +14,9 @@
 //     inheritance) preserves reviewIteration on the new source-agent row
 //     (locked here too).
 
+import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -55,8 +55,8 @@ async function seed(
     outputs: [],
   }
   const wfId = `wf_${ulid()}`
-  const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { docVersions } = tablesOf(db)
+  await workflowFixture(db, {
     id: wfId,
     name: 'stub',
     description: '',
@@ -69,7 +69,7 @@ async function seed(
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -87,20 +87,19 @@ async function seed(
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
 
   // Source agent node_run that produced both an output and a clarify envelope.
   const sourceRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -113,7 +112,7 @@ async function seed(
   // Pre-existing awaiting_review node_run on review1 with a pending doc_version.
   const reviewRunId = ulid()
   const docVersionId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: reviewRunId,
     taskId,
     nodeId: 'review1',

@@ -74,10 +74,14 @@ function postgresqlFixture(trace: string[]) {
             'owner@example.test',
             null,
             false,
-            'cached-1',
+            // RFC-395 II-a: requested-source columns now occupy the owner projection order.
             null,
-            '',
+            'cached-1',
             'main',
+            null,
+            null,
+            'remote',
+            '',
             1,
             null,
             null,
@@ -90,7 +94,10 @@ function postgresqlFixture(trace: string[]) {
       normalized.includes('from "agent_workflow"."node_runs"') &&
       normalized.includes('"retry_index"')
     ) {
-      return sqlRows({ values: [['prep-0', 0, 'failed']] })
+      return sqlRows({
+        // RFC-395 II-a: listFields selects id/status/retryIndex in that order.
+        values: [['prep-0', 'failed', 0]],
+      })
     }
     if (normalized.includes('from "agent_workflow"."cached_repos"')) return sqlRows()
     if (normalized.includes('from "agent_workflow"."task_execution_owners"')) return sqlRows()
@@ -296,7 +303,6 @@ describeEachProvider('RFC-363 real-provider scratch rollback lease', (harness) =
       const prepared = await materializer.prepare({
         taskId: 'task-scratch',
         task: {
-          workflowId: 'workflow-1',
           name: 'Scratch workspace',
           inputs: {},
           scratch: true,

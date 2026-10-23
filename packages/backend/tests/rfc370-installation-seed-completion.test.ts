@@ -1,3 +1,4 @@
+import { readAgentFixtures, readWorkflowFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
@@ -13,10 +14,10 @@ describeEachProvider('RFC-370 selected installation seed completion', (harness) 
     codeCapability: composeCodeCapabilityDemoSeedParticipant(harness.db),
   })
   const snapshot = async () => {
-    const { agents, workflows, capabilityTemplates } = tablesOf(harness.db)
+    const { capabilityTemplates } = tablesOf(harness.db)
     return {
-      agents: await harness.db.select().from(agents),
-      workflows: await harness.db.select().from(workflows),
+      agents: await readAgentFixtures(harness.db),
+      workflows: await readWorkflowFixtures(harness.db),
       templates: await harness.db.select().from(capabilityTemplates),
     }
   }

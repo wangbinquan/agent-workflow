@@ -7,7 +7,7 @@
 // Regression 2026-08-13: Claude can explicitly reset a conversation within one
 // process; the next root frame's native id becomes the resumable identity.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import type { Agent, RuntimeInventoryObservation } from '@agent-workflow/shared'
@@ -60,15 +60,14 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -92,8 +91,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'node1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'node1', status: 'pending' })
   return id
 }
 
@@ -290,13 +288,12 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
       eventSubtype: null,
       hasParentToolUseId: false,
     })
-    const { nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
+    const { runtimeSessionLeases } = tablesOf(h.db)
     expect(
       (
-        await h.db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, nodeRunId))
+        await readNodeRunFixtures(h.db, { id: nodeRunId }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: null })
     expect(
@@ -377,7 +374,7 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
     expect(result.sessionId).toBe('claude-after-reset')
     expect(result.outputs.summary).toBe('kept')
 
-    const { nodeRunEvents, nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
+    const { nodeRunEvents, runtimeSessionLeases } = tablesOf(h.db)
     const rows = await h.db
       .select()
       .from(nodeRunEvents)
@@ -398,10 +395,9 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
 
     expect(
       (
-        await h.db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, nodeRunId))
+        await readNodeRunFixtures(h.db, { id: nodeRunId }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: 'claude-after-reset' })
     expect(
@@ -450,13 +446,12 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
       'runtime ended before reporting the replacement native session id',
     )
     expect(result.sessionId).toBeUndefined()
-    const { nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
+    const { runtimeSessionLeases } = tablesOf(h.db)
     expect(
       (
-        await h.db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, nodeRunId))
+        await readNodeRunFixtures(h.db, { id: nodeRunId }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: null })
     expect(

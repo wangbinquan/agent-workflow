@@ -19,11 +19,17 @@
 // scheduler-clarify-dispatch.test.ts（createInMemoryDb + fixtures/mock-opencode.ts +
 // 临时真实 git 仓）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -49,6 +55,12 @@ let seq = 0
 function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -76,14 +88,14 @@ function def(nodes: Array<{ id: string; kind: NodeKind }>): {
 const ups = (m: Record<string, string[]>): Map<string, string[]> => new Map(Object.entries(m))
 
 describe('RFC-092 纯函数层 — 行 id 一次性豁免的有界退化', () => {
-  test('pending 行 id ∈ dispatchedPendingRowIds → 不 ready、不入任何桶（有界退化 = 回到 stall 语义）', () => {
+  test('pending 行 id ∈ dispatchedPendingRowIds → 不 ready、不入任何桶（有界退化 = 回到 stall 语义）', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'd', kind: 'agent-single' },
     ])
     const leaked = row('d', 'pending') // 派发过但未被消费的泄漏行
     const rows = [row('in', 'done'), leaked]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -106,7 +118,7 @@ describe('RFC-092 纯函数层 — 行 id 一次性豁免的有界退化', () =>
     expect(f.allSettled).toBe(false)
   })
 
-  test('同 rows 追加新 id 的 pending 行（out-of-band 新铸）→ 重新放行 ready 且 anchor 指向新行', () => {
+  test('同 rows 追加新 id 的 pending 行（out-of-band 新铸）→ 重新放行 ready 且 anchor 指向新行', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'd', kind: 'agent-single' },
@@ -114,7 +126,7 @@ describe('RFC-092 纯函数层 — 行 id 一次性豁免的有界退化', () =>
     const leaked = row('d', 'pending')
     const fresh = row('d', 'pending') // 新铸行：新 ULID（更晚 id ⇒ latest）
     const rows = [row('in', 'done'), leaked, fresh]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -196,13 +208,12 @@ function makeDef(agentName: string, agentId: string): WorkflowDefinition {
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -245,8 +256,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
     // `agent-not-found` 早期 return，预铸的 pending 行永远不被消费（泄漏行）。
     const taskId = await seedWorkflowAndTask(h, makeDef('ghost', 'ghost-agent-id'))
     const preMintedId = ulid()
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: preMintedId,
       taskId,
       nodeId: 'd',
@@ -266,13 +276,13 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(taskRow.status).toBe('failed')
     expect(taskRow.errorMessage ?? '').toContain('agent-not-found')
 
     // 行数上界：≤ 预铸 1 + 重派可能铸的 1（agent-not-found 早期 return 实际不铸行，
     // 现状恰为 1）。任何「失败路径开始铸行 / 无界铸行」的回归都会顶穿这个上界。
-    const dRows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+    const dRows = (await readNodeRunFixtures(h.db, { taskId })).filter(
       (r) => r.nodeId === 'd' && r.parentNodeRunId === null,
     )
     expect(dRows.length).toBeLessThanOrEqual(2)
@@ -284,8 +294,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
 
   test('对照：agent 存在时预铸 pending 行被恰好消费一次（pendingExisting 复用）→ 任务 done、零额外铸行', async () => {
     const designerId = ulid()
-    const { agents, nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, agents, {
+    await agentFixture(h.db, {
       id: designerId,
       name: 'designer',
       description: 'test',
@@ -297,7 +306,7 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
     })
     const taskId = await seedWorkflowAndTask(h, makeDef('designer', designerId))
     const preMintedId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: preMintedId,
       taskId,
       nodeId: 'd',
@@ -315,9 +324,9 @@ describe('RFC-092 集成层 — 泄漏 pending 行在真实 runTask 下有界终
       }),
     )
 
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(taskRow.status).toBe('done')
-    const dRows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+    const dRows = (await readNodeRunFixtures(h.db, { taskId })).filter(
       (r) => r.nodeId === 'd' && r.parentNodeRunId === null,
     )
     // 预铸行被 runOneNode 的 pendingExisting 复用：同一行跑到 done，不重复铸行。

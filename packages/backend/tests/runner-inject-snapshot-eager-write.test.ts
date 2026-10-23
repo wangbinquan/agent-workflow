@@ -18,8 +18,15 @@
 // `runner-inject-snapshot-eager-write-source.test.ts` separately locks that
 // the UPDATE statement physically precedes the final UPDATE in source order.
 
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent, TaskWsMessage } from '@agent-workflow/shared'
@@ -32,7 +39,7 @@ const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous t
 import { runNode } from './helpers/runner'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskExecutionPersistence } from '../src/modules/task-execution/application/ports/taskExecutionPersistence'
-import { TASK_CHANNEL, resetBroadcastersForTests, taskBroadcaster } from '../src/ws/broadcaster'
+import { TASK_CHANNEL, resetBroadcastersForTests, taskBroadcaster } from '../src/ws/broadcaster' // RFC-074 PR-C: monotonic ids for synchronous test seeding (pure-id freshness)
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -71,15 +78,14 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -104,11 +110,10 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 async function insertNodeRun(
   db: PersistenceDb,
   taskId: string,
-  overrides: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  overrides: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n1',
@@ -155,7 +160,7 @@ describeEachProvider(
     })
 
     test('E1: normal path — eager broadcast fires once and column ends populated', async () => {
-      const { memories, nodeRuns } = tablesOf(h.db)
+      const { memories } = tablesOf(h.db)
       await insertOne(h.db, memories, {
         id: 'mem_g1',
         scopeType: 'global',
@@ -201,7 +206,9 @@ describeEachProvider(
       )
       expect(runningEvents.length).toBeGreaterThanOrEqual(1)
       // Final column also persisted.
-      const rows = await h.db.select({ json: nodeRuns.injectedMemoriesJson }).from(nodeRuns)
+      const rows = await readNodeRunFixtures(h.db).then((rows) =>
+        rows.map((row) => ({ json: row.injectedMemories })),
+      )
       const target = rows.find(() => true) // single row in this harness
       expect(target?.json).not.toBeNull()
       const parsed = JSON.parse(target!.json!)
@@ -238,8 +245,9 @@ describeEachProvider(
       // RFC-036's throttled re-ping inside stdoutPump may fire alongside the
       // eager broadcast; assert "at least once" instead of "exactly once".
       expect(runningEvents.length).toBeGreaterThanOrEqual(1)
-      const { nodeRuns } = tablesOf(h.db)
-      const rows = await h.db.select({ json: nodeRuns.injectedMemoriesJson }).from(nodeRuns)
+      const rows = await readNodeRunFixtures(h.db).then((rows) =>
+        rows.map((row) => ({ json: row.injectedMemories })),
+      )
       expect(rows[0]?.json).toBeNull()
     })
 
@@ -265,7 +273,7 @@ describeEachProvider(
         nodeId: 'agent-x',
         retryIndex: 0,
         status: 'failed',
-        injectedMemoriesJson: attempt0Json,
+        injectedMemories: attempt0Json,
         opencodeSessionId: 'sess_resume',
       })
       const followupId = await insertNodeRun(h.db, h.taskId, {
@@ -304,10 +312,9 @@ describeEachProvider(
       )
       // See E1's note — RFC-036 throttled re-ping may fire too.
       expect(runningEvents.length).toBeGreaterThanOrEqual(1)
-      const { nodeRuns } = tablesOf(h.db)
-      const rows = await h.db
-        .select({ id: nodeRuns.id, json: nodeRuns.injectedMemoriesJson })
-        .from(nodeRuns)
+      const rows = await readNodeRunFixtures(h.db).then((rows) =>
+        rows.map((row) => ({ id: row.id, json: row.injectedMemories })),
+      )
       const followup = rows.find((r) => r.id === followupId)
       expect(followup?.json).not.toBeNull()
       const parsed = JSON.parse(followup!.json!)
@@ -316,7 +323,7 @@ describeEachProvider(
     })
 
     test('E4: eager-write SQL throws — run survives, final UPDATE persists snapshot', async () => {
-      const { memories, nodeRuns } = tablesOf(h.db)
+      const { memories } = tablesOf(h.db)
       await insertOne(h.db, memories, {
         id: 'mem_g_e4',
         scopeType: 'global',
@@ -341,8 +348,16 @@ describeEachProvider(
       const realPersistence = createTaskExecutionPersistence(h.db)
       let eagerWriteIntercepted = false
       const patch: TaskExecutionPersistence['nodeExecution']['patch'] = async (request) => {
-        const keys = Object.keys(request.values ?? {})
-        if (!eagerWriteIntercepted && keys.length === 1 && keys[0] === 'injectedMemoriesJson') {
+        // RFC-395 II-a: the same eager write is now the configuration group.
+        const groups = Object.keys(request.values ?? {})
+        const keys = Object.keys(request.values?.config ?? {})
+        if (
+          !eagerWriteIntercepted &&
+          groups.length === 1 &&
+          groups[0] === 'config' &&
+          keys.length === 1 &&
+          keys[0] === 'injectedMemoriesJson'
+        ) {
           eagerWriteIntercepted = true
           throw new Error('e4-eager-write-forced-failure')
         }
@@ -398,7 +413,9 @@ describeEachProvider(
       expect(runningEvents.length).toBeLessThanOrEqual(2)
       // Final UPDATE still landed — column visible to the UI at end-of-run
       // (i.e. legacy RFC-046 behavior).
-      const rows = await h.db.select({ json: nodeRuns.injectedMemoriesJson }).from(nodeRuns)
+      const rows = await readNodeRunFixtures(h.db).then((rows) =>
+        rows.map((row) => ({ json: row.injectedMemories })),
+      )
       expect(rows[0]?.json).not.toBeNull()
       const parsed = JSON.parse(rows[0]!.json!)
       expect(parsed[0].id).toBe('mem_g_e4')

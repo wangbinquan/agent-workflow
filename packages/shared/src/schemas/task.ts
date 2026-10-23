@@ -701,6 +701,22 @@ export const TaskListItemSchema = TaskSummarySchema.extend({
 }).strict()
 export type TaskListItem = z.infer<typeof TaskListItemSchema>
 
+/** Stable compatibility namespaces for generated task definitions; these are not catalog resources. */
+export const TASK_DEFINITION_HOSTS = {
+  agent: { id: '00000000000000AGENTHOST00', name: '__agent_host__' },
+  workgroup: { id: '00000000000000WORKGROUP00', name: '__workgroup_host__' },
+  'digital-employee': { id: '00000000000000DIGEMPHOST0', name: '__digital_employee_host__' },
+  'code-round': { id: '00000000000000CODEROUND00', name: '__code_round_host__' },
+} as const
+
+export const TASK_DEFINITION_HOST_IDS: readonly string[] = Object.values(TASK_DEFINITION_HOSTS).map(
+  (host) => host.id,
+)
+
+export function isTaskDefinitionHostId(id: string): boolean {
+  return TASK_DEFINITION_HOST_IDS.includes(id)
+}
+
 /**
  * RFC-165: single derivation point for a task's execution subject. Route
  * guards, list badges, "launch again" deep links and the sync-workflow guard
@@ -711,7 +727,8 @@ export function taskExecutionKind(t: {
   workgroupId?: string | null
   sourceAgentName?: string | null
   codeRoundId?: string | null
-}): 'code-round' | 'workgroup' | 'agent' | 'workflow' {
+  workflowId?: string | null
+}): 'code-round' | 'workgroup' | 'agent' | 'digital-employee' | 'workflow' {
   // RFC-304: checked FIRST because it is the most specific claim a row can
   // make. A code-round task also carries a synthesized workflow snapshot, so
   // falling through to the `workflow` default would misread it as an ordinary
@@ -721,6 +738,7 @@ export function taskExecutionKind(t: {
   if (t.codeRoundId != null && t.codeRoundId !== '') return 'code-round'
   if (t.workgroupId != null && t.workgroupId !== '') return 'workgroup'
   if (t.sourceAgentName != null && t.sourceAgentName !== '') return 'agent'
+  if (t.workflowId === TASK_DEFINITION_HOSTS['digital-employee'].id) return 'digital-employee'
   return 'workflow'
 }
 
@@ -737,182 +755,191 @@ export function isWorkgroupTask(t: { workgroupId?: string | null }): boolean {
  * launcher behavior); in URL mode the optional `ref` is used instead (falls
  * back to the cached repo's default branch on the server).
  */
-export const StartTaskSchema = z
-  .object({
-    workflowId: z.string().min(1),
-    /**
-     * RFC-037: user-supplied display name. Required, trimmed, 1..255 chars.
-     * Empty / whitespace-only / overlong → 422. No server fallback.
-     */
-    name: TaskNameSchema,
-    /**
-     * RFC-165: temporary-space launch. When true the task gets a fresh
-     * `git init` scratch repo (empty root commit) as its workspace — no
-     * source repo. Mutually exclusive with every repo-source field AND with
-     * `workingBranch` / `autoCommitPush` (no remote to push to); enforced in
-     * superRefine.
-     */
-    scratch: z.boolean().optional(),
-    /** RFC-024: remote Git URL (SSH / HTTP(S) / file://). Triggers clone-or-reuse. */
-    repoUrl: z.string().min(1).optional(),
-    /** RFC-204: legacy single-repo counterpart of `repos[].cachedRepoId`. XOR with `repoUrl`. */
-    cachedRepoId: z.string().min(1).optional(),
-    /** RFC-024: branch / tag / commit to check out from the cached repo. Optional. */
-    ref: z.string().min(1).optional(),
-    inputs: z.record(z.string(), z.string()).default({}),
-    /** Per-task overrides (settings defaults apply when omitted). */
-    maxDurationMs: z.number().int().nonnegative().optional(),
-    maxTotalTokens: z.number().int().nonnegative().optional(),
-    /**
-     * RFC-175 (§2c): immediate-submit-only OCC guard. When present, `startTask`
-     * rejects (409 `workflow-version-mismatch`) if the workflow it snapshots has
-     * a different `workflows.version` — so a relaunch that normalized inputs
-     * against version N can't silently store them into a concurrently-PUT N+1.
-     * NEVER persisted into a scheduled task (§2d: added as an immediate-POST
-     * overlay, not via buildLaunchBody; the scheduled payload schema rejects it).
-     */
-    expectedWorkflowVersion: z.number().int().optional(),
-    /**
-     * RFC-036 / RFC-099 — initial task users besides the launcher (the
-     * launcher is recorded as owner automatically). RFC-099 removed the
-     * per-node `assignments` field — POST /api/tasks now rejects payloads
-     * still carrying it with 422 `assignments-removed`.
-     */
-    collaboratorUserIds: z.array(z.string().min(1)).optional(),
-    gitUserName: ClientOwnedGitIdentityFieldSchema.optional(),
-    gitUserEmail: ClientOwnedGitIdentityFieldSchema.optional(),
-    /**
-     * RFC-248: 用一个仓库组作为执行空间。与 `scratch` / 单仓字段 / `sourceTaskId`
-     * 互斥。服务端展平该组（深度 ≤ 5、展平 ≤ 32）后按布局物化。
-     *
-     * 这是**唯一**的多仓入口——RFC-066 的 `repos[]` 已在 T32 退役（顶层 `repos`
-     * 进 `RETIRED_START_TASK_KEYS`，422 硬拒，不做静默剥除）。
-     */
-    repoGroupId: z.string().min(1).optional(),
+const StartTaskFieldsSchema = z.object({
+  workflowId: z.string().min(1),
+  /**
+   * RFC-037: user-supplied display name. Required, trimmed, 1..255 chars.
+   * Empty / whitespace-only / overlong → 422. No server fallback.
+   */
+  name: TaskNameSchema,
+  /**
+   * RFC-165: temporary-space launch. When true the task gets a fresh
+   * `git init` scratch repo (empty root commit) as its workspace — no
+   * source repo. Mutually exclusive with every repo-source field AND with
+   * `workingBranch` / `autoCommitPush` (no remote to push to); enforced in
+   * superRefine.
+   */
+  scratch: z.boolean().optional(),
+  /** RFC-024: remote Git URL (SSH / HTTP(S) / file://). Triggers clone-or-reuse. */
+  repoUrl: z.string().min(1).optional(),
+  /** RFC-204: legacy single-repo counterpart of `repos[].cachedRepoId`. XOR with `repoUrl`. */
+  cachedRepoId: z.string().min(1).optional(),
+  /** RFC-024: branch / tag / commit to check out from the cached repo. Optional. */
+  ref: z.string().min(1).optional(),
+  inputs: z.record(z.string(), z.string()).default({}),
+  /** Per-task overrides (settings defaults apply when omitted). */
+  maxDurationMs: z.number().int().nonnegative().optional(),
+  maxTotalTokens: z.number().int().nonnegative().optional(),
+  /**
+   * RFC-175 (§2c): immediate-submit-only OCC guard. When present, `startTask`
+   * rejects (409 `workflow-version-mismatch`) if the workflow it snapshots has
+   * a different `workflows.version` — so a relaunch that normalized inputs
+   * against version N can't silently store them into a concurrently-PUT N+1.
+   * NEVER persisted into a scheduled task (§2d: added as an immediate-POST
+   * overlay, not via buildLaunchBody; the scheduled payload schema rejects it).
+   */
+  expectedWorkflowVersion: z.number().int().optional(),
+  /**
+   * RFC-036 / RFC-099 — initial task users besides the launcher (the
+   * launcher is recorded as owner automatically). RFC-099 removed the
+   * per-node `assignments` field — POST /api/tasks now rejects payloads
+   * still carrying it with 422 `assignments-removed`.
+   */
+  collaboratorUserIds: z.array(z.string().min(1)).optional(),
+  gitUserName: ClientOwnedGitIdentityFieldSchema.optional(),
+  gitUserEmail: ClientOwnedGitIdentityFieldSchema.optional(),
+  /**
+   * RFC-248: 用一个仓库组作为执行空间。与 `scratch` / 单仓字段 / `sourceTaskId`
+   * 互斥。服务端展平该组（深度 ≤ 5、展平 ≤ 32）后按布局物化。
+   *
+   * 这是**唯一**的多仓入口——RFC-066 的 `repos[]` 已在 T32 退役（顶层 `repos`
+   * 进 `RETIRED_START_TASK_KEYS`，422 硬拒，不做静默剥除）。
+   */
+  repoGroupId: z.string().min(1).optional(),
 
-    /**
-     * RFC-248（设计门二轮 H9）——**重启**：按另一个任务**冻结的**仓库快照
-     * （`task_repos` 的 mount_path / subdir / readonly / cached_repo_id / ref）
-     * 重建执行空间，**不读当前的组定义**。
-     *
-     * 为什么不复用 `repoGroupId` 重启：组是可变的、也可能已被删除。用当前组
-     * 重启会静默换掉布局（甚至直接 404），而重启的语义是「再跑一次刚才那个」。
-     * 与 `scratch` / 单仓字段 / `repoGroupId` 互斥。
-     */
-    sourceTaskId: z.string().min(1).optional(),
-    /**
-     * RFC-075 — optional working branch name. Applies to every repo in a
-     * multi-repo task. When set, the worktree is checked out on this branch
-     * (replacing the default `agent-workflow/{taskId}`), branched off the
-     * remote-latest base; an existing branch is reused + base merged in.
-     * Omitted → legacy isolation branch, byte-for-byte unchanged.
-     */
-    workingBranch: z.string().min(1).max(WORKING_BRANCH_MAX).optional(),
-    /**
-     * RFC-075 — when true, after each writer agent emits its final output the
-     * framework commits all changes (LLM-summarized message) and pushes to
-     * the working branch (or the isolation branch when no working branch was
-     * set). Default false → no commit/push, legacy behavior.
-     */
-    autoCommitPush: z.boolean().optional(),
-  })
-  .superRefine((value, ctx) => {
-    const hasLegacyUrl = typeof value.repoUrl === 'string' && value.repoUrl.length > 0
-    // RFC-204: the legacy single-repo source can now also be a cached-mirror id.
-    const hasLegacyCachedId =
-      typeof value.cachedRepoId === 'string' && value.cachedRepoId.length > 0
-    const hasLegacy = hasLegacyUrl || hasLegacyCachedId
-    // RFC-248: 多仓改由 repoGroupId 表达（`repos[]` 已退役并进硬拒清单）。
-    const hasGroup = typeof value.repoGroupId === 'string' && value.repoGroupId.length > 0
-    // RFC-248 H9: 重启按冻结快照重放，也是一种「空间来源」。
-    const hasSourceTask = typeof value.sourceTaskId === 'string' && value.sourceTaskId.length > 0
-    const hasRepos = hasGroup || hasSourceTask
+  /**
+   * RFC-248（设计门二轮 H9）——**重启**：按另一个任务**冻结的**仓库快照
+   * （`task_repos` 的 mount_path / subdir / readonly / cached_repo_id / ref）
+   * 重建执行空间，**不读当前的组定义**。
+   *
+   * 为什么不复用 `repoGroupId` 重启：组是可变的、也可能已被删除。用当前组
+   * 重启会静默换掉布局（甚至直接 404），而重启的语义是「再跑一次刚才那个」。
+   * 与 `scratch` / 单仓字段 / `repoGroupId` 互斥。
+   */
+  sourceTaskId: z.string().min(1).optional(),
+  /**
+   * RFC-075 — optional working branch name. Applies to every repo in a
+   * multi-repo task. When set, the worktree is checked out on this branch
+   * (replacing the default `agent-workflow/{taskId}`), branched off the
+   * remote-latest base; an existing branch is reused + base merged in.
+   * Omitted → legacy isolation branch, byte-for-byte unchanged.
+   */
+  workingBranch: z.string().min(1).max(WORKING_BRANCH_MAX).optional(),
+  /**
+   * RFC-075 — when true, after each writer agent emits its final output the
+   * framework commits all changes (LLM-summarized message) and pushes to
+   * the working branch (or the isolation branch when no working branch was
+   * set). Default false → no commit/push, legacy behavior.
+   */
+  autoCommitPush: z.boolean().optional(),
+})
 
-    // RFC-204: same url ⊕ id + query-credential rules the repos[] entries get.
-    // requireSource:false — "at least one source" is decided below vs scratch/group.
-    refineRepoSourceFields(value, ctx, { requireSource: false })
+const refineTaskStartOptions = (
+  value: Omit<z.infer<typeof StartTaskFieldsSchema>, 'workflowId'>,
+  ctx: z.RefinementCtx,
+) => {
+  const hasLegacyUrl = typeof value.repoUrl === 'string' && value.repoUrl.length > 0
+  // RFC-204: the legacy single-repo source can now also be a cached-mirror id.
+  const hasLegacyCachedId = typeof value.cachedRepoId === 'string' && value.cachedRepoId.length > 0
+  const hasLegacy = hasLegacyUrl || hasLegacyCachedId
+  // RFC-248: 多仓改由 repoGroupId 表达（`repos[]` 已退役并进硬拒清单）。
+  const hasGroup = typeof value.repoGroupId === 'string' && value.repoGroupId.length > 0
+  // RFC-248 H9: 重启按冻结快照重放，也是一种「空间来源」。
+  const hasSourceTask = typeof value.sourceTaskId === 'string' && value.sourceTaskId.length > 0
+  const hasRepos = hasGroup || hasSourceTask
 
-    // RFC-165: scratch ⊕ every repo source. A scratch task has no source repo,
-    // no ref, no remote — so workingBranch / autoCommitPush are meaningless
-    // and rejected too (schema layer of the two-layer ban; UI hides them).
-    if (value.scratch === true) {
-      if (hasLegacy || hasRepos || (typeof value.ref === 'string' && value.ref.length > 0)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'scratch-source-conflict',
-          path: ['scratch'],
-        })
-        return
-      }
-      if (value.workingBranch !== undefined || value.autoCommitPush !== undefined) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'scratch-remote-only-option',
-          path: [value.workingBranch !== undefined ? 'workingBranch' : 'autoCommitPush'],
-        })
-        return
-      }
-      return // scratch body is complete — repo-source rules below don't apply.
-    }
+  // RFC-204: same url ⊕ id + query-credential rules the repos[] entries get.
+  // requireSource:false — "at least one source" is decided below vs scratch/group.
+  refineRepoSourceFields(value, ctx, { requireSource: false })
 
-    // RFC-248（实现门 P2）：组 / 冻结快照来源下，顶层 `ref` 是**无效**的——
-    // 每个成员的 ref 来自组定义或冻结快照，materialize 用的是那些，顶层这个会
-    // 被**静默忽略**。API 调用方以为自己换了分支，实际跑在别的 ref 上；显式拒
-    // 比静默忽略好。
-    if (hasRepos && typeof value.ref === 'string' && value.ref.length > 0) {
+  // RFC-165: scratch ⊕ every repo source. A scratch task has no source repo,
+  // no ref, no remote — so workingBranch / autoCommitPush are meaningless
+  // and rejected too (schema layer of the two-layer ban; UI hides them).
+  if (value.scratch === true) {
+    if (hasLegacy || hasRepos || (typeof value.ref === 'string' && value.ref.length > 0)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'start-task-ref-not-applicable',
-        path: ['ref'],
+        message: 'scratch-source-conflict',
+        path: ['scratch'],
       })
       return
     }
-
-    // RFC-248 H9: 组 ↔ 冻结快照互斥——两者都给无法判断该用哪个布局。
-    if (hasGroup && hasSourceTask) {
+    if (value.workingBranch !== undefined || value.autoCommitPush !== undefined) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'start-task-source-conflict',
-        path: ['sourceTaskId'],
+        message: 'scratch-remote-only-option',
+        path: [value.workingBranch !== undefined ? 'workingBranch' : 'autoCommitPush'],
       })
       return
     }
+    return // scratch body is complete — repo-source rules below don't apply.
+  }
 
-    // RFC-248: 单仓 ↔ 仓库组互斥。给了两个 → 拒（调用方必须挑一个）。
-    if (hasLegacy && hasRepos) {
+  // RFC-248（实现门 P2）：组 / 冻结快照来源下，顶层 `ref` 是**无效**的——
+  // 每个成员的 ref 来自组定义或冻结快照，materialize 用的是那些，顶层这个会
+  // 被**静默忽略**。API 调用方以为自己换了分支，实际跑在别的 ref 上；显式拒
+  // 比静默忽略好。
+  if (hasRepos && typeof value.ref === 'string' && value.ref.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'start-task-ref-not-applicable',
+      path: ['ref'],
+    })
+    return
+  }
+
+  // RFC-248 H9: 组 ↔ 冻结快照互斥——两者都给无法判断该用哪个布局。
+  if (hasGroup && hasSourceTask) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'start-task-source-conflict',
+      path: ['sourceTaskId'],
+    })
+    return
+  }
+
+  // RFC-248: 单仓 ↔ 仓库组互斥。给了两个 → 拒（调用方必须挑一个）。
+  if (hasLegacy && hasRepos) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'start-task-source-conflict',
+      path: ['repoGroupId'],
+    })
+    return
+  }
+
+  // RFC-165/248: 三态之一必须给——scratch / 单仓 / 仓库组。
+  if (!hasLegacy && !hasRepos) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'start-task-source-required',
+      path: ['repoGroupId'],
+    })
+    return
+  }
+
+  // RFC-075: loose working-branch format check. Authoritative validation is
+  // `git check-ref-format --branch` at materialize time; this catches the
+  // obvious illegal shapes (whitespace, `..`, leading/trailing `/`, etc.)
+  // before we even spawn git.
+  if (typeof value.workingBranch === 'string') {
+    const wb = value.workingBranch.trim()
+    if (wb.length === 0 || !isLooseValidBranchName(wb)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'start-task-source-conflict',
-        path: ['repoGroupId'],
+        message: 'working-branch-invalid',
+        path: ['workingBranch'],
       })
-      return
     }
+  }
+}
 
-    // RFC-165/248: 三态之一必须给——scratch / 单仓 / 仓库组。
-    if (!hasLegacy && !hasRepos) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'start-task-source-required',
-        path: ['repoGroupId'],
-      })
-      return
-    }
-
-    // RFC-075: loose working-branch format check. Authoritative validation is
-    // `git check-ref-format --branch` at materialize time; this catches the
-    // obvious illegal shapes (whitespace, `..`, leading/trailing `/`, etc.)
-    // before we even spawn git.
-    if (typeof value.workingBranch === 'string') {
-      const wb = value.workingBranch.trim()
-      if (wb.length === 0 || !isLooseValidBranchName(wb)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'working-branch-invalid',
-          path: ['workingBranch'],
-        })
-      }
-    }
-  })
+export const StartTaskSchema = StartTaskFieldsSchema.superRefine(refineTaskStartOptions)
+/** Execution-internal options; the subject is supplied separately by the launch port. */
+export const TaskStartOptionsSchema = StartTaskFieldsSchema.omit({ workflowId: true }).superRefine(
+  refineTaskStartOptions,
+)
+export type TaskStartOptions = z.infer<typeof TaskStartOptionsSchema>
 export type StartTask = z.infer<typeof StartTaskSchema>
 
 /**

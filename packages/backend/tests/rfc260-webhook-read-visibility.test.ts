@@ -4,6 +4,7 @@
 // session 响应里**——非 admin 与一切 PAT（含 admin 自己的 PAT）拿 null + 尾 4
 // 位 hint；写动作对非 admin 一律 403（方法门）；触发器全量只读（D1 推翻
 // owner-404 读语义）；投递列表+详情（含 body）全员可读、replay 仍 admin。
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -58,10 +59,8 @@ async function harness(scope: ProviderHttpApplicationScope) {
 
   const {
     webhookEndpoints,
-    workflows,
     webhookTriggers,
     webhookDeliveries,
-    tasks,
     webhookMrControlEffects,
     webhookMrControlTargets,
   } = tablesOf(db)
@@ -77,7 +76,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
   })
   const workflowId = ulid()
   const managerWorkflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -88,7 +87,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: managerWorkflowId,
     name: 'manager-wf',
     description: '',
@@ -136,7 +135,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     ['task-visible', user.id],
     ['task-hidden', admin.id],
   ] as const) {
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id,
       name: id,
       workflowId,

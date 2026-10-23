@@ -11,9 +11,8 @@
 //
 // 判据：通知归 composition 所有（谁调用都发），且调用方自己的 `afterCommit` 不被吞掉。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readAgentFixtures } from './helpers/model'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -91,8 +90,7 @@ describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
         ownerUserId: admin.user.id,
       },
     )
-    const { agents } = tablesOf(db)
-    const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
+    const row = (await readAgentFixtures(db, { id: agent.id }, { limit: 1 }))[0]!
     await updateResourceAcl(db, admin, 'agent', row, {
       visibility: 'private',
       grants: [{ userId: bobId, level: 'read' }],
@@ -112,8 +110,7 @@ describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
         ownerUserId: admin.user.id,
       },
     )
-    const { agents } = tablesOf(db)
-    const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
+    const row = (await readAgentFixtures(db, { id: agent.id }, { limit: 1 }))[0]!
     let ownEffect = 0
     await updateResourceAcl(
       db,
@@ -139,8 +136,7 @@ describeEachProvider('RFC-345 resource ACL revalidation', (harness) => {
         ownerUserId: admin.user.id,
       },
     )
-    const { agents } = tablesOf(db)
-    const row = (await db.select().from(agents).where(eq(agents.id, agent.id)).limit(1))[0]!
+    const row = (await readAgentFixtures(db, { id: agent.id }, { limit: 1 }))[0]!
     let ownEffect = 0
     await composeOwnedResourceAclEndpoints(composeResourceCatalogFor({ db })).updateResourceAcl(
       admin,

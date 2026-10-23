@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-314 D3 —— 事件落库按 chunk 合并。
@@ -131,13 +131,12 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc314-fixture',
     workflowId,
@@ -161,8 +160,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'node1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'node1', status: 'pending' })
   return id
 }
 

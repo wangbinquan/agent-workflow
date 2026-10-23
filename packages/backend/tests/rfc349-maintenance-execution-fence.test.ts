@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
-import { createMaintenanceExecutionFence } from '@/platform/persistence/maintenanceExecutionFence'
+import { createMaintenanceExecutionFence } from '@/modules/task-execution/infrastructure/maintenanceExecutionFence'
 import { recordStatements } from './helpers/statementRecorder'
 
 describe('RFC-349 maintenance execution fence', () => {

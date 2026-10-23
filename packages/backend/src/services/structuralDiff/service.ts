@@ -376,7 +376,7 @@ async function getNodeStructuralDiff(
     let hadError = false
     const nodeLabels = canonicalRepoKeys(task.repos)
     for (const [repoIdx, repo] of task.repos.entries()) {
-      const res = resolveNodeScope(perRepoNodeRuns([...rows], repo.worktreeDirName), nodeRunId)
+      const res = resolveNodeScope(perRepoNodeRuns([...rows], repo.mountPath), nodeRunId)
       if (res.kind !== 'between' && res.kind !== 'to-worktree') continue // node didn't write this repo
       hadSnapshot = true
       const content = reads.content.bind(repo.worktreePath)
@@ -441,7 +441,7 @@ async function getNodeStructuralDiff(
     return getWrapperStructuralDiff(reads, task, nodeRunId, deepOpts)
   }
 
-  const res = resolveNodeScope([...rows], nodeRunId)
+  const res = resolveNodeScope(perRepoNodeRuns(rows, ''), nodeRunId)
   if (res.kind === 'not-found') {
     throw new NotFoundError(
       'node-run-not-found',

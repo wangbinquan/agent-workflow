@@ -2,6 +2,7 @@
 // RFC-268 T5 — 走 webhook dispatcher 的真实 startExecution 收口，证明三种目标
 // 都落成 RFC-165 scratch task：main 空根提交、空 tree、无 remote。这里不注入
 // launch fake；若 dispatcher 只“长得像” scratch 而未接进物化层，本测试会红。
+import { readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -223,7 +224,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     })
     await dispatcher.dispatch({ deliveryId, endpoint, event })
 
-    const launched = await db.select().from(tasks)
+    const launched = await readTaskFixtures(db)
     expect(launched).toHaveLength(3)
     expect(new Set(launched.map((task) => task.webhookTriggerId))).toEqual(
       new Set(triggerRows.map((row) => row.id)),
@@ -259,7 +260,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     }
     // workgroup 会异步进入首轮；测试收尾前显式取消，避免 finally 删除目录时让
     // 后台 runner 把清理竞态误报成 workspace-missing。
-    for (const task of await db.select().from(tasks)) {
+    for (const task of await readTaskFixtures(db)) {
       if (isTerminalTaskStatus(task.status)) continue
       try {
         await cancelViaEngine(db, task.id)

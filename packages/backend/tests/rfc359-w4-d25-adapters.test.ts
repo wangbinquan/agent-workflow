@@ -10,7 +10,7 @@
 // 正典取合一前的 SQLite 语义：门操作先消费、任务再跃迁、提交后才发事件；停靠成功后 clarify round 与
 // question 行一次落定，操作行走到 completed。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { expect, test } from 'bun:test'
@@ -29,10 +29,9 @@ const NOW = 1_788_969_900_000
 
 async function seedRunningTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  await workflowFixture(db, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'd25 park task',
     workflowId,
@@ -46,7 +45,7 @@ async function seedRunningTask(db: PersistenceDb): Promise<string> {
     startedAt: NOW - 1_000,
     lifecycleEventRevision: 1,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: `${taskId}-asking`,
     taskId,
     nodeId: 'writer',
@@ -162,7 +161,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const opening = await prepareClarifyGate(db, taskId)
     const { tasks, collaborationGateOperations, clarifyRounds } = tablesOf(db)
     // 别人先把任务推进了一格，prepared 门上记的 expectedTaskRevision 随之陈旧。
-    await db.update(tasks).set({ lifecycleEventRevision: 7 }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { lifecycleEventRevision: 7 })
 
     let failed = false
     try {

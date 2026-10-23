@@ -1,8 +1,12 @@
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // P-4-09: worktree GC scan.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -40,7 +44,7 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 
 async function seedDoneTask(
   h: Harness,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  overrides: Partial<TaskFixtureSpec> = {},
 ): Promise<{ taskId: string; worktreePath: string }> {
   const workflowId = ulid()
   const taskId = ulid()
@@ -50,15 +54,14 @@ async function seedDoneTask(
     taskId,
     appHome: h.appHome,
   })
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -127,9 +130,8 @@ describeEachProvider('runWorktreeGc', (harness) => {
     expect(r.removed).toBe(0)
     expect(r.skipped).toBe(1)
     expect(existsSync(worktreePath)).toBe(true)
-    const { tasks } = tablesOf(h.db)
     // task row not deleted either
-    const [t] = await h.db.select().from(tasks)
+    const [t] = await readTaskFixtures(h.db)
     expect(t?.id).toBe(taskId)
   })
 })

@@ -7,7 +7,7 @@ import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
 } from '../../src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '../../src/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '../../src/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createResourcePackageReadPort } from '../../src/modules/resource-catalog/infrastructure/packageResourceRows'
 import { readPackageSkillTree } from '../../src/modules/resource-catalog/infrastructure/packageSkillTree'
 import { createPostgresqlResourcePackageExecutionAdapter } from '../../src/services/resourcePackage/executionAdapter'
@@ -56,7 +56,7 @@ export function composeSqliteResourcePackageCatalogForTest(input: {
     execution: createPostgresqlResourcePackageExecutionAdapter({
       box: input.box,
       provider,
-      atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({
+      atomicApply: createResourcePackageAtomicApplyOperations({
         db: input.db,
         box: input.box,
       }),

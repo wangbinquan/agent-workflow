@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { spawnSync } from 'node:child_process'
@@ -255,8 +255,7 @@ test('native content adapter retains default directory operands and compound ide
 
 async function seed(db: PersistenceDb, taskId: string, parentTaskId?: string): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf_' + taskId,
     name: 'rfc370-task-delete',
     description: '',
@@ -264,7 +263,7 @@ async function seed(db: PersistenceDb, taskId: string, parentTaskId?: string): P
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'wf_' + taskId,
@@ -291,8 +290,10 @@ async function claimState(db: PersistenceDb, claimId: string) {
   )[0]?.state
 }
 async function exists(db: PersistenceDb, taskId: string) {
-  const { tasks } = tablesOf(db)
-  return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length > 0
+  return (
+    (await readTaskFixtures(db, { id: taskId }).then((rows) => rows.map((row) => ({ id: row.id }))))
+      .length > 0
+  )
 }
 const activity = Object.freeze({ isActive: () => false, awaitReleasedSettled: async () => {} })
 

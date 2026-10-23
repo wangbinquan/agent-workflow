@@ -7,7 +7,12 @@
 // task row is created. When passed, launchTestTask must NOT shell out to git;
 // when omitted, behavior is identical to the pre-RFC-020 path.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  patchWorkflowFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import {
   beforeAll,
   afterEach,
@@ -23,7 +28,6 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
-import { eq } from 'drizzle-orm'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
@@ -263,8 +267,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
 
   test('RFC-292: manual launch rejects trigger-dependent workflow before repo materialization and task INSERT', async () => {
     const { appHome, db, stubOpencode, wf } = await setup()
-    const { workflows, tasks } = tablesOf(db)
-    const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]!
+    const row = (await readWorkflowFixtures(db, { id: wf.id }))[0]!
     const definition = JSON.parse(row.definition) as {
       $schema_version: number
       nodes: Array<{ kind: string; promptTemplate?: string }>
@@ -272,10 +275,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
     definition.$schema_version = 5
     const agent = definition.nodes.find((node) => node.kind === 'agent-single')!
     agent.promptTemplate = 'Handle {{trigger.webhook.comment_text}}'
-    await db
-      .update(workflows)
-      .set({ definition: JSON.stringify(definition) })
-      .where(eq(workflows.id, wf.id))
+    await patchWorkflowFixture(db, { id: wf.id }, { definition: JSON.stringify(definition) })
 
     await expect(
       launchTestTask(
@@ -294,13 +294,12 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
       ),
     ).rejects.toMatchObject({ code: 'trigger-context-missing' })
 
-    expect(await db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(db)).toHaveLength(0)
   })
 
   test('RFC-292: nested trigger context reaches the first agent prompt without root-input flattening', async () => {
     const { appHome, repoPath, db, stubOpencode, wf } = await setup()
-    const { workflows, nodeRuns } = tablesOf(db)
-    const row = (await db.select().from(workflows).where(eq(workflows.id, wf.id)))[0]!
+    const row = (await readWorkflowFixtures(db, { id: wf.id }))[0]!
     const definition = JSON.parse(row.definition) as {
       $schema_version: number
       nodes: Array<{ kind: string; promptTemplate?: string }>
@@ -308,10 +307,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
     definition.$schema_version = 5
     const agent = definition.nodes.find((node) => node.kind === 'agent-single')!
     agent.promptTemplate = 'Topic={{topic}} Event={{trigger.webhook.comment_text}}'
-    await db
-      .update(workflows)
-      .set({ definition: JSON.stringify(definition) })
-      .where(eq(workflows.id, wf.id))
+    await patchWorkflowFixture(db, { id: wf.id }, { definition: JSON.stringify(definition) })
 
     const task = await launchTestTask(
       {
@@ -345,7 +341,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
     expect(task.status).toBe('done')
     expect(task.inputs).toEqual({ topic: 'orders' })
     expect(task).not.toHaveProperty('triggerContextJson')
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+    const run = (await readNodeRunFixtures(db, { taskId: task.id })).find(
       (candidate) => candidate.nodeId === 'echoer',
     )!
     expect(readNodeRunPrompt(run, join(appHome, 'runs'))).toContain('please-fix-from-webhook')

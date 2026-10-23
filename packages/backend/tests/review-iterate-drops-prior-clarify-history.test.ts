@@ -33,6 +33,7 @@
 // `priorCompletedTopLevelRun` block + the validate-before-insert ordering
 // in runner.ts.
 
+import { readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -274,10 +275,9 @@ async function buildHarness(): Promise<Harness> {
   await reenterScheduler(db, task.id)
   await runTask({ taskId: task.id, db, appHome, binaryOverride: stubOpencode })
 
-  const designerRows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'designer')))
+  const designerRows = await readNodeRunFixtures(db, {
+    $and: [{ taskId: task.id }, { nodeId: 'designer' }],
+  })
   // The designer now has TWO done top-level rows: the clarify run (stub call 1)
   // and the v1 OUTPUT run (stub call 2, after the stop answer). The review
   // consumes the output run, so pick the latest (ULID id-order) done row.
@@ -374,10 +374,9 @@ describe('review-iterate rerun drops prior clarify Q&A from the prompt', () => {
       binaryOverride: h.stubOpencode,
     })
 
-    const designerRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'designer')))
+    const designerRuns = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId: h.taskId }, { nodeId: 'designer' }],
+    })
     const tops = designerRuns
       .filter((r) => r.parentNodeRunId === null && r.id !== h.designerDoneRunId)
       .filter((r) => r.retryIndex >= 1)

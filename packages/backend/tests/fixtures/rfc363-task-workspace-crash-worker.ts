@@ -1,11 +1,11 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
+// Hosted real-process oracle: kill a production Task launch before its row is committed.
+
+import { readTaskFixtures, workflowFixture } from '../helpers/model'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { applyUploadsToWorktree } from '@/services/upload'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
-// Hosted real-process oracle: kill a production Task launch before its row is committed.
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import {
   WorkflowDefinitionSchema,
   StartTaskSchema,
@@ -99,15 +99,15 @@ try {
     nodes: [],
     edges: [],
   })
-  const { workflows, tasks } = tablesOf(db)
-  await db
-    .insert(workflows)
-    .values({
+  await workflowFixture(
+    db,
+    {
       id: input.workflowId,
       name: input.workflowId,
       definition: JSON.stringify(definition),
-    })
-    .onConflictDoNothing()
+    },
+    { onConflict: 'ignore' },
+  )
   if (
     ['upload-reserved-before-file', 'uploaded-file-before-receipt'].includes(
       process.env.RFC363_TASK_CRASH_POINT ?? '',
@@ -202,7 +202,7 @@ try {
       ...(input.scratch ? { scratch: true } : { repoUrl: input.remote }),
     }),
     subject: {
-      workflowId: input.workflowId,
+      subject: { kind: 'workflow' as const, sourceId: input.workflowId },
       workflowName: input.workflowId,
       workflowVersion: 1,
       workflowSnapshot: definition,
@@ -235,7 +235,9 @@ try {
     join(input.root, 'result.json'),
     JSON.stringify({
       task,
-      rows: await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, input.taskId)),
+      rows: await readTaskFixtures(db, { id: input.taskId }).then((rows) =>
+        rows.map((row) => ({ id: row.id })),
+      ),
       plan: await createWorkspacePreparationJournal(db).forTask(input.taskId),
       cleanupRejected,
     }),

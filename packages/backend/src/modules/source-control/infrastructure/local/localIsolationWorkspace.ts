@@ -42,7 +42,7 @@ function describeWorkspace(handle: IsoHandle): IsolationWorkspace {
       repositoryRef: repo.repoPath,
       canonicalRef: repo.canonWorktreePath,
       workspaceRef: repo.isoWorktreePath,
-      mount: repo.worktreeDirName,
+      mount: repo.mountPath,
       baseBranch: repo.baseBranch,
       baseSnapshot: repo.baseSnapshot,
       taskBaseHead: repo.taskBaseHead,
@@ -65,7 +65,7 @@ function nativeHandle(workspace: IsolationWorkspace): IsoHandle {
       repoPath: repo.repositoryRef,
       canonWorktreePath: repo.canonicalRef,
       isoWorktreePath: repo.workspaceRef,
-      worktreeDirName: repo.mount,
+      mountPath: repo.mount,
       baseBranch: repo.baseBranch,
       baseSnapshot: repo.baseSnapshot,
       taskBaseHead: repo.taskBaseHead,
@@ -91,7 +91,7 @@ function retainTopology(workspace: IsolationWorkspace, handle: IsoHandle): void 
 
 function describeConflict(conflict: MergeBackConflict): IsolationConflict {
   return {
-    mount: conflict.worktreeDirName,
+    mount: conflict.mountPath,
     paths: conflict.paths,
     mergedTree: conflict.mergedTree,
     rawConflictOutput: conflict.rawConflictOutput,
@@ -105,7 +105,7 @@ function describeConflict(conflict: MergeBackConflict): IsolationConflict {
 
 function nativeConflict(conflict: IsolationConflict): MergeBackConflict {
   return {
-    worktreeDirName: conflict.mount,
+    mountPath: conflict.mount,
     paths: conflict.paths,
     mergedTree: conflict.mergedTree,
     rawConflictOutput: conflict.rawConflictOutput,
@@ -146,7 +146,7 @@ function bindLocalIsolationWorkspace(binding: IsolationWorkspaceBinding): Isolat
   const canonRepos = binding.repositories.map((repo) => ({
     repoPath: repo.repositoryRef,
     worktreePath: repo.workspaceRef,
-    worktreeDirName: repo.mount,
+    mountPath: repo.mount,
     baseBranch: repo.baseBranch,
   }))
   return Object.freeze<IsolationWorkspaceScope>({

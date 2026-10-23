@@ -22,8 +22,7 @@
 //      against a real prefix conflict. A naive first-match impl would corrupt the
 //      inner ref. (expandService.ts:113.)
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -92,8 +91,7 @@ async function buildHarness(): Promise<Harness> {
     repos.push(repoPath)
   }
   const db = createInMemoryDb(MIGRATIONS)
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-ccx',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),

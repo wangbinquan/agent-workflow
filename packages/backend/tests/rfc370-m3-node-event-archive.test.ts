@@ -3,7 +3,7 @@
 // copy in the database). Publication and deletion of exactly the source range
 // commit together; a service replacement resumes with the same lifetime; the
 // task object sweep releases the chunks of deleted tasks.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
@@ -27,9 +27,9 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
   const setup = async () => {
     const db = harness.db,
       objects = objectFixture()
-    const { workflows, tasks, nodeRuns, nodeRunEvents, hostedObjectPublications } = tablesOf(db)
-    await insertOne(db, workflows, { id: 'wf', name: 'archive', definition: '{}' })
-    await insertOne(db, tasks, {
+    const { nodeRunEvents, hostedObjectPublications } = tablesOf(db)
+    await workflowFixture(db, { id: 'wf', name: 'archive', definition: '{}' })
+    await taskFixture(db, {
       id: 'task',
       name: 'archive',
       workflowId: 'wf',
@@ -43,7 +43,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
       startedAt: 1,
       finishedAt: 2,
     })
-    await insertOne(db, nodeRuns, { id: 'run', taskId: 'task', nodeId: 'node', status: 'done' })
+    await nodeRunFixture(db, { id: 'run', taskId: 'task', nodeId: 'node', status: 'done' })
     await db.insert(nodeRunEvents).values(
       Array.from({ length: 7 }, (_, i) => ({
         nodeRunId: 'run',

@@ -1,3 +1,4 @@
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
@@ -85,8 +86,7 @@ interface SeededTask {
 
 async function seedTask(db: PersistenceDb): Promise<SeededTask> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -96,7 +96,7 @@ async function seedTask(db: PersistenceDb): Promise<SeededTask> {
   })
 
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,
@@ -134,8 +134,8 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
     const { taskId } = await seedTask(db)
     // Seed a parent node_run so clarify session has a valid FK target.
     const sourceRunId = ulid()
-    const { nodeRuns, taskFeedback } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { taskFeedback } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: sourceRunId,
       taskId,
       nodeId: 'agent-1',
@@ -146,7 +146,7 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
     })
 
     const clarifyRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: clarifyRunId,
       taskId,
       nodeId: 'clarify-1',
@@ -167,8 +167,8 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
       intermediaryNodeId: 'clarify-1',
       intermediaryNodeRunId: clarifyRunId,
       iteration: 0,
-      questionsJson: JSON.stringify([{ id: 'q1', kind: 'open', text: 'what?' }]),
-      answersJson: JSON.stringify([{ questionId: 'q1', text: 'answer' }]),
+      questions: JSON.stringify([{ id: 'q1', kind: 'open', text: 'what?' }]),
+      answers: JSON.stringify([{ questionId: 'q1', text: 'answer' }]),
       status: 'answered',
     })
     const feedbackId = ulid()
@@ -510,7 +510,7 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
   test('closed loop: distilled candidate stays out until approval, then injects into a subsequent task', async () => {
     const source = await seedTask(db)
     const jobId = ulid()
-    const { memoryDistillJobs, memories, tasks } = tablesOf(db)
+    const { memoryDistillJobs, memories } = tablesOf(db)
     await insertOne(db, memoryDistillJobs, {
       id: jobId,
       debounceKey: `${source.taskId}:feedback`,
@@ -563,7 +563,7 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
     expect(candidate.status).toBe('candidate')
 
     const nextTaskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: nextTaskId,
       name: 'fixture-next-task',
       workflowId: source.workflowId,

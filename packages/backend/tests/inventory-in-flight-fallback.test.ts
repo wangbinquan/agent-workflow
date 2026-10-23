@@ -15,8 +15,7 @@
 //          stub is NOT promoted to 'in-flight' — propagate verbatim so the
 //          original plugin failure surface stays visible.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -82,8 +81,7 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -91,7 +89,7 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -106,7 +104,7 @@ async function seed(
     ...(lineage?.(taskId) ?? {}),
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId,

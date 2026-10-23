@@ -1,3 +1,5 @@
+import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
+import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
 export { archivePortArtifacts } from '../composition/portArtifacts'
 export { nodeRunPromptRelPath, storeNodeRunPrompt } from '../composition/nodeRunPrompts'
 import { runTaskAgentWithFamily as runTaskAgentWithFamilyInternal } from '../composition/taskAgentRunFamily'
@@ -19,6 +21,7 @@ import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/pub
 import { parkPreparedHumanGate as parkPreparedHumanGateInternal } from '../composition/humanGate'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
 import type { SourceTerminationSnapshot } from './types'
+import type { TaskSubject } from '../domain/taskSubject'
 
 /** Frozen root-launch provenance shared by routes, schedules and webhooks. */
 export type ExecutionInvoker =
@@ -53,6 +56,8 @@ export type {
   TaskExecutionContextRef,
 } from '../application/ports/taskExecutionTopology'
 export type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
+/** RFC-395 II-a：状态转移的伴随写（按目标表分组），legacy 生命周期 writer 经此取用。 */
+export type { NodeRunLifecycleWrite } from '../application/ports/nodeRunWrites'
 export {
   INHERITABLE_RUN_CONFIG_KEYS,
   pickInheritableRunConfig,
@@ -150,6 +155,7 @@ export const WORKGROUP_TURN_LEADER_NODE_ID = '__wg_leader__'
 export const WORKGROUP_TURN_MEMBER_NODE_ID = '__wg_member__'
 
 export interface WorkgroupHostLedgerRun {
+  readonly selection: WorkgroupRunSelectionProjection
   readonly seq: number | null
   readonly id: string
   readonly nodeId: string
@@ -162,7 +168,7 @@ export interface WorkgroupHostLedgerRun {
 }
 
 export interface WorkgroupHostLedgerSnapshot {
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
   readonly hostRuns: readonly WorkgroupHostLedgerRun[]
   readonly leaderClarifyParked: boolean
 }
@@ -241,17 +247,19 @@ export interface WorkgroupHostLedgerParticipantInTx {
 }
 
 export interface WorkgroupTaskRoomTaskSnapshot {
+  readonly subject: TaskSubject
   readonly id: string
   readonly name: string
   readonly ownerUserId: string | null
   readonly status: TaskStatus
   readonly workgroupId: string | null
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
   readonly workflowSnapshot: string
   readonly triggerContextJson: string | null
 }
 
 export interface WorkgroupTaskRoomHostRunSnapshot {
+  readonly selection: WorkgroupRunSelectionProjection
   readonly seq: number | null
   readonly id: string
   readonly nodeId: string

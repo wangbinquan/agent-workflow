@@ -1,10 +1,10 @@
+import { readTaskFixtures, taskFixture, workflowFixture } from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
 // RFC-382: compose the real provider task bundle with recorded scheduler delivery and real database participants.
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
@@ -177,8 +177,8 @@ export async function seedBundleTask(
   const slot = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: 1 },
   ])
-  const { workflows, tasks, taskExecutionIntents } = tablesOf(harness.db)
-  await insertOne(harness.db, workflows, {
+  const { taskExecutionIntents } = tablesOf(harness.db)
+  await workflowFixture(harness.db, {
     id: workflowId,
     name: workflowId,
     definition: JSON.stringify(emptyWorkflow),
@@ -186,7 +186,7 @@ export async function seedBundleTask(
     schemaVersion: 5,
     visibility: 'public',
   })
-  await insertOne(harness.db, tasks, {
+  await taskFixture(harness.db, {
     id,
     name: id,
     workflowId,
@@ -227,7 +227,7 @@ export async function seedBundleTask(
     intentId,
     workflowId,
     async row() {
-      return (await harness.db.select().from(tasks).where(eq(tasks.id, id)))[0]!
+      return (await readTaskFixtures(harness.db, { id }))[0]!
     },
   }
 }

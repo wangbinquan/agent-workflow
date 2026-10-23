@@ -3,12 +3,10 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
-import { parseAgentDependencyIds } from '../src/modules/resource-catalog/infrastructure/agentDependencyJson'
-import { assertAgentDependencyTraversal } from '../src/modules/resource-catalog/infrastructure/agentDependencyTraversal'
+import { assertAgentDependencyGraph } from '../src/modules/resource-catalog/domain/agentDependencies'
 import { ValidationError } from '../src/util/errors'
 
 type Side = 'semantics' | 'package'
-type RowLoader = (id: string) => Promise<readonly string[] | undefined>
 
 function loadActualOwner(side: Side, ports: Record<string, unknown>) {
   const file =
@@ -20,7 +18,7 @@ function loadActualOwner(side: Side, ports: Record<string, unknown>) {
   const names =
     side === 'semantics'
       ? ['unique', 'assertDependencyGraph']
-      : ['uniqueStrings', 'stringArray', 'assertAgentDependencyGraph']
+      : ['uniqueStrings', 'assertAgentDependencyGraph']
   const extracted = names.map((name) => {
     const matches = ast.statements.filter(
       (node): node is ts.FunctionDeclaration =>
@@ -100,35 +98,60 @@ function scenario(side: Side, control: Control) {
       }
     },
   }
-  const owner = loadActualOwner(side, {
-    tablesOf: (handle: unknown) => {
+  function extract(file: string, name: string): string {
+    const text = readFileSync(new URL(file, import.meta.url), 'utf8')
+    const ast = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+    const fn = ast.statements.find(
+      (node): node is ts.FunctionDeclaration =>
+        ts.isFunctionDeclaration(node) && node.name?.text === name,
+    )
+    if (fn === undefined) throw new Error(`missing ${name}`)
+    return new Bun.Transpiler({ loader: 'ts' }).transformSync(
+      fn.getText(ast).replace(/^export /, ''),
+    )
+  }
+  const decode = new Function(
+    'JSON',
+    `${extract('../src/modules/resource-catalog/infrastructure/agentReferenceCodec.ts', 'decodeAgentReferenceIds')}\nreturn decodeAgentReferenceIds;`,
+  )({
+    get parse() {
+      events.push('parse-get')
+      if (control.parseLookupError !== undefined) throw control.parseLookupError
+      return (raw: string) => {
+        events.push('parse-call')
+        return control.decode === undefined ? JSON.parse(raw) : control.decode(raw)
+      }
+    },
+  })
+  const createReader = new Function(
+    'tablesOf',
+    'eq',
+    'decodeAgentReferenceIds',
+    `${extract('../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts', 'createAgentDependencyReadPort')}\nreturn createAgentDependencyReadPort;`,
+  )(
+    (handle: unknown) => {
       expect(handle).toBe(transaction)
       return { agents: table }
     },
-    first: async (query: { limit(count: number): Promise<unknown[]> }) => (await query.limit(1))[0],
-    eq: (column: unknown, id: string) => ({ column, id }),
+    (column: unknown, id: string) => ({ column, id }),
+    decode,
+  )
+  const owner = loadActualOwner(side, {
     ValidationError,
-    parseAgentDependencyIds,
-    JSON: {
-      get parse() {
-        events.push('parse-get')
-        if (control.parseLookupError !== undefined) throw control.parseLookupError
-        return (raw: string) => {
-          events.push('parse-call')
-          return control.decode === undefined ? JSON.parse(raw) : control.decode(raw)
-        }
-      },
-    },
-    assertAgentDependencyTraversal: (id: string, roots: readonly string[], read: RowLoader) =>
-      assertAgentDependencyTraversal(id, roots, async (dependencyId) => {
-        try {
-          const value = await read(dependencyId)
-          parsed.push({ id: dependencyId, value })
-          return value
-        } catch (error) {
-          readErrors.push({ id: dependencyId, error })
-          throw error
-        }
+    createAgentDependencyReadPort: createReader,
+    validateDependencyGraph: (input: Parameters<typeof assertAgentDependencyGraph>[0]) =>
+      assertAgentDependencyGraph({
+        ...input,
+        load: async (dependencyId) => {
+          try {
+            const value = await input.load(dependencyId)
+            parsed.push({ id: dependencyId, value })
+            return value
+          } catch (error) {
+            readErrors.push({ id: dependencyId, error })
+            throw error
+          }
+        },
       }),
   })
   return {
@@ -248,24 +271,34 @@ for (const side of ['semantics', 'package'] as const) {
 function checkStringDecoder(file: string, name: string, fields: readonly string[]) {
   const source = readFileSync(new URL(file, import.meta.url), 'utf8')
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
-  const declarations = ast.statements.filter(
+  const decoderFile = '../src/modules/resource-catalog/infrastructure/agentReferenceCodec.ts'
+  const decoderAst = ts.createSourceFile(
+    decoderFile,
+    readFileSync(new URL(decoderFile, import.meta.url), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+  const declarations = decoderAst.statements.filter(
     (node): node is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(node) && node.name?.text === name,
   )
-  if (declarations.length !== 1 || declarations[0] === undefined) {
+  if (declarations.length !== 1 || declarations[0] === undefined)
     throw new Error('missing unique string decoder')
-  }
   const calls: ts.CallExpression[] = []
   function visit(node: ts.Node): void {
     if (ts.isCallExpression(node) && node.expression.getText(ast) === name) calls.push(node)
     ts.forEachChild(node, visit)
   }
   visit(ast)
-  expect(calls.map((call) => call.getText(ast))).toEqual(
-    fields.map((field) => `${name}(row.${field})`),
+  expect(calls.map((call) => call.getText(ast).replace(/\s+/g, ' '))).toEqual(
+    fields.map((field) =>
+      file.endsWith('agentDependencyRead.ts')
+        ? `${name}(source === 'semantics' ? () => row.${field} : row.${field})`
+        : `${name}(row.${field})`,
+    ),
   )
   const javascript = new Bun.Transpiler({ loader: 'ts' }).transformSync(
-    declarations[0].getText(ast),
+    declarations[0].getText(decoderAst).replace(/^export /, ''),
   )
   const inputs: { raw: string; expected: string[] }[] = [
     { raw: '["z","z","",null,2,false,{},[],"雪","a"]', expected: ['z', 'z', '', '雪', 'a'] },
@@ -286,10 +319,10 @@ function checkStringDecoder(file: string, name: string, fields: readonly string[
     const failure = new Error('controlled decoder failure')
     let fault = ''
     const reader: unknown = new Function(
-      'parseAgentDependencyIds',
+      'source',
       'JSON',
       `${javascript}\nreturn (row) => ${call.getText(ast)};`,
-    )(parseAgentDependencyIds, {
+    )('other', {
       get parse() {
         events.push('parse-get')
         if (fault === 'parse-get') throw failure
@@ -368,23 +401,23 @@ function checkStringDecoder(file: string, name: string, fields: readonly string[
 test('RFC-359 W49 persistence decoder preserves ordered values and catch boundaries', () => {
   checkStringDecoder(
     '../src/modules/resource-catalog/infrastructure/agentPersistence.ts',
-    'stringArray',
+    'decodeAgentReferenceIds',
     ['outputs', 'dependsOn', 'mcp', 'plugins'],
   )
 })
 
 test('RFC-359 W49 Intent decoder preserves ordered values and catch boundaries', () => {
   checkStringDecoder(
-    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
-    'parseStringArray',
+    '../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts',
+    'decodeAgentReferenceIds',
     ['dependsOn'],
   )
 })
 
 test('RFC-359 W50 catalog decoder preserves ordered values and catch boundaries', () => {
   checkStringDecoder(
-    '../src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts',
-    'stringArray',
+    '../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts',
+    'decodeAgentReferenceIds',
     ['dependsOn'],
   )
 })

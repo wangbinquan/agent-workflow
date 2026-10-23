@@ -22,6 +22,15 @@
 //   kills it). Retryable conflicts (DESIGNER_DEFERRABLE_CONFLICTS) keep the marker; anything
 //   else clears it (back to the manual board, never silent-spin).
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -103,8 +112,7 @@ function ans(qid: string) {
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc140',
     description: '',
@@ -112,7 +120,7 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc140',
     workflowId: `wf_${taskId}`,
@@ -134,8 +142,7 @@ async function seedRun(
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -145,7 +152,7 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -161,8 +168,7 @@ async function seedCrossRound(
   const roundId = ulid()
   const questionsJson = JSON.stringify(questions)
   const answersJson = JSON.stringify(questions.map((q) => ans(q.id)))
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: roundId,
     taskId,
     kind: 'cross',
@@ -172,8 +178,8 @@ async function seedCrossRound(
     intermediaryNodeRunId: intRunId,
     targetConsumerNodeId: DESIGNER,
     iteration: 0,
-    questionsJson,
-    answersJson,
+    questions: questionsJson,
+    answers: answersJson,
     directive: 'continue',
     status: 'answered',
     answeredAt: Date.now(),
@@ -190,8 +196,7 @@ async function seedSelfRound(
   const askingRunId = await seedRun(db, taskId, DESIGNER, { status: 'done' })
   const intRunId = await seedRun(db, taskId, CL, { status: 'done' })
   const roundId = ulid()
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: roundId,
     taskId,
     kind: 'self',
@@ -201,8 +206,8 @@ async function seedSelfRound(
     intermediaryNodeRunId: intRunId,
     targetConsumerNodeId: null,
     iteration: 0,
-    questionsJson: JSON.stringify(questions),
-    answersJson: JSON.stringify(questions.map((q) => ans(q.id))),
+    questions: JSON.stringify(questions),
+    answers: JSON.stringify(questions.map((q) => ans(q.id))),
     directive: 'continue',
     status: 'answered',
     answeredAt: Date.now(),
@@ -332,7 +337,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       .update(taskQuestions)
       .set({ triggerRunId: pending.id })
       .where(inArray(taskQuestions.id, selfIds))
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, pending.id))
+    await patchNodeRunFixture(db, { id: pending.id }, { status: 'done' })
     await autoDispatchDeferredQuestions(db, taskId)
     for (const id of designerIds) {
       const row = (await entryById(db, id))!
@@ -390,7 +395,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       .update(taskQuestions)
       .set({ triggerRunId: pending.id })
       .where(inArray(taskQuestions.id, selfIds))
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, pending.id))
+    await patchNodeRunFixture(db, { id: pending.id }, { status: 'done' })
     await autoDispatchDeferredQuestions(db, taskId)
     expect((await entryById(db, designerIds[0]!))!.dispatchedAt).toBeNull() // withdrawn → untouched
     expect((await entryById(db, designerIds[1]!))!.dispatchedAt).not.toBeNull() // sibling fired
@@ -402,8 +407,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
     await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
-    const { tasks } = tablesOf(db)
-    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'done' })
     await autoDispatchDeferredQuestions(db, taskId) // task-terminal — NOT in the retryable set
     for (const id of designerIds) {
       const row = (await entryById(db, id))!

@@ -1,9 +1,6 @@
 // One physical task lifecycle CAS, companion and event sequence. The caller
 // owns the transaction and chooses synchronous or asynchronous interpretation.
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { TaskStatus } from '@agent-workflow/shared'
-import { and, eq, isNull, sql } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
@@ -18,21 +15,9 @@ import type {
   TaskLifecycleTransitionCommittedEventInput,
 } from './taskLifecycleCommittedEvents'
 
-export type TaskLifecycleWriteExtra = Partial<
-  Pick<
-    PersistenceTables['tasks']['$inferInsert'],
-    | 'finishedAt'
-    | 'errorSummary'
-    | 'errorMessage'
-    | 'failedNodeId'
-    | 'workflowSnapshot'
-    | 'workflowVersion'
-    | 'refClosureJson'
-    | 'workgroupConfigJson'
-    | 'sourceTerminationFence'
-    | 'sourceTerminationEffectRev'
-  >
->
+import type { TaskLifecycleWriteExtra } from '../application/ports/taskDefinitionWrite'
+import { createTaskDefinitionWriteParticipantInTx } from './taskDefinitionWriteParticipant'
+export type { TaskLifecycleWriteExtra } from '../application/ports/taskDefinitionWrite'
 
 export interface TaskLifecycleWriteInput<Tx extends PersistenceDb> {
   readonly taskId: string
@@ -70,58 +55,9 @@ export function* taskLifecycleWriteSequence<Tx extends PersistenceDb>(
   void
 > {
   const prune = input.workspacePruneDecision
-  // rfc097-allow-direct-task-status-write -- single allowlisted writer
-  const updated = yield* transactionStep(() => {
-    const { tasks } = tablesOf(tx)
-    return queryRows(
-      tx
-        .update(tasks)
-        .set({
-          status: input.to,
-          ...(input.to === 'running'
-            ? { runningSince: input.now }
-            : input.from === 'running'
-              ? {
-                  runningMs: sql`${tasks.runningMs} + (${input.now} - COALESCE(${tasks.runningSince}, ${input.now}))`,
-                  runningSince: null,
-                }
-              : {}),
-          ...(input.extra ?? {}),
-          ...(prune.prune
-            ? { workspacePruningAt: input.now, workspacePruneCause: prune.cause }
-            : {}),
-          lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
-        })
-        .where(
-          and(
-            eq(tasks.id, input.taskId),
-            eq(tasks.status, input.from),
-            ...(input.expectedLifecycleRevision === undefined
-              ? []
-              : [eq(tasks.lifecycleEventRevision, input.expectedLifecycleRevision)]),
-            ...(input.expectedWorktreePath === undefined
-              ? []
-              : [eq(tasks.worktreePath, input.expectedWorktreePath)]),
-            ...(input.isRevival
-              ? [
-                  isNull(tasks.deletedAt),
-                  isNull(tasks.sourceTerminationFence),
-                  isNull(tasks.workspacePruningAt),
-                  isNull(tasks.workspacePrunedAt),
-                ]
-              : []),
-            ...(prune.prune
-              ? [
-                  isNull(tasks.workspacePruningAt),
-                  isNull(tasks.workspacePruneCause),
-                  isNull(tasks.workspacePrunedAt),
-                ]
-              : []),
-          ),
-        )
-        .returning({ id: tasks.id, lifecycleEventRevision: tasks.lifecycleEventRevision }),
-    )
-  })
+  const updated = yield* transactionStep(() =>
+    createTaskDefinitionWriteParticipantInTx(tx).transitionLifecycle(input),
+  )
   const changed = updated[0]
   if (changed === undefined) return null
   const nodeChanges = [...(input.nodeChanges ?? [])]

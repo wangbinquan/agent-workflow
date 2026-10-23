@@ -5,8 +5,7 @@
 // (auto_recovery_suspended=1)，并记 quarantine recovery_event；② 已隔离再调不二次累加；
 // ③ 人工 clear 重置；④ 窗口滚过后计数重置为 1。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -24,9 +23,8 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,

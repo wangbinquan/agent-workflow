@@ -6,6 +6,10 @@
 // rights as the owner (cancel / retry / resume) — only member management,
 // owner transfer and task deletion stay with the owner or explicit permission holders.
 
+import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+
+import type { TaskGateContext } from '@/modules/task-execution/public/queries'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   AssignableTaskMemberRole,
@@ -17,7 +21,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { NotFoundError } from '@/util/errors'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
@@ -27,10 +31,7 @@ import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 
 /** Row-shape that visibility checks accept. The full `tasks` row is supersets of this. */
-export type TaskRowForVisibility = Pick<
-  PersistenceTables['tasks']['$inferSelect'],
-  'id' | 'ownerUserId'
->
+export type TaskRowForVisibility = Pick<TaskGateContext, 'id' | 'ownerUserId'>
 
 /**
  * Pure read: is the actor allowed to see this task?
@@ -67,12 +68,9 @@ export async function assertCanReplaySourceTask(
   actor: Actor,
   sourceTaskId: string,
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  const rows = await db
-    .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
-    .from(tasks)
-    .where(eq(tasks.id, sourceTaskId))
-    .limit(1)
+  const rows = await createTaskGateQueries(db)
+    .listContexts([sourceTaskId])
+    .then((rows) => rows.map((row) => ({ id: row.id, ownerUserId: row.ownerUserId })))
   const row = rows[0]
   if (row === undefined || !(await canViewTask(db, actor, row))) {
     throw new NotFoundError('task-not-found', `task ${sourceTaskId} not found`)
@@ -321,13 +319,10 @@ export async function updateTaskMembers(
   // The WS revalidation wait and the broadcast stay OUTSIDE the lock — they can
   // take arbitrarily long and must not stall reviews / cancels on the same task.
   const commit = await withTaskReviewMutationLock(task.id, async () => {
-    const { tasks } = tablesOf(db)
     const fresh = (
-      await db
-        .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
-        .from(tasks)
-        .where(eq(tasks.id, task.id))
-        .limit(1)
+      await createTaskGateQueries(db)
+        .listContexts([task.id])
+        .then((rows) => rows.map((row) => ({ id: row.id, ownerUserId: row.ownerUserId })))
     )[0]
     if (fresh === undefined)
       throw new NotFoundError('task-not-found', `task '${task.id}' not found`)
@@ -394,8 +389,9 @@ async function updateTaskMembersLocked(
   // PostgreSQL 的 SERIALIZABLE 会把 predicate lock 落在索引**页**上、连改别的任务的
   // 事务都判成读写依赖（实测 32 并发 22.9% 冲突逃逸成 500）。锁 tasks 行即可。
   await databaseSessionFor(db).transaction(async (tx) => {
-    const { tasks: tasksTable, taskCollaborators } = tablesOf(tx)
-    await engineOf(tx).lockAggregateRoot(tx, tasksTable, tasksTable.id, task.id)
+    const { taskCollaborators } = tablesOf(tx)
+    const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+    await taskHumanGate.lockTask(task.id)
     // Freeze the pre-change audience in the same transaction as the full
     // replacement. The post-commit WS frame can then authorize both sides of
     // the transition without racing a membership read.
@@ -415,7 +411,7 @@ async function updateTaskMembersLocked(
     nextMembers = plan.nextMembers
 
     if (nextOwner !== prevOwner) {
-      await tx.update(tasksTable).set({ ownerUserId: nextOwner }).where(eq(tasksTable.id, task.id))
+      await taskHumanGate.transferTaskOwner(task.id, nextOwner)
     }
     await tx.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id))
     const values: PersistenceTables['taskCollaborators']['$inferInsert'][] = []

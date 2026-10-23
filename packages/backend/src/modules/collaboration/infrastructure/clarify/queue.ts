@@ -16,6 +16,8 @@
 // PR-1 lands it UNWIRED (no caller): the two legacy injectors are untouched. PR-2 (T3) drops it in
 // and deletes the fork.
 
+import { decodeLegacyClarifyAnswerColumns } from '../clarifyAnswerCodec'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
 
@@ -110,7 +112,7 @@ export interface AgentQueueEntry {
 export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<AgentQueueEntry[]> {
   const { db, taskId, consumerNodeId, dispatchedRunId, shardKey, currentRunOnly = false } = args
 
-  const { taskQuestions, nodeRuns, clarifyRounds } = tablesOf(db)
+  const { taskQuestions, clarifyRounds } = tablesOf(db)
   // 1. All DISPATCHED entries whose EFFECTIVE TARGET (override ?? default) is this node — every role
   //    in one query. RFC-131 T4 去借壳: select by the target the rerun is minted on (a reassign
   //    moves the run to the target node), not the origin home — reading the origin would miss a
@@ -137,37 +139,33 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
   // 2. Frame the lineage window on this run's node + iteration (mirrors resolveHandlerRun): all of
   //    the node's runs at this iteration are the process-retry / clarify-rerun chain the derived-
   //    aging oracle scans.
-  const rRow = (
-    await db.select().from(nodeRuns).where(eq(nodeRuns.id, dispatchedRunId)).limit(1)
-  )[0]
+  const rRow = await createNodeRunQueries(db).readFields(dispatchedRunId, ['iteration'])
   const iteration = rRow?.iteration ?? 0
   const sameNode = rRow
-    ? await db
-        .select()
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, taskId),
-            eq(nodeRuns.nodeId, consumerNodeId),
-            eq(nodeRuns.iteration, iteration),
-            // RFC-172 (route 2): scope the derived-aging window to this shard when the caller is
-            // shard-fanned (workgroup member). Without it a sibling shard's output would age this
-            // shard's entries. `null` MUST use IS NULL — `eq(col, null)` renders `= NULL` (always
-            // false), the eq(col,null) hazard forked at memoryInject.ts:427 / clarify.ts:468.
-            // `undefined` (普通节点/leader today) adds nothing → node-only window, golden-lock.
-            ...(shardKey !== undefined
-              ? [shardKey === null ? isNull(nodeRuns.shardKey) : eq(nodeRuns.shardKey, shardKey)]
-              : []),
-          ),
-        )
+    ? await createNodeRunQueries(db).list({
+        taskId,
+        nodeId: consumerNodeId,
+        iteration,
+        ...(shardKey === undefined ? {} : { shardKey }),
+      })
     : []
   const outputRunIds = await runIdsWithOutput(
     db,
     sameNode.map((r) => r.id),
   )
-  const unaged = dispatched.filter(
-    (e) => !isTargetNodeConsumed(consumerNodeId, iteration, e.triggerRunId, sameNode, outputRunIds),
+  const consumed = await Promise.all(
+    dispatched.map(
+      async (e) =>
+        await isTargetNodeConsumed(
+          consumerNodeId,
+          iteration,
+          e.triggerRunId,
+          sameNode,
+          outputRunIds,
+        ),
+    ),
   )
+  const unaged = dispatched.filter((_, index) => !consumed[index])
   // RFC-026 inline resume is an incremental USER message in an existing
   // transcript. `triggerRunId` is the exact "this entry was rendered into
   // this run" anchor, so it also provides a stronger delta boundary than
@@ -211,10 +209,12 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
     )
       continue
     let questions: ClarifyQuestion[]
-    let answers: ClarifyAnswer[]
+    let projection: ReturnType<typeof decodeLegacyClarifyAnswerColumns>
+    let submitted: ClarifyAnswer[]
     try {
       questions = JSON.parse(round.questionsJson) as ClarifyQuestion[]
-      answers = JSON.parse(round.answersJson) as ClarifyAnswer[]
+      projection = decodeLegacyClarifyAnswerColumns(round)
+      submitted = projection.requireAnswers()
     } catch (err) {
       log.warn('clarify queue round JSON parse failed; skipping round', {
         roundId: round.id,
@@ -224,7 +224,7 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
     }
     roundByOrigin.set(originId, {
       questions: new Map(questions.map((q) => [q.id, q])),
-      answers: new Map(answers.map((a) => [a.questionId, a])),
+      answers: projection.answerMap(submitted),
       askingShardKey: round.askingShardKey,
     })
   }

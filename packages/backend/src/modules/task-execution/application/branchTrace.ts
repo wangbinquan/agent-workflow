@@ -18,7 +18,6 @@
 // boolean that is wrong either way.
 
 import {
-  compareNodeRunMintOrder,
   WorkflowDefinitionSchema,
   buildWorkflowScopeParentMap,
   resolveWorkflowSourceRef,
@@ -47,21 +46,29 @@ function parseSnapshot(raw: string | null): WorkflowDefinition | null {
 }
 
 /** Freshest top-level SETTLED row per node (done ∪ skipped), any iteration. */
-function latestSettledPerNode(rows: readonly RunRow[]): Map<string, RunRow> {
-  const m = new Map<string, RunRow>()
-  for (const r of rows) {
-    if (r.parentNodeRunId !== null) continue
-    if (r.status !== 'done' && r.status !== 'skipped') continue
-    const cur = m.get(r.nodeId)
-    if (
-      cur === undefined ||
-      r.iteration > cur.iteration ||
-      (r.iteration === cur.iteration && compareNodeRunMintOrder(r, cur) > 0)
-    ) {
-      m.set(r.nodeId, r)
-    }
-  }
-  return m
+async function latestSettledPerNode(
+  reader: BranchTraceSnapshotReader,
+  taskId: string,
+  rows: readonly RunRow[],
+): Promise<Map<string, RunRow>> {
+  const history = await reader
+    .history(taskId, rows)
+    .familyHistory(
+      taskId,
+      {},
+      { topLevelOnly: true, statusIn: ['done', 'skipped'], order: 'iteration' },
+    )
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  const selected = new Map(history.map((ref) => [ref.nodeId, byId.get(ref.id)!]))
+  // 输出节点顺序仍按原输入首次出现的位置；历史排序只决定每个节点选哪一行。
+  return new Map(
+    rows
+      .filter(
+        (row) =>
+          row.parentNodeRunId === null && (row.status === 'done' || row.status === 'skipped'),
+      )
+      .map((row) => [row.nodeId, selected.get(row.nodeId)!]),
+  )
 }
 
 export async function getTaskBranchTrace(
@@ -74,7 +81,7 @@ export async function getTaskBranchTrace(
   if (definition === null) return null
 
   const rows = snapshot.runs
-  const latest = latestSettledPerNode(rows)
+  const latest = await latestSettledPerNode(reader, taskId, rows)
 
   // Port activation of every settled row we might consult. One query, not N.
   const outRows = snapshot.outputs

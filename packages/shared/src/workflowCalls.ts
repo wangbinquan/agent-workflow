@@ -7,7 +7,8 @@
 // RESOURCE IDS only — names are display data the reporter may not be allowed
 // to echo (RFC-099 D1); the caller decides how much of the path is visible.
 
-import type { WorkflowDefinition, WorkflowNode } from './schemas/workflow'
+import type { WorkflowDefinition } from './schemas/workflow'
+import { collectWorkflowDependencyRefs } from './resourceReferences'
 
 /** The call-node selector as authored: name is authoritative, id is a cache. */
 export interface WorkflowCallRef {
@@ -16,22 +17,20 @@ export interface WorkflowCallRef {
   workflowId?: string
 }
 
-function readStr(node: WorkflowNode, key: string): string | undefined {
-  const v = (node as unknown as Record<string, unknown>)[key]
-  return typeof v === 'string' && v.length > 0 ? v : undefined
-}
-
 /** Every call-workflow reference in one definition (declaration order). */
 export function collectWorkflowCallRefs(defn: WorkflowDefinition): WorkflowCallRef[] {
-  const out: WorkflowCallRef[] = []
-  for (const node of defn.nodes) {
-    if (node.kind !== 'call-workflow') continue
-    const workflowName = readStr(node, 'workflowName')
-    if (workflowName === undefined) continue // malformed node — validator owns the error
-    const workflowId = readStr(node, 'workflowId')
-    out.push({ nodeId: node.id, workflowName, ...(workflowId ? { workflowId } : {}) })
-  }
-  return out
+  return collectWorkflowDependencyRefs(defn, { throwOnNullNode: true, requireNodes: true }).flatMap(
+    (ref) =>
+      ref.resourceType === 'workflow'
+        ? [
+            {
+              nodeId: ref.nodeId,
+              workflowName: ref.value,
+              ...(ref.idCache === undefined ? {} : { workflowId: ref.idCache }),
+            },
+          ]
+        : [],
+  )
 }
 
 /** RFC-243 PR-4 — call-workgroup selector (workgroups are closure LEAVES:
@@ -44,15 +43,18 @@ export interface WorkgroupCallRef {
 }
 
 export function collectWorkgroupCallRefs(defn: WorkflowDefinition): WorkgroupCallRef[] {
-  const out: WorkgroupCallRef[] = []
-  for (const node of defn.nodes) {
-    if (node.kind !== 'call-workgroup') continue
-    const workgroupName = readStr(node, 'workgroupName')
-    if (workgroupName === undefined) continue
-    const workgroupId = readStr(node, 'workgroupId')
-    out.push({ nodeId: node.id, workgroupName, ...(workgroupId ? { workgroupId } : {}) })
-  }
-  return out
+  return collectWorkflowDependencyRefs(defn, { throwOnNullNode: true, requireNodes: true }).flatMap(
+    (ref) =>
+      ref.resourceType === 'workgroup'
+        ? [
+            {
+              nodeId: ref.nodeId,
+              workgroupName: ref.value,
+              ...(ref.idCache === undefined ? {} : { workgroupId: ref.idCache }),
+            },
+          ]
+        : [],
+  )
 }
 
 export interface ExecutionRefsOfDefinition {

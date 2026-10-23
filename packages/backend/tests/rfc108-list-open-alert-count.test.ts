@@ -4,6 +4,7 @@
 // 一条 grouped 查询（非 per-row fetch）。本测试锁定：① 有未决告警的任务 count>0；②
 // 无告警的任务 count=0；③ 已 resolved 的告警不计入。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -21,9 +22,8 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,

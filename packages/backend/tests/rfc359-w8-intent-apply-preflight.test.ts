@@ -14,6 +14,7 @@
 //
 // 所以这里不重复 T14/T15 的语义细分，只锁**跨引擎一致性**这一件事：占用名集合（大小写归一）
 // 与 copy-only 目标（含拒绝理由）在两个引擎上给出同一个答案。
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -30,8 +31,7 @@ const THEIRS = 'u-theirs'
 
 async function seedAgent(db: PersistenceDb, name: string, owner: string) {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: '',

@@ -1,7 +1,7 @@
 // Service + HTTP coverage for Skills CRUD (P-1-09).
 // Uses real temp filesystem (skill content lives on disk) + in-memory SQLite.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -302,7 +302,7 @@ describeProviderSkills('skill service (continued)', (buildHarness) => {
 
     const { agents } = tablesOf(h.db)
     // Insert agent referencing 'foo' via a typed MANAGED skill ref (RFC-223 PR-1).
-    await insertOne(h.db, agents, {
+    await agentFixture(h.db, {
       id: ulid(),
       name: 'a1',
       description: '',

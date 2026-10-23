@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { and, asc, eq } from 'drizzle-orm'
@@ -337,8 +337,7 @@ describeEachProvider(
       const before = await rows(harness)
       await expect(
         harness.session.transaction(async (tx) => {
-          const { workflows } = tablesOf(tx)
-          await insertOne(tx, workflows, {
+          await workflowFixture(tx, {
             id: 'append-business',
             name: 'append-business',
             definition: '{}',
@@ -352,10 +351,7 @@ describeEachProvider(
           )
         }),
       ).rejects.toThrow()
-      const { workflows } = tablesOf(harness.db)
-      expect(
-        await harness.db.select().from(workflows).where(eq(workflows.id, 'append-business')),
-      ).toEqual([])
+      expect(await readWorkflowFixtures(harness.db, { id: 'append-business' })).toEqual([])
       expect(await rows(harness)).toEqual(before)
     })
 

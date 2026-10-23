@@ -20,6 +20,7 @@
 // `sqlite3` is universally available on CI runners (apt installs by
 // default on ubuntu, ships in macOS).
 
+import { nodeRunFixtureSql } from './fixtures/model'
 import { test, expect, type Page } from '@playwright/test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -189,11 +190,7 @@ function plantR1Violation(taskId: string): {
   const docVersionId = `dv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
   const now = Date.now()
   const sql = `
-    INSERT INTO node_runs (id, task_id, node_id, parent_node_run_id, iteration,
-      shard_key, retry_index, review_iteration, status,
-      started_at, finished_at)
-    VALUES ('${nodeRunId}', '${taskId}', 'rev_stuck', NULL, 0, NULL, 0, 0,
-      'awaiting_review', ${now - 1000}, NULL);
+    ${nodeRunFixtureSql({ id: nodeRunId, taskId, nodeId: 'rev_stuck', parentNodeRunId: null, iteration: 0, shardKey: null, retryIndex: 0, reviewIteration: 0, status: 'awaiting_review', startedAt: now - 1000, finishedAt: null })}
     INSERT INTO doc_versions (id, task_id, review_node_id, review_node_run_id,
       source_node_id, source_port_name, version_index, review_iteration,
       body_path, comments_json, decision, decision_reason, prompt_snapshot,

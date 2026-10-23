@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-183 — 反问「邀请 ⟺ 接受」对称收口（design/RFC-183-clarify-invite-accept-symmetry/）。
@@ -80,13 +80,12 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -110,8 +109,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 
 async function insertPendingNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'asker', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'asker', status: 'pending' })
   return id
 }
 

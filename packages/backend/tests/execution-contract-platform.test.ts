@@ -1,8 +1,13 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  patchAgentFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { validateProgramFixture } from '@/modules/execution-contract/application/validateProgramFixture'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -621,8 +626,7 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
 
     test('human-review projection reads the frozen host input and durable review receipt', async () => {
       const db = harness.db
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: 'review-projection-workflow',
         name: 'review projection workflow',
         description: '',
@@ -632,7 +636,7 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
         createdAt: 1,
         updatedAt: 1,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: 'review-projection-task',
         // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
         ...taskLineage('review-projection-task'),
@@ -651,15 +655,16 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'not-applicable',
       )
-      await db
-        .update(tasks)
-        .set({ inputs: JSON.stringify({ [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: 'frozen prompt' }) })
-        .where(eq(tasks.id, 'review-projection-task'))
+      await patchTaskFixture(
+        db,
+        { id: 'review-projection-task' },
+        { inputs: JSON.stringify({ [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: 'frozen prompt' }) },
+      )
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'planning',
       )
 
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: 'review-projection-run',
         taskId: 'review-projection-task',
         nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
@@ -671,17 +676,11 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'waiting',
       )
-      await db
-        .update(nodeRuns)
-        .set({ status: 'done' })
-        .where(eq(nodeRuns.id, 'review-projection-run'))
+      await patchNodeRunFixture(db, { id: 'review-projection-run' }, { status: 'done' })
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'approved',
       )
-      await db
-        .update(nodeRuns)
-        .set({ status: 'failed' })
-        .where(eq(nodeRuns.id, 'review-projection-run'))
+      await patchNodeRunFixture(db, { id: 'review-projection-run' }, { status: 'failed' })
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'failed',
       )
@@ -786,16 +785,16 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
       const planner = templates.find(
         (agent) => agent.frontmatterExtra.digitalEmployeeTemplate === 'implementation-planning',
       )!
-      const { agents } = tablesOf(db)
-      await db
-        .update(agents)
-        .set({
+      await patchAgentFixture(
+        db,
+        { id: codeWriter.id },
+        {
           frontmatterExtra: JSON.stringify({
             digitalEmployeeTemplate: 'code-writing',
             schemaVersion: 1,
           }),
-        })
-        .where(eq(agents.id, codeWriter.id))
+        },
+      )
       const service = new ExecutionContractService({
         registrations: developmentExecutionContractRegistrations,
         resources: createExecutionContractResourceAdapter(
@@ -1057,8 +1056,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
   test('a failed reviewed execution reports the task failure before derived plan validation', async () => {
     const db = provider.db
     const taskId = 'reviewed-execution-failed-before-output'
-    const { tasks } = tablesOf(db)
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'reviewed execution pre-spawn failure',
       workflowId: 'digital-employee-host-reviewed',
@@ -1110,8 +1108,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
   test('daemon-restart interruptions remain pending while automatic recovery is available', async () => {
     const db = provider.db
     const taskId = 'employee-execution-recovering-after-daemon-restart'
-    const { tasks } = tablesOf(db)
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'recovering employee execution',
       workflowId: 'digital-employee-host',
@@ -1147,7 +1144,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
     // `.run()` 在 SQLite 上是同步的、在 PostgreSQL 上返回 Promise——漏了 await，这次写入
     // 就可能还没落库，下面那次 inspect 读到的仍是 `autoRecoverySuspended: false`，于是
     // 期望 failed 却拿到 pending（2026-09-22 在 CI 的 PG 臂上实撞，SQLite 臂一直绿）。
-    await db.update(tasks).set({ autoRecoverySuspended: true }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { autoRecoverySuspended: true })
     expect(await execution.inspect(taskId)).toEqual({
       kind: 'failed',
       errorClass: 'infrastructure',

@@ -9,8 +9,7 @@
 // project the failed node's RFC-145 failure code (failed-run oracle) and
 // taskNodeRunsProjection surfaces the per-run code.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   taskListItemsProjection,
@@ -31,15 +30,14 @@ async function seedFailedTask(
 ): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'ft',
     workflowId,
@@ -59,25 +57,23 @@ async function seedFailedTask(
     ]),
   })
   // Older retry (must lose the freshest pick) + freshest failed run.
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: '01OLD' + ulid().slice(5),
     taskId,
     nodeId: 'agent_x',
     status: 'failed',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: null,
     startedAt: Date.now() - 1000,
     failureCode: null,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: '01ZZZ' + ulid().slice(5),
     taskId,
     nodeId: 'agent_x',
     status: 'failed',
     retryIndex: 1,
     iteration: 0,
-    preSnapshot: null,
     startedAt: Date.now(),
     failureCode,
   })

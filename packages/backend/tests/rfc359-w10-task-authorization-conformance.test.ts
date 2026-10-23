@@ -27,6 +27,7 @@
 // 另外钉住 `SQL_IN_CHUNK` 分块：`visibleTaskIds` 按 500 一批发 `IN`，跨批的行必须一条不丢
 // ——分块写错在小数据集上完全看不出来，只有在真实规模的任务列表上表现为「少了几行」。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -56,7 +57,7 @@ interface Seeded {
 
 async function seed(db: PersistenceDb): Promise<Seeded> {
   const now = Date.now()
-  const { users, workflows, tasks, taskCollaborators } = tablesOf(db)
+  const { users, taskCollaborators } = tablesOf(db)
   // `task_collaborators.user_id` 有到 `users` 的外键，PostgreSQL 会真的校验它。
   await db.insert(users).values(
     ['alice', 'bob', 'carol'].map((id) => ({
@@ -68,7 +69,7 @@ async function seed(db: PersistenceDb): Promise<Seeded> {
     })),
   )
   const workflowId = `wf_${ulid()}`
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc359-w10-auth',
     description: '',
@@ -78,7 +79,7 @@ async function seed(db: PersistenceDb): Promise<Seeded> {
   })
   const mint = async (owner: string): Promise<string> => {
     const id = `w10auth_${ulid()}`
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id,
       name: id,
       workflowId,

@@ -22,9 +22,8 @@
 //   lock below stays: answering a self-clarify still yields exactly one pending
 //   rerun + a done clarify row.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -84,8 +83,7 @@ function selfClarifyDef(): WorkflowDefinition {
 async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'fixture',
     description: '',
@@ -98,7 +96,7 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<str
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -115,15 +113,14 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<str
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
@@ -140,7 +137,7 @@ describeEachProvider('RFC-076 PR-0 — clarify rerun write-ordering', (harness) 
     // worktreePath '' makes rollback a no-op, keeping the test hermetic).
     const agentRunId = `nr_agent_${Math.random().toString(36).slice(2, 8)}`
     const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: agentRunId,
       taskId,
       nodeId: 'agent_x',
@@ -149,7 +146,7 @@ describeEachProvider('RFC-076 PR-0 — clarify rerun write-ordering', (harness) 
       iteration: 0,
       startedAt: Date.now(),
       finishedAt: Date.now(),
-      preSnapshot: 'snap-x',
+      checkpoints: [{ mountPath: '', preSnapshot: 'snap-x' }],
     })
 
     const sess = await createClarifyRound({

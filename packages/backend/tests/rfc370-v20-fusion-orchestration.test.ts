@@ -33,6 +33,7 @@ import {
   type FusionDeps,
 } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
 import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/composition/fusion'
+import { composeFusionResourceSeedParticipant } from '../src/modules/resource-catalog/composition/fusionResourceSeed'
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
@@ -145,6 +146,7 @@ describeEachProvider(
       })
       const engine = fakeEngineTasks()
       const operations = composeFusionOperationsFor({
+        resourceSeed: composeFusionResourceSeedParticipant(),
         memoryMembership: composeSkillMemoryFusionParticipantFactory(),
         skillVersionCommit: composeSkillVersionCommitParticipantFactory({ skillContent: binding }),
         db,

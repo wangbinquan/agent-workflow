@@ -8,7 +8,7 @@
 //     writes, owner transfer keeps the previous owner as collaborator
 //   - task users hold operational rights (D13): a collaborator may cancel
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -69,10 +69,10 @@ async function req(
 
 async function seedTask(h: Harness, ownerId: string, collaboratorIds: string[]): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks, taskCollaborators } = tablesOf(h.db)
-  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
+  const { taskCollaborators } = tablesOf(h.db)
+  await workflowFixture(h.db, { id: workflowId, name: 'wf', definition: '{}' })
   const taskId = ulid()
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 't',
     id: taskId,
     workflowId,

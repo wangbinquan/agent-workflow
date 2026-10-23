@@ -1,7 +1,15 @@
 // RFC-382: reproduce the former PostgreSQL session wiring, then prove real gate work precedes drive once.
+
+import { humanGateCheckpointProjectionMember } from '@/modules/task-execution/infrastructure/humanGateProjection'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import {
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
@@ -9,7 +17,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { gitStashSnapshot } from '@/util/git'
+
 import {
   DefaultTaskDriveCoordinator,
   resolveTaskDriveConfig,
@@ -21,10 +29,7 @@ import { prepareClarifyDecision } from '@/services/clarifyDecision'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { finishCommittedClarifyAutoDispatch } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
-import {
-  humanGateNodeProjectionFence,
-  humanGateNodeProjectionMember,
-} from '@/modules/task-execution/domain/humanGateContinuation'
+import { humanGateNodeProjectionFence } from '@/modules/task-execution/domain/humanGateContinuation'
 import { validatedWorkspaceRollbackPlan } from '@/modules/collaboration/domain/workspaceRollbackPlan'
 import { encodeReviewDecisionManifest } from '@/modules/collaboration/domain/reviewDecision'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -63,10 +68,11 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           db = harness.db
         const seeded = await seedBundleTask(harness, home, 'running', false),
           taskId = seeded.taskId
-        const { tasks, taskExecutionIntents, taskQuestions, nodeRuns } = tablesOf(db)
-        await db
-          .update(tasks)
-          .set({
+        const { taskExecutionIntents, taskQuestions, nodeRuns } = tablesOf(db)
+        await patchTaskFixture(
+          db,
+          { id: taskId },
+          {
             workflowSnapshot: JSON.stringify({
               $schema_version: 4,
               inputs: [],
@@ -77,8 +83,8 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
               edges: [],
               outputs: [],
             }),
-          })
-          .where(eq(tasks.id, taskId))
+          },
+        )
         const asking = await mintSequenceRun(db, taskId, { nodeId: 'P', status: 'awaiting_human' })
         const round = await createClarifyRound({
           kind: 'self',
@@ -211,25 +217,26 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           'fixture',
         )
         writeFileSync(join(home, 'document.txt'), 'ask-time')
-        const snapshot = await gitStashSnapshot(home)
+        const snapshot = await legacyStashSnapshotFixture(home)
         writeFileSync(join(home, 'document.txt'), 'changed')
         const fixture = taskBundleInput(harness, home),
           bundle = fixture.compose(),
           db = harness.db
         const seeded = await seedBundleTask(harness, home, 'running', false),
           taskId = seeded.taskId
-        const { tasks, nodeRuns, taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(db)
-        await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
+        const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(db)
+        await patchTaskFixture(db, { id: taskId }, { status: 'awaiting_review' })
         const source = await mintSequenceRun(db, taskId, { nodeId: 'writer', status: 'done' })
-        await db
-          .update(nodeRuns)
-          .set({
+        await patchNodeRunFixture(
+          db,
+          { id: source },
+          {
             status: 'canceled',
-            preSnapshot: snapshot,
             supersededByReview: 'rejected',
             rolledBack: false,
-          })
-          .where(eq(nodeRuns.id, source))
+            checkpoints: [{ mountPath: '', preSnapshot: snapshot }],
+          },
+        )
         const rerun = await mintSequenceRun(db, taskId, {
           nodeId: 'writer',
           status: 'pending',
@@ -252,10 +259,9 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
           gateRef = `review:${taskId}:1`,
           now = Date.now()
         const decision = await databaseSessionFor(db).transaction(async (tx) => {
-          const { nodeRuns, tasks, collaborationGateOperations } = tablesOf(tx)
-          const rows = await tx.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-          const revision = (await first(tx.select().from(tasks).where(eq(tasks.id, taskId))))!
-            .lifecycleEventRevision
+          const { collaborationGateOperations } = tablesOf(tx)
+          const rows = await readNodeRunFixtures(tx, { taskId })
+          const revision = (await readTaskFixtures(tx, { id: taskId }))[0]!.lifecycleEventRevision
           await insertOne(tx, collaborationGateOperations, {
             id: operationId,
             taskId,
@@ -303,7 +309,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
             gate: { kind: 'review', ref: gateRef },
             expectedTaskRevision: revision,
             expectedNodeProjection: humanGateNodeProjectionFence(
-              rows.map(humanGateNodeProjectionMember),
+              rows.map((row) => humanGateCheckpointProjectionMember(row, [''])),
             ),
             continuationLineage: { sourceNodeRunIds: [source], rerunNodeRunIds: [rerun] },
             workspaceRollbackPlan: { operationId, planDigest: plan.digest },
@@ -320,7 +326,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
             expect(readFileSync(join(home, 'document.txt'), 'utf8')).toBe(
               baseline ? 'changed' : 'ask-time',
             )
-            const [row] = await db.select().from(nodeRuns).where(eq(nodeRuns.id, source))
+            const [row] = await readNodeRunFixtures(db, { id: source })
             expect(row!.rolledBack).toBe(!baseline)
             const effects = await db
               .select()

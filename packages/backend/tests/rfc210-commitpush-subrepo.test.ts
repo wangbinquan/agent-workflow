@@ -16,8 +16,7 @@
 // bump gitlink 并推。任一子仓推不上去就**扣住父仓**——宁可少推一次，也不让远端
 // 出现无法解析的 gitlink。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -126,9 +125,8 @@ async function fixture(subPushable: boolean): Promise<{ parent: string; subOrigi
  * `rfc328_tasks_lineage_after_insert` has no PostgreSQL counterpart by design.
  */
 async function seedTask(repo: string): Promise<PersistenceDb> {
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'wf', name: 'f', definition: '{}' })
+  await taskFixture(db, {
     id: 't1',
     name: 'cp',
     workflowId: 'wf',
@@ -148,7 +146,7 @@ async function seedTask(repo: string): Promise<PersistenceDb> {
   })
   // The mint factory enforces "born-running ⟹ child row", so provide the
   // triggering agent run exactly as production does.
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'parent-run',
     taskId: 't1',
     nodeId: 'writer',

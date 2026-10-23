@@ -29,6 +29,13 @@ type Row = PersistenceTables['nodeRuns']['$inferSelect']
 // Minimal node-run row factory (identical shape to dispatch-frontier.test.ts).
 function run(over: Partial<Row>): Row {
   return {
+    seq: null,
+    parentNodeRunId: null,
+    containerRunId: null,
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
     id: '01R',
     nodeId: 'n',
     iteration: 0,
@@ -70,7 +77,7 @@ describe('RFC-076 PR-A — wrapper-fanout uses own iteration (progress ignored)'
     })
   }
 
-  test('inner pending at wrapperRow.iteration (3) → true (own iteration, NOT progress 9)', () => {
+  test('inner pending at wrapperRow.iteration (3) → true (own iteration, NOT progress 9)', async () => {
     const wrapperRow = fanoutAwaitingRow()
     const rows = [
       wrapperRow,
@@ -82,16 +89,16 @@ describe('RFC-076 PR-A — wrapper-fanout uses own iteration (progress ignored)'
         containerRunId: wrapperRow.id,
       }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, rows, fanoutDef)).toBe(true)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, rows, fanoutDef)).toBe(true)
   })
 
-  test('inner pending at progress.iteration (9) instead of 3 → false (progress ignored)', () => {
+  test('inner pending at progress.iteration (9) instead of 3 → false (progress ignored)', async () => {
     const wrapperRow = fanoutAwaitingRow()
     const rows = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 9 })]
-    expect(wrapperHasFreshInnerWork(wrapperRow, rows, fanoutDef)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, rows, fanoutDef)).toBe(false)
   })
 
-  test('isDispatchable(awaiting_review wrapper-fanout) routes to wrapperHasFreshInnerWork → true', () => {
+  test('isDispatchable(awaiting_review wrapper-fanout) routes to wrapperHasFreshInnerWork → true', async () => {
     const wrapperRow = fanoutAwaitingRow()
     const rows = [
       wrapperRow,
@@ -105,12 +112,14 @@ describe('RFC-076 PR-A — wrapper-fanout uses own iteration (progress ignored)'
     ]
     // WRAPPER_KINDS.has('wrapper-fanout') === true → routes into the wrapper carve-out;
     // inner pending at the wrapper's own iteration (3) makes it dispatchable.
-    expect(isDispatchable(wrapperRow, 'wrapper-fanout', NO_FRESH, rows, fanoutDef)).toBe(true)
+    expect(await isDispatchable(wrapperRow, 'wrapper-fanout', NO_FRESH, rows, fanoutDef)).toBe(true)
   })
 
-  test('isDispatchable wrapper-fanout with inner pending only at progress iteration (9) → false', () => {
+  test('isDispatchable wrapper-fanout with inner pending only at progress iteration (9) → false', async () => {
     const wrapperRow = fanoutAwaitingRow()
     const rows = [wrapperRow, run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 9 })]
-    expect(isDispatchable(wrapperRow, 'wrapper-fanout', NO_FRESH, rows, fanoutDef)).toBe(false)
+    expect(await isDispatchable(wrapperRow, 'wrapper-fanout', NO_FRESH, rows, fanoutDef)).toBe(
+      false,
+    )
   })
 })

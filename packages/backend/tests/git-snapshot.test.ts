@@ -1,11 +1,17 @@
 // gitStashSnapshot + rollbackToSnapshot end-to-end against a real git
 // fixture (P-3-07).
 
+// RFC-395 II-a A2 update (the original rationale above is retained as history):
+// RFC-395 II-a A2: historical stash fixtures exercise surviving rollback and diff behavior.
+
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { createLogger } from '@/util/log'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gitDiffSnapshot, gitStashSnapshot, rollbackToSnapshot, runGit } from '../src/util/git'
+import { gitDiffSnapshot, rollbackToSnapshot, runGit } from '../src/util/git'
 
 interface Repo {
   path: string
@@ -23,20 +29,34 @@ async function buildRepo(): Promise<Repo> {
   return { path, cleanup: () => rmSync(path, { recursive: true, force: true }) }
 }
 
-describe('gitStashSnapshot + rollbackToSnapshot', () => {
+describe('historical snapshots and rollbackToSnapshot', () => {
   let r: Repo
   beforeEach(async () => {
     r = await buildRepo()
   })
   afterEach(() => r.cleanup())
 
-  test('clean worktree → snapshot returns empty string', async () => {
-    expect(await gitStashSnapshot(r.path)).toBe('')
+  test('historical clean-tree marker skips resume rollback after later edits', async () => {
+    const snapshot = await legacyStashSnapshotFixture(r.path)
+    expect(snapshot).toBe('')
+    writeFileSync(join(r.path, 'a.txt'), 'later\n')
+    const outcome = await rollbackNodeRunWorktrees(
+      { worktreePath: r.path, repos: [] },
+      {
+        id: 'historical-clean',
+        checkpoints: [{ mountPath: '', preSnapshot: snapshot }],
+        checkpointScope: 'workspace' as const,
+      },
+      {},
+      createLogger('snapshot-fixture'),
+    )
+    expect(outcome).toEqual({ attempted: false, failures: [] })
+    expect(readFileSync(join(r.path, 'a.txt'), 'utf8')).toBe('later\n')
   })
 
-  test('captures modified tracked file', async () => {
+  test('rollback accepts a historical unreferenced stash object', async () => {
     writeFileSync(join(r.path, 'a.txt'), 'modified\n')
-    const sha = await gitStashSnapshot(r.path)
+    const sha = await legacyStashSnapshotFixture(r.path)
     expect(sha).toMatch(/^[a-f0-9]{40}$/)
     // git stash create does NOT push to stash list; verify the entry isn't
     // there but the commit object is reachable.
@@ -44,27 +64,32 @@ describe('gitStashSnapshot + rollbackToSnapshot', () => {
     expect(list.stdout.trim()).toBe('')
     const cat = await runGit(r.path, ['cat-file', '-t', sha])
     expect(cat.stdout.trim()).toBe('commit')
+    writeFileSync(join(r.path, 'a.txt'), 'later\n')
+    await rollbackToSnapshot(r.path, sha)
+    expect(readFileSync(join(r.path, 'a.txt'), 'utf8')).toBe('modified\n')
   })
 
-  test('captures untracked file via --include-untracked semantics', async () => {
-    // git stash create stashes tracked + index by default. The runner takes
-    // the snapshot BEFORE any agent write, so this primarily protects
-    // tracked working-tree changes. Untracked files predating the agent are
-    // rare; this test pins the current behavior.
+  test('historical empty marker preserves untracked files on resume', async () => {
     writeFileSync(join(r.path, 'fresh.txt'), 'new\n')
-    const sha = await gitStashSnapshot(r.path)
-    // Default stash create does not include untracked: returns '' if only
-    // untracked changes exist.
-    if (sha === '') {
-      expect(existsSync(join(r.path, 'fresh.txt'))).toBe(true)
-    } else {
-      expect(sha).toMatch(/^[a-f0-9]{40}$/)
-    }
+    const sha = await legacyStashSnapshotFixture(r.path)
+    expect(sha).toBe('')
+    const outcome = await rollbackNodeRunWorktrees(
+      { worktreePath: r.path, repos: [] },
+      {
+        id: 'historical-untracked',
+        checkpoints: [{ mountPath: '', preSnapshot: sha }],
+        checkpointScope: 'workspace' as const,
+      },
+      {},
+      createLogger('snapshot-fixture'),
+    )
+    expect(outcome).toEqual({ attempted: false, failures: [] })
+    expect(readFileSync(join(r.path, 'fresh.txt'), 'utf8')).toBe('new\n')
   })
 
   test('rollback restores the snapshot after subsequent edits', async () => {
     writeFileSync(join(r.path, 'a.txt'), 'snap-time\n')
-    const sha = await gitStashSnapshot(r.path)
+    const sha = await legacyStashSnapshotFixture(r.path)
 
     // Simulate an agent write that we want to undo.
     writeFileSync(join(r.path, 'a.txt'), 'post-snap garbage\n')

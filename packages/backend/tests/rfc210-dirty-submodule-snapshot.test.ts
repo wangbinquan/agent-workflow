@@ -70,7 +70,7 @@ async function commitIn(dir: string, msg: string): Promise<string> {
 }
 
 function canonRepo(dir: string): CanonRepo {
-  return { repoPath: dir, worktreePath: dir, worktreeDirName: '', baseBranch: 'main' }
+  return { repoPath: dir, worktreePath: dir, mountPath: '', baseBranch: 'main' }
 }
 
 describe('RFC-210 — user edits in a canonical submodule are pinned before -f', () => {

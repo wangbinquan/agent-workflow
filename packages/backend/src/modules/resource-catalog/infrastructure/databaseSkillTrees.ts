@@ -13,13 +13,15 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 import { digestSortedTree } from './legacy/skillHash'
 
-export const LIVE_TREE = 'live'
-export const versionTree = (version: number): string => `version:${version}`
-export const stagingTree = (publicationId: string): string => `staging:${publicationId}`
+export {
+  LIVE_TREE,
+  versionTree,
+  stagingTree,
+  trashTreeOf,
+  trashTreePrefix,
+} from '@/platform/content/legacySkill'
+import { trashTreePrefix } from '@/platform/content/legacySkill'
 const TRASH_PREFIX = 'trash:'
-export const trashTreeOf = (operationId: string, tree: string): string =>
-  `${TRASH_PREFIX}${operationId}|${tree}`
-export const trashTreePrefix = (operationId: string): string => `${TRASH_PREFIX}${operationId}|`
 
 export interface SkillTreeFile {
   readonly path: string

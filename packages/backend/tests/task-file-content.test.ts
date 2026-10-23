@@ -10,8 +10,7 @@
 // `RepositoryWorkspaceStore`）。`openContainedFile` 那一组**一条数据库语句都没有**
 // ——纯文件系统判据，双跑只是白花墙钟，留单份。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, renameSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -52,18 +51,17 @@ async function makeRepo(): Promise<{ dir: string; commit: string }> {
 
 async function seedTask(
   db: PersistenceDb,
-  opts: { worktreePath: string; baseCommit: string | null; repoCount?: number },
+  opts: { worktreePath: string; baseCommit: string | null },
 ): Promise<string> {
   const taskId = `01FC${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -76,7 +74,6 @@ async function seedTask(
     inputs: '{}',
     startedAt: Date.now(),
     baseCommit: opts.baseCommit,
-    repoCount: opts.repoCount ?? 1,
     // PostgreSQL 的迁移只投影 DDL，不带 `rfc328_tasks_lineage_after_insert` 那条 SQLite
     // 触发器，所以直插 `tasks` 的夹具两侧都显式写 lineage，两个引擎的起点才相同。
     executionLineageId: taskId,
@@ -233,24 +230,18 @@ describeEachProvider('getTaskFileContent（双引擎）', (harness) => {
     const secondaryHead = (await runGit(secondary.dir, ['rev-parse', 'HEAD'])).stdout.trim()
 
     const container = tempDir('aw-fc-multi-')
-    const taskId = await seedTask(db, {
-      worktreePath: container,
-      baseCommit: primary.commit,
-      repoCount: 2,
-    })
+    const taskId = await seedTask(db, { worktreePath: container, baseCommit: primary.commit })
     const repoRow = {
       taskId,
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
     }
-    const { taskRepos } = tablesOf(db)
-    await db.insert(taskRepos).values([
+    await taskRepoFixture(db, [
       {
         ...repoRow,
         repoIndex: 0,
         repoPath: primary.dir,
         worktreePath: primary.dir,
-        worktreeDirName: 'primary',
         // RFC-248: 规范 key 是 mount_path（不再是 basename）。生产路径 startTask
         // 永远显式写它；直插 task_repos 的夹具必须自己给，否则拿到列默认 ''。
         mountPath: 'primary',
@@ -261,7 +252,6 @@ describeEachProvider('getTaskFileContent（双引擎）', (harness) => {
         repoIndex: 1,
         repoPath: secondary.dir,
         worktreePath: secondary.dir,
-        worktreeDirName: 'secondary',
         mountPath: 'secondary',
         baseCommit: secondaryHead,
       },

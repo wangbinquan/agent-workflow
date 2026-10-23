@@ -1,11 +1,4 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import {
-  serializeWorkflowDefinitionStorageV1,
-  WORKFLOW_SCHEMA_VERSION,
-} from '@agent-workflow/shared'
-
 import type { Actor } from '@/auth/actor'
-import { initialBuiltinResourceAcl } from '@/modules/resource-catalog/application/resourceDefaults'
 import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   loadWorkflowValidationContext,
@@ -19,25 +12,6 @@ import type {
   AgentLaunchWorkflowValidation,
 } from '../application/ports/agentLaunchResourceOperations'
 
-const AGENT_HOST_WORKFLOW_ID = '00000000000000AGENTHOST00'
-const AGENT_HOST_WORKFLOW_NAME = '__agent_host__'
-
-function hostWorkflowRow() {
-  return {
-    id: AGENT_HOST_WORKFLOW_ID,
-    name: AGENT_HOST_WORKFLOW_NAME,
-    description: 'RFC-165 single-agent host anchor — do not launch directly',
-    definition: serializeWorkflowDefinitionStorageV1({
-      $schema_version: WORKFLOW_SCHEMA_VERSION,
-      inputs: [],
-      nodes: [],
-      edges: [],
-    }),
-    ...initialBuiltinResourceAcl(null),
-    builtin: true,
-  } as const
-}
-
 /**
  * RFC-359 AC-1（plan §5ge）—— **两个 provider 唯一的一份**。
  *
@@ -46,8 +20,6 @@ function hostWorkflowRow() {
  *     PG 那份转交给注入的 `input.agents.get`；
  *   · `validateHostWorkflow`：SQLite 那份体内 `validateWorkflowDef(def, await loadWorkflowValidationContext(db))`，
  *     PG 那份转交给注入的 `input.workflowValidation.validate`。
- * 第三件 `ensureHostWorkflow` 本来就一样，只差 PG 那份多写了个 `.run()`——
- * 中立句柄上 `await` 就够（§5ft 同一条）。
  *
  * 按 §5fq 三条判据一条都不命中：这不是引擎差异，是**装配责任放在了不同的地方**。
  * 处方仍是「装配者提供答案」，但这里用**缺省实参**收口：两个口子都可选，
@@ -77,13 +49,6 @@ export function createAgentLaunchResourceOperations(input: {
   }
   return Object.freeze({
     loadVisibleAgent: (actor: Actor, agentId: string) => agents.get(actor, agentId),
-    async ensureHostWorkflow() {
-      const { workflows } = tablesOf(db)
-      await db
-        .insert(workflows)
-        .values(hostWorkflowRow())
-        .onConflictDoNothing({ target: workflows.id })
-    },
     async validateHostWorkflow(
       definition: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[0],
       candidate?: Parameters<AgentLaunchResourceOperations['validateHostWorkflow']>[1],

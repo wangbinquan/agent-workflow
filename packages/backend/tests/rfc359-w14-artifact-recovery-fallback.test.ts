@@ -18,6 +18,7 @@
 // `if (!(error instanceof ZodError)) throw error` 去掉，③ 当场红（legacy 被调了一次）；
 // 把整个 `catch` 去掉，② 当场红（旧格式工件的 journal 行卡住）。
 
+// 2026-10-22 RFC-395 II-a A6：格式在 effect 前选择；effect 的 ZodError 不再触发另一套恢复。
 import { describe, expect, test } from 'bun:test'
 import { z, type ZodError } from 'zod'
 
@@ -25,7 +26,7 @@ import type {
   ResourcePackageApplyArtifactRecoveryPort,
   ResourcePackageApplyJournalSnapshot,
 } from '../src/modules/resource-catalog/application/resourcePackageMaintenance'
-import { composeResourcePackageApplyArtifactRecoveryChain } from '../src/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { createVersionedResourcePackageArtifactRecovery } from '../src/modules/resource-catalog/infrastructure/resourcePackageArtifactRecovery'
 
 const JOURNAL: ResourcePackageApplyJournalSnapshot = Object.freeze({
   id: 'journal-1',
@@ -34,6 +35,13 @@ const JOURNAL: ResourcePackageApplyJournalSnapshot = Object.freeze({
   receiptJson: JSON.stringify({ journalId: 'journal-1', applied: [] }),
   updatedAt: 1,
 })
+
+const LEGACY_JOURNAL = {
+  ...JOURNAL,
+  preparedArtifactsJson: JSON.stringify([
+    { kind: 'skill-stage', skillId: 's', opId: 'old', skillDir: '/skills/s' },
+  ]),
+}
 
 /** 解码失败长什么样：用真的 zod 报错，不是自造的 `new Error('ZodError')`。 */
 function decodeFailure(): ZodError {
@@ -60,11 +68,11 @@ function recording(behaviour: {
   }
 }
 
-describe('RFC-359 —— 落盘工件读回的跨格式回落', () => {
+describe('RFC-395 A6 versioned legacy recovery', () => {
   test('① 统一格式读得动 ⇒ legacy 读回侧一次都不跑', async () => {
     const primary = recording({})
     const legacy = recording({})
-    const chain = composeResourcePackageApplyArtifactRecoveryChain(primary, legacy)
+    const chain = createVersionedResourcePackageArtifactRecovery(primary, legacy)
 
     await chain.rollForward(JOURNAL)
     await chain.compensate(JOURNAL)
@@ -73,43 +81,45 @@ describe('RFC-359 —— 落盘工件读回的跨格式回落', () => {
     expect(legacy.calls).toEqual([])
   })
 
-  test('② 统一格式解码失败（合一前留下的旧工件）⇒ 回落到 legacy 读回侧，两个入口都回落', async () => {
+  test('② 旧格式在 effect 之前分派给 legacy，两个入口一致', async () => {
     const primary = recording({
       rollForward: () => Promise.reject(decodeFailure()),
       compensate: () => Promise.reject(decodeFailure()),
     })
     const legacy = recording({})
-    const chain = composeResourcePackageApplyArtifactRecoveryChain(primary, legacy)
+    const chain = createVersionedResourcePackageArtifactRecovery(primary, legacy)
 
-    await chain.rollForward(JOURNAL)
-    await chain.compensate(JOURNAL)
+    await chain.rollForward(LEGACY_JOURNAL)
+    await chain.compensate(LEGACY_JOURNAL)
 
-    expect(primary.calls).toEqual(['rollForward', 'compensate'])
+    expect(primary.calls).toEqual([])
     expect(legacy.calls).toEqual(['rollForward', 'compensate'])
   })
 
-  test('③ 非解码错误原样抛出，**不**换一个读回侧再动一次手', async () => {
-    const boom = new Error('resource-package-plugin-publication-missing:p1')
-    const primary = recording({
-      rollForward: () => Promise.reject(boom),
-      compensate: () => Promise.reject(boom),
-    })
-    const legacy = recording({})
-    const chain = composeResourcePackageApplyArtifactRecoveryChain(primary, legacy)
+  test.each([new Error('effect-failed'), decodeFailure()])(
+    '③ effect 错误（含 ZodError）原样抛出，不换读回侧',
+    async (boom) => {
+      const primary = recording({
+        rollForward: () => Promise.reject(boom),
+        compensate: () => Promise.reject(boom),
+      })
+      const legacy = recording({})
+      const chain = createVersionedResourcePackageArtifactRecovery(primary, legacy)
 
-    await expect(chain.rollForward(JOURNAL)).rejects.toThrow(boom.message)
-    await expect(chain.compensate(JOURNAL)).rejects.toThrow(boom.message)
+      await expect(chain.rollForward(JOURNAL)).rejects.toThrow(boom.message)
+      await expect(chain.compensate(JOURNAL)).rejects.toThrow(boom.message)
 
-    expect(legacy.calls).toEqual([])
-  })
+      expect(legacy.calls).toEqual([])
+    },
+  )
 
   test('④ legacy 读回侧自己失败时，报的是 legacy 那条错（不被解码错覆盖）', async () => {
     const primary = recording({ rollForward: () => Promise.reject(decodeFailure()) })
     const legacy = recording({
       rollForward: () => Promise.reject(new Error('legacy-recovery-failed')),
     })
-    const chain = composeResourcePackageApplyArtifactRecoveryChain(primary, legacy)
+    const chain = createVersionedResourcePackageArtifactRecovery(primary, legacy)
 
-    await expect(chain.rollForward(JOURNAL)).rejects.toThrow('legacy-recovery-failed')
+    await expect(chain.rollForward(LEGACY_JOURNAL)).rejects.toThrow('legacy-recovery-failed')
   })
 })

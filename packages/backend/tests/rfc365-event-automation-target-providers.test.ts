@@ -1,3 +1,4 @@
+import { readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -348,8 +349,8 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
   })
 
   test('Task and Case providers adopt legacy receipts and linearize concurrent starts', async () => {
-    const { tasks, employeeCases, employeeCaseEventOrigins } = tablesOf(harness.db)
-    await insertOne(harness.db, tasks, taskRow('legacy-event-task', 'legacy-task-delivery'))
+    const { employeeCases, employeeCaseEventOrigins } = tablesOf(harness.db)
+    await taskFixture(harness.db, taskRow('legacy-event-task', 'legacy-task-delivery'))
     await insertOne(harness.db, employeeCases, employeeCaseRow('legacy-event-case'))
     await insertOne(harness.db, employeeCaseEventOrigins, {
       caseId: 'legacy-event-case',
@@ -440,7 +441,7 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
       resources: Object.freeze({}) as never,
       async launch() {
         const taskId = `racing-event-task-${++taskOrdinal}`
-        await insertOne(harness.db, tasks, taskRow(taskId, 'racing-task-delivery'))
+        await taskFixture(harness.db, taskRow(taskId, 'racing-task-delivery'))
         return { taskId }
       },
     })
@@ -484,10 +485,9 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
     expect(new Set(taskReceipts.map((receipt) => receipt.taskId)).size).toBe(1)
     expect(new Set(caseReceipts.map((receipt) => receipt.caseId)).size).toBe(1)
     expect(
-      await harness.db
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(eq(tasks.eventDeliveryId, 'racing-task-delivery')),
+      await readTaskFixtures(harness.db, { eventDeliveryId: 'racing-task-delivery' }).then((rows) =>
+        rows.map((row) => ({ id: row.id })),
+      ),
     ).toHaveLength(1)
     expect(
       await harness.db

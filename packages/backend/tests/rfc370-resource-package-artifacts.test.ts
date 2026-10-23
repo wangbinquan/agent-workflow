@@ -1,5 +1,6 @@
 // RFC-370: selected storage owners must drive the real package apply and recovery,
 // while AW retains durable journal, database publication and replay semantics.
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -22,11 +23,8 @@ import type {
 import type { ResourcePackageApplyArtifactRecoveryPort } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composePostgresqlResourcePackageProvider } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import {
-  composePostgresqlResourcePackageApplyMaintenance,
-  composeSqliteResourcePackageApplyMaintenance,
-} from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { buildPackagePreviewFromReadPort } from '@/services/resourcePackage/preview'
 import { encodeZip } from '@/util/zip'
@@ -163,7 +161,7 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
           importId: 'storage-preview',
         }),
       )
-      return createPostgresqlResourcePackageAtomicApplyOperations({ db: harness.db, box }).apply({
+      return createResourcePackageAtomicApplyOperations({ db: harness.db, box }).apply({
         actor,
         authority,
         package: pkg,
@@ -428,7 +426,7 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
     const { skills } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toHaveLength(1)
     let recovered = 0
-    const maintenance = composePostgresqlResourcePackageApplyMaintenance({
+    const maintenance = composeResourcePackageApplyMaintenance({
       db: harness.db,
       appHome: f.appHome,
       pluginsDir: join(f.appHome, 'plugins'),
@@ -446,7 +444,9 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
         },
       },
     })
-    expect(await maintenance.command.converge({ activeApplyIds: [] })).toEqual({
+    expect(
+      await createAtomicApplyRecovery([maintenance.scene]).converge({ 'resource-package': [] }),
+    ).toEqual({
       failed: 0,
       rolledForward: 1,
     })
@@ -505,18 +505,22 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
       }
       const maintenance =
         composition === 'sqlite'
-          ? composeSqliteResourcePackageApplyMaintenance({
+          ? composeResourcePackageApplyMaintenance({
               ...input,
               activitySource: { activeApplyIds: () => ['active'] },
             })
-          : composePostgresqlResourcePackageApplyMaintenance(input)
-      expect(await maintenance.command.converge({ activeApplyIds: ['active'] })).toEqual({
+          : composeResourcePackageApplyMaintenance(input)
+      expect(
+        await createAtomicApplyRecovery([maintenance.scene]).converge({
+          'resource-package': ['active'],
+        }),
+      ).toEqual({
         failed: 0,
         rolledForward: 0,
       })
       failing = false
-      const pending = maintenance.command
-        .converge({ activeApplyIds: ['active'] })
+      const pending = createAtomicApplyRecovery([maintenance.scene])
+        .converge({ 'resource-package': ['active'] })
         .then((result) => {
           settled = true
           return result

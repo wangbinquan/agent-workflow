@@ -5,6 +5,7 @@
 // 起来。现在决定 / 评论 / 选择跑在 `DatabaseSession` 上，node_run 状态 CAS、任务成员判定、
 // 正文读取、互斥作用域各只剩一份实现。场景对照 SQLite 黄金锁 `review-decision-full-asserts.test.ts`。
 
+import { readNodeRunOutputFixtures, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -35,16 +36,14 @@ const actor = { user: { id: REVIEW_OWNER } } as Parameters<
 >[0]['actor']
 
 const runById = async (db: PersistenceDb, id: string) => {
-  const { nodeRuns } = tablesOf(db)
-  return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+  return (await readNodeRunFixtures(db, { id }))[0]!
 }
 const docById = async (db: PersistenceDb, id: string) => {
   const { docVersions } = tablesOf(db)
   return (await db.select().from(docVersions).where(eq(docVersions.id, id)))[0]!
 }
 const outputsOf = (db: PersistenceDb, runId: string) => {
-  const { nodeRunOutputs } = tablesOf(db)
-  return db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, runId))
+  return readNodeRunOutputFixtures(db, { nodeRunId: runId })
 }
 const commentsOf = (db: PersistenceDb, docVersionId: string) => {
   const { reviewComments } = tablesOf(db)
@@ -77,8 +76,7 @@ const reviewEvents = (db: PersistenceDb, reviewRunId: string, type: string) => {
     )
 }
 const taskRuns = (db: PersistenceDb, taskId: string) => {
-  const { nodeRuns } = tablesOf(db)
-  return db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  return readNodeRunFixtures(db, { taskId })
 }
 
 describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）', (harness) => {

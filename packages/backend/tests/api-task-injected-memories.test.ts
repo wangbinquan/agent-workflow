@@ -6,8 +6,7 @@
 //   - Corrupted JSON in the column → field surfaces as null (no 5xx).
 //   - Empty-array payload distinct from NULL.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -17,8 +16,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -27,7 +25,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string 
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
@@ -56,8 +54,7 @@ async function seedRun(
   nodeId = 'n',
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -65,7 +62,7 @@ async function seedRun(
     retryIndex: 0,
     reviewIteration: 0,
     status: 'done',
-    injectedMemoriesJson: json,
+    injectedMemories: json,
     startedAt: Date.now(),
   })
   return id

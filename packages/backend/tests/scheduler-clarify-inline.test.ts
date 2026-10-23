@@ -14,7 +14,7 @@
 // Uses MOCK_OPENCODE_CAPTURE_ARGV_TO + MOCK_OPENCODE_EMIT_SESSION_ID added in
 // fixtures/mock-opencode.ts (RFC-026 additive helpers).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -85,8 +85,7 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
 
 async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -145,13 +144,12 @@ async function seedWorkflowAndTask(
 ): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -262,8 +260,7 @@ function registerCases(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
-    const { nodeRuns } = tablesOf(h.db)
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const designerRun = runs
       .filter((r) => r.nodeId === 'd')
       .sort((a, b) => (a.id < b.id ? -1 : 1))[0]
@@ -290,7 +287,7 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
-    const { clarifyRounds, nodeRuns, nodeRunEvents } = tablesOf(h.db)
+    const { clarifyRounds, nodeRunEvents } = tablesOf(h.db)
     // User submits answers → mints rerun row (clarifyIteration=1).
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -350,7 +347,7 @@ function registerCases(provider: ProviderHarness) {
     // format under mandatory ask-back) emits the full output protocol block for
     // the first time, NOT the ask-again reminder. --session resume still fired
     // (asserted above), which is the point of this test.
-    const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const allRuns = await readNodeRunFixtures(h.db, { taskId })
     const rerun = allRuns.filter((r) => r.nodeId === 'd').sort((a, b) => (a.id > b.id ? -1 : 1))[0]
     expect(rerun).toBeDefined()
     // RFC-132 (PR-C): the flat `## Clarify Q&A` block replaces the round-grouped
@@ -392,7 +389,7 @@ function registerCases(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
-    const { clarifyRounds, nodeRuns } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     const firstRound = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     ).find((round) => round.iteration === 0)
@@ -464,7 +461,7 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
-    const designerRuns = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+    const designerRuns = (await readNodeRunFixtures(h.db, { taskId }))
       .filter((run) => run.nodeId === 'd')
       .sort((a, b) => (a.id < b.id ? -1 : 1))
     expect(designerRuns).toHaveLength(3)
@@ -499,7 +496,7 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
-    const { clarifyRounds, nodeRuns } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
@@ -542,7 +539,7 @@ function registerCases(provider: ProviderHarness) {
 
     // RFC-132 (PR-C): isolated rerun also renders the flat `## Clarify Q&A` block (round-grouped
     // "Prior Rounds (Answers)" / "User Answers (Current Round)" sections are gone).
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const rerun = runs.filter((r) => r.nodeId === 'd').sort((a, b) => (a.id > b.id ? -1 : 1))[0]
     expect(rerun?.promptText ?? '').toContain('## Clarify Q&A')
     expect(rerun?.promptText ?? '').not.toContain('Prior Rounds (Answers)')
@@ -569,7 +566,7 @@ function registerCases(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
-    const { clarifyRounds, nodeRuns, nodeRunEvents } = tablesOf(h.db)
+    const { clarifyRounds, nodeRunEvents } = tablesOf(h.db)
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
@@ -612,7 +609,7 @@ function registerCases(provider: ProviderHarness) {
       expect(line.argv).not.toContain('--session')
     }
     // Fallback warning event on the rerun row.
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const rerun = runs.filter((r) => r.nodeId === 'd').sort((a, b) => (a.id > b.id ? -1 : 1))[0]!
     const events = await h.db
       .select()

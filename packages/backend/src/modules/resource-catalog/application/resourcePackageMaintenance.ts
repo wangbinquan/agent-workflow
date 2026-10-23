@@ -1,8 +1,4 @@
-import type {
-  ResourcePackageApplyConvergenceInput,
-  ResourcePackageApplyConvergenceReceipt,
-  ResourcePackageApplyMaintenanceCommand,
-} from '../public/commands'
+import type { AtomicApplyPatch } from '@/platform/contracts/atomicApply'
 import type { ResourcePackageApplyActivityQuery } from '../public/queries'
 
 export type ResourcePackageApplyJournalState = 'prepared' | 'applying' | 'committed' | 'failed'
@@ -13,16 +9,15 @@ export interface ResourcePackageApplyJournalSnapshot {
   readonly preparedArtifactsJson: string
   readonly receiptJson: string | null
   readonly updatedAt: number
+  readonly error?: string | null
 }
 
 export interface ResourcePackageApplyJournalPort {
+  compareAndSet(
+    row: Pick<ResourcePackageApplyJournalSnapshot, 'id' | 'state'>,
+    patch: AtomicApplyPatch,
+  ): Promise<boolean>
   list(): Promise<readonly ResourcePackageApplyJournalSnapshot[]>
-  settleFailed(input: {
-    readonly id: string
-    readonly expectedState: 'prepared' | 'applying'
-    readonly error: string
-    readonly updatedAt: number
-  }): Promise<boolean>
 }
 
 export interface ResourcePackageApplyArtifactRecoveryPort {
@@ -41,71 +36,6 @@ export interface ResourcePackageApplyActivitySource {
 /** Provider-private writer paired with the public read-only activity query. */
 export interface ResourcePackageApplyActivityTracker {
   enter(applyId: string): Readonly<{ leave(): void }>
-}
-
-const CONVERGENCE_MIN_AGE_MS = 10 * 60 * 1000
-
-export function createResourcePackageApplyMaintenanceCommand(input: {
-  readonly journal: ResourcePackageApplyJournalPort
-  readonly artifacts: ResourcePackageApplyArtifactRecoveryPort
-  readonly now?: () => number
-  readonly log?: ResourcePackageApplyMaintenanceLog
-}): ResourcePackageApplyMaintenanceCommand {
-  const now = input.now ?? Date.now
-  return Object.freeze({
-    async converge(
-      command: ResourcePackageApplyConvergenceInput,
-    ): Promise<ResourcePackageApplyConvergenceReceipt> {
-      const active = new Set(command.activeApplyIds)
-      const reapBefore = now() - CONVERGENCE_MIN_AGE_MS
-      let failed = 0
-      let rolledForward = 0
-
-      for (const journal of await input.journal.list()) {
-        if (journal.state === 'committed') {
-          try {
-            await input.artifacts.rollForward(journal)
-            rolledForward += 1
-          } catch (error) {
-            input.log?.warn('resource-package-roll-forward-retryable', {
-              journalId: journal.id,
-              error: error instanceof Error ? error.message : String(error),
-            })
-          }
-          continue
-        }
-        if (
-          journal.state === 'failed' ||
-          active.has(journal.id) ||
-          journal.updatedAt > reapBefore
-        ) {
-          continue
-        }
-
-        try {
-          await input.artifacts.compensate(journal)
-        } catch (error) {
-          input.log?.warn('resource-package-compensation-retryable', {
-            journalId: journal.id,
-            error: error instanceof Error ? error.message : String(error),
-          })
-          continue
-        }
-        if (
-          await input.journal.settleFailed({
-            id: journal.id,
-            expectedState: journal.state,
-            error: 'converged: crashed before commit',
-            updatedAt: now(),
-          })
-        ) {
-          failed += 1
-        }
-      }
-
-      return Object.freeze({ failed, rolledForward })
-    },
-  })
 }
 
 export function createResourcePackageApplyActivityQuery(

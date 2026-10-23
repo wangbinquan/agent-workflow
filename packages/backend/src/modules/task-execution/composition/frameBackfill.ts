@@ -2,7 +2,7 @@
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runFrameBackfill, type FrameBackfillReport } from '../application/frameBackfillJob'
-import { createFrameBackfillStore } from '../infrastructure/frameBackfillStore'
+import { createFrameBackfillStore } from '../infrastructure/legacyMigration/frameBackfillStore'
 
 /**
  * RFC-359 AC-10 —— 这里**没有** provider 标签。

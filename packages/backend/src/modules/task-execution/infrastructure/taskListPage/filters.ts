@@ -6,6 +6,9 @@
 //     `taskListOriginMatches`——`origin` 的映射在 PostgreSQL 目录源上曾另写一份并猜错
 //     （「事件」/「API」筛选直接 400），2026-09-04 收成一份判据后这里跟着用同一份。
 
+import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
+import { taskWorkgroupNameExpression } from '../taskWorkgroupConfig'
+import { taskSubjectKindSql, taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskSubjectSql'
 import {
   TASK_LIST_ACTIVE_STATUSES,
   TASK_LIST_ATTENTION_STATUSES,
@@ -211,16 +214,14 @@ export function nonViewCondition(
   if (filters.statuses.length > 0) {
     conditions.push(sql`${col('status')} IN (${list(filters.statuses)})`)
   }
-  if (filters.subject === 'workgroup') {
-    conditions.push(sql`${col('workgroup_id')} IS NOT NULL AND ${col('workgroup_id')} <> ''`)
-  } else if (filters.subject === 'agent') {
-    conditions.push(sql`(${col('workgroup_id')} IS NULL OR ${col('workgroup_id')} = '')`)
+  if (filters.subject !== 'all') {
+    const subject = taskSubjectKindSql(taskSubjectSqlColumns(alias))
+    // 线上仍只有三个 facet；数字员工与 code-round 保留在原有 workflow 目录源。
     conditions.push(
-      sql`${col('source_agent_name')} IS NOT NULL AND ${col('source_agent_name')} <> ''`,
+      filters.subject === 'workflow'
+        ? sql`${subject} IN ('workflow', 'digital-employee', 'code-round')`
+        : sql`${subject} = ${filters.subject}`,
     )
-  } else if (filters.subject === 'workflow') {
-    conditions.push(sql`(${col('workgroup_id')} IS NULL OR ${col('workgroup_id')} = '')`)
-    conditions.push(sql`(${col('source_agent_name')} IS NULL OR ${col('source_agent_name')} = '')`)
   }
   // RFC-357：来源 → 存储值的映射只有 shared 的 `taskListOriginMatches` 一份。
   // 它此前在这里是手写的 `IN ('event','webhook')`，而 PostgreSQL 目录源另写了一份按
@@ -241,7 +242,10 @@ export function nonViewCondition(
     const derived = (name: 'workflow_name' | 'workgroup_name'): SQL => {
       if (alias === 'b') return col(name)
       if (name === 'workflow_name') {
-        return sql`(SELECT w_q.name FROM workflows w_q WHERE w_q.id = ${col('workflow_id')})`
+        return taskWorkflowNameSql(
+          taskSubjectSqlColumns(alias),
+          workflowNameExpression(db, col('workflow_id')),
+        )
       }
       return workgroupNameExpression(db, alias)
     }
@@ -281,10 +285,7 @@ export function nonViewCondition(
  * 外层 `NULLIF(…, '')` 是产品判据（空名字视同没有），不进矩阵。
  */
 export function workgroupNameExpression(db: TaskListPageDb, alias: string): SQL {
-  return sql`NULLIF(${engineOf(db).jsonMemberText(
-    sql.raw(`${alias}.workgroup_config_json`),
-    'workgroupName',
-  )}, '')`
+  return taskWorkgroupNameExpression(db, alias)
 }
 
 /** `openAlert` 覆盖 attention 视图里「有未结告警」这一半：旧管线读已物化的

@@ -13,8 +13,7 @@
 // 不到 recorded（新增子仓，父层 HEAD 里没有）按"必须推"处理，不是按"没动"。
 // A8 原修复的语义保持不变：真正没动过的子仓一个 ref 都不写。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -107,9 +106,8 @@ async function fixture(): Promise<{ parent: string; vendorSrc: string; innerSrc:
  * statements only parsed against the bun:sqlite dialect.
  */
 async function seedTask(db: PersistenceDb, repo: string): Promise<void> {
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'wf', name: 'f', definition: '{}' })
+  await taskFixture(db, {
     id: 't1',
     name: 'cp',
     workflowId: 'wf',
@@ -130,7 +128,7 @@ async function seedTask(db: PersistenceDb, repo: string): Promise<void> {
       { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
     ]),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'parent-run',
     taskId: 't1',
     nodeId: 'writer',

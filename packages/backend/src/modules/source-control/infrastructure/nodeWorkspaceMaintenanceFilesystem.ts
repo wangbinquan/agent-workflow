@@ -1,3 +1,4 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { isSingleRootRepository } from '@agent-workflow/shared'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -28,7 +29,8 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
       task: WorkspaceTaskRecord,
       repositories: readonly WorkspaceTaskRepositoryRecord[],
     ): Promise<boolean> {
-      const workspaceExisted = task.worktreePath !== '' && existsSync(task.worktreePath)
+      const workspaceExisted =
+        !isTaskWorkspaceUnbound(task.worktreePath) && existsSync(task.worktreePath)
       // An absent legacy task_repos projection still denotes the task-level root.
       const mounts = repositories.length === 0 ? [''] : repositories.map((repo) => repo.mountPath)
       if (task.spaceKind === 'scratch') {
@@ -39,7 +41,10 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
         }
       } else if (!isSingleRootRepository(mounts)) {
         for (const repository of repositories) {
-          if (repository.worktreePath !== '' && existsSync(repository.worktreePath)) {
+          if (
+            !isTaskWorkspaceUnbound(repository.worktreePath) &&
+            existsSync(repository.worktreePath)
+          ) {
             await removeWorktree({
               repoPath: repository.repoPath,
               worktreePath: repository.worktreePath,
@@ -75,7 +80,7 @@ export function createNodeWorkspaceMaintenanceFilesystem(input: {
       await removeDirectoryWithRetry(containerRoot, { log })
       if (task !== null) {
         for (const worktreePath of [task.worktreePath, task.repoPath]) {
-          if (worktreePath !== '' && existsSync(worktreePath)) {
+          if (!isTaskWorkspaceUnbound(worktreePath) && existsSync(worktreePath)) {
             // RFC-356 T5：`prune` 改到 registry 锁内执行——它与
             // `worktree add` / `remove` 一样改 common-dir 注册表，不持锁时会把
             // 另一个任务半初始化的注册项观察到并删掉（`services/task.ts` 记着

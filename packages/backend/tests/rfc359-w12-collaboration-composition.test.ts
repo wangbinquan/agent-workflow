@@ -1,4 +1,10 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  readClarifyRoundFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
@@ -33,6 +39,7 @@ import type {
 import { encodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 const ulid = monotonicFactory()
 
@@ -67,6 +74,7 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 function operations(harness: ProviderHarness): CollaborationRouteOperations {
   const db = harness.db
   const memoryOperations = composeMemoryOperationsFor({
+    clarifyAnswers: createClarifyAnswerQueries(db),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(APP_HOME, 'runs')),
@@ -136,8 +144,7 @@ interface ReviewFixture {
 async function seedTask(db: PersistenceDb, overrides: { status?: string } = {}): Promise<string> {
   const taskId = `t_${ulid()}`
   const definition = JSON.stringify(reviewDefinition())
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-w7-route',
     description: '',
@@ -145,7 +152,7 @@ async function seedTask(db: PersistenceDb, overrides: { status?: string } = {}):
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc359 w7 route',
     workflowId: `wf_${taskId}`,
@@ -168,16 +175,15 @@ async function seedTask(db: PersistenceDb, overrides: { status?: string } = {}):
 
 async function seedDoneRun(db: PersistenceDb, taskId: string, nodeId: string): Promise<string> {
   const id = `nr_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
+  await nodeRunFixture(db, { id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
   return id
 }
 
 async function seedSingleDocReview(db: PersistenceDb): Promise<ReviewFixture> {
   const taskId = await seedTask(db)
   const reviewNodeRunId = `nr_${ulid()}`
-  const { nodeRuns, docVersions } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  const { docVersions } = tablesOf(db)
+  await nodeRunFixture(db, {
     id: reviewNodeRunId,
     taskId,
     nodeId: REVIEW,
@@ -227,8 +233,8 @@ async function seedSingleDocReview(db: PersistenceDb): Promise<ReviewFixture> {
 async function seedMultiDocReview(db: PersistenceDb): Promise<ReviewFixture> {
   const taskId = await seedTask(db)
   const reviewNodeRunId = `nr_${ulid()}`
-  const { nodeRuns, docVersions } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  const { docVersions } = tablesOf(db)
+  await nodeRunFixture(db, {
     id: reviewNodeRunId,
     taskId,
     nodeId: REVIEW,
@@ -446,14 +452,9 @@ describeEachProvider('RFC-359 W12 — collaboration route composition', (harness
       value: { selectedOptionIndices: [1], customText: 'later' },
       editor: { userId: 'u_second', displayName: 'Second', role: 'user' },
     })
-    const { clarifyRounds } = tablesOf(db)
-    const rows = await db
-      .select({
-        drafts: clarifyRounds.draftAnswersJson,
-        attributions: clarifyRounds.answerAttributionsJson,
-      })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, roundId))
+    const rows = await readClarifyRoundFixtures(db, { id: roundId }).then((rows) =>
+      rows.map((row) => ({ drafts: row.draftAnswers, attributions: row.answerAttributions })),
+    )
     const drafts = JSON.parse(rows[0]?.drafts ?? '{}') as Record<string, { customText: string }>
     expect(drafts['q1']?.customText).toBe('later')
     const attributions = JSON.parse(rows[0]?.attributions ?? '{}') as Record<
@@ -480,11 +481,9 @@ describeEachProvider('RFC-359 W12 — collaboration route composition', (harness
         throw new Error('rollback-probe')
       }),
     ).rejects.toThrow('rollback-probe')
-    const { clarifyRounds } = tablesOf(db)
-    const rows = await db
-      .select({ drafts: clarifyRounds.draftAnswersJson })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, roundId))
+    const rows = await readClarifyRoundFixtures(db, { id: roundId }).then((rows) =>
+      rows.map((row) => ({ drafts: row.draftAnswers })),
+    )
     expect(rows[0]?.drafts ?? null).toBeNull()
   })
 
@@ -525,11 +524,10 @@ describeEachProvider('RFC-359 W12 — collaboration route composition', (harness
       directive: 'continue',
     })
     expect(full.roundFullySealed).toBe(true)
-    const { clarifyRounds, taskQuestions } = tablesOf(db)
-    const rows = await db
-      .select({ status: clarifyRounds.status })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, roundId))
+    const { taskQuestions } = tablesOf(db)
+    const rows = await readClarifyRoundFixtures(db, { id: roundId }).then((rows) =>
+      rows.map((row) => ({ status: row.status })),
+    )
     expect(rows[0]?.status).toBe('answered')
     const entries = await db
       .select({ questionId: taskQuestions.questionId, sealedAt: taskQuestions.sealedAt })
@@ -550,8 +548,7 @@ async function seedClarifyRound(db: PersistenceDb): Promise<ClarifyFixture> {
   const taskId = await seedTask(db, { status: 'awaiting_human' })
   const askingRunId = `nr_${ulid()}`
   const originNodeRunId = `nr_${ulid()}`
-  const { nodeRuns, clarifyRounds } = tablesOf(db)
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     { id: askingRunId, taskId, nodeId: DESIGNER, status: 'done', retryIndex: 0, iteration: 0 },
     {
       id: originNodeRunId,
@@ -563,7 +560,7 @@ async function seedClarifyRound(db: PersistenceDb): Promise<ClarifyFixture> {
     },
   ])
   const roundId = `cr_${ulid()}`
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: roundId,
     taskId,
     kind: 'self',
@@ -572,8 +569,8 @@ async function seedClarifyRound(db: PersistenceDb): Promise<ClarifyFixture> {
     intermediaryNodeId: CLARIFY,
     intermediaryNodeRunId: originNodeRunId,
     iteration: 0,
-    questionsJson: JSON.stringify([question('q1'), question('q2')]),
-    answersJson: '[]',
+    questions: JSON.stringify([question('q1'), question('q2')]),
+    answers: '[]',
     directive: 'continue',
     status: 'awaiting_human',
     createdAt: Date.now(),

@@ -14,6 +14,7 @@
 //     + identical 404 (D1), owner-only writes, D15 new-agent-ref usability
 //     gate on create AND update (grandfathered existing refs pass).
 
+import { agentFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -297,8 +298,8 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
     let db: PersistenceDb
     beforeEach(async () => {
       db = harness.db
-      const { agents } = tablesOf(db)
-      await db.insert(agents).values(
+      await agentFixture(
+        db,
         AGENT_NAMES.map((name) => ({
           id: agentId(name),
           name,
@@ -600,8 +601,8 @@ describeEachProviderHttpApplication(
       app = (await scope.open()).app
       alice = await mkUser('alice', 'user')
       bob = await mkUser('bob', 'user')
-      const { agents } = tablesOf(db)
-      await db.insert(agents).values(
+      await agentFixture(
+        db,
         AGENT_NAMES.map((name) => ({
           id: agentId(name),
           name,

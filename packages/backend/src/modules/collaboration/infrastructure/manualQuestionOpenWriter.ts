@@ -8,9 +8,10 @@
 // 事务用中立 `serializable`：SQLite 是 BEGIN IMMEDIATE（本来就全库独占），PG 抬到 SERIALIZABLE 并按
 // 40001 重放，与合一前两侧各自的隔离级别逐字相同。
 
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
+
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -48,13 +49,16 @@ export class DatabaseManualQuestionOpenWriter implements ManualQuestionOpenWrite
     const questionId = ulid(at)
     const originNodeRunId = ulid(at)
     const created = await databaseSessionFor(this.db).serializable(async (tx) => {
-      const { tasks, taskQuestions } = tablesOf(tx)
+      const { taskQuestions } = tablesOf(tx)
       const task = (
-        await tx
-          .select({ status: tasks.status, lifecycleEventRevision: tasks.lifecycleEventRevision })
-          .from(tasks)
-          .where(eq(tasks.id, input.taskId))
-          .limit(1)
+        await createTaskGateQueries(tx)
+          .listContexts([input.taskId])
+          .then((rows) =>
+            rows.map((row) => ({
+              status: row.status,
+              lifecycleEventRevision: row.lifecycleEventRevision,
+            })),
+          )
       )[0]
       if (task === undefined) {
         throw new ConflictError('task-not-found', `task ${input.taskId} not found`)

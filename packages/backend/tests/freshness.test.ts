@@ -22,12 +22,31 @@ type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 function run(id: string, consumed: Record<string, string> | null): Row {
   return {
+    seq: null,
+    parentNodeRunId: null,
+    containerRunId: null,
+    shardKey: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+
     id,
     consumedUpstreamRunsJson: consumed === null ? null : JSON.stringify(consumed),
   } as unknown as Row
 }
 function doneRow(id: string): Row {
-  return { id, status: 'done' } as unknown as Row
+  return {
+    seq: null,
+    parentNodeRunId: null,
+    containerRunId: null,
+    shardKey: null,
+    consumedUpstreamRunsJson: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+    id,
+    status: 'done',
+  } as unknown as Row
 }
 function fresnel(entries: Record<string, string>): Map<string, Row> {
   return new Map(Object.entries(entries).map(([up, id]) => [up, doneRow(id)]))
@@ -35,31 +54,31 @@ function fresnel(entries: Record<string, string>): Map<string, Row> {
 
 describe('RFC-074 PR-B — isNodeRunFresh (B1-B4)', () => {
   // B1 — empty consumed (input node / no upstream / legacy NULL row) → fresh.
-  test('B1: empty consumed map → fresh', () => {
-    expect(isNodeRunFresh(run('r', {}), fresnel({ designer: '01A' }))).toBe(true)
-    expect(isNodeRunFresh(run('r', null), fresnel({ designer: '01A' }))).toBe(true)
+  test('B1: empty consumed map → fresh', async () => {
+    expect(await isNodeRunFresh(run('r', {}), fresnel({ designer: '01A' }))).toBe(true)
+    expect(await isNodeRunFresh(run('r', null), fresnel({ designer: '01A' }))).toBe(true)
   })
 
   // B2 — every consumed upstream run is still the freshest done → fresh.
-  test('B2: all consumed == freshestSettled → fresh', () => {
+  test('B2: all consumed == freshestSettled → fresh', async () => {
     const r = run('r', { designer: '01A', spec: '01B' })
-    expect(isNodeRunFresh(r, fresnel({ designer: '01A', spec: '01B' }))).toBe(true)
+    expect(await isNodeRunFresh(r, fresnel({ designer: '01A', spec: '01B' }))).toBe(true)
   })
 
   // B3 — one upstream produced a newer done row (id differs) → stale.
-  test('B3: one upstream advanced (id mismatch) → stale', () => {
+  test('B3: one upstream advanced (id mismatch) → stale', async () => {
     const r = run('r', { designer: '01A', spec: '01B' })
     // designer still matches, but spec advanced from 01B → 01B2.
-    expect(isNodeRunFresh(r, fresnel({ designer: '01A', spec: '01B2' }))).toBe(false)
+    expect(await isNodeRunFresh(r, fresnel({ designer: '01A', spec: '01B2' }))).toBe(false)
   })
 
   // B4 — defensive: a consumed upstream that has NO current-scope done row
   // (absent from the map, e.g. a settled cross-loop boundary input) is NOT a
   // staleness signal.
-  test('B4: consumed upstream absent from freshestSettled map → not stale (fresh)', () => {
+  test('B4: consumed upstream absent from freshestSettled map → not stale (fresh)', async () => {
     const r = run('r', { gitwrapper: '01OLD', designer: '01A' })
     // gitwrapper not in the current-scope freshest map; designer matches.
-    expect(isNodeRunFresh(r, fresnel({ designer: '01A' }))).toBe(true)
+    expect(await isNodeRunFresh(r, fresnel({ designer: '01A' }))).toBe(true)
   })
 })
 
@@ -68,19 +87,19 @@ describe('RFC-074 §8 / D3 — fan-out wrapper provenance is atomic (B5)', () =>
   // children + the aggregator deliberately record NO provenance (null consumed
   // = fresh). So when an upstream advances, freshness re-runs the WHOLE wrapper
   // atomically instead of demoting individual shards.
-  test('B5: wrapper carries consumed and goes stale on upstream advance; inner shard (null) stays fresh', () => {
+  test('B5: wrapper carries consumed and goes stale on upstream advance; inner shard (null) stays fresh', async () => {
     const wrapper = run('wrap', { producer: '01UPA' })
     const innerShard = run('wrap#shardA', null) // parentNodeRunId set in prod; consumed deliberately null
 
     // Upstream unchanged → wrapper fresh; inner always fresh.
-    expect(isNodeRunFresh(wrapper, fresnel({ producer: '01UPA' }))).toBe(true)
-    expect(isNodeRunFresh(innerShard, fresnel({ producer: '01UPA' }))).toBe(true)
+    expect(await isNodeRunFresh(wrapper, fresnel({ producer: '01UPA' }))).toBe(true)
+    expect(await isNodeRunFresh(innerShard, fresnel({ producer: '01UPA' }))).toBe(true)
 
     // Upstream advances 01UPA → 01UPB: the WHOLE wrapper is stale (atomic
     // re-run); the inner shard, carrying no provenance, is never independently
     // demoted.
-    expect(isNodeRunFresh(wrapper, fresnel({ producer: '01UPB' }))).toBe(false)
-    expect(isNodeRunFresh(innerShard, fresnel({ producer: '01UPB' }))).toBe(true)
+    expect(await isNodeRunFresh(wrapper, fresnel({ producer: '01UPB' }))).toBe(false)
+    expect(await isNodeRunFresh(innerShard, fresnel({ producer: '01UPB' }))).toBe(true)
   })
 
   // Source-level lock for the recording half (the genuinely uncovered branch):
@@ -114,7 +133,7 @@ describe('RFC-074 §8 / D3 — fan-out wrapper provenance is atomic (B5)', () =>
       'utf-8',
     )
     expect(strategy).toContain('this.data.recordConsumed(wrapperRunId, wrapperConsumed)')
-    expect(adapter).toContain('consumedUpstreamRunsJson: JSON.stringify(consumed)')
+    expect(adapter).toContain('...prepareConsumedInputs({ record: consumed })')
     expect(adapter).toContain('nodeRunId: runId')
     expect(adapter).toContain('state.opts.persistence.nodeExecution.patch({')
   })

@@ -16,6 +16,16 @@
 //   - source locks: runTask branches on workgroup_id before runScope;
 //     renderUserPrompt REPLACES (not extends) the protocol block.
 
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import {
+  patchAgentFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -33,6 +43,7 @@ import {
   renderUserPrompt,
   WG_LEADER_IDLE_NUDGE_LIMIT,
   WorkflowDefinitionSchema,
+  WorkgroupSchema,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
@@ -45,14 +56,15 @@ import { createAgent } from '../src/services/agent'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 import { createUser } from './helpers/userFixture'
 import { createWorkgroup } from '../src/services/workgroups'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   buildWorkgroupHostSnapshot,
   buildWorkgroupRuntimeConfig,
-  ensureWorkgroupHostWorkflow,
+} from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
-  WORKGROUP_HOST_WORKFLOW_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
@@ -80,10 +92,9 @@ async function seedNamedAgent(db: PersistenceDb, name: string): Promise<string> 
     frontmatterExtra: {},
     bodyMd: name,
   })
-  const { agents } = tablesOf(db)
   // Engine fixtures are intentionally reused across actor-backed launch
   // scenarios. Preserve that cross-actor premise explicitly.
-  await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, created.id))
+  await patchAgentFixture(db, { id: created.id }, { visibility: 'public' })
   return created.id
 }
 
@@ -165,15 +176,15 @@ async function seedEngineTask(
   }
   const taskId = ulid()
   const snapshot = buildWorkgroupHostSnapshot(canonicalConfig)
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { workflows } = tablesOf(db)
+  await workflowFixture(db, {
     id: ulid(),
     name: `host-anchor-${taskId}`,
     definition: '{}',
     builtin: true,
   })
   const workflowRow = (await db.select().from(workflows).limit(1))[0]
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'wg-engine-task',
     workflowId: workflowRow?.id ?? ulid(),
@@ -286,6 +297,8 @@ describeEachProviderHttpApplication(
       app = (await scope.open()).app
       const u = await createUser(db, {
         username: 'alice',
+        // RFC-395 II-a: a successful launch needs the same configured identity as HEAD.
+        email: 'alice@example.test',
         displayName: 'alice',
         role: 'user',
         password: 'longEnoughPassword',
@@ -309,20 +322,34 @@ describeEachProviderHttpApplication(
       return app.request(path, { ...init, headers })
     }
 
-    test('builtin host workflow row is lazily ensured (idempotent; NOT migration-seeded)', async () => {
-      const { workflows } = tablesOf(db)
-      // fresh DB stays clean — empty-fixture expectations elsewhere depend on it
-      const before = await db.select().from(workflows)
-      expect(before.some((w) => w.id === WORKGROUP_HOST_WORKFLOW_ID)).toBe(false)
-      await ensureWorkgroupHostWorkflow(db)
-      await ensureWorkgroupHostWorkflow(db) // idempotent
-      const rows = await db
-        .select()
-        .from(workflows)
-        .where(eq(workflows.id, WORKGROUP_HOST_WORKFLOW_ID))
-      expect(rows).toHaveLength(1)
-      expect(rows[0]?.name).toBe('__workgroup_host__')
-      expect(rows[0]?.builtin).toBe(true)
+    test('RFC-395 II-a A2: workgroup launch leaves the host outside the catalog', async () => {
+      const group = await createOwnedWorkgroup({
+        name: 'hostless',
+        description: '',
+        instructions: '',
+        mode: 'leader_worker',
+        leaderDisplayName: 'lead',
+        switches: { shareOutputs: true, directMessages: false, blackboard: false },
+        maxRounds: 5,
+        completionGate: false,
+        members: [{ memberType: 'agent', agentId: a1Id, displayName: 'lead', roleDesc: '' }],
+      })
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const response = await req(`/api/workgroups/${group.id}/tasks`, {
+          method: 'POST',
+          body: JSON.stringify({ name: 'hostless', goal: 'g', scratch: true }),
+        })
+        const body = await response.json()
+        expect(response.status, JSON.stringify(body)).toBe(201)
+        expect(body).toMatchObject({
+          workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
+          workflowName: TASK_DEFINITION_HOSTS.workgroup.name,
+          workgroupId: group.id,
+        })
+        expect(await readWorkflowFixtures(db, { id: TASK_DEFINITION_HOSTS.workgroup.id })).toEqual(
+          [],
+        )
+      }
     })
 
     test('not launch-ready (leaderless lw) → 422 workgroup-not-ready with reasons', async () => {
@@ -381,10 +408,11 @@ describeEachProviderHttpApplication(
         code: 'resource-operation-stale',
         details: { expectedVersion: 2, currentVersion: 1 },
       })
-      const { tasks, workflows } = tablesOf(db)
-      expect(await db.select().from(tasks)).toHaveLength(0)
+      expect(await readTaskFixtures(db)).toHaveLength(0)
       expect(
-        (await db.select().from(workflows)).some((row) => row.id === WORKGROUP_HOST_WORKFLOW_ID),
+        (await readWorkflowFixtures(db)).some(
+          (row) => row.id === TASK_DEFINITION_HOSTS.workgroup.id,
+        ),
       ).toBe(false)
     })
 
@@ -403,7 +431,7 @@ describeEachProviderHttpApplication(
           { memberType: 'agent', agentId: deletedAgentId, displayName: 'ghost', roleDesc: '' },
         ],
       })
-      const { agents, tasks, workflows } = tablesOf(db)
+      const { agents } = tablesOf(db)
       await db.delete(agents).where(eq(agents.id, deletedAgentId))
       const res = await req(`/api/workgroups/${group.id}/tasks`, {
         method: 'POST',
@@ -417,9 +445,9 @@ describeEachProviderHttpApplication(
       expect(body.code).toBe('workgroup-not-ready')
       expect(body.details?.reasons).toEqual(['agent-missing'])
       expect(body.details?.missingAgentNames).toEqual(['deleted-agent'])
-      expect(await db.select().from(tasks)).toHaveLength(0)
+      expect(await readTaskFixtures(db)).toHaveLength(0)
       expect(
-        (await db.select().from(workflows)).some((w) => w.id === WORKGROUP_HOST_WORKFLOW_ID),
+        (await readWorkflowFixtures(db)).some((w) => w.id === TASK_DEFINITION_HOSTS.workgroup.id),
       ).toBe(false)
     })
 
@@ -489,21 +517,44 @@ describeEachProviderHttpApplication(
       // the concurrent RFC-165 space-schema migration (scratch/repoUrl), so we
       // lock the wiring at the pure boundary.
       const { resolveWorkgroupCollaborators } =
-        await import('@/modules/resource-catalog/infrastructure/legacy/workgroup/launch')
+        await import('@/modules/task-execution/infrastructure/workgroupRuntimeConfig')
       const members = [
         { memberType: 'agent' as const, userId: null },
         { memberType: 'human' as const, userId: 'u-pm' },
         { memberType: 'human' as const, userId: 'u-qa' },
       ]
+      // RFC-395 II-a: the production collaborator projector accepts the complete group.
+      const group = WorkgroupSchema.parse({
+        ...cfg(),
+        outputContract: 'files',
+        id: 'wg-fixture',
+        name: 'wg-fixture',
+        description: '',
+        version: 1,
+        schemaVersion: 1,
+        createdAt: 0,
+        updatedAt: 0,
+        members: members.map((member, index) => ({
+          ...member,
+          id: `member-${index}`,
+          agentName: member.memberType === 'agent' ? 'agent' : null,
+          displayName: `member-${index}`,
+          roleDesc: '',
+          sortOrder: index,
+        })),
+      })
       // human ids appended to explicit, order-stable, deduped
-      expect(resolveWorkgroupCollaborators(['u-ext'], members)).toEqual(['u-ext', 'u-pm', 'u-qa'])
+      expect(resolveWorkgroupCollaborators(['u-ext'], group)).toEqual(['u-ext', 'u-pm', 'u-qa'])
       // explicit already containing a human id does not duplicate it
-      expect(resolveWorkgroupCollaborators(['u-pm'], members)).toEqual(['u-pm', 'u-qa'])
+      expect(resolveWorkgroupCollaborators(['u-pm'], group)).toEqual(['u-pm', 'u-qa'])
       // no explicit → just the human members
-      expect(resolveWorkgroupCollaborators(undefined, members)).toEqual(['u-pm', 'u-qa'])
+      expect(resolveWorkgroupCollaborators(undefined, group)).toEqual(['u-pm', 'u-qa'])
       // agent-only group → empty
       expect(
-        resolveWorkgroupCollaborators(undefined, [{ memberType: 'agent', userId: null }]),
+        resolveWorkgroupCollaborators(undefined, {
+          ...group,
+          members: group.members.filter((member) => member.memberType === 'agent'),
+        }),
       ).toEqual([])
     })
 
@@ -579,7 +630,7 @@ describeEachProviderHttpApplication(
       // leader turn 2 saw the member result via the ledger/new-activity block
       expect(requests[2]?.promptTemplate).toContain('x is done')
 
-      const { workgroupAssignments, workgroupMessages, nodeRuns } = tablesOf(db)
+      const { workgroupAssignments, workgroupMessages } = tablesOf(db)
       const assignments = await db
         .select()
         .from(workgroupAssignments)
@@ -599,10 +650,7 @@ describeEachProviderHttpApplication(
       expect(kinds).toContain('chat') // blackboard kickoff note
 
       // borrowing columns on the member run (agentOverrideName + shardKey)
-      const memberRuns = await db
-        .select()
-        .from(nodeRuns)
-        .where(eq(nodeRuns.nodeId, WG_MEMBER_NODE_ID))
+      const memberRuns = await readNodeRunFixtures(db, { nodeId: WG_MEMBER_NODE_ID })
       expect(memberRuns).toHaveLength(1)
       expect(memberRuns[0]?.agentOverrideName).toBe('wg-coder')
       expect(memberRuns[0]?.shardKey).toBe(assignments[0]?.id ?? '')
@@ -897,9 +945,8 @@ describeEachProvider('RFC-164 engine — stuck detector S1/S2 workgroup exemptio
     async function seedTask(workgroup: boolean): Promise<string> {
       const id = ulid()
       const wfId = ulid()
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, { id: wfId, name: `wf-${id}`, definition: '{}' })
-      await insertOne(db, tasks, {
+      await workflowFixture(db, { id: wfId, name: `wf-${id}`, definition: '{}' })
+      await taskFixture(db, {
         id,
         name: workgroup ? 'wg-parked' : 'plain-parked',
         workflowId: wfId,
@@ -992,7 +1039,7 @@ describe('RFC-164 engine — source locks', () => {
   })
 
   test('the task engine registry routes workgroup turns without entering the DAG frontier', () => {
-    expect(TASK_ENGINE_APPLICATION_SRC).toContain('isWorkgroupTask(task)')
+    expect(TASK_ENGINE_APPLICATION_SRC).toContain("task.subject.kind === 'workgroup'")
     expect(TASK_ENGINE_APPLICATION_SRC).toContain('resolveTaskEngineSelection(')
     expect(TASK_ENGINE_APPLICATION_SRC).toContain("'workgroup-turns': new WorkgroupTaskEngine")
     expect(TASK_ENGINE_APPLICATION_SRC).toContain('opts.workgroupTurns.drive({')
@@ -1272,7 +1319,7 @@ describeEachProviderHttpApplication(
       const { taskId } = await seedEngineTask(db, config)
       // 模拟 PR-5 confirm approve 之后的状态：清单已收敛 + gate approved
       const aId = ulid()
-      const { workgroupAssignments, tasks } = tablesOf(db)
+      const { workgroupAssignments } = tablesOf(db)
       await insertOne(db, workgroupAssignments, {
         id: aId,
         taskId,
@@ -1285,9 +1332,10 @@ describeEachProviderHttpApplication(
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await db
-        .update(tasks)
-        .set({
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        {
           workgroupConfigJson: JSON.stringify({
             ...config,
             gate: {
@@ -1297,8 +1345,8 @@ describeEachProviderHttpApplication(
               approved: true,
             },
           }),
-        })
-        .where(eq(tasks.id, taskId))
+        },
+      )
       const { hooks } = scriptedHooks({ leader: [], member: [] })
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('ok')

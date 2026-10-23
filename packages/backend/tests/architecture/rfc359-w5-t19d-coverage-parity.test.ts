@@ -104,7 +104,7 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // （原来指着随通用 bundle 引擎退役的 legacy 引擎）。**倒挂没有加深**——弱侧 sqlite 那一份
   // 现在是「合一前存量格式的读回侧」，它的 3/2 由 `rfc359-w5-artifact-format-portability`
   // 的 12 格矩阵与回落链判据一起盯着。
-  'modules/resource-catalog/infrastructure/ResourcePackageMaintenance: sqlite 3/2, postgresql 4/3',
+  // RFC-395 II-a A6：两 provider 共用版本化恢复入口；历史格式在 legacy codec，原对拍与矩阵全部保留。
   // RFC-359 AC-1（plan §5hn 批次二 ⑤）：**这一对整行销账**——SQLite 那半（87 行转发壳）
   // 已删除，两个组合根叫同一个工厂，`classify()` 再也配不出这一对。
   // RFC-359 W8：双引擎对拍 `rfc359-w8-source-termination-conformance.test.ts` 把两侧各 +1/+1。

@@ -21,11 +21,16 @@
 // 确定性说明：全部 git 操作为本地 init/add/commit（无网络、无 stash），无
 // sleep/轮询；节点顺序由显式边保证。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -152,8 +157,7 @@ async function createHarness(provider: ProviderHarness, slug: string): Promise<H
 }
 
 async function seedAgent(db: PersistenceDb, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -172,13 +176,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'audit-s04-task',
     id: taskId,
     workflowId,
@@ -218,11 +221,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 }
 
 async function readGitDiffPaths(h: Harness, wrapperRunId: string): Promise<string[]> {
-  const { nodeRunOutputs } = tablesOf(h.db)
-  const rows = await h.db
-    .select()
-    .from(nodeRunOutputs)
-    .where(and(eq(nodeRunOutputs.nodeRunId, wrapperRunId), eq(nodeRunOutputs.portName, 'git_diff')))
+  const rows = await readNodeRunOutputFixtures(h.db, {
+    nodeRunId: wrapperRunId,
+    portName: 'git_diff',
+  })
   return (rows[0]?.content ?? '').split('\n').filter((p) => p.length > 0)
 }
 
@@ -297,22 +299,11 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
-    const wg1Run = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'wg1')))
-    )[0]
-    const wg2Run = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'wg2')))
-    )[0]
+    const wg1Run = (await readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId: 'wg1' }] }))[0]
+    const wg2Run = (await readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId: 'wg2' }] }))[0]
     expect(wg1Run?.status).toBe('done')
     expect(wg2Run?.status).toBe('done')
 
@@ -403,17 +394,13 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // One fresh wrapper-git row per loop iteration (iteration axis on the
     // wrapper row itself works — that part was fixed; S-6 is about inner
     // rows). Both done.
-    const wgRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'wg')))
+    const wgRuns = await readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId: 'wg' }] })
     expect(wgRuns.length).toBe(2)
     expect(new Set(wgRuns.map((r) => r.iteration))).toEqual(new Set([0, 1]))
     expect(wgRuns.every((r) => r.status === 'done')).toBe(true)

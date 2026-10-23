@@ -2,6 +2,7 @@
 // 投递审计 / 回放读模型（含 loose index scan 的仓库路径枚举）、MR 启动守卫与终态 effect 持久化（统一事务 +
 // 引擎能力矩阵的 advisory lock）。
 
+import { type TaskFixtureSpec, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -46,15 +47,10 @@ function actorFor(userId: string, role: 'admin' | 'user' = 'user'): Actor {
   })
 }
 
-async function seedTask(
-  db: PersistenceDb,
-  owner: string,
-  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-) {
+async function seedTask(db: PersistenceDb, owner: string, extra: Partial<TaskFixtureSpec> = {}) {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -62,7 +58,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,

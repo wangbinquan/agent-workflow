@@ -15,6 +15,7 @@
 //      tolerates zero candidates (dangling name imports successfully), and a
 //      resolved import backfills THIS install's id (foreign ids never
 //      persist).
+import { agentFixture, readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -23,7 +24,6 @@ import { resolve } from 'node:path'
 import { stringify } from 'yaml'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { workflowDefinitionToNameSelectors } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -81,8 +81,7 @@ async function seedWorkflowRow(
   },
 ): Promise<string> {
   const id = input.id ?? ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: input.name,
     description: '',
@@ -102,8 +101,7 @@ async function storedDefinition(
   db: PersistenceDb,
   workflowId: string,
 ): Promise<WorkflowDefinition> {
-  const { workflows } = tablesOf(db)
-  const row = (await db.select().from(workflows).where(eq(workflows.id, workflowId)))[0]
+  const row = (await readWorkflowFixtures(db, { id: workflowId }))[0]
   if (row === undefined) throw new Error(`missing workflow ${workflowId}`)
   return JSON.parse(row.definition) as WorkflowDefinition
 }
@@ -162,8 +160,8 @@ describeEachProvider('RFC-243 §5.3 — save-time call-ref ACL (name domain, D15
   test('create accepts a public target, a granted private target, and a dangling name', async () => {
     await expect(createFor(['target-pub'])).resolves.toMatchObject({ name: 'caller' })
 
-    const { workflows, resourceGrants } = tablesOf(db)
-    const privRow = (await db.select().from(workflows).where(eq(workflows.name, 'target-priv')))[0]!
+    const { resourceGrants } = tablesOf(db)
+    const privRow = (await readWorkflowFixtures(db, { name: 'target-priv' }))[0]!
     await insertOne(db, resourceGrants, {
       resourceType: 'workflow',
       resourceId: privRow.id,
@@ -327,10 +325,9 @@ describeEachProvider('RFC-243 §5.5 — YAML export strips the workflowId cache'
     expect((fast.nodes[0] as Record<string, unknown>).workflowId).toBeUndefined()
     expect((fast.nodes[0] as Record<string, unknown>).workflowName).toBe('child-wf')
 
-    const { agents } = tablesOf(db)
     // With an agent node the main mapping path runs; the call node still loses
     // only its id cache while the agent node gains its portable selector.
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: 'agent-a',
       name: 'helper',
       ownerUserId: 'owner-a',

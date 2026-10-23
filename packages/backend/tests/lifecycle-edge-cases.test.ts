@@ -10,6 +10,7 @@
 // Each block focuses on one paragraph of the design.md §失败模式 + 边界
 // so a regression there fails a specifically-named test.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -52,10 +53,9 @@ async function seedTask(
   },
 ): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: opts.snapshotJson })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: opts.snapshotJson })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -175,8 +175,7 @@ describeEachProvider('RFC-053 — workflow snapshot corrupt degrades gracefully'
       startedAt: T0 - MIN_MS,
       snapshotJson: 'not-valid-json{{}',
     })
-    const { nodeRuns } = tablesOf(env.db)
-    await insertOne(env.db, nodeRuns, {
+    await nodeRunFixture(env.db, {
       id: ulid(),
       taskId,
       nodeId: 'rev',
@@ -339,8 +338,8 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
       snapshotJson: reviewJson,
     })
     const tBRun = ulid()
-    const { nodeRuns, docVersions } = tablesOf(env.db)
-    await insertOne(env.db, nodeRuns, {
+    const { docVersions } = tablesOf(env.db)
+    await nodeRunFixture(env.db, {
       id: tBRun,
       taskId: t1,
       nodeId: 'rev',

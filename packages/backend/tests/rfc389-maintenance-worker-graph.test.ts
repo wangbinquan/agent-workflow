@@ -93,6 +93,7 @@ describeEachProvider('RFC-389 neutral maintenance Worker graph', (harness) => {
       await mainStore.claimNext({ leaseToken: 'original-lease', now: 2, leaseMs: 100 })
       const graph = await compose()
       expect(Object.keys(graph.ownerCommands).sort()).toEqual([
+        'atomicApply',
         'developmentAutomation',
         'digitalEmployee',
         'integration',

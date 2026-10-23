@@ -18,7 +18,6 @@
 //      reversible (RFC-306 D10). A skipped row without provenance is never
 //      "fresh", so the frontier re-dispatches it every tick — a busy loop.
 
-import { pickFrameSourceRun } from '@/services/freshness'
 import { joinModeOf, resolveWorkflowSourceRef } from '@agent-workflow/shared'
 import { resolveSourceFrame, type FrameCoordinate } from '../domain/environmentChain'
 import { loadFrameChain } from './frameChain'
@@ -86,7 +85,6 @@ export async function resolveNodeActivationForDispatch(args: {
     const source = resolved.ok ? resolved.source : edge.source
 
     if (!runByNode.has(source.nodeId)) {
-      const rows = await reader.findRuns(taskId, source.nodeId)
       // A source the chain cannot see degrades to `unresolved` (⇒ active),
       // the same way an unresolvable wrapper boundary does above; the loud
       // failure belongs to resolveUpstreamInputs.
@@ -100,7 +98,21 @@ export async function resolveNodeActivationForDispatch(args: {
               frame,
               containerRowById: chain.lookup,
             })
-      const picked = sourceFrame.ok ? pickFrameSourceRun(rows, sourceFrame.frame) : undefined
+      const picked = sourceFrame.ok
+        ? (
+            await reader
+              .selectionFromRows(taskId, await reader.findRuns(taskId, source.nodeId))
+              .slotHistory(
+                taskId,
+                {
+                  kind: 'node',
+                  nodeId: source.nodeId,
+                  frame: sourceFrame.frame,
+                },
+                { statusIn: ['done', 'skipped'] },
+              )
+          ).at(-1)
+        : undefined
       runByNode.set(source.nodeId, picked)
       if (picked !== undefined) {
         consumed[source.nodeId] = picked.id

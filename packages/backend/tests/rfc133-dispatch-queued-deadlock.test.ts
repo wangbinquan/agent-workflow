@@ -18,6 +18,7 @@
 //      seals the answer and PARKS the dispatch — dispatchDeferredReason — instead of the
 //      legacy pre-seal reject).
 
+import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -117,8 +118,7 @@ function ans(qid: string) {
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc133',
     description: '',
@@ -126,7 +126,7 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -152,8 +152,7 @@ async function seedRun(
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -163,7 +162,7 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }

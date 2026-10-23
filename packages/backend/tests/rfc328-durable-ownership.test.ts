@@ -1,4 +1,12 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readNodeRunFixtures,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -65,8 +73,7 @@ async function seedTask(
   taskId: string,
   status: 'pending' | 'done' = 'pending',
 ): Promise<void> {
-  const { tasks } = tablesOf(database)
-  await insertOne(database, tasks, {
+  await taskFixture(database, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-rfc328',
@@ -142,17 +149,17 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
     test('continuation admission compares migrated lineage JSON semantically', async () => {
       const database = harness.db
       await seedTask(database, 'task-migrated-lineage')
-      const { tasks } = tablesOf(database)
       // SQLite json_object() preserves this insertion order. The application
       // encoder sorts keys, so a raw-string comparison would reject the same
       // lineage after migration and break every manual continuation.
-      await database
-        .update(tasks)
-        .set({
+      await patchTaskFixture(
+        database,
+        { id: 'task-migrated-lineage' },
+        {
           lineageSlotPathJson:
             '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"task-migrated-lineage","workflowRevision":1}]',
-        })
-        .where(eq(tasks.id, 'task-migrated-lineage'))
+        },
+      )
 
       expect(
         (
@@ -219,17 +226,16 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           token: claimed.token,
           now: 14,
           run: async (tx) => {
-            const { tasks } = tablesOf(tx)
-            return await tx
-              .update(tasks)
-              .set({ errorSummary: 'stale-write' })
-              .where(eq(tasks.id, 'task-owner'))
+            return await patchTaskFixture(tx, { id: 'task-owner' }, { errorSummary: 'stale-write' })
           },
         }),
       ).rejects.toEqual(expect.objectContaining({ code: 'task-execution-stale-owner' }))
-      const { tasks } = tablesOf(database)
       expect(
-        (await firstRow(database.select({ value: tasks.errorSummary }).from(tasks)))?.value,
+        (
+          await readTaskFixtures(database).then((rows) =>
+            rows.map((row) => ({ value: row.errorSummary })),
+          )
+        )[0]?.value,
       ).toBeNull()
 
       const revoked = (await module.ownershipFor(database).read('task-owner'))!
@@ -543,7 +549,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         resourceKeys: ['workspace:/tmp/worktree', 'repository:origin/main'],
         now: 20,
       })
-      const { taskExecutionEffectFences, nodeRuns, taskExecutionEffects } = tablesOf(database)
+      const { taskExecutionEffectFences, taskExecutionEffects } = tablesOf(database)
       expect(
         (
           await database
@@ -560,7 +566,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       // **故意**没有这个逃逸口：它把同事务投影表达成**具名变体**。所以改用已有的具名变体
       // `settleCodeHostNode` 去锁同一条性质，判据反而更贴生产路径（投影的是真实的 node_run 终态，
       // 不是一个只为测试存在的 `errorSummary` 字符串）。
-      await insertOne(database, nodeRuns, {
+      await nodeRunFixture(database, {
         id: 'run-effect-projection',
         taskId: 'task-effect',
         nodeId: 'n1',
@@ -586,13 +592,10 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       })
       expect(
         (
-          await firstRow(
-            database
-              .select({ status: nodeRuns.status })
-              .from(nodeRuns)
-              .where(eq(nodeRuns.id, 'run-effect-projection')),
+          await readNodeRunFixtures(database, { id: 'run-effect-projection' }).then((rows) =>
+            rows.map((row) => ({ status: row.status })),
           )
-        )?.status,
+        )[0]?.status,
       ).toBe('done')
       expect(
         (
@@ -980,8 +983,8 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       ]) {
         await seedTask(database, input.taskId)
         const nodeRunId = `${input.taskId}-run`
-        const { nodeRuns, taskExecutionEffectAttempts } = tablesOf(database)
-        await insertOne(database, nodeRuns, {
+        const { taskExecutionEffectAttempts } = tablesOf(database)
+        await nodeRunFixture(database, {
           id: nodeRunId,
           taskId: input.taskId,
           nodeId: 'agent-node',
@@ -1089,15 +1092,10 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           ).revokedTaskIds,
         ].sort(),
       ).toEqual(['task-process-activated', 'task-process-not-activated', 'task-remote-unknown'])
-      const {
-        tasks,
-        nodeRuns,
-        taskExecutionIntents,
-        taskExecutionEffects,
-        taskExecutionEffectFences,
-      } = tablesOf(database)
-      await database.update(tasks).set({ status: 'interrupted' })
-      await database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 })
+      const { taskExecutionIntents, taskExecutionEffects, taskExecutionEffectFences } =
+        tablesOf(database)
+      await patchTaskFixture(database, undefined, { status: 'interrupted' })
+      await patchNodeRunFixture(database, undefined, { status: 'interrupted', finishedAt: 202 })
       // Boot's orphan reaper terminalizes the claimed intent before durable
       // effect recovery runs. Recovery must bind the historical epoch by
       // claimedEpoch, not require that its intent still be active.
@@ -1195,10 +1193,9 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         },
       ]) {
         await seedTask(database, spec.taskId)
-        const { tasks, nodeRuns } = tablesOf(database)
-        await database.update(tasks).set({ status: 'running' }).where(eq(tasks.id, spec.taskId))
+        await patchTaskFixture(database, { id: spec.taskId }, { status: 'running' })
         const nodeRunId = `${spec.taskId}-run`
-        await insertOne(database, nodeRuns, {
+        await nodeRunFixture(database, {
           id: nodeRunId,
           taskId: spec.taskId,
           nodeId: 'code-host-node',
@@ -1272,10 +1269,9 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
           ).revokedTaskIds,
         ].sort(),
       ).toEqual(['task-codehost-recovered-applied', 'task-codehost-recovered-retry'])
-      const { tasks, nodeRuns, taskExecutionEffects, nodeRunOutputs, taskExecutionEffectAttempts } =
-        tablesOf(database)
-      await database.update(tasks).set({ status: 'interrupted' })
-      await database.update(nodeRuns).set({ status: 'interrupted', finishedAt: 202 })
+      const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(database)
+      await patchTaskFixture(database, undefined, { status: 'interrupted' })
+      await patchNodeRunFixture(database, undefined, { status: 'interrupted', finishedAt: 202 })
 
       const finalized = await new DrizzleTaskExecutionRecoveryPersistence(database).finalize({
         lockProof,
@@ -1325,20 +1321,16 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       ).toBe('succeeded')
       expect(
         (
-          await firstRow(
-            database
-              .select({ status: nodeRuns.status })
-              .from(nodeRuns)
-              .where(eq(nodeRuns.id, 'task-codehost-recovered-applied-run')),
+          await readNodeRunFixtures(database, { id: 'task-codehost-recovered-applied-run' }).then(
+            (rows) => rows.map((row) => ({ status: row.status })),
           )
-        )?.status,
+        )[0]?.status,
       ).toBe('done')
       expect(
         (
-          await database
-            .select({ port: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-            .from(nodeRunOutputs)
-            .where(eq(nodeRunOutputs.nodeRunId, 'task-codehost-recovered-applied-run'))
+          await readNodeRunOutputFixtures(database, {
+            nodeRunId: 'task-codehost-recovered-applied-run',
+          }).then((rows) => rows.map((row) => ({ port: row.portName, content: row.content })))
         ).sort((left, right) => left.port.localeCompare(right.port)),
       ).toEqual([
         { port: 'response', content: '{"status":"canceled"}' },
@@ -1472,8 +1464,8 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         cleanupPending: [],
         recoveryRequired: [],
       })
-      const { tasks, taskExecutionMaintenanceClaims } = tablesOf(database)
-      expect(await database.select().from(tasks)).toHaveLength(0)
+      const { taskExecutionMaintenanceClaims } = tablesOf(database)
+      expect(await readTaskFixtures(database)).toHaveLength(0)
       expect(
         (
           await firstRow(
@@ -1532,14 +1524,14 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
         receiptJson: '{"ok":true}',
         now: 62,
       })
-      const { tasks } = tablesOf(database)
       // RFC-359：这处 `onSettledTx` 原本只是**夹具**——把任务推到 done 好让下面的归档用例有料可归，
       // 它不断言任何同事务性质（那条断言在上面的 `settleCodeHostNode` 用例里）。所以直接平铺成
       // 结算之后的一笔普通写。
-      await database
-        .update(tasks)
-        .set({ status: 'done', finishedAt: 62 })
-        .where(eq(tasks.id, 'task-archive-ledger'))
+      await patchTaskFixture(
+        database,
+        { id: 'task-archive-ledger' },
+        { status: 'done', finishedAt: 62 },
+      )
       const owner = (await module.ownershipFor(database).read('task-archive-ledger'))!
       await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
         token: owned.token,

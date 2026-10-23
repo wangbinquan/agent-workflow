@@ -1,3 +1,4 @@
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -6,7 +7,6 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
-import {} from '@/modules/collaboration/composition/decisionCommands'
 import { replaceReviewNodeReviewers } from '../src/modules/collaboration/public/commands'
 import {
   getReviewNodeReviewerConfig,
@@ -29,7 +29,7 @@ function actor(id: string) {
 async function fixture(scope: ProviderHttpApplicationScope) {
   const db = scope.harness.db
   const now = 1_789_000_000_000
-  const { users, workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
+  const { users, docVersions } = tablesOf(db)
   await db.insert(users).values(
     ['owner', 'reviewer', 'other'].map((id) => ({
       id,
@@ -41,12 +41,12 @@ async function fixture(scope: ProviderHttpApplicationScope) {
       updatedAt: now,
     })),
   )
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf',
     name: 'Workflow',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: 'task',
     name: 'Task',
     workflowId: 'wf',
@@ -68,7 +68,7 @@ async function fixture(scope: ProviderHttpApplicationScope) {
     startedAt: now,
     ownerUserId: 'owner',
   })
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     ...['a', 'b'].map((suffix) => ({
       id: suffix === 'a' ? 'run' : `run-${suffix}`,
       taskId: 'task',

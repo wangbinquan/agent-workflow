@@ -12,8 +12,7 @@
 // agent reads the rules; when absent, the standard output-only block is the
 // only protocol block present.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
@@ -62,13 +61,12 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -93,8 +91,7 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 
 async function insertPendingNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'asker', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'asker', status: 'pending' })
   return id
 }
 

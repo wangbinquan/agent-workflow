@@ -10,13 +10,20 @@
 //     kept where values match, submitter takes over changed answers) and
 //     records the submitter's role; drafts reject non-awaiting rounds.
 
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, writeFileSync } from 'node:fs'
 
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
@@ -123,14 +130,14 @@ describeEachProviderHttpApplication(
         edges: [],
       }
       const workflowId = ulid()
-      const { workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { docVersions } = tablesOf(db)
+      await workflowFixture(db, {
         id: workflowId,
         name: 'wf',
         definition: JSON.stringify(definition),
       })
       taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         name: 't',
         id: taskId,
         workflowId,
@@ -147,7 +154,7 @@ describeEachProviderHttpApplication(
       await addMembership(db, taskId, users.alice.id, users.carol.id)
 
       const agentRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: agentRunId,
         taskId,
         nodeId: 'doc',
@@ -157,13 +164,13 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 1000,
         finishedAt: Date.now() - 900,
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: agentRunId,
         portName: 'docpath',
         content: '# body inline',
       })
       reviewRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: reviewRunId,
         taskId,
         nodeId: 'rev_1',
@@ -227,7 +234,7 @@ describeEachProviderHttpApplication(
       const commentBody = (await comment.json()) as { author: string; authorRole: string }
       expect(commentBody.author).toBe(users.carol.id)
       expect(commentBody.authorRole).toBe('user')
-      const { reviewComments, docVersions, nodeRunOutputs } = tablesOf(db)
+      const { reviewComments, docVersions } = tablesOf(db)
       const commentRow = (await db.select().from(reviewComments))[0]!
       expect(commentRow.author).toBe(users.carol.id)
       expect(commentRow.authorRole).toBe('user')
@@ -243,9 +250,9 @@ describeEachProviderHttpApplication(
       expect(dv.decidedBy).toBe(users.carol.id)
       expect(dv.decidedByRole).toBe('user')
       // RFC-099 prompt isolation — approval_meta port carries no identity
-      const metaRow = (
-        await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, reviewRunId))
-      ).find((o) => o.portName === 'approval_meta')!
+      const metaRow = (await readNodeRunOutputFixtures(db, { nodeRunId: reviewRunId })).find(
+        (o) => o.portName === 'approval_meta',
+      )!
       expect(metaRow.content).not.toContain(users.carol.id)
       expect(metaRow.content).not.toContain('dn-carol')
     })
@@ -344,8 +351,7 @@ describeEachProviderHttpApplication(
         outputs: [],
       }
       const workflowId = `wf_${taskId}`
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'wf',
         description: '',
@@ -353,7 +359,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 3,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         name: 'fixture-task',
         id: taskId,
         workflowId,
@@ -369,7 +375,7 @@ describeEachProviderHttpApplication(
       })
       await addMembership(db, taskId, users.alice.id, users.carol.id)
       const sourceRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: sourceRunId,
         taskId,
         nodeId: 'designer',
@@ -485,13 +491,12 @@ describeEachProviderHttpApplication(
         }),
       })
       expect(submit.status).toBe(200)
-      const { clarifyRounds } = tablesOf(db)
-      const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)))[0]!
+      const row = (await readClarifyRoundFixtures(db, { id: roundId }))[0]!
       expect(row.status).toBe('answered')
       expect(row.answeredBy).toBe(users.carol.id)
       expect(row.submittedByRole).toBe('user')
-      expect(row.draftAnswersJson).toBeNull()
-      const attrs = JSON.parse(row.answerAttributionsJson!) as Record<
+      expect(row.draftAnswers).toBeNull()
+      const attrs = JSON.parse(row.answerAttributions!) as Record<
         string,
         { userId: string; role: string }
       >

@@ -1,7 +1,7 @@
 // RFC-243 T1 — the unified executor contract. One vocabulary for "start an
 // execution / read its outcome / wait for its terminal state / cancel it"
 // across the three task-level execution kinds. The kind domain deliberately
-// equals `taskExecutionKind()` (shared/schemas/task.ts) — parent/child links
+// equals `decodeTaskSubject()` (task-execution/domain/taskSubject.ts) — parent/child links
 // added by RFC-243 PR-2 are an orthogonal dimension and never change a task's
 // kind.
 //

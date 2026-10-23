@@ -13,6 +13,7 @@
 //   - sibling cascade: current round decided by SYSTEM_DECIDER → null (R2a)
 //   - reject/iterate reuse (pre re-park): pending run, current = human iterate → 'decided' (R1)
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
@@ -25,8 +26,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -35,7 +35,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string 
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
@@ -78,8 +78,7 @@ async function seedRun(
   },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId,

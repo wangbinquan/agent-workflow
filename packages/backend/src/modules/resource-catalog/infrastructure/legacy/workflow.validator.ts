@@ -19,6 +19,7 @@
 // The validator is permissive about node shape (kind discriminators are loose
 // in the M1 schema), so per-kind fields are read defensively.
 
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   Agent,
@@ -33,6 +34,8 @@ import type {
   WorkflowValidationTarget,
 } from '@agent-workflow/shared'
 import {
+  agentReferenceIds,
+  agentSkillReferences,
   isSynthesizedOnlyNodeKind,
   DEPRECATED_PROMPT_TOKENS,
   CROSS_CLARIFY_OUT_TO_QUESTIONER_PORT,
@@ -383,7 +386,7 @@ async function loadCallWorkflowClosure(
       const rows = await db
         .select(columns)
         .from(workflows)
-        .where(inArray(workflows.name, wantNames))
+        .where(workflowCatalogPredicate(workflows.id, inArray(workflows.name, wantNames)))
         .orderBy(asc(workflows.id))
       // Duplicate names resolve DETERMINISTICALLY: oldest row (lowest ULID)
       // wins, first-wins per name — the fallback rule freezeCallClosure applies
@@ -395,7 +398,10 @@ async function loadCallWorkflowClosure(
       }
     }
     if (wantIds.length > 0) {
-      const rows = await db.select(columns).from(workflows).where(inArray(columns.id, wantIds))
+      const rows = await db
+        .select(columns)
+        .from(workflows)
+        .where(workflowCatalogPredicate(workflows.id, inArray(columns.id, wantIds)))
       for (const row of rows) {
         const ref = workflowReferenceFromPersistenceRow(row)
         if (ref !== null) byId.set(ref.id, ref)
@@ -685,10 +691,10 @@ export function projectWorkflowValidationContext(ctx: ValidatorContext) {
       // must be part of the context hash — flipping a port's branch flag has to
       // invalidate a cached validation result.
       branchPorts: [...(agent.branchPorts ?? [])],
-      dependsOn: [...(agent.dependsOn ?? [])],
+      dependsOn: [...agentReferenceIds(agent, 'agent')],
       skills: [...(agent.skills ?? [])],
-      mcp: [...(agent.mcp ?? [])],
-      plugins: [...(agent.plugins ?? [])],
+      mcp: [...agentReferenceIds(agent, 'mcp')],
+      plugins: [...agentReferenceIds(agent, 'plugin')],
       runtime: agent.runtime ?? null,
       syncOutputsOnIterate: agent.syncOutputsOnIterate,
     })),
@@ -1863,7 +1869,7 @@ export function validateWorkflowDef(
       }
       // RFC-358: `?? []` 与同段 mcp / plugins 对齐——生产 context 一律来自 listAgents(db)
       // 必然物化，但候选期注入的行不该因为少一个字段就让整个校验器抛。
-      for (const ref of agent.skills ?? []) {
+      for (const ref of agentSkillReferences(agent)) {
         // RFC-223 (PR-1): only MANAGED refs resolve against DB skill ids;
         // `project` refs are repo-local self-discovered skills (no DB row).
         if (ref.kind === 'managed' && !skillIds.has(ref.skillId)) {
@@ -1879,7 +1885,7 @@ export function validateWorkflowDef(
       // silently filtered by the scheduler. A present-but-disabled MCP keeps
       // RFC-223's intentional "not injected" semantics.
       if (mcpsKnown !== undefined) {
-        for (const mcpId of agent.mcp ?? []) {
+        for (const mcpId of agentReferenceIds(agent, 'mcp')) {
           if (!mcpsKnown.has(mcpId)) {
             issues.push({
               code: 'mcp-not-found',
@@ -1892,7 +1898,7 @@ export function validateWorkflowDef(
       }
       // RFC-031: plugin references on the directly-used agent.
       if (pluginsKnown !== undefined && pluginsEnabled !== undefined) {
-        for (const p of agent.plugins ?? []) {
+        for (const p of agentReferenceIds(agent, 'plugin')) {
           if (!pluginsKnown.has(p)) {
             issues.push({
               code: 'plugin-not-found',
@@ -1919,7 +1925,7 @@ export function validateWorkflowDef(
       // RFC-223 (PR-1): the dependsOn closure is keyed BY ID (dependsOn stores
       // agent ids; a rename can't re-route it).
       const seenInClosure = new Set<string>([agent.id])
-      const closureQueue = [...(agent.dependsOn ?? [])]
+      const closureQueue = [...agentReferenceIds(agent, 'agent')]
       while (closureQueue.length > 0) {
         const depId = closureQueue.shift()
         if (depId === undefined) break
@@ -1935,7 +1941,7 @@ export function validateWorkflowDef(
           })
           continue
         }
-        for (const ref of dep.skills ?? []) {
+        for (const ref of agentSkillReferences(dep)) {
           if (ref.kind === 'managed' && !skillIds.has(ref.skillId)) {
             issues.push({
               code: 'skill-not-found',
@@ -1946,7 +1952,7 @@ export function validateWorkflowDef(
           }
         }
         if (mcpsKnown !== undefined) {
-          for (const mcpId of dep.mcp ?? []) {
+          for (const mcpId of agentReferenceIds(dep, 'mcp')) {
             if (!mcpsKnown.has(mcpId)) {
               issues.push({
                 code: 'mcp-not-found',
@@ -1959,7 +1965,7 @@ export function validateWorkflowDef(
         }
         // RFC-031: same plugin-name reference check across the closure.
         if (pluginsKnown !== undefined && pluginsEnabled !== undefined) {
-          for (const p of dep.plugins ?? []) {
+          for (const p of agentReferenceIds(dep, 'plugin')) {
             if (!pluginsKnown.has(p)) {
               issues.push({
                 code: 'plugin-not-found',
@@ -1977,7 +1983,7 @@ export function validateWorkflowDef(
             }
           }
         }
-        for (const next of dep.dependsOn ?? []) closureQueue.push(next)
+        for (const next of agentReferenceIds(dep, 'agent')) closureQueue.push(next)
       }
       // RFC-060 PR-E: agent-multi removed; its sourcePort + shardingStrategy
       // validation rules deleted. wrapper-fanout (validated above in rule 4d)

@@ -28,6 +28,7 @@
 // storage); changing a projected-but-not-rehydrated field is a 403. Nothing
 // states that rule in one place, so it is enumerated here.
 
+import { workflowFixture, type WorkflowFixtureSpec } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -204,8 +205,7 @@ async function seedWorkflow(
 ): Promise<{ id: string; version: number }> {
   const id = ulid()
   const now = Date.now()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name,
     description: '',
@@ -216,7 +216,7 @@ async function seedWorkflow(
     builtin: false,
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['workflows']['$inferInsert'])
+  } as WorkflowFixtureSpec)
   return { id, version: 1 }
 }
 

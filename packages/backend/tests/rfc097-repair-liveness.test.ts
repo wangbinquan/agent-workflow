@@ -15,7 +15,7 @@
 // those suites double as the gate's negative control; test 2 locks that
 // explicitly.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -126,8 +126,7 @@ function gatedDef(): WorkflowDefinition {
 }
 
 async function seedInterruptedTask(h: LiveHarness): Promise<string> {
-  const { agents, workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, agents, {
+  await agentFixture(h.db, {
     id: ulid(),
     name: 'slow',
     description: 'test',
@@ -140,12 +139,12 @@ async function seedInterruptedTask(h: LiveHarness): Promise<string> {
   const def = await canonicalizeWorkflowAgentIds(h.db, gatedDef())
   const workflowId = ulid()
   const taskId = ulid()
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-rfc097-liveness',
     definition: JSON.stringify(def),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'rfc097-liveness',
     workflowId,

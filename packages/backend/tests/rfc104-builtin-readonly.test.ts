@@ -14,12 +14,20 @@
 // the drift-proof column discriminator, deterministic seed self-heal, and the
 // DB-level "≤1 built-in per name" guarantee that de-ambiguates fusionWorkflowId.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import {
+  agentFixture,
+  patchAgentFixture,
+  patchWorkflowFixture,
+  readAgentFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { schemaFixtureDb } from './helpers/schemaFixture'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { WorkflowDetail } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Hono } from 'hono'
@@ -28,7 +36,6 @@ import { SYSTEM_USER_ID } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
-import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
 import {
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_NAME,
@@ -41,7 +48,6 @@ import {
   assertNotBuiltin,
   isBuiltinRow,
 } from '../src/services/systemResources'
-import { WORKGROUP_HOST_WORKFLOW_ID } from '../src/services/workgroup/constants'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { listWorkflows } from '../src/services/workflow'
@@ -100,10 +106,9 @@ async function builtinWorkflowId(db: PersistenceDb): Promise<string> {
 }
 
 async function builtinAgentId(db: PersistenceDb): Promise<string> {
-  const { agents } = tablesOf(db)
-  const agent = (
-    await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
-  ).find((row) => row.builtin)
+  const agent = (await readAgentFixtures(db, { name: SKILL_MERGER_AGENT_NAME })).find(
+    (row) => row.builtin,
+  )
   if (!agent) throw new Error('built-in agent not seeded')
   return agent.id
 }
@@ -135,8 +140,7 @@ async function agentRevision(
 /** Insert a task row whose workflow is the built-in (mirrors task-collab-launch). */
 async function seedTaskOnWorkflow(db: PersistenceDb, wfId: string): Promise<string> {
   const id = ulid()
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: 'fixture',
     workflowId: wfId,
@@ -210,11 +214,8 @@ describeEachProviderHttpApplication(
         }),
       )
 
-      const { agents } = tablesOf(db)
       // The row survived all three attempts, unmodified.
-      const row = (
-        await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
-      )[0]
+      const row = (await readAgentFixtures(db, { name: SKILL_MERGER_AGENT_NAME }))[0]
       expect(row?.description).toContain('skill-fusion worker')
       expect(row?.builtin).toBe(true)
     })
@@ -241,11 +242,9 @@ describeEachProviderHttpApplication(
       })
       expect(ok.status).toBe(200)
       const updated = (await ok.clone().json()) as { updatedAt: number; aclRevision?: number }
-      const { agents } = tablesOf(db)
-      expect(
-        (await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)))[0]
-          ?.runtime,
-      ).toBe('oc-haiku')
+      expect((await readAgentFixtures(db, { name: SKILL_MERGER_AGENT_NAME }))[0]?.runtime).toBe(
+        'oc-haiku',
+      )
 
       // a mixed patch (runtime + another field) is still rejected — no smuggling.
       await expect403Builtin(
@@ -261,8 +260,7 @@ describeEachProviderHttpApplication(
       )
       // built-in description untouched (the mixed patch didn't land).
       expect(
-        (await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME)))[0]
-          ?.description,
+        (await readAgentFixtures(db, { name: SKILL_MERGER_AGENT_NAME }))[0]?.description,
       ).toContain('skill-fusion worker')
     })
 
@@ -292,8 +290,7 @@ describeEachProviderHttpApplication(
           body: JSON.stringify({ expectedVersion: workflow.version, clientMutationId: ulid() }),
         }),
       )
-      const { workflows } = tablesOf(db)
-      expect((await db.select().from(workflows).where(eq(workflows.id, id)))[0]?.builtin).toBe(true)
+      expect((await readWorkflowFixtures(db, { id }))[0]?.builtin).toBe(true)
     })
 
     test('ACL PUT (owner/visibility/grants) on built-in agent + workflow → 403 (the footgun)', async () => {
@@ -323,9 +320,8 @@ describeEachProviderHttpApplication(
           }),
         }),
       )
-      const { workflows } = tablesOf(db)
       // Owner + visibility unchanged → still hidden + still resolvable as built-in.
-      const wf = (await db.select().from(workflows).where(eq(workflows.id, id)))[0]
+      const wf = (await readWorkflowFixtures(db, { id }))[0]
       expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
       expect(wf?.visibility).toBe('public')
     })
@@ -420,8 +416,8 @@ describe('RFC-104 — assertNotBuiltin / isBuiltinRow are the actor-blind single
     const reservedIds = [
       SKILL_MERGER_AGENT_ID,
       SKILL_FUSION_WORKFLOW_ID,
-      AGENT_HOST_WORKFLOW_ID,
-      WORKGROUP_HOST_WORKFLOW_ID,
+      TASK_DEFINITION_HOSTS.agent.id,
+      TASK_DEFINITION_HOSTS.workgroup.id,
       QUARANTINED_FUSION_SKILL_ID,
     ]
     expect(new Set(reservedIds).size).toBe(reservedIds.length)
@@ -464,15 +460,11 @@ describeEachProviderHttpApplication(
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
       const id = await builtinWorkflowId(db)
-      const { workflows } = tablesOf(db)
       // Simulate someone having moved owner + flipped visibility (builtin kept).
-      await db
-        .update(workflows)
-        .set({ ownerUserId: ulid(), visibility: 'private' })
-        .where(eq(workflows.id, id))
+      await patchWorkflowFixture(db, { id }, { ownerUserId: ulid(), visibility: 'private' })
 
       await seedFusionResourcesForDb(db)
-      const wf = (await db.select().from(workflows).where(eq(workflows.id, id)))[0]
+      const wf = (await readWorkflowFixtures(db, { id }))[0]
       expect(wf?.ownerUserId).toBe(SYSTEM_USER_ID)
       expect(wf?.visibility).toBe('public')
       expect(wf?.builtin).toBe(true)
@@ -482,29 +474,26 @@ describeEachProviderHttpApplication(
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
       const id = await builtinWorkflowId(db)
-      const { workflows } = tablesOf(db)
       // Migration backfill could miss a row; simulate builtin=0 with owner intact.
-      await db.update(workflows).set({ builtin: false }).where(eq(workflows.id, id))
+      await patchWorkflowFixture(db, { id }, { builtin: false })
 
       await seedFusionResourcesForDb(db)
-      expect((await db.select().from(workflows).where(eq(workflows.id, id)))[0]?.builtin).toBe(true)
+      expect((await readWorkflowFixtures(db, { id }))[0]?.builtin).toBe(true)
     })
 
     test('agent drift with __system__ owner intact (builtin/visibility) is repaired on re-seed', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
-      const { agents } = tablesOf(db)
       // The fixed ID is the authority, so identity-field drift is repaired.
       // A random-ID same-name squatter is still never adopted (covered below).
-      await db
-        .update(agents)
-        .set({ visibility: 'private', builtin: false })
-        .where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+      await patchAgentFixture(
+        db,
+        { name: SKILL_MERGER_AGENT_NAME },
+        { visibility: 'private', builtin: false },
+      )
 
       await seedFusionResourcesForDb(db)
-      const row = (
-        await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
-      )[0]
+      const row = (await readAgentFixtures(db, { name: SKILL_MERGER_AGENT_NAME }))[0]
       expect(row?.builtin).toBe(true)
       expect(row?.ownerUserId).toBe(SYSTEM_USER_ID)
       expect(row?.visibility).toBe('public')
@@ -513,10 +502,7 @@ describeEachProviderHttpApplication(
     test('re-seed preserves merger customization and repairs only workflow agentId once', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
-      const { workflows, agents } = tablesOf(db)
-      const workflow = (
-        await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      )[0]!
+      const workflow = (await readWorkflowFixtures(db, { id: SKILL_FUSION_WORKFLOW_ID }))[0]!
       const definition = JSON.parse(workflow.definition) as {
         nodes: Array<Record<string, unknown>>
         custom?: string
@@ -525,31 +511,31 @@ describeEachProviderHttpApplication(
       mergerNode['agentId'] = 'drifted-agent-id'
       definition.custom = 'preserve-me'
 
-      await db
-        .update(agents)
-        .set({
+      await patchAgentFixture(
+        db,
+        { id: SKILL_MERGER_AGENT_ID },
+        {
           runtime: 'custom-runtime',
           bodyMd: 'custom merger instructions',
           dependsOn: JSON.stringify(['custom-dependency']),
           plugins: JSON.stringify(['custom-plugin']),
-        })
-        .where(eq(agents.id, SKILL_MERGER_AGENT_ID))
+        },
+      )
 
-      await db
-        .update(workflows)
-        .set({ definition: JSON.stringify(definition) })
-        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      await patchWorkflowFixture(
+        db,
+        { id: SKILL_FUSION_WORKFLOW_ID },
+        { definition: JSON.stringify(definition) },
+      )
 
       await seedFusionResourcesForDb(db)
-      const agent = (await db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)))[0]!
+      const agent = (await readAgentFixtures(db, { id: SKILL_MERGER_AGENT_ID }))[0]!
       expect(agent.runtime).toBe('custom-runtime')
       expect(agent.bodyMd).toBe('custom merger instructions')
       expect(JSON.parse(agent.dependsOn)).toEqual(['custom-dependency'])
       expect(JSON.parse(agent.plugins)).toEqual(['custom-plugin'])
 
-      const repaired = (
-        await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      )[0]!
+      const repaired = (await readWorkflowFixtures(db, { id: SKILL_FUSION_WORKFLOW_ID }))[0]!
       const repairedDefinition = JSON.parse(repaired.definition) as {
         nodes: Array<Record<string, unknown>>
         custom?: string
@@ -563,10 +549,9 @@ describeEachProviderHttpApplication(
       await seedFusionResourcesForDb(db)
       expect(
         (
-          await db
-            .select({ version: workflows.version })
-            .from(workflows)
-            .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+          await readWorkflowFixtures(db, { id: SKILL_FUSION_WORKFLOW_ID }).then((rows) =>
+            rows.map((row) => ({ version: row.version })),
+          )
         )[0]?.version,
       ).toBe(repaired.version)
     })
@@ -574,10 +559,7 @@ describeEachProviderHttpApplication(
     test('workflow repair never adopts another node by the merger display name', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
-      const { workflows } = tablesOf(db)
-      const workflow = (
-        await db.select().from(workflows).where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
-      )[0]!
+      const workflow = (await readWorkflowFixtures(db, { id: SKILL_FUSION_WORKFLOW_ID }))[0]!
       const definition = JSON.parse(workflow.definition) as {
         nodes: Array<Record<string, unknown>>
       }
@@ -587,18 +569,18 @@ describeEachProviderHttpApplication(
         agentId: 'user-agent-id',
         agentName: SKILL_MERGER_AGENT_NAME,
       })
-      await db
-        .update(workflows)
-        .set({ definition: JSON.stringify(definition) })
-        .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+      await patchWorkflowFixture(
+        db,
+        { id: SKILL_FUSION_WORKFLOW_ID },
+        { definition: JSON.stringify(definition) },
+      )
 
       await seedFusionResourcesForDb(db)
       const repaired = JSON.parse(
         (
-          await db
-            .select({ definition: workflows.definition })
-            .from(workflows)
-            .where(eq(workflows.id, SKILL_FUSION_WORKFLOW_ID))
+          await readWorkflowFixtures(db, { id: SKILL_FUSION_WORKFLOW_ID }).then((rows) =>
+            rows.map((row) => ({ definition: row.definition })),
+          )
         )[0]!.definition,
       ) as { nodes: Array<Record<string, unknown>> }
       expect(repaired.nodes.find((node) => node['id'] === 'merger')?.['agentId']).toBe(
@@ -611,25 +593,24 @@ describeEachProviderHttpApplication(
 
     test('a wrong-name fixed-id occupant fails closed and remains untouched', async () => {
       const { db } = await buildApp(scope)
-      const { agents } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: SKILL_MERGER_AGENT_ID,
         name: 'ordinary-agent',
         builtin: false,
       })
 
       await expect(seedFusionResourcesForDb(db)).rejects.toThrow(/stable built-in agent id/)
-      expect(
-        (await db.select().from(agents).where(eq(agents.id, SKILL_MERGER_AGENT_ID)))[0],
-      ).toMatchObject({ name: 'ordinary-agent', builtin: false })
+      expect((await readAgentFixtures(db, { id: SKILL_MERGER_AGENT_ID }))[0]).toMatchObject({
+        name: 'ordinary-agent',
+        builtin: false,
+      })
     })
 
     test('a user same-named workflow (builtin=false) coexists; exactly one built-in remains', async () => {
       const { db } = await buildApp(scope)
       await seedFusionResourcesForDb(db)
-      const { workflows } = tablesOf(db)
       // A user creates/imports their own workflow reusing the reserved name.
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: ulid(),
         name: SKILL_FUSION_WORKFLOW_NAME,
         description: 'mine',
@@ -651,7 +632,7 @@ describeEachProviderHttpApplication(
 
       // The partial unique index forbids a SECOND built-in with the same name.
       expect(async () => {
-        return await insertOne(db, workflows, {
+        return await workflowFixture(db, {
           id: ulid(),
           name: SKILL_FUSION_WORKFLOW_NAME,
           description: 'rogue',
@@ -675,8 +656,7 @@ describeEachProviderHttpApplication(
       // remains untouched while the framework publishes its own system row.
       const uid = ulid()
       const userAgentId = ulid()
-      const { agents } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: userAgentId,
         name: SKILL_MERGER_AGENT_NAME,
         ownerUserId: uid,
@@ -684,7 +664,7 @@ describeEachProviderHttpApplication(
       })
 
       await expect(seedFusionResourcesForDb(db)).resolves.toBeUndefined()
-      const rows = await db.select().from(agents).where(eq(agents.name, SKILL_MERGER_AGENT_NAME))
+      const rows = await readAgentFixtures(db, { name: SKILL_MERGER_AGENT_NAME })
       expect(rows).toHaveLength(2)
       expect(rows.find((row) => row.id === userAgentId)).toMatchObject({
         builtin: false,

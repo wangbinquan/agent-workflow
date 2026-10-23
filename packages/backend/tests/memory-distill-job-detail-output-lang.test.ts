@@ -17,9 +17,10 @@ import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function getDistillJobDetail(db: PersistenceDb, jobId: string) {
-  return composeMemoryDistillQueries(db).getJobDetail(jobId)
+  return composeMemoryDistillQueries(db, createClarifyAnswerQueries(db)).getJobDetail(jobId)
 }
 
 async function seedJob(db: PersistenceDb, outputLang: string | null | undefined): Promise<string> {

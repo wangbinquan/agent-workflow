@@ -1,5 +1,6 @@
+import { legacyReviewAbsolutePath } from '@/platform/content/legacyReview'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 
 import { sha256Hex } from '@/util/hash'
 import type {
@@ -11,7 +12,7 @@ import { planReviewArtifact } from '../application/reviewArtifactPlan'
 import { HumanGateOperationError } from '../domain/humanGateOperation'
 
 function absolutePath(appHome: string, relativePath: string): string {
-  return join(appHome, ...relativePath.split('/'))
+  return legacyReviewAbsolutePath(appHome, relativePath)
 }
 
 function bytesOf(body: string): Uint8Array {

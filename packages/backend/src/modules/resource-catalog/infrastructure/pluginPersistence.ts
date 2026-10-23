@@ -11,11 +11,7 @@ import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { ConflictError } from '@/util/errors'
 import { ValidationError, staleConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-import type {
-  PluginAgentReference,
-  PluginCreateRecord,
-  PluginProjection,
-} from '../application/plugins/ports'
+import type { PluginCreateRecord, PluginProjection } from '../application/plugins/ports'
 import type { PluginCatalogResource } from '../public/types'
 import { assertHostedPluginPublicationInTx } from './crewstation/pluginPublication'
 
@@ -246,35 +242,4 @@ export async function commitLegacyPluginPublishInTx(
   const [published] = await publishPluginRowInTx(tx, captured, set)
   if (published === undefined) throw stalePluginError(captured.id)
   return pluginFromPersistenceRow(published)
-}
-
-export interface PluginAgentReferencePersistenceRow {
-  readonly id: string
-  readonly name: string
-  readonly raw: unknown
-  readonly ownerUserId: string | null
-  readonly visibility: 'public' | 'private'
-}
-
-export function collectPluginAgentReferences(
-  rows: readonly PluginAgentReferencePersistenceRow[],
-  pluginId: string,
-): PluginAgentReference[] {
-  const references: PluginAgentReference[] = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(String(row.raw)) as unknown
-      if (Array.isArray(parsed) && parsed.includes(pluginId)) {
-        references.push({
-          id: row.id,
-          name: row.name,
-          ownerUserId: row.ownerUserId,
-          visibility: row.visibility,
-        })
-      }
-    } catch {
-      // Preserve the established fail-closed behavior for corrupt legacy JSON.
-    }
-  }
-  return references
 }

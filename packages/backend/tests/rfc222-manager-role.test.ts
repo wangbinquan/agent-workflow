@@ -11,8 +11,7 @@
 //     tasks:delete out of a PAT unless explicitly scoped; last-admin protection
 //     does not count manager as an admin.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture } from './helpers/model'
 import { describe, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
@@ -74,8 +73,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   })
   // A private agent owned by alice — the row a manager must be able to reach.
   const agId = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agId,
     name: `alice-secret-${agId}`,
     ownerUserId: alice.id,

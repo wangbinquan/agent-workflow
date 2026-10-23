@@ -20,7 +20,7 @@
 // minting shard children. Today both children share shardKey 'a.md' so the
 // DISTINCT shardKey count is 1 instead of 2 → the headline assertion fails.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -67,8 +67,7 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -90,15 +89,14 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -213,9 +211,9 @@ function registerCases(provider: ProviderHarness) {
     expect(wrapperRow.length).toBe(1)
 
     // Two items → two shard children, but each must own a DISTINCT shardKey.
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapperRow[0]!.id)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapperRow[0]!.id,
+    )
     expect(innerRows.length).toBe(2)
 
     // HEADLINE: each item must get a unique shard identity. Today both rows

@@ -8,7 +8,7 @@ export type MergeConflictType =
 
 export interface MergeConflictEntry {
   /** Per-repo worktree dir name (multi-repo disambiguation). */
-  worktreeDirName: string
+  mountPath: string
   /** Conflicted path relative to that repo root. */
   path: string
   type: MergeConflictType

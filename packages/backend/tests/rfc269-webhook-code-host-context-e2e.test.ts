@@ -4,6 +4,7 @@
 // code-host-call. The HTTP peer is local, but no launch/scheduler seam is
 // mocked. If trigger context ever returns to a post-launch UPDATE, the node's
 // one-time task snapshot sees NULL and this test fails before sending a request.
+import { readTaskFixtures, readNodeRunFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
@@ -194,7 +195,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
       { ownerUserId: owner.id, actor },
     )
 
-    const { webhookEndpoints, webhookTriggers, webhookDeliveries, tasks } = tablesOf(db)
+    const { webhookEndpoints, webhookTriggers, webhookDeliveries } = tablesOf(db)
     await insertOne(db, webhookEndpoints, {
       id: 'ep-rfc269-context',
       name: 'RFC 269 context endpoint',
@@ -273,7 +274,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
     await dispatcher.dispatch({ deliveryId, endpoint, event })
 
     const task = (
-      await db.select().from(tasks).where(eq(tasks.webhookTriggerId, 'tr-rfc269-context')).limit(1)
+      await readTaskFixtures(db, { webhookTriggerId: 'tr-rfc269-context' }, { limit: 1 })
     )[0]!
     const terminal = await watchExecutionTerminal(db, task.id, { pollMs: 10 })
     expect(terminal).toMatchObject({ kind: 'outcome', outcome: { status: 'done' } })
@@ -388,8 +389,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     )
     const workflowId = receipt.applied.find((entry) => entry.opId === 'op-2')?.resourceId
     expect(workflowId).toBeString()
-    const { workflows, webhookEndpoints, webhookTriggers, webhookDeliveries, tasks, nodeRuns } =
-      tablesOf(db)
+    const { workflows, webhookEndpoints, webhookTriggers, webhookDeliveries } = tablesOf(db)
     const workflow = (
       await db
         .select()
@@ -479,11 +479,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
     await dispatcher.dispatch({ deliveryId, endpoint, event })
 
     const task = (
-      await db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.webhookTriggerId, 'tr-rfc292-intent-agent'))
-        .limit(1)
+      await readTaskFixtures(db, { webhookTriggerId: 'tr-rfc292-intent-agent' }, { limit: 1 })
     )[0]!
     const terminal = await watchExecutionTerminal(db, task.id, { pollMs: 10 })
     expect(terminal).toMatchObject({ kind: 'outcome', outcome: { status: 'done' } })
@@ -497,7 +493,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
       },
     })
     expect(JSON.parse(task.triggerContextJson!)).not.toHaveProperty('comment_text')
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id)).limit(1))[0]!
+    const run = (await readNodeRunFixtures(db, { taskId: task.id }, { limit: 1 }))[0]!
     expect(readNodeRunPrompt(run, join(appHome, 'runs'))).toContain('fix-the-trigger-regression')
     expect(readNodeRunPrompt(run, join(appHome, 'runs'))).not.toContain(
       '{{trigger.webhook.comment_text}}',

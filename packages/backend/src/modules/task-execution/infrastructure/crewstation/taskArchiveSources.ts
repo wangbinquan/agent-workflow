@@ -2,6 +2,7 @@
 // and `logs/<task>`: object-backed task artifacts, review documents and node
 // event chunks (linked by object id), plus the task's work-volume files
 // (enumerated in the task image, uploaded once).
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -61,9 +62,11 @@ export function createHostedTaskArchiveSources(input: {
         .where(eq(tasks.id, taskId))
         .limit(1)
     )[0]
-    const owner = task?.workspace ? input.locate(task.workspace).taskId : taskId
+    // RFC-395 II-a A2: retain the absent-row fallback and use the shared empty-root predicate.
+    const hasWorkspace = task !== undefined && !isTaskWorkspaceUnbound(task.workspace)
+    const owner = hasWorkspace ? input.locate(task.workspace).taskId : taskId
     const workspace = await input.workspaces.find(owner)
-    if (task?.workspace && !workspace) throw new Error('hosted-archive-source-volume-unavailable')
+    if (hasWorkspace && !workspace) throw new Error('hosted-archive-source-volume-unavailable')
     let exists = files.size > 0
     if (workspace) {
       const snapshot = await input.helper.call<{

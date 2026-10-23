@@ -1,9 +1,9 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
+import { patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TaskCatalogPageSchema, type TaskLaunchOrigin } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
@@ -26,7 +26,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seedBase(db: Db): Promise<void> {
   const now = 1_788_278_400_000
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await db.insert(users).values([
     {
       id: 'admin',
@@ -53,7 +53,7 @@ async function seedBase(db: Db): Promise<void> {
       updatedAt: now,
     },
   ])
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-rfc244',
     name: 'Operations workflow',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -142,8 +142,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
-      const { tasks } = tablesOf(db)
-      await db.insert(tasks).values([
+      await taskFixture(db, [
         task('root-old', 'alice', 'done', { startedAt: 100 }),
         task('mid', 'alice', 'done', { parentTaskId: 'root-old', startedAt: 200 }),
         task('leaf-target', 'alice', 'running', {
@@ -180,8 +179,7 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
-      const { tasks } = tablesOf(db)
-      await db.insert(tasks).values([
+      await taskFixture(db, [
         task('private-parent', 'bob', 'done', { startedAt: 100 }),
         task('visible-child', 'alice', 'running', {
           parentTaskId: 'private-parent',
@@ -201,16 +199,13 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
-      const { tasks } = tablesOf(db)
-      await db
-        .insert(tasks)
-        .values([
-          task('parent', 'alice'),
-          task('mid', 'alice', 'done', { parentTaskId: 'parent' }),
-          task('active-leaf', 'alice', 'running', { parentTaskId: 'mid' }),
-          task('private-parent', 'bob'),
-          task('private-child', 'bob', 'running', { parentTaskId: 'private-parent' }),
-        ])
+      await taskFixture(db, [
+        task('parent', 'alice'),
+        task('mid', 'alice', 'done', { parentTaskId: 'parent' }),
+        task('active-leaf', 'alice', 'running', { parentTaskId: 'mid' }),
+        task('private-parent', 'bob'),
+        task('private-child', 'bob', 'running', { parentTaskId: 'private-parent' }),
+      ])
 
       const page = await listTaskOperationsPage(db, actor('alice'), {
         parent_id: 'parent',
@@ -233,14 +228,11 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
-      const { tasks } = tablesOf(db)
-      await db
-        .insert(tasks)
-        .values([
-          task('task-c', 'alice', 'done', { startedAt: 100 }),
-          task('task-b', 'alice', 'done', { startedAt: 100 }),
-          task('task-a', 'alice', 'done', { startedAt: 100 }),
-        ])
+      await taskFixture(db, [
+        task('task-c', 'alice', 'done', { startedAt: 100 }),
+        task('task-b', 'alice', 'done', { startedAt: 100 }),
+        task('task-a', 'alice', 'done', { startedAt: 100 }),
+      ])
 
       const first = await listTaskOperationsPage(db, actor('alice'), { limit: '2' })
       expect(first.items.map((item) => item.id)).toEqual(['task-c', 'task-b'])
@@ -281,10 +273,9 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
-      const { tasks } = tablesOf(db)
-      await db
-        .insert(tasks)
-        .values([task('corrupt-json', 'alice', 'done', { workgroupConfigJson: '{broken' })])
+      await taskFixture(db, [
+        task('corrupt-json', 'alice', 'done', { workgroupConfigJson: '{broken' }),
+      ])
       const page = await listTaskOperationsPage(db, actor('alice'), {})
       expect(page.items[0]?.workgroupName).toBeNull()
     })
@@ -293,13 +284,11 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
-      const { tasks, taskCollaborators } = tablesOf(db)
-      await db
-        .insert(tasks)
-        .values([
-          task('owned-parent', 'admin'),
-          task('shared-child', 'bob', 'running', { parentTaskId: 'owned-parent' }),
-        ])
+      const { taskCollaborators } = tablesOf(db)
+      await taskFixture(db, [
+        task('owned-parent', 'admin'),
+        task('shared-child', 'bob', 'running', { parentTaskId: 'owned-parent' }),
+      ])
       await insertOne(db, taskCollaborators, {
         taskId: 'shared-child',
         userId: 'admin',
@@ -322,8 +311,7 @@ describe('RFC-244 task operations query', () => {
       const task = createProviderTask()
       await seedBase(db)
       const forbidden = 'RFC244_FORBIDDEN_LARGE_JSON_SENTINEL'
-      const { tasks } = tablesOf(db)
-      await db.insert(tasks).values([
+      await taskFixture(db, [
         task('workflow-manual', 'alice', 'done', { startedAt: 100 }),
         task('agent-manual', 'alice', 'running', {
           startedAt: 200,
@@ -399,10 +387,9 @@ describe('RFC-244 task operations query', () => {
       const db = harness.db
       const task = createProviderTask()
       await seedBase(db)
-      const { tasks } = tablesOf(db)
-      await db.insert(tasks).values([task('cycle-a', 'alice'), task('cycle-b', 'alice')])
-      await db.update(tasks).set({ parentTaskId: 'cycle-b' }).where(eq(tasks.id, 'cycle-a'))
-      await db.update(tasks).set({ parentTaskId: 'cycle-a' }).where(eq(tasks.id, 'cycle-b'))
+      await taskFixture(db, [task('cycle-a', 'alice'), task('cycle-b', 'alice')])
+      await patchTaskFixture(db, { id: 'cycle-a' }, { parentTaskId: 'cycle-b' })
+      await patchTaskFixture(db, { id: 'cycle-b' }, { parentTaskId: 'cycle-a' })
 
       const page = await listTaskOperationsPage(db, actor('alice'), {})
       expect(page.kind).toBe('root')
@@ -432,13 +419,12 @@ describe('RFC-244 task operations query', () => {
           role: 'user',
           password: 'longEnoughPassword',
         })
-        const { workflows, tasks } = tablesOf(db)
-        await insertOne(db, workflows, {
+        await workflowFixture(db, {
           id: 'wf-route-rfc244',
           name: 'Route workflow',
           definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
         })
-        await insertOne(db, tasks, {
+        await taskFixture(db, {
           ...task('route-task', owner.id),
           workflowId: 'wf-route-rfc244',
         })

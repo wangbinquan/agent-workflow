@@ -3,10 +3,10 @@
 // fixtures already use, so the migration sweep is a call-site rename instead
 // of a 51-file reshape; internally everything lands in `clarify_rounds`.
 
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { type ClarifyRoundFixtureSpec, clarifyRoundFixture, nodeRunFixture } from './helpers/model'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-type DbLike = Pick<PersistenceDb, 'insert'>
+type DbLike = PersistenceDb
 
 export interface LegacySelfClarifyValues {
   id: string
@@ -39,11 +39,11 @@ async function ensureRunStubs(
 ): Promise<void> {
   for (const id of runIds) {
     if (id === null || id === '') continue
-    const { nodeRuns } = tablesOf(db)
-    await db
-      .insert(nodeRuns)
-      .values({ id, taskId, nodeId: `stub:${id}`, status: 'done', retryIndex: 0, iteration: 0 })
-      .onConflictDoNothing()
+    await nodeRunFixture(
+      db,
+      { id, taskId, nodeId: `stub:${id}`, status: 'done', retryIndex: 0, iteration: 0 },
+      { onConflict: 'ignore' },
+    )
   }
 }
 
@@ -52,8 +52,7 @@ export async function insertLegacySelfClarify(
   v: LegacySelfClarifyValues,
 ): Promise<void> {
   await ensureRunStubs(db, v.taskId, [v.sourceAgentNodeRunId, v.clarifyNodeRunId])
-  const { clarifyRounds } = tablesOf(db)
-  await db.insert(clarifyRounds).values({
+  await clarifyRoundFixture(db, {
     id: v.id,
     taskId: v.taskId,
     kind: 'self',
@@ -64,10 +63,10 @@ export async function insertLegacySelfClarify(
     intermediaryNodeRunId: v.clarifyNodeRunId,
     loopIter: 0,
     iteration: v.iterationIndex ?? 0,
-    questionsJson: v.questionsJson,
-    answersJson: v.answersJson ?? null,
+    questions: v.questionsJson,
+    answers: v.answersJson ?? null,
     status: v.status ?? 'awaiting_human',
-    truncationWarningsJson: v.truncationWarningsJson ?? null,
+    truncationWarnings: v.truncationWarningsJson ?? null,
     createdAt: v.createdAt ?? Date.now(),
     answeredAt: v.answeredAt ?? null,
     answeredBy: v.answeredBy ?? null,
@@ -100,8 +99,7 @@ export async function insertLegacyCrossClarify(
   v: LegacyCrossClarifyValues,
 ): Promise<void> {
   await ensureRunStubs(db, v.taskId, [v.sourceQuestionerNodeRunId, v.crossClarifyNodeRunId])
-  const { clarifyRounds } = tablesOf(db)
-  await db.insert(clarifyRounds).values({
+  await clarifyRoundFixture(db, {
     id: v.id,
     taskId: v.taskId,
     kind: 'cross',
@@ -113,8 +111,8 @@ export async function insertLegacyCrossClarify(
     targetConsumerNodeId: v.targetDesignerNodeId ?? null,
     loopIter: v.loopIter ?? 0,
     iteration: v.iteration ?? 0,
-    questionsJson: v.questionsJson,
-    answersJson: v.answersJson ?? null,
+    questions: v.questionsJson,
+    answers: v.answersJson ?? null,
     directive: v.directive ?? null,
     status: v.status ?? 'awaiting_human',
     designerRunTriggeredAt: v.designerRunTriggeredAt ?? null,
@@ -125,11 +123,7 @@ export async function insertLegacyCrossClarify(
 }
 
 /** rounds 键名直插（含 run 桩）——给已经手写统一表形状的夹具用。 */
-export async function insertClarifyRoundRaw(
-  db: DbLike,
-  v: PersistenceTables['clarifyRounds']['$inferInsert'],
-): Promise<void> {
+export async function insertClarifyRoundRaw(db: DbLike, v: ClarifyRoundFixtureSpec): Promise<void> {
   await ensureRunStubs(db, v.taskId, [v.askingNodeRunId ?? null, v.intermediaryNodeRunId ?? null])
-  const { clarifyRounds } = tablesOf(db)
-  await db.insert(clarifyRounds).values(v)
+  await clarifyRoundFixture(db, v)
 }

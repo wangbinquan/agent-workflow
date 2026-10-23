@@ -7,25 +7,17 @@
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { lstatSync } from 'node:fs'
 import { ValidationError } from '@/util/errors'
+import {
+  skillRootRel,
+  skillFilesRel,
+  skillVersionRelPath,
+  assertPathSegment,
+} from '@/platform/content/legacySkill'
+export { skillRootRel, skillFilesRel, skillVersionRelPath } from '@/platform/content/legacySkill'
 
 export interface SkillOperationIdentity {
   skillId: string
   legacyName?: string
-}
-
-export function skillRootRel(skillId: string): string {
-  return `skills/${assertPathSegment(skillId, 'skill id')}`
-}
-
-export function skillFilesRel(skillId: string): string {
-  return `${skillRootRel(skillId)}/files`
-}
-
-export function skillVersionRelPath(skillId: string, version: number): string {
-  if (!Number.isInteger(version) || version < 1) {
-    throw new ValidationError('skill-version-invalid', 'skill version must be a positive integer')
-  }
-  return `${skillRootRel(skillId)}/versions/v${version}/files`
 }
 
 export function skillRootAbs(appHome: string, skillId: string): string {
@@ -151,62 +143,4 @@ export function realDirectoryChainState(root: string, target: string): RealDirec
  * prefix. Rebase the suffix rooted at `skills/` into the current appHome and
  * reject any value that cannot be proven to stay inside the current skills root.
  */
-export function rebaseSkillOperationPath(
-  appHome: string,
-  storedPath: string,
-  expectedSkillKey: string,
-): string {
-  const key = assertPathSegment(expectedSkillKey, 'skill operation identity')
-  const normalized = storedPath.replaceAll('\\', '/')
-  let rel: string
-  if (isAbsolute(storedPath)) {
-    const marker = '/skills/'
-    const at = normalized.lastIndexOf(marker)
-    if (at < 0) {
-      throw new ValidationError(
-        'skill-operation-path-invalid',
-        'skill operation path is not rooted under skills/',
-      )
-    }
-    rel = normalized.slice(at + 1)
-  } else {
-    rel = normalized
-  }
-  const expectedPrefix = `skills/${key}`
-  if (rel !== expectedPrefix && !rel.startsWith(`${expectedPrefix}/`)) {
-    throw new ValidationError(
-      'skill-operation-path-invalid',
-      'skill operation path is not rooted under the operation skill identity',
-    )
-  }
-  if (rel.split('/').some((part) => part === '' || part === '.' || part === '..')) {
-    throw new ValidationError(
-      'skill-operation-path-invalid',
-      'skill operation path contains an unsafe segment',
-    )
-  }
-  const root = resolve(appHome, 'skills')
-  const target = resolve(appHome, ...rel.split('/'))
-  const inside = relative(root, target)
-  if (inside === '' || (!inside.startsWith(`..${sep}`) && inside !== '..' && !isAbsolute(inside))) {
-    return target
-  }
-  throw new ValidationError(
-    'skill-operation-path-invalid',
-    'skill operation path escapes the current skills root',
-  )
-}
-
-function assertPathSegment(value: string, label: string): string {
-  if (
-    value.length === 0 ||
-    value === '.' ||
-    value === '..' ||
-    value.includes('/') ||
-    value.includes('\\') ||
-    value.includes('\0')
-  ) {
-    throw new ValidationError('skill-identity-invalid', `${label} is not a safe path segment`)
-  }
-  return value
-}
+export { rebaseSkillOperationPath } from '@/platform/content/legacySkill'

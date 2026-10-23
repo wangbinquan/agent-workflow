@@ -1,7 +1,9 @@
+// RFC-382: exercise the real session graph on both databases, including pre-fix controls.
+
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
-// RFC-382: exercise the real session graph on both databases, including pre-fix controls.
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -187,9 +189,9 @@ describeEachProvider('RFC-382 session task execution bundle', (harness) => {
         actor,
         resourceAuthority: { actor, authority: authority.authority, resources: bundle.resources },
         invoker: { type: 'user', launchKind: 'direct-json' },
-        task: { workflowId: launch.workflowId, name: 'host', inputs: {} },
+        task: { name: 'host', inputs: {} },
         subject: {
-          workflowId: launch.workflowId,
+          subject: { kind: 'workflow' as const, sourceId: launch.workflowId },
           workflowName: launch.workflowId,
           builtin: false,
           workflowVersion: 1,
@@ -308,8 +310,7 @@ describeEachProvider('RFC-382 session task execution bundle', (harness) => {
     const fixture = taskBundleInput(harness, home()),
       bundle = fixture.compose(),
       id = ulid()
-    const { agents } = tablesOf(harness.db)
-    await insertOne(harness.db, agents, {
+    await agentFixture(harness.db, {
       id,
       name: `builtin-${id}`,
       builtin: true,

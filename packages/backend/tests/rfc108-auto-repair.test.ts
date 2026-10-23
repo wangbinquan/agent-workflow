@@ -6,6 +6,7 @@
 // 不调 apply；③ 两个 eligible → 跳（no-single-eligible）；④ 已隔离任务 → 跳；⑤ apply 抛错
 // → 跳、不计 repaired。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -45,9 +46,9 @@ async function seedTaskWithAlert(db: PersistenceDb, rule = 'S4'): Promise<string
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  const { workflows, tasks, lifecycleAlerts } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await insertOne(db, tasks, {
+  const { lifecycleAlerts } = tablesOf(db)
+  await workflowFixture(db, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,

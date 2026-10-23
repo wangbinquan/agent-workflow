@@ -8,7 +8,15 @@
 //     maintenance_state marker makes the next boot a no-op, `force` re-walks;
 //   • `doctor --backfill-containers` refuses while the daemon runs.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  patchTaskFixture,
+  readClarifyRoundFixtures,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -21,7 +29,7 @@ import { runFrameBackfillOnBoot } from '../src/modules/task-execution/compositio
 import {
   planFrameBackfill,
   type FrameBackfillRunRow,
-} from '../src/modules/task-execution/domain/frameBackfill'
+} from '../src/modules/task-execution/domain/legacyMigration/frameBackfill'
 
 function row(
   id: string,
@@ -164,8 +172,7 @@ const DEFINITION: WorkflowDefinition = {
 async function seedLegacyTask(db: PersistenceDb) {
   const wfId = '01WF0000000000000000000000'
   const taskId = '01TASK00000000000000000000'
-  const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'nested',
     description: '',
@@ -173,7 +180,7 @@ async function seedLegacyTask(db: PersistenceDb) {
     version: 1,
     schemaVersion: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'nested',
     executionLineageId: taskId,
@@ -198,7 +205,7 @@ async function seedLegacyTask(db: PersistenceDb) {
     { id: '05I000000000000000000000000', nodeId: 'iloop', iteration: 1 },
   ]
   for (const r of legacy) {
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: r.id,
       taskId,
       nodeId: r.nodeId,
@@ -212,7 +219,7 @@ async function seedLegacyTask(db: PersistenceDb) {
     })
   }
   // a self-clarify round whose park row is the round-0 worker run
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: '01ROUND0000000000000000000',
     taskId,
     kind: 'self',
@@ -222,8 +229,8 @@ async function seedLegacyTask(db: PersistenceDb) {
     intermediaryNodeRunId: '03W000000000000000000000000',
     targetConsumerNodeId: null,
     iteration: 0,
-    questionsJson: '[]',
-    answersJson: '[]',
+    questions: '[]',
+    answers: '[]',
     directive: 'continue',
     status: 'answered',
     answeredAt: Date.now(),
@@ -246,7 +253,7 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
     expect(first.unreadableTasks).toEqual([])
     expect(first.unresolvedRows).toBe(0)
 
-    const { nodeRuns, clarifyRounds, maintenanceState } = tablesOf(db)
+    const { nodeRuns, maintenanceState } = tablesOf(db)
     const runs = await db
       .select({
         id: nodeRuns.id,
@@ -279,10 +286,9 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
         scopePath: 'oloop:1',
       },
     ])
-    const round = await db
-      .select({ containerRunId: clarifyRounds.containerRunId })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.taskId, taskId))
+    const round = await readClarifyRoundFixtures(db, { taskId }).then((rows) =>
+      rows.map((row) => ({ containerRunId: row.containerRunId })),
+    )
     expect(round).toEqual([{ containerRunId: '02I000000000000000000000000' }])
 
     const marker = await db
@@ -313,17 +319,15 @@ describeEachProvider('RFC-354 T4 — SQLite store end-to-end', (harness) => {
   test('a task whose snapshot cannot be parsed is reported and left untouched', async () => {
     const db = harness.db
     const { taskId } = await seedLegacyTask(db)
-    const { tasks, nodeRuns } = tablesOf(db)
-    await db.update(tasks).set({ workflowSnapshot: '{not json' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { workflowSnapshot: '{not json' })
     const report = await runFrameBackfillOnBoot({
       db,
     })
     expect(report.unreadableTasks).toEqual([taskId])
     expect(report.rowsUpdated).toBe(0)
-    const framed = await db
-      .select({ containerRunId: nodeRuns.containerRunId })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
+    const framed = await readNodeRunFixtures(db, { taskId }).then((rows) =>
+      rows.map((row) => ({ containerRunId: row.containerRunId })),
+    )
     expect(framed.every((r) => r.containerRunId === null)).toBe(true)
   })
 })

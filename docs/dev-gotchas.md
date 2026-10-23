@@ -8855,3 +8855,7 @@ I-b 之前 PostgreSQL 也走 sqlite-core 的 builder（sqlite-proxy），测试�
   （`sessionTables.ts` 的 `boundEngineOf`）。
 - **原始语句入口不同**：SQLite 是 `run` / `all`，原生 PostgreSQL 是 `execute`。故障注入缝两个都要钩，而且只钩句柄本来就有的
   方法：Proxy 凭空给 SQLite 句柄造一个 `execute`，`rawRows` 会把它当成 PostgreSQL。
+
+### 2026-10-22 RFC-395 II-a A6 补记
+
+`createSqliteResourcePackageApplyArtifactRecovery` 已随恢复机制合一迁为 `createLegacyResourcePackageApplyArtifactRecovery`；上文 2026-09-08 记录保留当时名称。

@@ -34,7 +34,13 @@
 // attempts' half-products are gone. Under the pre-fix code the same chain
 // reset src.txt to its committed HEAD body — losing X.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -156,8 +162,7 @@ async function buildHarness(): Promise<Harness> {
 
 async function seedWriterAgent(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -188,15 +193,14 @@ async function seedSingleRepoTask(h: Harness, agentId: string): Promise<string> 
     ],
     edges: [],
   }
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -208,7 +212,7 @@ async function seedSingleRepoTask(h: Harness, agentId: string): Promise<string> 
     status: 'pending',
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
-    // repoCount defaults to 1 — single-repo path throughout.
+    // No explicit repos — single-root repository path throughout.
   })
   return taskId
 }
@@ -272,13 +276,13 @@ describe('S-2b followup-chain retry rollback restores the last FRESH baseline (R
         }),
     )
 
-    const { tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
+    const { nodeRunEvents } = tablesOf(h.db)
     // Attempt 2 succeeded → task done.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // Three attempts: 0 failed (fresh), 1 failed (followup), 2 done (fresh).
-    const runs = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+    const runs = (await readNodeRunFixtures(h.db, { taskId }))
       .filter((r) => r.nodeId === 'a1')
       .sort((a, b) => a.retryIndex - b.retryIndex)
     expect(runs.map((r) => r.status)).toEqual(['failed', 'failed', 'done'])
@@ -307,9 +311,15 @@ describe('S-2b followup-chain retry rollback restores the last FRESH baseline (R
     expect(followupEvents.some((e) => e.payload.includes('[rfc042/envelope-followup]'))).toBe(true)
     // RFC-130: the iso model no longer writes pre-snapshot columns — every attempt
     // ran in an iso and the canonical worktree was never touched. All NULL.
-    expect(runs[0]?.preSnapshot).toBeNull()
-    expect(runs[1]?.preSnapshot).toBeNull()
-    expect(runs[2]?.preSnapshot).toBeNull()
+    expect(
+      runs[0]?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null,
+    ).toBeNull()
+    expect(
+      runs[1]?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null,
+    ).toBeNull()
+    expect(
+      runs[2]?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null,
+    ).toBeNull()
 
     // ── Followup attempt inherited the SAME iso AS-IS (RFC-130 D17: a same-session
     // followup keeps its iso worktree): attempt 0's half-product and tracked

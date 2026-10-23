@@ -1,3 +1,4 @@
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
@@ -39,7 +40,7 @@ export function createExecutionContractResourceLookup(
           definition: workflows.definition,
         })
         .from(workflows)
-        .where(eq(workflows.id, id))
+        .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
         .limit(1)
       const row = rows[0]
       if (row === undefined) return null

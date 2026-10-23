@@ -26,6 +26,7 @@
 // where the gate actually runs, on ubuntu only (matching the committed
 // `-linux.png` baselines).
 
+import { patchTaskFixtureSql } from './fixtures/model'
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -742,10 +743,10 @@ async function seedTerminalTask(): Promise<{ taskId: string; agentId: string }> 
               comment_url: 'https://gitlab.example/platform/api/-/merge_requests/42#note_visual',
             },
           },
-        }).replaceAll("'", "''")
+        })
         runSqlite(
           join(d.home, 'db.sqlite'),
-          `UPDATE tasks SET trigger_context_json='${context}' WHERE id='${task.id}';`,
+          patchTaskFixtureSql({ id: task.id }, { triggerContextJson: context }),
         )
         return { taskId: task.id, agentId: agent.id }
       }

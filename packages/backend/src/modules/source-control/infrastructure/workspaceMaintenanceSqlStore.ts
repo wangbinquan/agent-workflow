@@ -1,3 +1,7 @@
+import {
+  taskWorkspaceUnboundSql,
+  taskWorkspaceRootMatchesSql,
+} from '@/platform/persistence/taskRepositorySql'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { RawRowCodecs } from '@/platform/persistence/queryHelpers'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -321,7 +325,7 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
         AND ${tasks.workspacePruningAt} IS NULL
         AND ${tasks.status} IN (${terminalStatuses})
         AND ${tasks.deletedAt} IS NULL
-        AND ${tasks.worktreePath} = ${expected.worktreePath}
+        AND ${taskWorkspaceRootMatchesSql(tasks.worktreePath, expected.worktreePath)}
         AND ${tasks.lifecycleEventRevision} = ${expected.lifecycleEventRevision}
       RETURNING ${tasks.id} AS id
     `)
@@ -348,7 +352,7 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
       WHERE ${tasks.status} IN (${terminalStatuses})
         AND ${tasks.workspacePrunedAt} IS NULL
         AND ${tasks.workspacePruningAt} IS NULL
-        AND ${tasks.worktreePath} <> ''
+        AND not ${taskWorkspaceUnboundSql(tasks.worktreePath)}
     `,
       { lifecycle_event_revision: 'int' },
     )

@@ -6,7 +6,13 @@
 // touch any node_runs.injected_memories_json column (historical inject
 // snapshots are frozen; admin edits only affect future inject reads).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -262,8 +268,7 @@ describeEachProviderHttpApplication(
       // that includes a record of the memory at its v1 state. PATCHing the
       // memory must NOT rewrite this historical column.
       const workflowId = ulid()
-      const { workflows, tasks, nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, workflows, {
+      await workflowFixture(h.db, {
         id: workflowId,
         name: 'wf-test',
         description: '',
@@ -274,7 +279,7 @@ describeEachProviderHttpApplication(
         updatedAt: Date.now(),
       })
       const taskId = ulid()
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         id: taskId,
         name: 'task-rfc045-test',
         workflowId,
@@ -302,7 +307,7 @@ describeEachProviderHttpApplication(
           approvedAt: Date.now(),
         },
       ])
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
@@ -310,7 +315,7 @@ describeEachProviderHttpApplication(
         retryIndex: 0,
         reviewIteration: 0,
         status: 'done',
-        injectedMemoriesJson: snapshotJsonBefore,
+        injectedMemories: snapshotJsonBefore,
       })
 
       // PATCH the memory's title + body — every field a runtime injector
@@ -324,12 +329,10 @@ describeEachProviderHttpApplication(
       )
       expect(res.status).toBe(200)
 
-      const rows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))) as Array<{
-        injectedMemoriesJson: string | null
-      }>
+      const rows = await readNodeRunFixtures(h.db, { id: nodeRunId })
       expect(rows.length).toBe(1)
       // Byte-equal: the historical snapshot is frozen by RFC-046 design.
-      expect(rows[0]!.injectedMemoriesJson).toBe(snapshotJsonBefore)
+      expect(rows[0]!.injectedMemories).toBe(snapshotJsonBefore)
     })
   },
 )
@@ -352,8 +355,8 @@ describeEachProviderHttpApplication(
 
     test('trusted route identity moves a candidate and persists its audit receipt', async () => {
       const agentId = ulid()
-      const { agents, memoryScopeMoveEvents } = tablesOf(h.db)
-      await insertOne(h.db, agents, {
+      const { memoryScopeMoveEvents } = tablesOf(h.db)
+      await agentFixture(h.db, {
         id: agentId,
         name: `route-move-agent-${agentId.slice(-6)}`,
         description: '',

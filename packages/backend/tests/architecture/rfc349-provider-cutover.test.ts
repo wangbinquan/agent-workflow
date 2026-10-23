@@ -53,14 +53,14 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // 一起从这条债里消失（债只降不升，这是连着两次收敛）。
   // RFC-359 AC-1（第 11 刀）：cancel 合一，`taskExecutionOwners` 随取消实现一起离开这条债
   //（回收任务持有者那一步现在只在共用的 `cancelTaskProjection` 里做）。债只降不升。
-  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,and,asc,desc,eq,inArray,isNotNull',
+  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,eq',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: export:LegacySqliteTaskAuthorizationRef,export:LegacyTaskOwnershipScope',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: legacySqliteDefaultTaskAuthorizationRef,legacySqliteTaskAuthorizationCondition,legacySqliteTaskOwnershipScopeCondition,legacySqliteVisibleTaskIdsOf',
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀的前置）：`taskDelete.ts` 的库句柄从
   // bun:sqlite 专有的 `LegacySqliteTaskDatabase` 放宽到中立别名——卡住它的只有五处 `.get()`
   // （bun:sqlite 独有的同步终结符），改写成 `await … .limit(1)` 之后整份实现就是普通
   // drizzle 查询 + 中立事务原语了。**债的形状变了但没长**：换的是同一条边上的一个类型名。
-  'packages/backend/src/services/taskDelete.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,eq,inArray,sql',
+  'packages/backend/src/services/taskDelete.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase',
   'packages/backend/src/services/taskLaunchGate.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase',
 ] as const
 

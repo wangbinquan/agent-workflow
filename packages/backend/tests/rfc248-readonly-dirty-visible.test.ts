@@ -14,8 +14,12 @@
 //   0    = 检查过且干净
 //   N>0  = 丢弃了 N 处
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  readTaskRepoFixtures,
+} from './helpers/model'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -49,10 +53,9 @@ describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
 describeEachProvider('migration 0133 —— task_repos.readonly_dirty_count', (harness) => {
   test('三态都能写入并读回', async () => {
     const db = harness.db
-    const { workflows, tasks, taskRepos } = tablesOf(db)
     // 外键链：task_repos.task_id → tasks.id → workflows.id，两级都得先落行。
-    await insertOne(db, workflows, { id: 'wf', name: 'w', definition: '{}' })
-    await insertOne(db, tasks, {
+    await workflowFixture(db, { id: 'wf', name: 'w', definition: '{}' })
+    await taskFixture(db, {
       id: 't1',
       // Preserve the values observed from the original SQLite task-row trigger.
       executionLineageId: 't1',
@@ -69,7 +72,6 @@ describeEachProvider('migration 0133 —— task_repos.readonly_dirty_count', (h
       inputs: '{}',
       status: 'pending',
       startedAt: Date.now(),
-      repoCount: 3,
     })
     const base = {
       taskId: 't1',
@@ -77,17 +79,18 @@ describeEachProvider('migration 0133 —— task_repos.readonly_dirty_count', (h
       baseBranch: 'main',
       branch: 'agent-workflow/t1',
       worktreePath: '/tmp/wt',
-      worktreeDirName: '',
       mountPath: '',
       subdir: '',
       readonly: true,
     }
-    await db.insert(taskRepos).values([
+    await taskRepoFixture(db, [
       { ...base, repoIndex: 0 },
       { ...base, repoIndex: 1, mountPath: 'clean', readonlyDirtyCount: 0 },
       { ...base, repoIndex: 2, mountPath: 'dirty', readonlyDirtyCount: 7 },
     ])
-    const rows = await db.select().from(taskRepos).orderBy(taskRepos.repoIndex)
+    const rows = await readTaskRepoFixtures(db, undefined, {
+      orderBy: [{ field: 'repoIndex', direction: 'asc' }],
+    })
     expect(rows.map((r) => r.readonlyDirtyCount)).toEqual([null, 0, 7])
   })
 })

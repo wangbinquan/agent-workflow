@@ -6,7 +6,14 @@
 // scheduler-less `pending` zombie and wiped its completion metadata before the
 // 404 fired. A bad nodeRunId must now leave the task completely untouched.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 
@@ -36,8 +43,8 @@ describeEachProvider(
 
     test('bogus nodeRunId → 404 and the done task is left intact', async () => {
       const workflowId = ulid()
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { tasks } = tablesOf(db)
+      await workflowFixture(db, {
         id: workflowId,
         name: 'wf',
         description: '',
@@ -48,7 +55,7 @@ describeEachProvider(
       })
       const taskId = ulid()
       const finishedAt = Date.now()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 't',
         workflowId,
@@ -107,8 +114,7 @@ describeEachProvider(
         ],
         edges: [],
       }
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'wf-trigger-retry',
         description: '',
@@ -120,7 +126,7 @@ describeEachProvider(
       const taskId = ulid()
       const runId = ulid()
       const finishedAt = Date.now()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'trigger-retry',
         workflowId,
@@ -137,7 +143,7 @@ describeEachProvider(
         errorMessage: 'original-detail',
         failedNodeId: 'agent',
       })
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: 'agent',
@@ -153,8 +159,8 @@ describeEachProvider(
         createRetryEngine(db, {}).retry({ taskId, nodeRunId: runId, cascade: true }),
       ).rejects.toMatchObject({ code: 'trigger-context-missing' })
 
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
-      const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]!
+      const run = (await readNodeRunFixtures(db, { id: runId }))[0]!
       expect(task).toMatchObject({
         status: 'failed',
         finishedAt,
@@ -167,8 +173,7 @@ describeEachProvider(
 
     test("cross-task call row → 404 without canceling that row's live child", async () => {
       const workflowId = ulid()
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'wf-cross-task',
         description: '',
@@ -191,7 +196,7 @@ describeEachProvider(
         inputs: '{}',
         startedAt: Date.now() - 100,
       }
-      await db.insert(tasks).values([
+      await taskFixture(db, [
         {
           ...common,
           id: targetTaskId,
@@ -209,7 +214,7 @@ describeEachProvider(
           finishedAt: Date.now(),
         },
       ])
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: foreignCallRunId,
         taskId: foreignTaskId,
         nodeId: 'call_foreign',
@@ -218,7 +223,7 @@ describeEachProvider(
         iteration: 0,
         startedAt: Date.now() - 50,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         ...common,
         id: foreignChildId,
         name: 'foreign-live-child',
@@ -228,10 +233,7 @@ describeEachProvider(
         parentNodeRunId: foreignCallRunId,
         invocationDepth: 1,
       })
-      await db
-        .update(nodeRuns)
-        .set({ childTaskId: foreignChildId })
-        .where(eq(nodeRuns.id, foreignCallRunId))
+      await patchNodeRunFixture(db, { id: foreignCallRunId }, { childTaskId: foreignChildId })
 
       await expect(
         createRetryEngine(db, {}).retry({
@@ -241,8 +243,8 @@ describeEachProvider(
         }),
       ).rejects.toMatchObject({ code: 'node-run-not-found' })
 
-      const target = (await db.select().from(tasks).where(eq(tasks.id, targetTaskId)))[0]
-      const child = (await db.select().from(tasks).where(eq(tasks.id, foreignChildId)))[0]
+      const target = (await readTaskFixtures(db, { id: targetTaskId }))[0]
+      const child = (await readTaskFixtures(db, { id: foreignChildId }))[0]
       expect(target?.status).toBe('done')
       expect(child?.status).toBe('awaiting_human')
       expect(child?.errorMessage).toBeNull()

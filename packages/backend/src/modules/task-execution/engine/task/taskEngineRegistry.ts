@@ -1,3 +1,5 @@
+import { workgroupLaunchMode, type TaskWorkgroupConfig } from '../../domain/taskWorkgroupConfig'
+import type { TaskSubject } from '../../domain/taskSubject'
 import {
   TASK_ENGINE_KINDS,
   type TaskEngine,
@@ -32,12 +34,12 @@ export interface ResolvedTaskEngine {
 }
 
 export function resolveTaskEngineSelection(
-  task: { readonly workgroupId?: string | null; readonly workgroupConfigJson?: string | null },
+  task: { readonly subject: TaskSubject; readonly workgroupConfig?: TaskWorkgroupConfig | null },
   dwPhase: DynamicWorkflowPhase | null,
 ): ResolvedTaskEngine {
-  if (!isWorkgroupTask(task)) return { engine: 'dag', wgDispatch: null }
+  if (task.subject.kind !== 'workgroup') return { engine: 'dag', wgDispatch: null }
   const wgDispatch = deriveWorkgroupDispatch(
-    workgroupModeOf(task.workgroupConfigJson) ?? 'leader_worker',
+    workgroupLaunchMode(task.workgroupConfig?.launch) ?? 'leader_worker',
     dwPhase,
   )
   const engine: TaskEngineKind =
@@ -50,8 +52,6 @@ export function resolveTaskEngineSelection(
 }
 import {
   deriveWorkgroupDispatch,
-  isWorkgroupTask,
-  workgroupModeOf,
   type DynamicWorkflowPhase,
   type WorkgroupDispatch,
 } from '@agent-workflow/shared'

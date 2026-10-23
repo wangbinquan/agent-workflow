@@ -6,7 +6,8 @@
 // 不从 memory public query 暴露正文。RFC-041 的 live-read 语义保持不变——每次 runNode
 // 重新取当前 approved 的行，中途新批准的记忆下一次 runNode 即生效。
 
-import { compareNodeRunMintOrder, nodeRunOrderAnchor } from '@agent-workflow/shared'
+import { nodeRunOrderAnchor } from '@agent-workflow/shared'
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 import type { Agent, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import type { MemoryInjectionReadStore, MemoryInjectionRecord } from '../ports/injectionReadStore'
 import {
@@ -292,9 +293,15 @@ export async function loadInjectedSnapshotFromFirstAttempt(
   // Walk the in-scope top-level rows up to the runId anchor in mint order; the anchor is the
   // LATEST generation start (first row, or a row whose predecessor was `done`).
   const anchorKey = nodeRunOrderAnchor(candidates, ctx.runId)
-  const upToRun = candidates
-    .filter((r) => compareNodeRunMintOrder(r, anchorKey) <= 0)
-    .sort(compareNodeRunMintOrder)
+  const history = await createRunHistorySnapshot(
+    ctx.taskId,
+    candidates.map((row) => ({
+      ...row,
+      nodeId: ctx.nodeId,
+    })),
+  ).familyHistory(ctx.taskId, { nodeId: ctx.nodeId }, { through: anchorKey })
+  const byId = new Map(candidates.map((row) => [row.id, row]))
+  const upToRun = history.map((ref) => byId.get(ref.id)!)
   let anchor: { id: string; injectedMemoriesJson: string | null } | undefined
   let prevStatus: string | undefined
   for (const r of upToRun) {

@@ -4,17 +4,15 @@
 // 的私有 `runIdsWithOutput`（连签名都一样），合计十个调用点。它是「这一轮问答该不该重跑上游」
 // 的判据之一，三份实现意味着三条问答路径可能对同一批 run 给出不同答案。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { inArray } from 'drizzle-orm'
-
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 /** 空入参不查库；返回的是**存在 output 的那一子集**。 */
 export async function runIdsWithOutput(db: PersistenceDb, runIds: string[]): Promise<Set<string>> {
   if (runIds.length === 0) return new Set()
-  const { nodeRunOutputs } = tablesOf(db)
-  const rows = await db
-    .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-    .from(nodeRunOutputs)
-    .where(inArray(nodeRunOutputs.nodeRunId, runIds))
+
+  const rows = await createNodeOutputQueries(db)
+    .runsWithOutput(runIds)
+    .then((runIds) => [...runIds].map((nodeRunId) => ({ nodeRunId })))
+    .then((rows) => rows.map((row) => ({ nodeRunId: row.nodeRunId })))
   return new Set(rows.map((r) => r.nodeRunId))
 }

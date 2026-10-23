@@ -58,8 +58,8 @@ const ARTIFACT_SRC = resolve(
   'src',
   'modules',
   'intent',
-  'domain',
-  'journalArtifacts.ts',
+  'infrastructure',
+  'intentApplyLegacyCodec.ts',
 )
 const ARTIFACT_LIFECYCLE_SRC = resolve(
   import.meta.dir,

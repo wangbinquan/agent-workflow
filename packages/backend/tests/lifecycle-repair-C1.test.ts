@@ -1,11 +1,10 @@
 // LOCKS: RFC-057 — C1 repair options (clarify_session closed but clarify run still awaiting_human).
 // 2 options × 3 cases = 6 tests.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readClarifyRoundFixtures } from './helpers/model'
 import { afterEach, expect, test } from 'bun:test'
 
 import { describeEachProvider } from './helpers/eachProvider'
-import { eq } from 'drizzle-orm'
 
 import {
   buildHarness,
@@ -141,12 +140,9 @@ describeEachProvider('RFC-057 — C1.reopen-session', (provider) => {
     })
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, clarifyRunId)).toBe('awaiting_human')
-    const { clarifyRounds } = tablesOf(h.db)
-    const sessAfter = (
-      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, sessId)).limit(1)
-    )[0]!
+    const sessAfter = (await readClarifyRoundFixtures(h.db, { id: sessId }, { limit: 1 }))[0]!
     expect(sessAfter.status).toBe('awaiting_human')
-    expect(sessAfter.answersJson).toBeNull()
+    expect(sessAfter.answers).toBeNull()
     expect(sessAfter.answeredAt).toBeNull()
   })
 

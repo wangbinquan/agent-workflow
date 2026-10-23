@@ -2,6 +2,8 @@
  * Provider-neutral retry-index allocator over an already-frozen row set.
  * Callers retain ownership of their provider transaction and query scope.
  */
+
+import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
 export function nextRetryIndex(
   rows: ReadonlyArray<{
     readonly retryIndex: number
@@ -10,11 +12,5 @@ export function nextRetryIndex(
   }>,
   opts: { readonly topLevelOnly?: boolean; readonly iteration?: number } = {},
 ): number {
-  let max = -1
-  for (const row of rows) {
-    if (opts.topLevelOnly === true && (row.parentNodeRunId ?? null) !== null) continue
-    if (opts.iteration !== undefined && row.iteration !== opts.iteration) continue
-    if (row.retryIndex > max) max = row.retryIndex
-  }
-  return max + 1
+  return nodeRunAttemptIndex({ kind: 'max-plus-one', rows, ...opts })
 }

@@ -11,7 +11,12 @@
 // 回归意图：任何 refactor 让「移出待下发的已答题」再次不可重答（409）、或让重答冲掉
 // answered 轮的 answeredAt / directive / 长出 stop 轮 designer 条目，这里立刻变红。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -89,8 +94,7 @@ function crossDef(): WorkflowDefinition {
 async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ taskId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -98,7 +102,7 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ t
     version: 1,
     schemaVersion: def.$schema_version,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     executionLineageId: taskId,
@@ -124,15 +128,14 @@ async function seedSelfRound(
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, selfDef())
   const sourceRunId = `nr_src_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: '',
+    checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
   const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
     kind: 'self',
@@ -154,8 +157,7 @@ async function seedCrossRound(
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, crossDef())
   const questionerRunId = `nr_q_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     {
       id: `nr_d_${Math.random().toString(36).slice(2, 8)}`,
@@ -163,7 +165,7 @@ async function seedCrossRound(
       nodeId: 'designer',
       status: 'done',
       iteration: 0,
-      preSnapshot: 'stub',
+      checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
   const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
@@ -181,8 +183,7 @@ async function seedCrossRound(
 }
 
 async function roundRow(db: PersistenceDb, taskId: string) {
-  const { clarifyRounds } = tablesOf(db)
-  const rows = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+  const rows = await readClarifyRoundFixtures(db, { taskId })
   return rows[0]
 }
 
@@ -245,7 +246,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       expect(res.sealedQuestionIds).toEqual([])
 
       const round = await roundRow(db, taskId)
-      const answers = answersOf(round?.answersJson ?? null)
+      const answers = answersOf(round?.answers ?? null)
       expect(answers).toHaveLength(1)
       expect(answers[0]?.selectedOptionIndices).toEqual([1])
       expect(answers[0]?.customText).toBe('NEW-MARKER')
@@ -343,7 +344,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
 
       const round = await roundRow(db, taskId)
       expect(round?.status).toBe('answered')
-      const answers = answersOf(round?.answersJson ?? null)
+      const answers = answersOf(round?.answers ?? null)
       expect(answers.find((a) => a.questionId === 'q1')?.customText).toBe('NEW')
       expect(answers.find((a) => a.questionId === 'q2')?.customText).toBe('FRESH')
     })
@@ -377,15 +378,15 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       // 简化的下发面：手动把 self 条目置 dispatched 并 mint 一个承接 rerun（真实 dispatch 路径
       // 由 RFC-133 测试锁定；本断言只锁「注入读 answers_json → 重答后注入新答案」）。
       const rerunId = `nr_rerun_${Math.random().toString(36).slice(2, 8)}`
-      const { nodeRuns, taskQuestions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { taskQuestions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: rerunId,
         taskId,
         nodeId: 'designer',
         status: 'running',
         retryIndex: 1,
         iteration: 0,
-        preSnapshot: '',
+        checkpoints: [{ mountPath: '', preSnapshot: '' }],
       })
       await db
         .update(taskQuestions)

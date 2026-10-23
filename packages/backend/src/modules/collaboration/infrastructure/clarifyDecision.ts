@@ -7,15 +7,16 @@
 // / `acceptHumanGateDecisionTx` / `appendHumanGateDecisionCommittedEvent`。
 // RFC-359 W12：实现与源锁统一改为中立路径，两个引擎继续共用同一事务参与者。
 
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, desc, eq, isNotNull, inArray } from 'drizzle-orm'
+import { and, desc, eq, isNotNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
-import type { ClarifySealDecisionParticipantInTx } from './clarify/seal'
+import type { ClarifySealDecisionParticipantInTx } from '../application/ports/clarifySealDecisionParticipant'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type { ClarifyAnswer, ClarifyDirective, TaskActorRole } from '@agent-workflow/shared'
@@ -39,7 +40,6 @@ import {
   DatabaseHumanGateOperationJournal,
   type HumanGateOperationJournal,
 } from './humanGateOperationJournal'
-import { humanGateNodeProjectionMember } from '@/modules/task-execution/public/participants'
 
 export interface ClarifyDecisionArgs {
   readonly expectedTaskRevision?: number
@@ -319,19 +319,14 @@ export async function prepareClarifyDecision(input: {
         manifestJson,
         now: sealed.now,
       })
-      const { nodeRuns } = tablesOf(sealed.tx)
-      const sourceRows = await sealed.tx
-        .select()
-        .from(nodeRuns)
-        .where(inArray(nodeRuns.id, [input.originNodeRunId]))
-        .limit(1)
+      const sourceRows = await createNodeRunQueries(sealed.tx).humanGateProjection([
+        input.originNodeRunId,
+      ])
       const accepted = await acceptHumanGateDecisionTx(sealed.tx, {
         taskId: input.taskId,
         gate: { kind: 'clarify', ref: gateRef },
         expectedTaskRevision: request.expectedTaskRevision,
-        expectedNodeProjection: humanGateNodeProjectionFence(
-          sourceRows.map(humanGateNodeProjectionMember),
-        ),
+        expectedNodeProjection: humanGateNodeProjectionFence(sourceRows),
         continuationLineage: {
           sourceNodeRunIds: [input.originNodeRunId],
           rerunNodeRunIds: [],

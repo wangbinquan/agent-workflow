@@ -23,6 +23,12 @@
 // All git repos are real temp repos; no DB needed — the function is pure
 // filesystem+git against the passed-in row shape.
 
+// RFC-395 II-a A2 update (the original rationale above is retained as history):
+// RFC-395 II-a A2: preserve historical pre-snapshot rollback; unrecorded and clean checkpoints skip.
+// Real Git fixtures cover scalar fallback, partial maps, malformed maps and repeated resume.
+
+import { decodeTaskRollbackCheckpoints } from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -30,7 +36,7 @@ import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { rollbackNodeRunWorktrees } from '../src/services/nodeRollback'
 import type { RollbackTarget } from '../src/services/nodeRollback'
-import { gitStashSnapshot, runGit } from '../src/util/git'
+import { runGit } from '../src/util/git'
 import { createLogger } from '../src/util/log'
 
 const ulid = monotonicFactory()
@@ -58,11 +64,6 @@ function expectDirty(repo: string): void {
   expect(existsSync(join(repo, 'stray.txt'))).toBe(true)
 }
 
-function expectResetClean(repo: string): void {
-  expect(readFileSync(join(repo, 'data.txt'), 'utf-8')).toBe('HEAD\n')
-  expect(existsSync(join(repo, 'stray.txt'))).toBe(false)
-}
-
 function singleTarget(repo: string): RollbackTarget {
   return { worktreePath: repo, repos: [] }
 }
@@ -71,8 +72,8 @@ function multiTarget(container: string, repoA: string, repoB: string): RollbackT
   return {
     worktreePath: container,
     repos: [
-      { worktreePath: repoA, worktreeDirName: 'repo-a' },
-      { worktreePath: repoB, worktreeDirName: 'repo-b' },
+      { worktreePath: repoA, mountPath: 'repo-a' },
+      { worktreePath: repoB, mountPath: 'repo-b' },
     ],
   }
 }
@@ -86,20 +87,25 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  test('single repo, non-empty sha: restores the stash body and clears strays — identical in both opts modes', async () => {
-    for (const resetOnEmptySnapshot of [false, true]) {
-      const repo = join(root, `single-sha-${resetOnEmptySnapshot}`)
+  test('single repo, non-empty sha: restores the stash body and clears strays — tracked and staged historical snapshots', async () => {
+    for (const snapshotKind of ['tracked', 'staged']) {
+      const repo = join(root, `single-sha-${snapshotKind}`)
       await makeRepo(repo)
       // Snapshot-time body: tracked mutation vs HEAD so the stash is non-empty.
       writeFileSync(join(repo, 'data.txt'), 'SNAPSHOT-TIME\n')
-      const sha = await gitStashSnapshot(repo)
+      if (snapshotKind === 'staged') await runGit(repo, ['add', 'data.txt'])
+      const sha = await legacyStashSnapshotFixture(repo)
       expect(sha).not.toBe('')
       dirtyRepo(repo)
 
       await rollbackNodeRunWorktrees(
         singleTarget(repo),
-        { id: ulid(), preSnapshot: sha, preSnapshotReposJson: null },
-        { resetOnEmptySnapshot },
+        {
+          id: ulid(),
+          checkpoints: [{ mountPath: '', preSnapshot: sha }],
+          checkpointScope: 'workspace' as const,
+        },
+        {},
         log,
       )
 
@@ -108,22 +114,26 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     }
   })
 
-  test("single repo, empty sha × resetOnEmptySnapshot=true: reset --hard + clean -fd clears the failed attempt's partial writes", async () => {
+  test('single repo, clean-tree checkpoint: resume preserves subsequent writes', async () => {
     const repo = join(root, 'single-empty-retry')
     await makeRepo(repo)
     dirtyRepo(repo)
 
     await rollbackNodeRunWorktrees(
       singleTarget(repo),
-      { id: ulid(), preSnapshot: '', preSnapshotReposJson: null },
-      { resetOnEmptySnapshot: true },
+      {
+        id: ulid(),
+        checkpoints: [{ mountPath: '', preSnapshot: '' }],
+        checkpointScope: 'workspace' as const,
+      },
+      {},
       log,
     )
 
-    expectResetClean(repo)
+    expectDirty(repo)
   })
 
-  test('single repo, empty/NULL sha × resetOnEmptySnapshot=false: worktree untouched (historical resume guard)', async () => {
+  test('single repo, empty/NULL checkpoint: worktree untouched', async () => {
     // Cover both '' and NULL — the resume guard treats them identically.
     for (const preSnapshot of ['', null]) {
       const repo = join(root, `single-empty-resume-${preSnapshot === null ? 'null' : 'blank'}`)
@@ -132,8 +142,8 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
 
       await rollbackNodeRunWorktrees(
         singleTarget(repo),
-        { id: ulid(), preSnapshot, preSnapshotReposJson: null },
-        { resetOnEmptySnapshot: false },
+        { id: ulid(), checkpoints: preSnapshot === null ? [] : [{ mountPath: '', preSnapshot }] },
+        {},
         log,
       )
 
@@ -151,8 +161,8 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     await makeRepo(repoB)
     writeFileSync(join(repoA, 'data.txt'), 'SNAP-A\n')
     writeFileSync(join(repoB, 'data.txt'), 'SNAP-B\n')
-    const shaA = await gitStashSnapshot(repoA)
-    const shaB = await gitStashSnapshot(repoB)
+    const shaA = await legacyStashSnapshotFixture(repoA)
+    const shaB = await legacyStashSnapshotFixture(repoB)
     expect(shaA).not.toBe('')
     expect(shaB).not.toBe('')
     dirtyRepo(repoA)
@@ -162,10 +172,11 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
       multiTarget(container, repoA, repoB),
       {
         id: ulid(),
-        preSnapshot: null,
-        preSnapshotReposJson: JSON.stringify({ 'repo-a': shaA, 'repo-b': shaB }),
+        checkpoints: Object.entries({ 'repo-a': shaA, 'repo-b': shaB }).map(
+          ([mountPath, preSnapshot]) => ({ mountPath, preSnapshot }),
+        ),
       },
-      { resetOnEmptySnapshot: false },
+      {},
       log,
     )
 
@@ -176,7 +187,7 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     expect(readFileSync(join(container, 'container-marker.txt'), 'utf-8')).toBe('keep-me\n')
   })
 
-  test("multi-repo, per-repo sha='': skipped on resume, reset+clean on retry (mixed map shows the per-repo fork)", async () => {
+  test('multi-repo, partial map: repeated resume restores the recorded member and keeps the clean member', async () => {
     const container = join(root, 'container-mixed')
     mkdirSync(container, { recursive: true })
     const repoA = join(container, 'repo-a')
@@ -184,36 +195,26 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     await makeRepo(repoA)
     await makeRepo(repoB)
     writeFileSync(join(repoA, 'data.txt'), 'SNAP-A\n')
-    const shaA = await gitStashSnapshot(repoA)
+    const shaA = await legacyStashSnapshotFixture(repoA)
     expect(shaA).not.toBe('')
     dirtyRepo(repoA)
     dirtyRepo(repoB)
     const run = {
       id: ulid(),
-      preSnapshot: null,
-      preSnapshotReposJson: JSON.stringify({ 'repo-a': shaA, 'repo-b': '' }),
+      checkpoints: Object.entries({ 'repo-a': shaA, 'repo-b': '' }).map(
+        ([mountPath, preSnapshot]) => ({ mountPath, preSnapshot }),
+      ),
     }
 
     // Resume mode: repo-a (real sha) restored, repo-b (sha='') skipped.
-    await rollbackNodeRunWorktrees(
-      multiTarget(container, repoA, repoB),
-      run,
-      { resetOnEmptySnapshot: false },
-      log,
-    )
+    await rollbackNodeRunWorktrees(multiTarget(container, repoA, repoB), run, {}, log)
     expect(readFileSync(join(repoA, 'data.txt'), 'utf-8')).toBe('SNAP-A\n')
     expectDirty(repoB)
 
-    // Retry mode on the same state: repo-b's '' now resets+cleans; repo-a
-    // re-applies its stash (idempotent).
-    await rollbackNodeRunWorktrees(
-      multiTarget(container, repoA, repoB),
-      run,
-      { resetOnEmptySnapshot: true },
-      log,
-    )
+    // Repeated resume keeps the same per-mount decision.
+    await rollbackNodeRunWorktrees(multiTarget(container, repoA, repoB), run, {}, log)
     expect(readFileSync(join(repoA, 'data.txt'), 'utf-8')).toBe('SNAP-A\n')
-    expectResetClean(repoB)
+    expectDirty(repoB)
   })
 
   test('multi-repo, reposJson=NULL × resume: legacy pre-PR-B fallback rolls target.worktreePath via the single-string path; sub-repos untouched', async () => {
@@ -223,7 +224,7 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     const legacyWorktree = join(root, 'legacy-wt')
     await makeRepo(legacyWorktree)
     writeFileSync(join(legacyWorktree, 'data.txt'), 'LEGACY-SNAP\n')
-    const legacySha = await gitStashSnapshot(legacyWorktree)
+    const legacySha = await legacyStashSnapshotFixture(legacyWorktree)
     expect(legacySha).not.toBe('')
     dirtyRepo(legacyWorktree)
 
@@ -236,8 +237,12 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
 
     await rollbackNodeRunWorktrees(
       multiTarget(legacyWorktree, repoA, repoB),
-      { id: ulid(), preSnapshot: legacySha, preSnapshotReposJson: null },
-      { resetOnEmptySnapshot: false },
+      {
+        id: ulid(),
+        checkpoints: [{ mountPath: '', preSnapshot: legacySha }],
+        checkpointScope: 'workspace' as const,
+      },
+      {},
       log,
     )
 
@@ -249,7 +254,7 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     expectDirty(repoB)
   })
 
-  test("HARD GATE: multi-repo, reposJson=NULL × retry: per-sub-repo '' resets fire; the container dir inside an ANCESTOR git repo gets ZERO git operations", async () => {
+  test('HARD GATE: multi-repo ignores a stray workspace scalar and never touches its container', async () => {
     // The corner S-2 names: tasks.worktreePath for a multi-repo task is a
     // plain mkdir container. If the retry rollback ever ran git against it,
     // git would resolve the nearest ANCESTOR repo and `clean -fd` would wipe
@@ -274,20 +279,18 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
 
     await rollbackNodeRunWorktrees(
       multiTarget(container, repoA, repoB),
-      // A non-empty single-string sha is deliberately present: the hard gate
-      // must NOT be tempted into the single-repo branch by it.
+      // A stray scalar must not turn the container into a root worktree.
       {
         id: ulid(),
-        preSnapshot: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-        preSnapshotReposJson: null,
+        checkpoints: [{ mountPath: '', preSnapshot: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef' }],
       },
-      { resetOnEmptySnapshot: true },
+      {},
       log,
     )
 
-    // Missing map degrades to per-sub-repo '' resets: both sub-repos cleaned.
-    expectResetClean(repoA)
-    expectResetClean(repoB)
+    // Neither a member nor the root has a recorded rollback action.
+    expectDirty(repoA)
+    expectDirty(repoB)
     // Container contents are byte-for-byte intact — no git command ever ran
     // against the container / ancestor repo.
     expect(readFileSync(join(container, 'container-marker.txt'), 'utf-8')).toBe('keep-me\n')
@@ -298,7 +301,7 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     expect(readFileSync(join(ancestor, 'data.txt'), 'utf-8')).toBe('HEAD\n')
   })
 
-  test('multi-repo, corrupted reposJson = empty map: never throws; resume skips every repo, retry does per-sub-repo resets and the container stays intact', async () => {
+  test('multi-repo, corrupted reposJson: repeated resume skips every repo and keeps the container', async () => {
     const container = join(root, 'container-corrupt')
     mkdirSync(container, { recursive: true })
     writeFileSync(join(container, 'container-marker.txt'), 'keep-me\n')
@@ -308,30 +311,22 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     await makeRepo(repoB)
     dirtyRepo(repoA)
     dirtyRepo(repoB)
-    const run = { id: ulid(), preSnapshot: null, preSnapshotReposJson: '{not valid json' }
+    const run = decodeTaskRollbackCheckpoints(
+      { id: ulid(), preSnapshot: null, preSnapshotReposJson: '{not valid json' },
+      ['repo-a', 'repo-b'],
+    )
 
     // Resume mode: parse failure → empty map → every repo reads sha='' and is
     // skipped (the historical outcome — task.ts's old comment claimed a
     // single-repo fallthrough that never actually happened).
-    await rollbackNodeRunWorktrees(
-      multiTarget(container, repoA, repoB),
-      run,
-      { resetOnEmptySnapshot: false },
-      log,
-    )
+    await rollbackNodeRunWorktrees(multiTarget(container, repoA, repoB), run, {}, log)
     expectDirty(repoA)
     expectDirty(repoB)
 
-    // Retry mode: parse failure still means empty map, but the switch turns
-    // each '' into a real reset+clean per sub-repo. Container never touched.
-    await rollbackNodeRunWorktrees(
-      multiTarget(container, repoA, repoB),
-      run,
-      { resetOnEmptySnapshot: true },
-      log,
-    )
-    expectResetClean(repoA)
-    expectResetClean(repoB)
+    // A second resume remains a no-op; corruption never becomes an invented checkpoint.
+    await rollbackNodeRunWorktrees(multiTarget(container, repoA, repoB), run, {}, log)
+    expectDirty(repoA)
+    expectDirty(repoB)
     expect(readFileSync(join(container, 'container-marker.txt'), 'utf-8')).toBe('keep-me\n')
   })
 })

@@ -140,9 +140,18 @@ describe('RFC-341 collaboration owner source locks', () => {
     expect(preDrivePersistence).toContain(
       'eq(taskExecutionIntents.claimedEpoch, input.token.epoch)',
     )
-    expect(seal).toContain('freezeAnswerAttributions({')
+    const answers = source('modules/collaboration/domain/clarifyAnswers.ts')
+    const writer = source('modules/collaboration/infrastructure/clarifyAnswerWrite.ts')
+    expect(answers).toContain('freezeAnswerAttributions({')
+    expect(writer).toContain('projectClarifyAnswers(transition.state)')
+    expect(writer).toContain(
+      'answerAttributionsJson: JSON.stringify(projection.answerAttributions)',
+    )
+    expect(seal).toContain(
+      'await createClarifyAnswerWritePort(args.db).seal(tx, round.id, transition)',
+    )
     expect(seal).toContain('setNodeClarifyDirectiveTx(')
-    expect(seal.indexOf('freezeAnswerAttributions({')).toBeLessThan(
+    expect(seal.indexOf('await createClarifyAnswerWritePort(args.db).seal(')).toBeLessThan(
       seal.indexOf('await args.afterCommit?.()'),
     )
     expect(seal.indexOf('setNodeClarifyDirectiveTx(')).toBeLessThan(

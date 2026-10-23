@@ -1,3 +1,10 @@
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
@@ -31,8 +38,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 const TASK_ID = 't_t25'
 
 async function seedTask(db: PersistenceDb): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf_t25',
     name: 't25',
     description: '',
@@ -40,7 +46,7 @@ async function seedTask(db: PersistenceDb): Promise<void> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: TASK_ID,
     name: 't25',
     workflowId: 'wf_t25',
@@ -58,8 +64,7 @@ async function seedTask(db: PersistenceDb): Promise<void> {
 let runSeq = 0
 async function seedRun(db: PersistenceDb): Promise<string> {
   const id = `nr_t25_${(runSeq += 1)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId: TASK_ID, nodeId: 'n1', status: 'running' })
+  await nodeRunFixture(db, { id, taskId: TASK_ID, nodeId: 'n1', status: 'running' })
   return id
 }
 
@@ -188,9 +193,8 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
     await seedTask(h.db)
     const nodeRunId = await seedRun(h.db)
     const max = h.capabilities.batchInsertMax(6) // node_run_outputs 是 6 列
-    const { nodeRunOutputs } = tablesOf(h.db)
     // 提前占住第二批里的一个端口名：第二批插到它时撞主键，整笔必须回滚。
-    await insertOne(h.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(h.db, {
       nodeRunId,
       portName: `p${max + 3}`,
       content: 'pre-existing',
@@ -205,16 +209,15 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
       databaseSessionFor(h.db).transaction(async (tx) => {
         const { nodeRunOutputs } = tablesOf(tx)
         await insertInBatches(tx, nodeRunOutputs, rows, (batch) => {
-          return queryWrite(tx.insert(nodeRunOutputs).values([...batch]))
+          return queryWrite(nodeRunOutputFixture(tx, [...batch]))
         })
       }),
     ).rejects.toThrow()
 
     // 只剩预置的那一行：第一批（max 行）必须一起被回滚掉。
-    const stored = await h.db
-      .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const stored = await readNodeRunOutputFixtures(h.db, { nodeRunId }).then((rows) =>
+      rows.map((row) => ({ portName: row.portName, content: row.content })),
+    )
     expect(stored).toEqual([{ portName: `p${max + 3}`, content: 'pre-existing' }])
   }, 300_000)
 

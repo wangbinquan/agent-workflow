@@ -7,6 +7,7 @@
 // deleting shared URL cache mirrors. Conversely, a task-row insert that commits
 // first must make the fenced workflow delete report in-use.
 
+import { readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { StartTask, WorkflowDefinition } from '@agent-workflow/shared'
 import { beforeAll, afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -187,8 +188,8 @@ describe('RFC-199 production materialization cleanup', () => {
     // 生产 participant 在准备前拒绝版本；已由调用方物化的资源仍由其持有的 SC 租约清理。
     // 不把这两条生产合同包装成已不存在的「插入事务二次版本检查」。
     expect(await cleanupMaterializedSpace(space)).toMatchObject({ complete: true, failures: [] })
-    const { tasks, cachedRepos } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toHaveLength(0)
+    const { cachedRepos } = tablesOf(harness.db)
+    expect(await readTaskFixtures(harness.db)).toHaveLength(0)
     expect((await getWorkflow(harness.db, workflow.id))?.version).toBe(workflow.version + 1)
     expect(await harness.db.select().from(cachedRepos)).toHaveLength(1)
     expect(existsSync(harness.sourcePaths[0]!)).toBe(true)
@@ -225,8 +226,7 @@ describe('RFC-199 production materialization cleanup', () => {
     expect(existsSync(space.worktreePath)).toBe(false)
     expect(materializingSpaces.has(space.taskId)).toBe(false)
     expect(await getWorkflow(harness.db, workflow.id)).toBeNull()
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(harness.db)).toHaveLength(0)
   })
 
   test('delete-first after multi-repo materialization unregisters every worktree and removes container', async () => {
@@ -275,8 +275,8 @@ describe('RFC-199 production materialization cleanup', () => {
     })
     expect(await cleanupMaterializedSpace(space)).toMatchObject({ complete: true, failures: [] })
     expect(existsSync(space.worktreePath)).toBe(false)
-    const { tasks, cachedRepos } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toHaveLength(0)
+    const { cachedRepos } = tablesOf(harness.db)
+    expect(await readTaskFixtures(harness.db)).toHaveLength(0)
     expect(await harness.db.select().from(cachedRepos)).toHaveLength(2)
     for (const source of harness.sourcePaths) expect(existsSync(source)).toBe(true)
     await expectWorktreeFullyRemoved(space, harness.db)
@@ -376,8 +376,7 @@ describe('RFC-199 production materialization cleanup', () => {
     ).rejects.toMatchObject({ code: 'workflow-not-found' })
     expect(prepared).toBe(true)
     expect(existsSync(ownedRoot)).toBe(false)
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(harness.db)).toHaveLength(0)
   })
 
   test('owned-root cleanup failure is structured and never reported as zero residue', async () => {
@@ -496,8 +495,7 @@ describe('RFC-199 production materialization cleanup', () => {
         coordinator: {
           async submit(request) {
             committedTaskId = request.taskId
-            const { tasks } = tablesOf(harness!.db)
-            expect((await harness!.db.select().from(tasks)).map((row) => row.id)).toEqual([
+            expect((await readTaskFixtures(harness!.db)).map((row) => row.id)).toEqual([
               request.taskId,
             ])
             try {
@@ -525,8 +523,7 @@ describe('RFC-199 production materialization cleanup', () => {
       details: { referenceCount: 1 },
     })
     expect(await getWorkflow(harness.db, workflow.id)).not.toBeNull()
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toHaveLength(1)
+    expect(await readTaskFixtures(harness.db)).toHaveLength(1)
     expect(existsSync(task.worktreePath)).toBe(true)
   })
 
@@ -648,7 +645,6 @@ describe('RFC-199 production materialization cleanup', () => {
     // RFC-254: git prints forward-slash worktree paths even on Windows.
     expect(registered.stdout).toContain(residuePath.replace(/\\/g, '/'))
     expect((await runGit(source, ['branch', '--list', residueBranch])).stdout.trim()).not.toBe('')
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(harness.db)).toHaveLength(0)
   })
 })

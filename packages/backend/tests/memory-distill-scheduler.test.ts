@@ -1,9 +1,3 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
-import { distillTick, type RunDistillOptions } from './helpers/memoryDistill'
-import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-041 — distill scheduler tests (PR2 scope).
 //
 // Drives `distillTick` synchronously (no setInterval) with a deterministic
@@ -11,6 +5,20 @@ import { createFileReviewArtifactContent } from '@/modules/collaboration/infrast
 // merge, exp-backoff retry math, max-attempts flip to `failed`, recovery
 // of leftover `running` rows.
 
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
+import {
+  agentFixture,
+  clarifyRoundFixture,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
+import { distillTick, type RunDistillOptions } from './helpers/memoryDistill'
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -43,6 +51,7 @@ import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/service
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillRuntimeResolver } from '../src/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 /**
  * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
@@ -59,7 +68,7 @@ function createMemoryDistillTestContext(db: PersistenceDb) {
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-provider-'))
   process.env.AGENT_WORKFLOW_HOME = root
   return {
-    store: new DrizzleMemoryDistillWorkStore(db),
+    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
@@ -119,8 +128,7 @@ async function seedTask(
   } = {},
 ): Promise<{ taskId: string; workflowId: string }> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -137,7 +145,7 @@ async function seedTask(
     })),
   }
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,
@@ -224,58 +232,64 @@ describe('extractAgentIdsFromWorkgroupConfig', () => {
   test('returns unique frozen member ids and ignores malformed or quarantined entries', () => {
     expect(
       extractAgentIdsFromWorkgroupConfig(
-        JSON.stringify({
-          workgroupId: 'workgroup-fixture',
-          workgroupName: 'fixture',
-          mode: 'leader_worker',
-          leaderMemberId: 'member-0',
-          switches: {
-            shareOutputs: true,
-            directMessages: false,
-            blackboard: false,
-          },
-          maxRounds: 3,
-          completionGate: false,
-          instructions: '',
-          goal: 'test',
-          members: [
-            {
-              id: 'member-0',
-              memberType: 'agent',
-              agentId: 'agent-lead',
-              agentName: 'lead',
-              userId: null,
-              displayName: 'lead',
-              roleDesc: '',
+        decodeTaskWorkgroupConfig(
+          JSON.stringify({
+            workgroupId: 'workgroup-fixture',
+            workgroupName: 'fixture',
+            mode: 'leader_worker',
+            leaderMemberId: 'member-0',
+            switches: {
+              shareOutputs: true,
+              directMessages: false,
+              blackboard: false,
             },
-            {
-              id: 'member-1',
-              memberType: 'agent',
-              agentId: 'agent-lead',
-              agentName: 'lead-again',
-              userId: null,
-              displayName: 'lead-again',
-              roleDesc: '',
-            },
-            {
-              id: 'member-2',
-              memberType: 'agent',
-              agentId: QUARANTINED_SNAPSHOT_AGENT_ID,
-              agentName: 'quarantined',
-              userId: null,
-              displayName: 'quarantined',
-              roleDesc: '',
-            },
-          ],
-        }),
+            maxRounds: 3,
+            completionGate: false,
+            instructions: '',
+            goal: 'test',
+            members: [
+              {
+                id: 'member-0',
+                memberType: 'agent',
+                agentId: 'agent-lead',
+                agentName: 'lead',
+                userId: null,
+                displayName: 'lead',
+                roleDesc: '',
+              },
+              {
+                id: 'member-1',
+                memberType: 'agent',
+                agentId: 'agent-lead',
+                agentName: 'lead-again',
+                userId: null,
+                displayName: 'lead-again',
+                roleDesc: '',
+              },
+              {
+                id: 'member-2',
+                memberType: 'agent',
+                agentId: QUARANTINED_SNAPSHOT_AGENT_ID,
+                agentName: 'quarantined',
+                userId: null,
+                displayName: 'quarantined',
+                roleDesc: '',
+              },
+            ],
+          }),
+        ).runtime.config,
       ),
     ).toEqual(['agent-lead'])
-    expect(extractAgentIdsFromWorkgroupConfig('{not-json')).toEqual([])
+    expect(
+      extractAgentIdsFromWorkgroupConfig(decodeTaskWorkgroupConfig('{not-json').runtime.config),
+    ).toEqual([])
     expect(
       extractAgentIdsFromWorkgroupConfig(
-        JSON.stringify({
-          members: [{ memberType: 'agent', agentName: 'legacy-name-only' }],
-        }),
+        decodeTaskWorkgroupConfig(
+          JSON.stringify({
+            members: [{ memberType: 'agent', agentName: 'legacy-name-only' }],
+          }),
+        ).runtime.config,
       ),
     ).toEqual([])
   })
@@ -295,8 +309,7 @@ describeEachProvider('computeEligibleScopes', (harness) => {
     expect(r).toEqual({ agentIds: [], workflowId: null, repoId: null, includeGlobal: true })
   })
   test('resolves workflowId + agentIds from frozen ids only', async () => {
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: 'agent-codegen',
       name: 'codegen',
       description: '',
@@ -568,8 +581,8 @@ describeEachProvider('distillTick', (harness) => {
     // Seed an actual clarify_session with a source-agent node_run + events so
     // the loader path runs end-to-end (rather than the empty-clarify branch).
     const sourceRunId = ulid()
-    const { nodeRuns, clarifyRounds, nodeRunEvents, memoryDistillJobs } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { nodeRunEvents, memoryDistillJobs } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: sourceRunId,
       taskId,
       nodeId: 'agent-1',
@@ -582,7 +595,7 @@ describeEachProvider('distillTick', (harness) => {
       opencodeSessionId: 'sess-1',
     })
     const clarifyRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: clarifyRunId,
       taskId,
       nodeId: 'clarify-1',
@@ -592,7 +605,7 @@ describeEachProvider('distillTick', (harness) => {
       status: 'awaiting_human',
     })
     const clarifyId = ulid()
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       kind: 'self' as const,
       id: clarifyId,
       taskId,
@@ -602,8 +615,8 @@ describeEachProvider('distillTick', (harness) => {
       intermediaryNodeId: 'clarify-1',
       intermediaryNodeRunId: clarifyRunId,
       iteration: 0,
-      questionsJson: '[]',
-      answersJson: '[]',
+      questions: '[]',
+      answers: '[]',
       status: 'answered',
       createdAt: Date.now(),
     })

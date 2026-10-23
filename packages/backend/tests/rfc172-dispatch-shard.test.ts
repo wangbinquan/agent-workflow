@@ -5,6 +5,14 @@
 // Locks the golden-lock invariant throughout: every non-workgroup path derives shardKey === null,
 // so a `(home, null)` composite key collapses byte-for-byte to today's home-only behavior.
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/queries'
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -21,10 +29,9 @@ import {
   dispatchTaskQuestions,
   resolveEntryShardKeys,
 } from '../src/services/taskQuestionDispatch'
-import {
-  buildWorkgroupHostSnapshot,
-  WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 import { createManualTaskQuestion, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { hasOpenDispatchedEntryOnHome } from '../src/services/clarifyRerunLedger'
 import { createNodeRunMintParticipantInTx } from '../src/modules/task-execution/infrastructure/nodeRunMintParticipant'
@@ -41,9 +48,8 @@ const MIN_DEF = {
 } as unknown as WorkflowDefinition
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -65,8 +71,7 @@ async function seedNodeRun(
   over: { retryIndex?: number; shardKey?: string; status?: string; mergeState?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -87,8 +92,7 @@ async function seedRound(
   askingShardKey: string | null,
 ): Promise<void> {
   const askingRunId = await seedNodeRun(db, taskId, '__wg_member__')
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -97,8 +101,8 @@ async function seedRound(
     intermediaryNodeId: '__wg_clarify__',
     intermediaryNodeRunId,
     iteration: 0,
-    questionsJson: '[]',
-    answersJson: '[]',
+    questions: '[]',
+    answers: '[]',
     directive: 'continue',
     status: 'answered',
     answeredAt: Date.now(),
@@ -179,9 +183,8 @@ const WG_CONFIG: WorkgroupRuntimeConfig = {
  *  workgroupId + config are set so `isTurnEngineWorkgroupTask` is true — the R2-T5 ban is gated on
  *  it (an ordinary workflow with a coincidentally-named node must NOT trip the ban). */
 async function seedWorkgroupTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await taskFixture(db, {
     id: taskId,
     name: 'wg-fixture',
     workflowId: `wf_${taskId}`,
@@ -210,9 +213,8 @@ async function seedOrdinaryTaskWithMemberNamedNode(
     nodes: [{ id: '__wg_member__', kind: 'agent-single', agentName: 'a' }],
     edges: [],
   }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: `wf_${taskId}`, name: 'stub', definition: '{}' })
+  await taskFixture(db, {
     id: taskId,
     name: 'ordinary-fixture',
     workflowId: `wf_${taskId}`,
@@ -291,7 +293,7 @@ describeEachProvider('RFC-172 S3 — buildFrontierMintPlan shard scoping', (harn
       'shard-A',
     )
     expect(planA.shardKey).toBe('shard-A')
-    expect(planA.input.overrides?.shardKey).toBe('shard-A')
+    expect(planA.input.overrides?.identity?.shardKey).toBe('shard-A')
     expect(planA.input.retryIndex).toBe(1)
 
     // Golden-lock: undefined = shard-blind → inherit the GLOBAL freshest across ALL shards, retry =
@@ -510,7 +512,7 @@ describeEachProvider(
       expect(row?.dispatchedAt).toBeNull()
     })
 
-    test('source lock: guards gate on isTurnEngineWorkgroupTask + literal matches WG_MEMBER_NODE_ID', () => {
+    test('source lock: guards gate on task subject and launch mode + literal matches WG_MEMBER_NODE_ID', () => {
       // WG_MEMBER_NODE_ID is the source of truth; the guards hard-code its value to dodge the import
       // cycle (workgroupLaunch pulls in heavy services). If the constant is renamed, this catches it.
       expect(WG_MEMBER_NODE_ID).toBe('__wg_member__')
@@ -527,7 +529,9 @@ describeEachProvider(
         'utf8',
       )
       expect(SVC).toContain("if (target !== '__wg_member__') return")
-      expect(SVC).toContain('isTurnEngineWorkgroupTask(t)') // P2 gating
+      expect(SVC).toContain(
+        'isTurnEngineTaskSubject(decodeTaskSubject(t), t.workgroupConfig?.launch.mode)',
+      ) // P2 gating
       expect(SVC).toContain('manual-question-workgroup-member-target')
       const DISP = readFileSync(
         resolve(
@@ -544,7 +548,9 @@ describeEachProvider(
       // dispatch backstop: any shard-less entry at __wg_member__ on a turn-engine workgroup → reject.
       expect(DISP).toContain("effectiveTarget(e) === '__wg_member__'")
       expect(DISP).toContain('workgroup-member-shardless-dispatch')
-      expect(DISP).toContain('isTurnEngineWorkgroupTask(taskRow)')
+      expect(DISP).toContain(
+        'isTurnEngineTaskSubject(decodeTaskSubject(taskRow), taskRow.workgroupConfig?.launch.mode)',
+      )
     })
   },
 )
@@ -631,6 +637,12 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
   type Run = PersistenceTables['nodeRuns']['$inferSelect']
   const mkRun = (over: Partial<Run>): Run =>
     ({
+      containerRunId: null,
+      consumedUpstreamRunsJson: null,
+      supersededByReview: null,
+      wrapperProgressJson: null,
+      mergeState: null,
+
       seq: null,
       id: 'r',
       taskId: 't',
@@ -656,9 +668,9 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
   const runs = [mkRun({ id: 'rerunB', status: 'pending', shardKey: 'B' })]
   const shardOf = (e: { originNodeRunId: string }) => (e.originNodeRunId === 'oB' ? 'B' : null)
 
-  test("member A (shard A) rollback is NOT blocked by member B's open ledger (shard B)", () => {
+  test("member A (shard A) rollback is NOT blocked by member B's open ledger (shard B)", async () => {
     expect(
-      hasOpenDispatchedEntryOnHome(
+      await hasOpenDispatchedEntryOnHome(
         WG_MEMBER_NODE_ID,
         [memberBEntry],
         runs,
@@ -670,9 +682,9 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
     ).toBe(false)
   })
 
-  test('golden-lock: shard-blind (undefined) IS blocked by any open ledger on the home (今日行为)', () => {
+  test('golden-lock: shard-blind (undefined) IS blocked by any open ledger on the home (今日行为)', async () => {
     expect(
-      hasOpenDispatchedEntryOnHome(
+      await hasOpenDispatchedEntryOnHome(
         WG_MEMBER_NODE_ID,
         [memberBEntry],
         runs,
@@ -682,9 +694,9 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
     ).toBe(true)
   })
 
-  test('same member (shard B) rollback IS blocked by its OWN open ledger', () => {
+  test('same member (shard B) rollback IS blocked by its OWN open ledger', async () => {
     expect(
-      hasOpenDispatchedEntryOnHome(
+      await hasOpenDispatchedEntryOnHome(
         WG_MEMBER_NODE_ID,
         [memberBEntry],
         runs,
@@ -731,13 +743,14 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
   ): Promise<string> {
     return await withTaskExecutionWrite(db, async (tx) =>
       createNodeRunMintParticipantInTx(tx).mint({
+        ...deriveNodeRunRole({ nodeId: WG_MEMBER_NODE_ID, rerunCause: 'wg-assignment' }),
         id: ulid(),
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
         iteration: 0,
         status: 'pending',
         cause: 'wg-assignment',
-        overrides: { shardKey },
+        overrides: { identity: { shardKey } },
       }),
     )
   }
@@ -751,8 +764,7 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
     await mintMemberRun(db, taskId, 'assign-B')
     expect(await derivedSupersededIds(db, taskId)).toEqual([runB])
     await expectFencedToAbandoned(db, runB)
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(db, { taskId })
     const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
     expect(byId.get(runA)).toBe('isolating') // sibling member A UNTOUCHED (the fix)
     expect(byId.get(runB)).toBe('abandoned')

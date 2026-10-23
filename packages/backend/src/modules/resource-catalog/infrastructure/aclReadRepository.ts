@@ -15,6 +15,7 @@ import type { ResourceAclIdentityPersistence } from '../application/ports/resour
 import type { AclRow } from '../domain/resourceAccess'
 import { ACL_TABLES } from './aclRegistry'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
+import { catalogResourcePredicate } from './workflowCatalogPredicate'
 
 export type OwnedAclResourceType = ResourceCatalogOwnedAclType
 
@@ -48,7 +49,13 @@ export async function findOwnedAclResourceIdsByName(
   const rows = await db
     .select({ id: table.id })
     .from(table)
-    .where(and(eq(table.name, name), eq(table.ownerUserId, ownerUserId)))
+    .where(
+      catalogResourcePredicate(
+        type,
+        table.id,
+        and(eq(table.name, name), eq(table.ownerUserId, ownerUserId)),
+      ),
+    )
   return rows.map((row) => row.id)
 }
 
@@ -62,7 +69,7 @@ export async function loadAclResourceNamesByIds(
   const rows = await db
     .select({ id: table.id, name: table.name })
     .from(table)
-    .where(inArray(table.id, [...ids]))
+    .where(catalogResourcePredicate(type, table.id, inArray(table.id, [...ids])))
   return new Map(rows.map((row) => [row.id, row.name]))
 }
 
@@ -75,7 +82,7 @@ export async function getAclResourceOwner(
   const rows = await db
     .select({ ownerUserId: table.ownerUserId })
     .from(table)
-    .where(eq(table.id, id))
+    .where(catalogResourcePredicate(type, table.id, eq(table.id, id)))
     .limit(1)
   return rows[0]?.ownerUserId
 }
@@ -89,7 +96,7 @@ export async function listOwnedAclResourceNames(
   const rows = await db
     .select({ name: table.name })
     .from(table)
-    .where(eq(table.ownerUserId, ownerUserId))
+    .where(catalogResourcePredicate(type, table.id, eq(table.ownerUserId, ownerUserId)))
   return rows.map((row) => row.name)
 }
 
@@ -102,7 +109,7 @@ export async function getAclResourceAccessRow(
   const rows = await db
     .select({ id: table.id, ownerUserId: table.ownerUserId, visibility: table.visibility })
     .from(table)
-    .where(eq(table.id, id))
+    .where(catalogResourcePredicate(type, table.id, eq(table.id, id)))
     .limit(1)
   return rows[0] ?? null
 }
@@ -123,7 +130,9 @@ export async function listAclResourceIdentityRowsByIds(
       aclRevision: table.aclRevision,
     })
     .from(table)
-    .where(inArray(table.id, [...ids]))) as AclResourceIdentitySnapshot[]
+    .where(
+      catalogResourcePredicate(type, table.id, inArray(table.id, [...ids])),
+    )) as AclResourceIdentitySnapshot[]
 }
 
 export async function listAclResourceIdentityRowsByNames(
@@ -142,7 +151,9 @@ export async function listAclResourceIdentityRowsByNames(
       aclRevision: table.aclRevision,
     })
     .from(table)
-    .where(inArray(table.name, [...names]))) as AclResourceIdentitySnapshot[]
+    .where(
+      catalogResourcePredicate(type, table.id, inArray(table.name, [...names])),
+    )) as AclResourceIdentitySnapshot[]
 }
 
 /**
@@ -177,7 +188,7 @@ export function createResourceAclReadPort(
                     aclRevision: table.aclRevision,
                   })
                   .from(table)
-                  .where(eq(table.id, resourceId))
+                  .where(catalogResourcePredicate(type, table.id, eq(table.id, resourceId)))
                   .limit(1)
               )[0]
         if (identity === undefined) return null

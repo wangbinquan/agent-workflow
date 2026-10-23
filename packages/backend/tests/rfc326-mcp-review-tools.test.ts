@@ -22,6 +22,13 @@
 //   - The decision route hands the acting user to the service (P16) — pinned by
 //     source text, since the service-level re-check is only observable in races.
 
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Hono } from 'hono'
@@ -35,7 +42,6 @@ import { z } from 'zod'
 import { SubmitReviewDecisionSchema, type Permission } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
-import {} from '@/modules/collaboration/composition/decisionCommands'
 import {
   ALL_TOOLS,
   McpCallError,
@@ -161,16 +167,14 @@ async function seedReview(
     ],
     edges: [],
   }
-  const { workflows, tasks, taskCollaborators, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(
-    h.db,
-  )
-  await insertOne(h.db, workflows, {
+  const { taskCollaborators, docVersions } = tablesOf(h.db)
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -192,7 +196,7 @@ async function seedReview(
     addedAt: NOW,
   })
   const docRunId = ulid()
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: docRunId,
     taskId,
     nodeId: 'doc',
@@ -202,13 +206,13 @@ async function seedReview(
     startedAt: NOW - 1000,
     finishedAt: NOW - 900,
   })
-  await insertOne(h.db, nodeRunOutputs, {
+  await nodeRunOutputFixture(h.db, {
     nodeRunId: docRunId,
     portName: 'docpath',
     content: mode === 'single' ? SINGLE_BODY : bodies.map((_, i) => `cases/${i}.md`).join('\n'),
   })
   const reviewRunId = ulid()
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -463,10 +467,9 @@ describeEachProviderHttpApplication(
         comments: [{ docVersionId: b, quote: 'beta', commentText: 'why b is out' }],
       })) as { ok: boolean; selectionsApplied: number; commentsAdded: number }
       expect(decided).toMatchObject({ ok: true, selectionsApplied: 2, commentsAdded: 1 })
-      const { nodeRunOutputs } = tablesOf(h.db)
-      const accepted = (
-        await h.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, fx.reviewRunId))
-      ).find((o) => o.portName === 'accepted')!
+      const accepted = (await readNodeRunOutputFixtures(h.db, { nodeRunId: fx.reviewRunId })).find(
+        (o) => o.portName === 'accepted',
+      )!
       expect(accepted.content).toBe('cases/0.md\ncases/2.md')
     })
 

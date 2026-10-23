@@ -12,6 +12,8 @@
 // advisory twin over possibly-stale resolvers): a cycle or an unresolvable
 // name fails the LAUNCH closed with id-only payloads (design-gate P2-6 —
 // names are display data the launcher may not be entitled to echo).
+
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, inArray } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
@@ -318,33 +320,33 @@ export async function freezeCallClosure(
     const hintIds = [
       ...new Set(pending.flatMap((e) => (e.ref.idHint !== undefined ? [e.ref.idHint] : []))),
     ]
-    const { workflows } = tablesOf(db)
     const hintRows =
       hintIds.length === 0
         ? []
-        : await db
-            .select({
-              id: workflows.id,
-              name: workflows.name,
-              version: workflows.version,
-              definition: workflows.definition,
-              ownerUserId: workflows.ownerUserId,
-              visibility: workflows.visibility,
-            })
-            .from(workflows)
-            .where(inArray(workflows.id, hintIds))
-    const rows = await db
-      .select({
-        id: workflows.id,
-        name: workflows.name,
-        version: workflows.version,
-        definition: workflows.definition,
-        ownerUserId: workflows.ownerUserId,
-        visibility: workflows.visibility,
-      })
-      .from(workflows)
-      .where(inArray(workflows.name, missing))
-      .orderBy(asc(workflows.id))
+        : await createWorkflowExecutionQueries(db)
+            .documents(hintIds, true)
+            .then((rows) =>
+              rows.map((row) => ({
+                id: row.id,
+                name: row.name,
+                version: row.version,
+                definition: row.definition,
+                ownerUserId: row.ownerUserId,
+                visibility: row.visibility,
+              })),
+            )
+    const rows = await createWorkflowExecutionQueries(db)
+      .namedDocuments(missing)
+      .then((rows) =>
+        rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          version: row.version,
+          definition: row.definition,
+          ownerUserId: row.ownerUserId,
+          visibility: row.visibility,
+        })),
+      )
     // RFC-291 面 D — visibility is decided HERE (we own the ACL context);
     // WHICH row wins is decided by `pickCallTarget`, the single implementation
     // the intent dump also calls. Name-query rows and id-hint rows are merged

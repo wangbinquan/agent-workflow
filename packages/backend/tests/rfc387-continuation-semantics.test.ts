@@ -1,4 +1,12 @@
 // RFC-387: both providers exercise session continuation semantics, with the former wiring retained as controls.
+import {
+  patchTaskFixture,
+  patchWorkflowFixture,
+  readTaskFixtures,
+  workflowFixture,
+  readNodeRunFixtures,
+  readTaskRepoFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeTaskAutoResumeCommand } from '@/modules/task-execution/composition/taskAutoResume'
@@ -50,12 +58,12 @@ async function settled(bundle: Bundle, taskId: string) {
 }
 async function gate(harness: ProviderDatabaseHarness, appHome: string) {
   const seeded = await seedBundleTask(harness, appHome)
-  const { taskExecutionIntents, tasks } = tablesOf(harness.db)
+  const { taskExecutionIntents } = tablesOf(harness.db)
   await harness.db
     .update(taskExecutionIntents)
     .set({ kind: 'gate-continuation', payloadJson: JSON.stringify({ v: 1, event: 'resume' }) })
     .where(eq(taskExecutionIntents.id, seeded.intentId))
-  await harness.db.update(tasks).set({ spaceKind: 'local' }).where(eq(tasks.id, seeded.taskId))
+  await patchTaskFixture(harness.db, { id: seeded.taskId }, { spaceKind: 'local' })
   return seeded
 }
 // C8/C10/C7 swallowed engine errors and omitted the distillation observer. The real lifecycle is unchanged.
@@ -86,7 +94,7 @@ async function formerSqlite(bundle: Bundle): Promise<TaskDriveCoordinator> {
 async function retrySeed(harness: ProviderDatabaseHarness, appHome: string) {
   const seeded = await seedBundleTask(harness, appHome, 'interrupted', false)
   const cachedId = ulid()
-  const { cachedRepos, tasks } = tablesOf(harness.db)
+  const { cachedRepos } = tablesOf(harness.db)
   await insertOne(harness.db, cachedRepos, {
     id: cachedId,
     urlHash: cachedId,
@@ -95,16 +103,17 @@ async function retrySeed(harness: ProviderDatabaseHarness, appHome: string) {
     lastFetchedAt: 1,
     createdAt: 1,
   })
-  await harness.db
-    .update(tasks)
-    .set({
+  await patchTaskFixture(
+    harness.db,
+    { id: seeded.taskId },
+    {
       status: 'failed',
       worktreePath: '',
       cachedRepoId: cachedId,
       spaceKind: 'remote',
       failedNodeId: REPO_PREP_NODE_ID,
-    })
-    .where(eq(tasks.id, seeded.taskId))
+    },
+  )
   await mintSequenceRun(harness.db, seeded.taskId, { nodeId: REPO_PREP_NODE_ID, status: 'failed' })
   return seeded
 }
@@ -112,7 +121,7 @@ async function fusionSeed(harness: ProviderDatabaseHarness, appHome: string) {
   const taskId = ulid(),
     workflowId = ulid(),
     ownerUserId = ulid()
-  const { users, workflows } = tablesOf(harness.db)
+  const { users } = tablesOf(harness.db)
   await insertOne(harness.db, users, {
     id: ownerUserId,
     username: ownerUserId,
@@ -128,7 +137,7 @@ async function fusionSeed(harness: ProviderDatabaseHarness, appHome: string) {
     nodes: [{ id: 'a', kind: 'agent-single', agentName: 'merger' }],
     edges: [],
   })
-  await insertOne(harness.db, workflows, {
+  await workflowFixture(harness.db, {
     id: workflowId,
     name: workflowId,
     definition,
@@ -168,12 +177,9 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
           fixture = taskBundleInput(harness, appHome),
           bundle = fixture.compose()
         const seeded = await gate(harness, appHome)
-        const { tasks, taskExecutionIntents, memoryDistillJobs } = tablesOf(harness.db)
+        const { taskExecutionIntents, memoryDistillJobs } = tablesOf(harness.db)
         if (entry === 'fusion')
-          await harness.db
-            .update(tasks)
-            .set({ spaceKind: 'internal' })
-            .where(eq(tasks.id, seeded.taskId))
+          await patchTaskFixture(harness.db, { id: seeded.taskId }, { spaceKind: 'internal' })
         if (entry === 'retry' || entry === 'fusion')
           await harness.db
             .update(taskExecutionIntents)
@@ -380,11 +386,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
           status: 'failed',
           errorMessage: expect.stringContaining('fatal: rfc387 clone failed'),
         })
-        const { nodeRuns } = tablesOf(harness.db)
-        const runs = await harness.db
-          .select()
-          .from(nodeRuns)
-          .where(eq(nodeRuns.taskId, seeded.taskId))
+        const runs = await readNodeRunFixtures(harness.db, { taskId: seeded.taskId })
         expect(runs.filter((row) => row.nodeId === REPO_PREP_NODE_ID)).toHaveLength(2)
         expect(runs.find((row) => row.retryIndex === 1)).toMatchObject({
           status: 'failed',
@@ -443,12 +445,12 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       fixture = taskBundleInput(harness, appHome),
       bundle = fixture.compose()
     const seeds = [await retrySeed(harness, appHome), await retrySeed(harness, appHome)]
-    const { tasks } = tablesOf(harness.db)
     for (const seed of seeds)
-      await harness.db
-        .update(tasks)
-        .set({ status: 'interrupted', errorSummary: 'daemon-restart' })
-        .where(eq(tasks.id, seed.taskId))
+      await patchTaskFixture(
+        harness.db,
+        { id: seed.taskId },
+        { status: 'interrupted', errorSummary: 'daemon-restart' },
+      )
     const release = Promise.withResolvers<void>()
     const entered: string[] = []
     const factory = createTaskDriveCoordinatorFactory({
@@ -556,13 +558,13 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
         : bundle.coordinator
       const launchCoordinator: TaskDriveCoordinator = {
         async submit(request) {
-          const { tasks } = tablesOf(harness.db)
           // Former PG inserted the raw definition. Use the same neutral admission with that exact old projection.
           if (former)
-            await harness.db
-              .update(tasks)
-              .set({ workflowSnapshot: seed.definition })
-              .where(eq(tasks.id, request.taskId))
+            await patchTaskFixture(
+              harness.db,
+              { id: request.taskId },
+              { workflowSnapshot: seed.definition },
+            )
           return coordinator.submit(request)
         },
       }
@@ -573,8 +575,8 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
         cancellation: bundle.cancellation,
       })
       await expect(operations.launch(seed.command)).rejects.toThrow('fusion-engine-failed')
-      const { tasks, taskExecutionIntents } = tablesOf(harness.db)
-      const [task] = await harness.db.select().from(tasks).where(eq(tasks.id, seed.command.taskId))
+      const { taskExecutionIntents } = tablesOf(harness.db)
+      const [task] = await readTaskFixtures(harness.db, { id: seed.command.taskId })
       expect(task!.workflowSnapshot).toBe(
         former ? seed.definition : layoutBuiltinWorkflowSnapshotJson(seed.definition),
       )
@@ -682,17 +684,10 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
         },
       },
     })
-    const { workflows, taskRepos } = tablesOf(harness.db)
     // Stop immediately after the real profile stage; no runtime process is needed.
-    await harness.db
-      .update(workflows)
-      .set({ definition: '{}' })
-      .where(eq(workflows.id, seed.command.workflowId))
+    await patchWorkflowFixture(harness.db, { id: seed.command.workflowId }, { definition: '{}' })
     await bundle.fusion.launch(seed.command)
-    const [projection] = await harness.db
-      .select()
-      .from(taskRepos)
-      .where(eq(taskRepos.taskId, seed.command.taskId))
+    const [projection] = await readTaskRepoFixtures(harness.db, { taskId: seed.command.taskId })
     expect(projection!.workspaceProfileVersion).toBe(1)
     expect(projection!.workspaceProfileDigest).toBeTruthy()
     expect(
@@ -737,11 +732,11 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       })
       const seeded = await seedBundleTask(harness, appHome)
       const finish = async () => {
-        const { tasks } = tablesOf(harness.db)
-        await harness.db
-          .update(tasks)
-          .set({ status: 'done', spaceKind: 'scratch', finishedAt: Date.now() })
-          .where(eq(tasks.id, seeded.taskId))
+        await patchTaskFixture(
+          harness.db,
+          { id: seeded.taskId },
+          { status: 'done', spaceKind: 'scratch', finishedAt: Date.now() },
+        )
         expect(await store.claimWorkspace(seeded.taskId, Date.now())).toBe(true)
       }
       fixture.schedulerDriver.drive = finish

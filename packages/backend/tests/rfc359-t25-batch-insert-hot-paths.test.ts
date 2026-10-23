@@ -33,6 +33,15 @@
 //   R5 「INSERT 前先 SELECT」的路径只能降到 n+1：A1 的探测在循环外，是唯一真正 2n→1 的靶子；
 //      A4/A5 的回读改成一条 `inArray`，所以是 2n→2。用例按各自的真实条数断言。
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  patchClarifyRoundFixture,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+  clarifyRoundFixtureRuntimeInput,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -51,6 +60,7 @@ import { preparedHumanGateRef } from '@/modules/collaboration/domain/humanGateOp
 import { DatabaseHumanGateOpenParticipantInTx } from '@/modules/collaboration/infrastructure/humanGateOpenParticipant'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { reconcileTaskQuestionsForRound } from '@/modules/collaboration/infrastructure/taskQuestions'
+import { createConsumedInputsParticipantInTx } from '@/modules/task-execution/public/participants'
 import type { CustomEventSourceDraft } from '@/modules/event-center/domain/customEventSource'
 import {
   eventContentDigest,
@@ -99,8 +109,7 @@ function insertsInto(
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: taskId,
     description: '',
@@ -108,7 +117,7 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -268,17 +277,18 @@ function mintParticipant(tx: PersistenceTx) {
       readonly nodeId: string
       readonly status: 'awaiting_review' | 'awaiting_human'
       readonly iteration: number
-      readonly overrides?: Readonly<{ reviewIteration?: number; startedAt?: number | null }>
+      readonly overrides?: Readonly<{
+        identity?: Readonly<{ reviewIteration?: number; startedAt?: number | null }>
+      }>
     }): Promise<string> {
-      const { nodeRuns } = tablesOf(tx)
-      await insertOne(tx, nodeRuns, {
+      await nodeRunFixture(tx, {
         id: input.id,
         taskId: input.taskId,
         nodeId: input.nodeId,
         status: input.status,
         iteration: input.iteration,
-        reviewIteration: input.overrides?.reviewIteration ?? 0,
-        startedAt: input.overrides?.startedAt ?? NOW,
+        reviewIteration: input.overrides?.identity?.reviewIteration ?? 0,
+        startedAt: input.overrides?.identity?.startedAt ?? NOW,
       })
       return input.id
     },
@@ -482,6 +492,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
         journal,
         mintParticipant(tx),
         lifecycleParticipant,
+        createConsumedInputsParticipantInTx(),
       ).consumePreparedGateTx({
         prepared: preparedHumanGateRef(prepared),
         taskRevision: 1,
@@ -523,8 +534,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const askingRunId = `nr_ask_${taskId}`
     const intermediaryRunId = `nr_mid_${taskId}`
     for (const id of [askingRunId, intermediaryRunId]) {
-      const { nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id,
         taskId,
         nodeId: id === askingRunId ? 'writer' : 'clarify',
@@ -537,8 +547,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       title: `question ${i}`,
     }))
     const roundId = `cr_${taskId}`
-    const { clarifyRounds, taskQuestions } = tablesOf(h.db)
-    await insertOne(h.db, clarifyRounds, {
+    const { taskQuestions } = tablesOf(h.db)
+    await clarifyRoundFixture(h.db, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -548,16 +558,14 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       intermediaryNodeRunId: intermediaryRunId,
       iteration: 0,
       loopIter: 0,
-      questionsJson: JSON.stringify(questions),
+      questions: JSON.stringify(questions),
       status: 'awaiting_human',
       createdAt: NOW,
     })
-    const round = (
-      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)).limit(1)
-    )[0]!
+    const round = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
 
     const rec = h.recordStatements()
-    await reconcileTaskQuestionsForRound(h.db, round)
+    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(round))
     const inserts = insertsInto(rec.statements, 'task_questions')
     rec.stop()
     expect(inserts.length).toBe(batchesFor(h, taskQuestions, n))
@@ -586,8 +594,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const askingRunId = `nr_ask_${taskId}`
     const intermediaryRunId = `nr_mid_${taskId}`
     for (const id of [askingRunId, intermediaryRunId]) {
-      const { nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id,
         taskId,
         nodeId: id === askingRunId ? 'writer' : 'clarify',
@@ -597,8 +604,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const n = 6
     const roundId = `cr_${taskId}`
     const questions = Array.from({ length: n }, (_, i) => ({ id: `q-${i}`, title: `first ${i}` }))
-    const { clarifyRounds, taskQuestions } = tablesOf(h.db)
-    await insertOne(h.db, clarifyRounds, {
+    const { taskQuestions } = tablesOf(h.db)
+    await clarifyRoundFixture(h.db, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -608,14 +615,12 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       intermediaryNodeRunId: intermediaryRunId,
       iteration: 0,
       loopIter: 0,
-      questionsJson: JSON.stringify(questions),
+      questions: JSON.stringify(questions),
       status: 'awaiting_human',
       createdAt: NOW,
     })
-    const first = (
-      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)).limit(1)
-    )[0]!
-    await reconcileTaskQuestionsForRound(h.db, first)
+    const first = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
+    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(first))
     const ids = new Map(
       (
         await h.db
@@ -626,20 +631,19 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     )
 
     // 标题改了（agent 重发同一批问题、文案微调）⇒ 第二次 reconcile 全部走冲突分支。
-    await h.db
-      .update(clarifyRounds)
-      .set({
-        questionsJson: JSON.stringify(
+    await patchClarifyRoundFixture(
+      h.db,
+      { id: roundId },
+      {
+        questions: JSON.stringify(
           questions.map((question) => ({ ...question, title: `second ${question.id}` })),
         ),
-      })
-      .where(eq(clarifyRounds.id, roundId))
-    const second = (
-      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)).limit(1)
-    )[0]!
+      },
+    )
+    const second = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
 
     const rec = h.recordStatements()
-    await reconcileTaskQuestionsForRound(h.db, second)
+    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(second))
     const inserts = insertsInto(rec.statements, 'task_questions')
     rec.stop()
     expect(inserts.length).toBe(batchesFor(h, taskQuestions, n))
@@ -667,8 +671,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const askingRunId = `nr_ask_${taskId}`
     const intermediaryRunId = `nr_mid_${taskId}`
     for (const id of [askingRunId, intermediaryRunId]) {
-      const { nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id,
         taskId,
         nodeId: id === askingRunId ? 'writer' : 'clarify',
@@ -676,8 +679,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       })
     }
     const roundId = `cr_${taskId}`
-    const { clarifyRounds, taskQuestions } = tablesOf(h.db)
-    await insertOne(h.db, clarifyRounds, {
+    const { taskQuestions } = tablesOf(h.db)
+    await clarifyRoundFixture(h.db, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -688,7 +691,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       iteration: 0,
       loopIter: 0,
       // agent 输出里同一个问题 id 出现两次：逐行写时后写覆盖先写。
-      questionsJson: JSON.stringify([
+      questions: JSON.stringify([
         { id: 'q-a', title: 'first a' },
         { id: 'q-b', title: 'only b' },
         { id: 'q-a', title: 'second a' },
@@ -696,10 +699,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       status: 'awaiting_human',
       createdAt: NOW,
     })
-    const round = (
-      await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId)).limit(1)
-    )[0]!
-    await reconcileTaskQuestionsForRound(h.db, round)
+    const round = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
+    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(round))
 
     const stored = await h.db
       .select({ questionId: taskQuestions.questionId, questionTitle: taskQuestions.questionTitle })

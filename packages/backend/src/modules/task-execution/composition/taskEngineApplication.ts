@@ -1,3 +1,4 @@
+import { projectStoredTaskRepositoryMounts } from '../infrastructure/taskRepositorySurface'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
   isDaemonInterruptionAbortReason,
@@ -5,7 +6,6 @@ import {
   WorkflowDefinitionSchema,
   DwStateSchema,
   exclusionPlanFor,
-  isWorkgroupTask,
   migrateWorkflowDefinitionToLatest,
   parseTriggerContextJson,
   type WorkflowDefinition,
@@ -248,37 +248,7 @@ async function runTaskEngineOrchestratorInner(
     opts.taskAgentRuns.materialReferences,
   )
 
-  // RFC-066 PR-B T9: load per-repo metadata once at the top so every runner
-  // dispatch site can thread it through `templateMeta.repos` without an extra
-  // round-trip. Single-repo tasks get a length-1 array mirroring the legacy
-  // `tasks.*` columns (`worktreeDirName === ''` → `{{__repo_names__}}`
-  // renders empty, byte-baseline). Defensive fallback handles the ultra-rare
-  // case of a task row predating migration 0034's INSERT FROM backfill.
-  const repos: TaskMechanicsState['repos'] =
-    repoRows.length > 0
-      ? repoRows.map((r) => ({
-          repoIndex: r.repoIndex,
-          repoPath: r.repoPath,
-          worktreePath: r.worktreePath,
-          worktreeDirName: r.worktreeDirName,
-          // RFC-248: 真值来自 DB 列（migration 0131 已 backfill 存量行）。
-          mountPath: r.mountPath,
-          readonly: r.readonly,
-          baseBranch: r.baseBranch,
-          baseCommit: r.baseCommit,
-        }))
-      : [
-          {
-            repoIndex: 0,
-            repoPath: task.repoPath,
-            worktreePath: task.worktreePath,
-            worktreeDirName: '',
-            mountPath: '',
-            readonly: false,
-            baseBranch: task.baseBranch,
-            baseCommit: task.baseCommit,
-          },
-        ]
+  const repos: TaskMechanicsState['repos'] = projectStoredTaskRepositoryMounts(task, repoRows)
 
   // RFC-308: resume/retry/recovery never trust a profile left by the prior
   // process or by an agent. Rebuild the exact per-worktree profile before any
@@ -298,7 +268,7 @@ async function runTaskEngineOrchestratorInner(
         }).ensure({ directChildMounts: exclusionPlanFor(repo.mountPath, allMounts) })
         const updated = await opts.persistence.drive.updateWorkspaceProfile({
           taskId,
-          repoIndex: repo.repoIndex,
+          repoIndex: repo.ordinal,
           version: receipt.version,
           digest: receipt.digest,
           ...(opts.executionContext === undefined
@@ -306,7 +276,7 @@ async function runTaskEngineOrchestratorInner(
             : { executionContext: opts.executionContext }),
           now: Date.now(),
         })
-        if (!updated) throw new Error(`task-repository-not-found:${taskId}:${repo.repoIndex}`)
+        if (!updated) throw new Error(`task-repository-not-found:${taskId}:${repo.ordinal}`)
       }
     } catch (error) {
       await failRuntimeTask(
@@ -552,7 +522,7 @@ async function runTaskEngineOrchestratorInner(
     // workgroup_task_state (an unknown mode still routes to the turn engine,
     // which fails with its own precise config diagnostics).
     const dynamicWorkflowSnapshot =
-      isWorkgroupTask(task) && opts.dynamicWorkflow !== undefined
+      task.subject.kind === 'workgroup' && opts.dynamicWorkflow !== undefined
         ? await opts.dynamicWorkflow.persistence.loadTask(taskId)
         : null
     const dynamicWorkflowPhase = (() => {
@@ -687,7 +657,7 @@ async function runTaskEngineOrchestratorInner(
         task: {
           taskId,
           workgroupId: task.workgroupId,
-          workgroupConfigJson: task.workgroupConfigJson,
+          workgroupConfig: task.workgroupConfig,
           dynamicWorkflowPhase,
         },
         execution: opts.executionContext,

@@ -3,6 +3,14 @@
 // SERIALIZABLE transaction) and the commit-before-drive boundary without
 // routing the provider client through the legacy SQLite launcher.
 
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readTaskRepoFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
@@ -107,17 +115,8 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
     const fixture = { db: harness.db }
     inheritedSpace.cleanup.state = 'owned'
     const snapshot = JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] })
-    const {
-      users,
-      workflows,
-      tasks,
-      nodeRuns,
-      taskRepos,
-      taskSpaceNodes,
-      taskCollaborators,
-      taskExecutionIntents,
-      committedEvents,
-    } = tablesOf(fixture.db)
+    const { users, taskSpaceNodes, taskCollaborators, taskExecutionIntents, committedEvents } =
+      tablesOf(fixture.db)
     await insertOne(fixture.db, users, {
       id: actor.user.id,
       username: 'owner',
@@ -127,12 +126,12 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       createdAt: 1,
       updatedAt: 1,
     })
-    await insertOne(fixture.db, workflows, {
+    await workflowFixture(fixture.db, {
       id: 'child-workflow',
       name: 'Child',
       definition: snapshot,
     })
-    await insertOne(fixture.db, tasks, {
+    await taskFixture(fixture.db, {
       id: 'parent-task',
       name: 'Parent',
       workflowId: 'child-workflow',
@@ -157,7 +156,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       gitUserName: 'Owner',
       gitUserEmail: 'owner@example.test',
     })
-    await insertOne(fixture.db, nodeRuns, {
+    await nodeRunFixture(fixture.db, {
       id: 'parent-run',
       taskId: 'parent-task',
       nodeId: 'call-node',
@@ -173,9 +172,9 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
     registerAfterCommitEventPump({
       async publishNow() {
         trace.push('event:after-commit')
-        publishedTask = (await fixture.db.select().from(tasks).where(eq(tasks.id, 'child-task')))[0]
+        publishedTask = (await readTaskFixtures(fixture.db, { id: 'child-task' }))[0]
         // Preserve the original terminal-winner scenario using the real row.
-        await fixture.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, 'child-task'))
+        await patchTaskFixture(fixture.db, { id: 'child-task' }, { status: 'done' })
       },
       nudge() {},
     })
@@ -215,9 +214,6 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       ),
       workgroup: {
         async loadExistingAgentIds() {
-          throw new Error('workgroup resources are not used by workflow launch')
-        },
-        async ensureHostWorkflow() {
           throw new Error('workgroup resources are not used by workflow launch')
         },
         integrity: {
@@ -270,9 +266,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
     expect(await createWorkspacePreparationJournal(fixture.db).forTask('child-task')).toMatchObject(
       { state: 'admitted', lane: 'pre-materialized' },
     )
-    expect(
-      await fixture.db.select().from(taskRepos).where(eq(taskRepos.taskId, 'child-task')),
-    ).toHaveLength(1)
+    expect(await readTaskRepoFixtures(fixture.db, { taskId: 'child-task' })).toHaveLength(1)
     expect(
       await fixture.db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, 'child-task')),
     ).toHaveLength(1)

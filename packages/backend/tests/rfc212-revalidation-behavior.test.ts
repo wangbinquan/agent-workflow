@@ -11,6 +11,7 @@
 // rides on the existing real-server WS suites once the frame path is unchanged;
 // this file owns the decision logic. See design/RFC-212 §7.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -140,8 +141,7 @@ async function seedUser(
 
 async function seedTask(db: DbClient, ownerUserId: string): Promise<string> {
   const workflowId = `wf_${ownerUserId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
@@ -149,7 +149,7 @@ async function seedTask(db: DbClient, ownerUserId: string): Promise<string> {
     updatedAt: 0,
   })
   const taskId = `task_${ownerUserId}`
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,

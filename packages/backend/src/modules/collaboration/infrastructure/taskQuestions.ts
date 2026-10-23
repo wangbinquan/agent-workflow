@@ -17,6 +17,16 @@
 //
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
+import { isClarifyQuestionSealed } from '../domain/clarifyAnswers'
+import { resolveHandlerRun } from '@/modules/task-execution/public/queries'
+import {
+  createNodeRunQueries,
+  type NodeRunFactSnapshot,
+} from '@/modules/task-execution/public/queries'
+
+import { decodeTaskSubject, isTurnEngineTaskSubject } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { queryWrite, affectedRows } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
@@ -34,10 +44,7 @@ import {
   canReassign,
   deriveQuestionPhase,
   isTerminalTaskStatus,
-  isTurnEngineWorkgroupTask,
   reconcileDesiredEntries,
-  resolveHandlerRun,
-  type ClarifyAnswer,
   type ClarifyQuestion,
   type HandlerRunView,
   type RunLineageView,
@@ -48,7 +55,7 @@ import { runIdsWithOutput } from './nodeRunOutputPresence'
 
 type ClarifyRoundRow = PersistenceTables['clarifyRounds']['$inferSelect']
 type TaskQuestionRow = PersistenceTables['taskQuestions']['$inferSelect']
-type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
+type NodeRunRow = NodeRunFactSnapshot
 
 export interface TaskQuestionDTO {
   id: string
@@ -98,16 +105,6 @@ function parseQuestions(json: string): ClarifyQuestion[] {
   try {
     const v = JSON.parse(json)
     return Array.isArray(v) ? (v as ClarifyQuestion[]) : []
-  } catch {
-    return []
-  }
-}
-
-function parseAnswers(json: string | null): ClarifyAnswer[] {
-  if (!json) return []
-  try {
-    const v = JSON.parse(json)
-    return Array.isArray(v) ? (v as ClarifyAnswer[]) : []
   } catch {
     return []
   }
@@ -242,11 +239,11 @@ export async function loadSealedQuestionIds(
  *    trigger_run_id set, anchor GC'd → processing (in-flight; don't reset).
  *    trigger_run_id set, anchor live → resolveHandlerRun lineage (Codex H1: anchor +
  *      process-retries up to the next clarify-cause rerun) → processing/awaiting_confirm. */
-function resolveDispatchedEntryHandler(
+async function resolveDispatchedEntryHandler(
   entry: TaskQuestionRow,
-  runs: NodeRunRow[],
+  runs: readonly NodeRunRow[],
   outputRunIds: Set<string>,
-): { handlerRun: HandlerRunView | null; dispatchedInFlight: boolean } {
+): Promise<{ handlerRun: HandlerRunView | null; dispatchedInFlight: boolean }> {
   if (entry.dispatchedAt === null) {
     // Not yet dispatched → pending/staged (the gate parks the task here).
     return { handlerRun: null, dispatchedInFlight: false }
@@ -268,7 +265,7 @@ function resolveDispatchedEntryHandler(
   // sticking on a failed anchor. Anchor on the run's OWN node/iteration
   // (node_runs.iteration IS the loop index; loopIter is projected 0 to neutralize
   // the unused dimension, since the lineage is already framed by node+iteration).
-  const handlerRun = resolveHandlerRun({
+  const handlerRun = await resolveHandlerRun({
     effectiveTargetNodeId: anchorRow.nodeId,
     iteration: anchorRow.iteration,
     loopIter: 0,
@@ -312,7 +309,7 @@ export async function listTaskQuestions(
   taskId: string,
   opts: { sourceNodeId?: string; phase?: TaskQuestionPhase } = {},
 ): Promise<TaskQuestionDTO[]> {
-  const { clarifyRounds, tasks, taskQuestions, nodeRuns } = tablesOf(db)
+  const { clarifyRounds, taskQuestions } = tablesOf(db)
   // Reconcile before the terminal read-model filter so a task whose first board
   // read happens after completion still retains its historical audit ledger.
   const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -323,22 +320,21 @@ export async function listTaskQuestions(
   // contract: done/canceled cards are dead, while failed/interrupted cards are
   // temporarily hidden and reappear if the task resumes. The ledger itself is
   // intentionally retained for audit/recovery.
-  const [task] = await db
-    .select({ status: tasks.status })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
+  const [task] = await createTaskGateQueries(db)
+    .listContexts([taskId])
+    .then((rows) => rows.map((row) => ({ status: row.status })))
   if (task !== undefined && isTerminalTaskStatus(task.status)) return []
 
   const entries = await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))
   if (entries.length === 0) return []
 
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
   )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
+  const answersByRound = new Map(rounds.map((r) => [r.id, decodeLegacyClarifyAnswerColumns(r)]))
 
   const out: TaskQuestionDTO[] = []
   for (const e of entries) {
@@ -350,7 +346,7 @@ export async function listTaskQuestions(
     // would drop it, making manual questions invisible).
     if (e.sourceKind === 'manual') {
       if (opts.sourceNodeId) continue
-      const { handlerRun, dispatchedInFlight } = resolveDispatchedEntryHandler(
+      const { handlerRun, dispatchedInFlight } = await resolveDispatchedEntryHandler(
         e,
         runs,
         outputRunIds,
@@ -394,7 +390,11 @@ export async function listTaskQuestions(
     const round = roundByOrigin.get(e.originNodeRunId)
     if (!round) continue // round vanished (task edited); skip defensively
     const effectiveTargetNodeId = e.overrideTargetNodeId ?? e.defaultTargetNodeId
-    const { handlerRun, dispatchedInFlight } = resolveDispatchedEntryHandler(e, runs, outputRunIds)
+    const { handlerRun, dispatchedInFlight } = await resolveDispatchedEntryHandler(
+      e,
+      runs,
+      outputRunIds,
+    )
     const phase = deriveQuestionPhase({
       roundStatus: round.status,
       confirmation: e.confirmation,
@@ -407,7 +407,7 @@ export async function listTaskQuestions(
     // RFC-128 §10 — a question is sealed when its own per-question marker is set OR the
     // whole round is answered (golden-lock for pre-RFC-128 answered rounds, which carry
     // no sealed_at). answerSummary is then computed independent of round.status (F3).
-    const sealed = round.status === 'answered' || e.sealedAt !== null
+    const sealed = isClarifyQuestionSealed(round.status, e.sealedAt)
     out.push({
       id: e.id,
       taskId: e.taskId,
@@ -428,7 +428,7 @@ export async function listTaskQuestions(
         e.autoDispatchDeferredAt !== null && e.dispatchedAt === null && e.stagedAt !== null,
       sealed,
       reopenCount: 0,
-      answerSummary: summarizeAnswer(round, e.questionId, sealed),
+      answerSummary: summarizeAnswer(answersByRound.get(round.id)!, e.questionId, sealed),
       createdAt: e.createdAt,
       updatedAt: e.updatedAt,
     })
@@ -443,12 +443,12 @@ export async function listTaskQuestions(
  *  answer). For a pre-RFC-128 answered round every question is sealed, so this is
  *  byte-for-byte the old `round.status !== 'answered' → null` behavior (golden-lock). */
 function summarizeAnswer(
-  round: ClarifyRoundRow,
+  answers: ReturnType<typeof decodeLegacyClarifyAnswerColumns>,
   questionId: string,
   sealed: boolean,
 ): string | null {
   if (!sealed) return null
-  const ans = parseAnswers(round.answersJson).find((a) => a.questionId === questionId)
+  const ans = answers.firstAnswer(questionId)
   if (!ans) return null
   const parts: string[] = []
   if (ans.selectedOptionLabels.length > 0) parts.push(ans.selectedOptionLabels.join(', '))
@@ -495,13 +495,13 @@ export async function loadUndispatchedDesignerTargets(
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义（旧 flag 门移除）。
   const entries = await fetchDesignerParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
-  const { nodeRuns } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+
+  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
   )
-  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
+  return await partitionUndispatchedParkTargets(entries, runs, outputRunIds)
 }
 
 /** RFC-120 §18 designer park ENTRIES (clarify answered+continue designer rows + manual designer
@@ -583,11 +583,11 @@ interface ParkTargetEntry {
  *  again. RFC-131 T4 去借壳: keys on the EFFECTIVE TARGET (override ?? default — where the rerun is
  *  minted; a reassign moves the run to the target node), not the origin home, else a reassigned
  *  question would park its origin node while its rerun is in flight on the target. */
-function partitionUndispatchedParkTargets(
+async function partitionUndispatchedParkTargets(
   entries: ReadonlyArray<ParkTargetEntry>,
   runs: ReadonlyArray<NodeRunRow>,
   outputRunIds: ReadonlySet<string>,
-): Set<string> {
+): Promise<Set<string>> {
   if (entries.length === 0) return new Set()
   const lineageViews = runs.map(
     (r): RunLineageView => ({
@@ -623,7 +623,7 @@ function partitionUndispatchedParkTargets(
       hasInFlight.add(target) // stamped but run GC'd → treat as in-flight, not consumed
       continue
     }
-    const hr = resolveHandlerRun({
+    const hr = await resolveHandlerRun({
       effectiveTargetNodeId: anchorRow.nodeId,
       iteration: anchorRow.iteration,
       loopIter: 0,
@@ -682,13 +682,13 @@ export async function loadUndispatchedSelfQuestionerTargets(
   // RFC-132 PR-D' 步骤1 (T8 flag 停读): 所有任务走 deferred park 语义。
   const entries = await fetchSelfQuestionerParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
-  const { nodeRuns } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+
+  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
   )
-  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
+  return await partitionUndispatchedParkTargets(entries, runs, outputRunIds)
 }
 
 /** RFC-128 P5-BC self/questioner park ENTRIES (control-channel SEALED, not-confirmed self/q rows),
@@ -754,13 +754,13 @@ export async function loadUndispatchedParkTargets(
     ...(await fetchSelfQuestionerParkEntries(db, taskId)),
   ]
   if (entries.length === 0) return new Set()
-  const { nodeRuns } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+
+  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
   )
-  return partitionUndispatchedParkTargets(entries, runs, outputRunIds)
+  return await partitionUndispatchedParkTargets(entries, runs, outputRunIds)
 }
 
 // RFC-120 §18 (model A, corrected) — the per-node INJECTION gate is NOT a separate
@@ -801,13 +801,12 @@ async function deriveEntryPhase(
   // state (content always answered; no human-answer step) — the SAME resolution the
   // read-side uses for manual rows.
   if (entry.sourceKind === 'manual') {
-    const { nodeRuns } = tablesOf(db)
-    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, entry.taskId))
+    const runs = await createNodeRunQueries(db).list({ taskId: entry.taskId })
     const outputRunIds = await runIdsWithOutput(
       db,
       runs.map((r) => r.id),
     )
-    const { handlerRun, dispatchedInFlight } = resolveDispatchedEntryHandler(
+    const { handlerRun, dispatchedInFlight } = await resolveDispatchedEntryHandler(
       entry,
       runs,
       outputRunIds,
@@ -820,20 +819,20 @@ async function deriveEntryPhase(
       handlerRun,
     })
   }
-  const { clarifyRounds, nodeRuns } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   const [round] = await db
     .select()
     .from(clarifyRounds)
     .where(eq(clarifyRounds.intermediaryNodeRunId, entry.originNodeRunId))
     .limit(1)
   if (!round) return entry.stagedAt !== null ? 'staged' : 'pending'
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, entry.taskId))
+  const runs = await createNodeRunQueries(db).list({ taskId: entry.taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
   )
   // RFC-132: phase 一律从 entry 自身 dispatch 状态派生(dispatched_at + trigger_run_id)。
-  const { handlerRun, dispatchedInFlight } = resolveDispatchedEntryHandler(
+  const { handlerRun, dispatchedInFlight } = await resolveDispatchedEntryHandler(
     entry,
     runs,
     outputRunIds,
@@ -857,26 +856,16 @@ export async function taskNodeHasRun(
   taskId: string,
   nodeId: string,
 ): Promise<boolean> {
-  const { nodeRuns } = tablesOf(db)
   return (
-    (
-      await db
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
-        .limit(1)
-    )[0] !== undefined
+    (await createNodeRunQueries(db).listFields({ taskId, nodeId, limit: 1 }, ['id'])).length > 0
   )
 }
 
 /** Agent-kind node ids of the task's frozen workflow snapshot (reassign candidates). */
 async function agentNodeIdsForTask(db: PersistenceDb, taskId: string): Promise<Set<string>> {
-  const { tasks } = tablesOf(db)
-  const [t] = await db
-    .select({ snapshot: tasks.workflowSnapshot })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
+  const [t] = await createTaskGateQueries(db)
+    .listDefinitionContexts([taskId])
+    .then((rows) => rows.map((row) => ({ snapshot: row.workflowSnapshot })))
   if (!t) return new Set()
   try {
     const def = JSON.parse(t.snapshot) as WorkflowDefinition
@@ -893,13 +882,20 @@ async function agentNodeIdsForTask(db: PersistenceDb, taskId: string): Promise<S
 // with no shard ambiguity, so the manual-target ban below must NOT apply. `isTurnEngineWorkgroupTask`
 // is the exact predicate (workgroupId set AND mode != dynamic_workflow).
 async function taskIsTurnEngineWorkgroup(db: PersistenceDb, taskId: string): Promise<boolean> {
-  const { tasks } = tablesOf(db)
-  const [t] = await db
-    .select({ workgroupId: tasks.workgroupId, workgroupConfigJson: tasks.workgroupConfigJson })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  return t !== undefined && isTurnEngineWorkgroupTask(t)
+  const [t] = await createTaskGateQueries(db)
+    .listDispatchContexts([taskId])
+    .then((rows) =>
+      rows.map((row) => ({
+        workgroupId: row.workgroupId,
+        workflowId: row.workflowId,
+        codeRoundId: row.codeRoundId,
+        sourceAgentName: row.sourceAgentName,
+        workgroupConfig: row.workgroupConfig,
+      })),
+    )
+  return (
+    t !== undefined && isTurnEngineTaskSubject(decodeTaskSubject(t), t.workgroupConfig?.launch.mode)
+  )
 }
 
 // RFC-172 R2-T5 (Codex impl-gate P1): a manual question carries NO shard binding
@@ -1199,14 +1195,14 @@ export async function reassignTaskQuestion(
  *  answerSummary is unreliable as a "has an answer" signal here. */
 async function isEntrySealed(db: PersistenceDb, entry: TaskQuestionRow): Promise<boolean> {
   if (entry.sourceKind === 'manual') return true
-  if (entry.sealedAt !== null) return true
+  if (isClarifyQuestionSealed(undefined, entry.sealedAt)) return true
   const { clarifyRounds } = tablesOf(db)
   const [round] = await db
     .select({ status: clarifyRounds.status })
     .from(clarifyRounds)
     .where(eq(clarifyRounds.intermediaryNodeRunId, entry.originNodeRunId))
     .limit(1)
-  return round?.status === 'answered'
+  return isClarifyQuestionSealed(round?.status, entry.sealedAt)
 }
 
 /** Stage / unstage (拖入·拖出「待下发」). Approves an entry for batch dispatch.
@@ -1336,11 +1332,12 @@ export async function createManualTaskQuestion(
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,
 ): Promise<{ id: string }> {
-  const { tasks } = tablesOf(db)
   // RFC-120 §15 — task status (re-gate). RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有
   // 任务都是 deferred-dispatch，manual 恒可创建（旧 deferred-only 门移除）。
   const taskRow = (
-    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    await createTaskGateQueries(db)
+      .listContexts([taskId])
+      .then((rows) => rows.map((row) => ({ status: row.status })))
   )[0]
   if (taskRow === undefined) {
     throw new ConflictError('task-not-found', `task ${taskId} not found`)

@@ -6,11 +6,18 @@
 // provider 只提供「在借用工作区上启动 / 取消宿主任务」两件私有能力（`actionExecutionEnvironment.ts`）。
 // 这里用一个可观测的假环境把执行器在两个引擎上各跑一遍（宿主工作流播种、脚本定义读取走真库），
 // 再用源码锁钉住 PG daemon 的接线与两个 composer 的「薄」形态。
+
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import {
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { requirementBundlePath } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -28,7 +35,6 @@ import {
   type ActionHostTaskLaunch,
 } from '@/modules/task-execution/composition/actionExecutionRunners'
 import {
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
@@ -62,21 +68,23 @@ function fakeEnvironment(
     outcomes: {
       // 终态任务的结果读模型：只给最小的空产出，让 fetchOutcome 走到 exited 分支。
       find: async (taskId) => {
-        const { tasks } = tablesOf(db)
         const row = (
-          await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+          await readTaskFixtures(db, { id: taskId }).then((rows) =>
+            rows.map((row) => ({ status: row.status })),
+          )
         )[0]
         if (row === undefined) return null
         return {
           task: {
             id: taskId,
+            workflowId: TASK_DEFINITION_HOSTS['digital-employee'].id,
             status: row.status,
             errorSummary: null,
             errorMessage: null,
             failedNodeId: null,
             workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
             workgroupId: null,
-            workgroupConfigJson: null,
+            workgroupConfig: null,
             sourceAgentName: null,
             codeRoundId: null,
           },
@@ -88,9 +96,10 @@ function fakeEnvironment(
     },
     statusProjection: {
       find: async (taskId) => {
-        const { tasks } = tablesOf(db)
         const row = (
-          await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+          await readTaskFixtures(db, { id: taskId }).then((rows) =>
+            rows.map((row) => ({ status: row.status })),
+          )
         )[0]
         return row === undefined ? null : { taskId, status: row.status, errorSummary: null }
       },
@@ -123,7 +132,7 @@ describeEachProvider('RFC-359 T3 —— 借用工作区的平台输入', (harnes
     const identityAccess = createIdentityAccessRuntime({ db })
     try {
       const userId = ulid()
-      const { users, tasks } = tablesOf(db)
+      const { users } = tablesOf(db)
       await insertOne(db, users, {
         id: userId,
         username: `borrowed-${userId}`,
@@ -161,7 +170,7 @@ describeEachProvider('RFC-359 T3 —— 借用工作区的平台输入', (harnes
       const prepared = await participant.prepare(request)
       // Persist the real lease metadata consumed by the PG root insert. This
       // local diagnostic does not replace the hosted real-root execution cases.
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: prepared.taskId,
         name: request.task.name,
         workflowId,
@@ -209,11 +218,10 @@ const RESULT_AGENT = { id: 'agent-de', name: 'de-impl', outputs: [DIGITAL_EMPLOY
 
 async function seedTask(db: PersistenceDb, status: 'running' | 'done'): Promise<string> {
   const id = `t3_${ulid()}`
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
-    workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+    workflowId: TASK_DEFINITION_HOSTS['digital-employee'].id,
     workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
     repoPath: '/tmp/repo',
     worktreePath: '/tmp/worktree',
@@ -307,15 +315,13 @@ describeEachProvider('RFC-359 T3 —— agent 动作执行器（F-H2-2）', (har
       expect(launch.workspacePath).toBe(workspace)
       expect(launch.baselineSha).toBe(BASELINE)
       expect(JSON.stringify(launch.snapshot)).toContain(RESULT_AGENT.id)
-      const { workflows } = tablesOf(db)
-      // 宿主工作流行在本引擎上存在（两个引擎同一段 drizzle 播种）。
+      // RFC-395 II-a A2：两引擎启动均不播种宿主行。
       const host = (
-        await db
-          .select({ id: workflows.id })
-          .from(workflows)
-          .where(eq(workflows.id, DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID))
+        await readWorkflowFixtures(db, { id: TASK_DEFINITION_HOSTS['digital-employee'].id }).then(
+          (rows) => rows.map((row) => ({ id: row.id })),
+        )
       )[0]
-      expect(host?.id).toBe(DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID)
+      expect(host).toBeUndefined()
       // 终态观察者：状态投影轮询到终态后通知一次。
       await waitFor(() => terminal.length === 1)
       expect(terminal).toEqual([launchedTaskId])
@@ -461,11 +467,10 @@ async function seedTaskWithId(
   id: string,
   status: 'running' | 'done',
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
-    workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+    workflowId: TASK_DEFINITION_HOSTS['digital-employee'].id,
     workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
     repoPath: '/tmp/repo',
     worktreePath: '/tmp/worktree',
@@ -497,8 +502,7 @@ async function seedScriptWorkflow(
     nodes,
     edges: [],
   })
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',

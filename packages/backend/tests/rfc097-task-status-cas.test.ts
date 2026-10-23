@@ -25,12 +25,16 @@
 // 正是「SELECT 与 UPDATE 之间」这个位置，且两个引擎都成立。承重的判据一条没少——
 // 竞争写者先落库、CAS 的 `WHERE status = from` 必然 miss、赢家的写不被覆盖。
 
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -50,16 +54,12 @@ const ulid = monotonicFactory()
 
 interface Harness {
   db: PersistenceDb
-  seedTask: (
-    status: TaskStatus,
-    extra?: Partial<PersistenceTables['tasks']['$inferInsert']>,
-  ) => Promise<string>
+  seedTask: (status: TaskStatus, extra?: Partial<TaskFixtureSpec>) => Promise<string>
 }
 
 async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -74,7 +74,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     db,
     seedTask: async (status, extra = {}) => {
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'rfc097-cas',
         workflowId,
@@ -94,8 +94,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 }
 
 async function statusOf(db: PersistenceDb, taskId: string): Promise<string> {
-  const { tasks } = tablesOf(db)
-  return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.status
+  return (await readTaskFixtures(db, { id: taskId }))[0]!.status
 }
 
 describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
@@ -148,8 +147,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         },
         reason: 'unit-extra',
       })
-      const { tasks } = tablesOf(h.db)
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const row = (await readTaskFixtures(h.db, { id: taskId }))[0]!
       expect(row.status).toBe('failed')
       expect(row.finishedAt).toBe(777)
       expect(row.errorSummary).toBe('boom')
@@ -173,8 +171,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         extra: { finishedAt: null, errorSummary: null, errorMessage: null, failedNodeId: null },
         reason: 'unit-resume-clears',
       })
-      const { tasks } = tablesOf(h.db)
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const row = (await readTaskFixtures(h.db, { id: taskId }))[0]!
       expect(row.status).toBe('pending')
       expect(row.finishedAt).toBeNull()
       expect(row.errorSummary).toBeNull()
@@ -193,8 +190,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         extra: { finishedAt: null },
         reason: 'unit-T3-demote',
       })
-      const { tasks } = tablesOf(h.db)
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const row = (await readTaskFixtures(h.db, { id: taskId }))[0]!
       expect(row.status).toBe('interrupted')
       expect(row.finishedAt).toBeNull()
     })
@@ -290,8 +286,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
           allowedFrom: ['running'],
           reason: 'unit-cas-loss',
           beforeCas: async () => {
-            const { tasks } = tablesOf(h.db)
-            await h.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
+            await patchTaskFixture(h.db, { id: taskId }, { status: 'canceled' })
           },
         })
       } catch (e) {
@@ -341,8 +336,7 @@ describeEachProvider('RFC-097 tasks.status CAS（双引擎）', (harness) => {
         allowedFrom: ['running'],
         reason: 'unit-try-cas-loss',
         beforeCas: async () => {
-          const { tasks } = tablesOf(h.db)
-          await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
+          await patchTaskFixture(h.db, { id: taskId }, { status: 'failed' })
         },
       })
       expect(won).toBe(false)

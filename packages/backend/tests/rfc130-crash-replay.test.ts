@@ -7,11 +7,17 @@
 // canonical worktree and flip merge_state='merged' — WITHOUT re-running the agent — so
 // the frontier gate (which excludes non-'merged' done rows) then lets the task finish.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -60,7 +66,7 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
   })
   afterEach(() => h.cleanup())
 
-  test('deriveFrontier gate: a done row with merge_state != merged is NOT complete', () => {
+  test('deriveFrontier gate: a done row with merge_state != merged is NOT complete', async () => {
     const def: WorkflowDefinition = {
       $schema_version: 1,
       inputs: [],
@@ -81,6 +87,11 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
     const upstreamsOf = new Map([['B', ['A']]])
     const mkRow = (mergeState: string | null) =>
       ({
+        seq: null,
+        containerRunId: null,
+        supersededByReview: null,
+        wrapperProgressJson: null,
+
         id: 'r-A',
         taskId: 't',
         nodeId: 'A',
@@ -96,8 +107,8 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
       }) as unknown as Parameters<typeof deriveFrontier>[0][number]
 
     const empty = new Set<string>()
-    const front = (mergeState: string | null) =>
-      deriveFrontier(
+    const front = async (mergeState: string | null) =>
+      await deriveFrontier(
         [mkRow(mergeState)],
         def,
         scopeNodes,
@@ -109,16 +120,15 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
         empty,
       )
     // pending-merge → A NOT complete → B not ready.
-    expect(front('pending-merge').ready).not.toContain('B')
+    expect((await front('pending-merge')).ready).not.toContain('B')
     // merged → A complete → B ready.
-    expect(front('merged').ready).toContain('B')
+    expect((await front('merged')).ready).toContain('B')
     // legacy NULL → A complete (golden-lock) → B ready.
-    expect(front(null).ready).toContain('B')
+    expect((await front(null)).ready).toContain('B')
   })
 
   test('resume replays a pending-merge delta into canonical, then the task finishes', async () => {
-    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, agents, {
+    await agentFixture(h.db, {
       id: ulid(),
       name: 'a',
       description: '',
@@ -138,14 +148,14 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await insertOne(h.db, workflows, {
+    await workflowFixture(h.db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       id: taskId,
       name: 'fixture',
       workflowId,
@@ -166,7 +176,7 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
       {
         repoPath: h.worktreePath,
         worktreePath: h.worktreePath,
-        worktreeDirName: '',
+        mountPath: '',
         baseBranch: 'main',
       },
     ]
@@ -176,17 +186,18 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
     await discardNodeIso(handle) // simulate the worktree being gone after a crash
 
     const nrId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: nrId,
       taskId,
       nodeId: 'A',
       status: 'done', // runner wrote done…
       startedAt: Date.now(),
-      isoBaseSnapshot: handle.repos[0]!.baseSnapshot,
-      isoNodeTree: nodeTrees[''],
       mergeState: 'pending-merge', // …but merge-back never ran
+      checkpoints: [
+        { mountPath: '', isolationBase: handle.repos[0]!.baseSnapshot, nodeTree: nodeTrees[''] },
+      ],
     })
-    await insertOne(h.db, nodeRunOutputs, { nodeRunId: nrId, portName: 'summary', content: 'ok' })
+    await nodeRunOutputFixture(h.db, { nodeRunId: nrId, portName: 'summary', content: 'ok' })
 
     // canonical does NOT yet have the produced file (delta lives only in the pin).
     expect(existsSync(join(h.worktreePath, 'produced.txt'))).toBe(false)
@@ -195,9 +206,9 @@ describe('RFC-130 crash replay (D15 gate + T3c2 replay)', () => {
 
     // Replay merged the pinned delta into canonical + flipped merge_state; task done.
     expect(readFileSync(join(h.worktreePath, 'produced.txt'), 'utf-8')).toBe('by node A\n')
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nrId)))[0]
+    const row = (await readNodeRunFixtures(h.db, { id: nrId }))[0]
     expect(row?.mergeState).toBe('merged')
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
   })
 })

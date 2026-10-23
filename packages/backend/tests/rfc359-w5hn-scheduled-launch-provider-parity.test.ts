@@ -15,16 +15,16 @@
 //
 // 判据形状照抄前两条：**拒绝清单**（把逐次必然不同的那几格摘掉、其余整行都比）
 // + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { readTaskFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { WORKGROUP_HOST_WORKFLOW_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
 const TOKEN = 'e'.repeat(64)
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
@@ -221,13 +221,8 @@ describeEachProviderHttpApplication(
       expect(task['workflowId'], '工作流定时必须挂在被选中的工作流上').toBe(workflow.id)
 
       const comparable = comparableTask(task)
-      const { tasks } = tablesOf(scope.harness.db)
       const row = (
-        await scope.harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, String(task['id'])))
-          .limit(1)
+        await readTaskFixtures(scope.harness.db, { id: String(task['id']) }, { limit: 1 })
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
       expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()
@@ -274,13 +269,8 @@ describeEachProviderHttpApplication(
       expect(task['sourceAgentId'], '单代理定时必须记下发起它的 agent').toBe(agent.id)
 
       const comparable = comparableTask(task)
-      const { tasks } = tablesOf(scope.harness.db)
       const row = (
-        await scope.harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, String(task['id'])))
-          .limit(1)
+        await readTaskFixtures(scope.harness.db, { id: String(task['id']) }, { limit: 1 })
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
       expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()
@@ -341,7 +331,7 @@ describeEachProviderHttpApplication(
       expect(task['scheduledTaskId'], '定时启动必须把定时行 id 盖进任务').toBe(scheduleId)
       expect(task['workgroupId'], '工作组定时必须记下发起它的工作组').toBe(group.id)
       expect(task['workflowId'], '工作组启动必须挂在 __workgroup_host__ 锚上').toBe(
-        WORKGROUP_HOST_WORKFLOW_ID,
+        TASK_DEFINITION_HOSTS.workgroup.id,
       )
 
       const comparable = comparableTask(task)
@@ -349,13 +339,8 @@ describeEachProviderHttpApplication(
         (comparable['workflowSnapshot'] as { edgeCount: number }).edgeCount,
         '宿主边扫成 0 ⇒ 比较面失效',
       ).toBeGreaterThan(0)
-      const { tasks } = tablesOf(scope.harness.db)
       const row = (
-        await scope.harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, String(task['id'])))
-          .limit(1)
+        await readTaskFixtures(scope.harness.db, { id: String(task['id']) }, { limit: 1 })
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
       expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()

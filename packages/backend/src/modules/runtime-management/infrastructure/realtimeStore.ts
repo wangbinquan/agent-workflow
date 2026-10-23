@@ -13,6 +13,7 @@
 // `tests/rfc359-w7-realtime-store-conformance.test.ts` 把这四个方法在两个引擎上各跑一遍
 // ——合一之前这一对是「无对拍」的，那份对拍本身就是合一换来的。
 
+import { isTaskDefinitionHostId } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, gt } from 'drizzle-orm'
 
@@ -48,6 +49,8 @@ export class DrizzleRealtimeStore implements RealtimeStore {
     resourceId: string,
   ): Promise<RealtimeResourceRow | null> {
     if (type === 'workflow') {
+      if (isTaskDefinitionHostId(resourceId)) return null
+
       const { workflows } = tablesOf(this.db)
       const rows = await this.db
         .select({

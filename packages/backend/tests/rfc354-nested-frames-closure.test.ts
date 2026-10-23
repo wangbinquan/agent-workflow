@@ -17,11 +17,17 @@
 //
 // Counting uses scenario-opencode's trace.jsonl (one line per real spawn).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  consumedProducerIds,
+  type NodeRunFixtureRow,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -61,8 +67,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -81,13 +86,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc354-closure-task',
     id: taskId,
     workflowId,
@@ -127,10 +131,8 @@ function readTrace(h: Harness): Array<{ agent: string; callIndex: number }> {
     .map((l) => JSON.parse(l) as { agent: string; callIndex: number })
 }
 
-function consumedOf(row: { consumedUpstreamRunsJson: string | null }): Record<string, string> {
-  return row.consumedUpstreamRunsJson === null
-    ? {}
-    : (JSON.parse(row.consumedUpstreamRunsJson) as Record<string, string>)
+function consumedOf(row: Pick<NodeRunFixtureRow, 'consumedEdges'>): Record<string, string> {
+  return consumedProducerIds(row.consumedEdges)
 }
 
 describe('RFC-354 — closure / local edges across nested loop frames', () => {
@@ -227,9 +229,8 @@ describe('RFC-354 — closure / local edges across nested loop frames', () => {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
     // The nested topology ran to the outer loop's exhaustion.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-exhausted')
 
@@ -240,10 +241,7 @@ describe('RFC-354 — closure / local edges across nested loop frames', () => {
     expect(trace.filter((l) => l.agent === 'checker').length).toBe(4)
 
     const rowsOf = (nodeId: string) => {
-      return h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+      return readNodeRunFixtures(h.db, { taskId, nodeId })
     }
     const seedRuns = await rowsOf('seed')
     expect(seedRuns.length).toBe(1)

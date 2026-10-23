@@ -1,3 +1,4 @@
+import { decodeLegacySkillPath } from '@/platform/content/legacySkill'
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { safeJoin } from '@/util/safePath'
@@ -29,9 +30,15 @@ function publishSkill(
   const version = input.version
   const skill = { managedPath: input.managedPath }
   const snapshot = { filesPath: input.filesPath, contentHash: input.contentHash }
-  const liveDirectory = safeJoin(input.appHome, skill.managedPath)
+  const liveDirectory = safeJoin(
+    input.appHome,
+    decodeLegacySkillPath(skill.managedPath).location.value,
+  )
   const expectedLiveDirectory = input.rc.skillFilesAbs(input.appHome, input.artifact.skillId)
-  const versionDirectory = safeJoin(input.appHome, snapshot.filesPath)
+  const versionDirectory = safeJoin(
+    input.appHome,
+    decodeLegacySkillPath(snapshot.filesPath).location.value,
+  )
   const expectedVersionDirectory = input.rc.skillVersionAbs(
     input.appHome,
     input.artifact.skillId,

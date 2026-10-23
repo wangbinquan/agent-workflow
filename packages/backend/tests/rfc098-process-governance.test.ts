@@ -19,7 +19,13 @@
 // 对抗检视修订 #4: every spawned pid is recorded and afterEach best-effort
 // SIGKILLs the whole group so a red assertion can't leak process trees.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -142,15 +148,14 @@ async function buildHarness(taskStatus: 'running' | 'failed' = 'running'): Promi
   const db = createInMemoryDb(MIGRATIONS)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -181,8 +186,7 @@ async function insertRun(
   opts: { status?: 'pending' | 'running' | 'failed'; pid?: number; startedAt?: number } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'node1',
@@ -281,9 +285,8 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
     expect(result.status).toBe('failed')
     expect(result.errorMessage).toContain('node-timeout')
 
-    const { nodeRuns } = tablesOf(h.db)
     // Child pid was persisted by the runner; group kill reaped it.
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     expect(typeof row.pid).toBe('number')
     track(row.pid)
     expect(await waitDead(row.pid as number)).toBe(true)
@@ -330,8 +333,7 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
     expect(result.status).toBe('canceled')
     expect(result.errorMessage).toContain('aborted')
 
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     track(row.pid)
     expect(await waitDead(row.pid as number)).toBe(true)
     const grandchildPid = readGrandchildPid(h.pidFile)
@@ -366,10 +368,10 @@ describe('RFC-098 WP-8 — reapOrphanRuns kills live orphans before flipping', (
     expect(await waitDead(child.pid)).toBe(true)
     expect(await waitDead(grandchildPid)).toBe(true)
 
-    const { nodeRuns, tasks } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
     expect(row.status).toBe('interrupted')
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    const t = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
     expect(t.status).toBe('interrupted')
   }, 30_000)
 

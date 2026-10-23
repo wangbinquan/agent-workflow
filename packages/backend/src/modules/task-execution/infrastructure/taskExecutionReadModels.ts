@@ -1,8 +1,11 @@
 // RFC-359 W4-B1 —— task-execution 读模型：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
+import { legacyPortFallbackMount } from '@/platform/content/legacyPortArchive'
+import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
+import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
+import { decodeTaskSubject } from '../domain/taskSubject'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { isSingleRootRepository, isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, desc, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -46,7 +49,7 @@ export function createTaskExecutionReadModels(db: PersistenceDb): TaskExecutionR
 
       const repoRows = await db
         .select({
-          worktreeDirName: taskRepos.worktreeDirName,
+          mountPath: taskRepos.mountPath,
           worktreePath: taskRepos.worktreePath,
         })
         .from(taskRepos)
@@ -59,7 +62,10 @@ export function createTaskExecutionReadModels(db: PersistenceDb): TaskExecutionR
         repos:
           repoRows.length > 0
             ? repoRows
-            : [{ worktreeDirName: '', worktreePath: task.worktreePath }],
+            : projectStoredTaskRepositorySurface(task).repos.map(({ mountPath, worktreePath }) => ({
+                mountPath,
+                worktreePath,
+              })),
       }
     },
   }
@@ -153,8 +159,9 @@ export function createTaskExecutionReadModels(db: PersistenceDb): TaskExecutionR
           errorMessage: tasks.errorMessage,
           failedNodeId: tasks.failedNodeId,
           workflowSnapshot: tasks.workflowSnapshot,
+          workflowId: tasks.workflowId,
           workgroupId: tasks.workgroupId,
-          workgroupConfigJson: tasks.workgroupConfigJson,
+          workgroupConfig: taskWorkgroupConfigSelection(db),
           sourceAgentName: tasks.sourceAgentName,
           codeRoundId: tasks.codeRoundId,
         })
@@ -169,7 +176,7 @@ export function createTaskExecutionReadModels(db: PersistenceDb): TaskExecutionR
         dwPhase: string | null
         resultMessageBody: string | null
       } | null = null
-      if (isWorkgroupTask(task)) {
+      if (decodeTaskSubject(task).kind === 'workgroup') {
         const states = await db
           .select({
             gateSummary: workgroupTaskState.gateSummary,
@@ -330,13 +337,11 @@ export function createTaskExecutionReadModels(db: PersistenceDb): TaskExecutionR
       if (output === undefined) return { status: 'port-not-found' as const }
 
       const repoRows = await db
-        .select({ mountPath: taskRepos.mountPath, worktreeDirName: taskRepos.worktreeDirName })
+        .select({ mountPath: taskRepos.mountPath })
         .from(taskRepos)
         .where(eq(taskRepos.taskId, input.taskId))
         .orderBy(asc(taskRepos.repoIndex))
-      const legacyRepoDirName = isSingleRootRepository(repoRows.map((repo) => repo.mountPath))
-        ? ''
-        : (repoRows[0]?.worktreeDirName ?? '')
+      const legacyRepoDirName = legacyPortFallbackMount(repoRows.map((repo) => repo.mountPath))
       return {
         status: 'found' as const,
         artifact: {
@@ -399,7 +404,7 @@ export function createTaskExecutionReadModels(db: PersistenceDb): TaskExecutionR
                   eq(nodeRuns.opencodeSessionId, run.opencodeSessionId),
                 ),
               )
-              .orderBy(engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id))
+              .orderBy(...runHistoryOrder(db, nodeRuns))
       const lineage = siblings.length === 0 ? [run] : siblings
       const eventColumns = {
         id: nodeRunEvents.id,

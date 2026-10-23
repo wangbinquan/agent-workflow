@@ -8,13 +8,14 @@
 // 这一刀取**差异面最小**的一组：`node-runs` 的投影。它不需要真跑任务——直接把 `node_runs` /
 // `doc_versions` / `clarify_rounds` 播种成确定的形状，读的就是投影本身，
 // 而投影正是这一对唯一可能分叉的地方（PG 那侧自带评审轮次计时、clarify 轮次、nav kind）。
+import { clarifyRoundFixture, nodeRunFixture, patchTaskFixture } from './helpers/model'
+import { patchLegacyRunSelectionFixture } from './helpers/model/runSelectionOracle'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
@@ -133,11 +134,11 @@ describeEachProviderHttpApplication(
       expect(launched.status, await launched.clone().text()).toBe(201)
       const taskId = String(((await launched.json()) as { id: string }).id)
 
-      const { nodeRuns, docVersions, clarifyRounds } = tablesOf(scope.harness.db)
+      const { docVersions } = tablesOf(scope.harness.db)
       // **确定形状的播种**：三条 run 覆盖三种时间线位置（未开始 / 跑完 / 等人审），
       // 外加一条评审版本与一条 clarify 轮次，把 PG 那侧独有的派生（轮次计时 / nav kind /
       // clarify 状态）全都点亮——分叉只可能在这些派生里。
-      await scope.harness.db.insert(nodeRuns).values([
+      await nodeRunFixture(scope.harness.db, [
         {
           id: 'rr-pending-0001',
           taskId,
@@ -149,7 +150,7 @@ describeEachProviderHttpApplication(
         },
         {
           id: 'rr-done-0001',
-          seq: 1,
+          // RFC-395 II-a: allocate all three runs in order; the pending builder also allocates seq.
           taskId,
           nodeId: 'writer',
           status: 'done',
@@ -161,7 +162,6 @@ describeEachProviderHttpApplication(
         },
         {
           id: 'rr-review-0001',
-          seq: 2,
           taskId,
           nodeId: 'writer',
           status: 'awaiting_review',
@@ -171,6 +171,8 @@ describeEachProviderHttpApplication(
           operationGeneration: 0,
         },
       ])
+      // RFC-395 II-a: preserve the explicit pre-allocation history covered by the NULL wire assertion.
+      await patchLegacyRunSelectionFixture(scope.harness.db, 'rr-pending-0001', { seq: null })
       await insertOne(scope.harness.db, docVersions, {
         id: 'dv-0001',
         taskId,
@@ -186,7 +188,7 @@ describeEachProviderHttpApplication(
         decision: 'pending',
         createdAt: NOW + 2_500,
       })
-      await insertOne(scope.harness.db, clarifyRounds, {
+      await clarifyRoundFixture(scope.harness.db, {
         id: 'cr-0001',
         taskId,
         kind: 'self',
@@ -194,7 +196,7 @@ describeEachProviderHttpApplication(
         askingNodeRunId: 'rr-done-0001',
         intermediaryNodeId: 'writer',
         intermediaryNodeRunId: 'rr-done-0001',
-        questionsJson: '[]',
+        questions: '[]',
         status: 'answered',
         createdAt: NOW + 900,
       })
@@ -264,8 +266,7 @@ async function launchReadFixtureTask(app: Hono, label: string): Promise<string> 
 
 /** 播种一条 node_run，回它的 id。 */
 async function seedRun(db: PersistenceDb, taskId: string, id: string): Promise<string> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'writer',
@@ -452,11 +453,7 @@ describeEachProviderHttpApplication(
 
       const taskId = await launchReadFixtureTask(app, 'read-diff')
       const point = async (worktreePath: string, baseCommit: string | null): Promise<void> => {
-        const { tasks } = tablesOf(scope.harness.db)
-        await scope.harness.db
-          .update(tasks)
-          .set({ worktreePath, baseCommit, repoCount: 1 })
-          .where(eq(tasks.id, taskId))
+        await patchTaskFixture(scope.harness.db, { id: taskId }, { worktreePath, baseCommit })
       }
 
       await point(repo, head)

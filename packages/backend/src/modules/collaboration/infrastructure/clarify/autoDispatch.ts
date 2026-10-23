@@ -38,13 +38,22 @@
 // The single-path invariant still holds: self/q (auto-triggered) + designer (manual-triggered) go
 // through the ONE dispatchTaskQuestions mechanism — a single delivery path, two triggers.
 
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import {
+  createNodeRunQueries,
+  type NodeRunCheckpointSnapshot,
+} from '@/modules/task-execution/public/queries'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveClarifyNodeFromTaskSnapshot } from '@/services/clarify/service'
 import { hasOpenDispatchedEntryOnHome } from './rerunLedger'
-import { sealRoundQuestions, type ClarifySealDecisionParticipantInTx } from './seal'
+import { sealRoundQuestions } from './seal'
+import type { ClarifySealDecisionParticipantInTx } from '../../application/ports/clarifySealDecisionParticipant'
 import {
   prepareClarifyDecision,
   replayCommittedClarifyDecision,
@@ -126,16 +135,14 @@ async function resolveSelfRollbackRun(
   askingNodeRunId: string,
   intermediaryNodeId: string,
   workflowSnapshot: string,
-): Promise<PersistenceTables['nodeRuns']['$inferSelect'] | null> {
-  const { nodeRuns } = tablesOf(db)
-  const askingRun = (
-    await db.select().from(nodeRuns).where(eq(nodeRuns.id, askingNodeRunId)).limit(1)
-  )[0]
+): Promise<NodeRunCheckpointSnapshot | null> {
+  const askingRun =
+    (await createNodeRunQueries(db).readWithCheckpoints(askingNodeRunId)) ?? undefined
   if (askingRun === undefined) return null
   const clarifyNode = resolveClarifyNodeFromTaskSnapshot(workflowSnapshot, intermediaryNodeId)
   const sessionMode = clarifyNode ? resolveClarifySessionMode(clarifyNode) : 'isolated'
   if (sessionMode === 'inline') return null
-  if (askingRun.preSnapshot === null && askingRun.preSnapshotReposJson === null) return null
+  if (!hasTaskRollbackCheckpoint(askingRun.rollback)) return null
   return askingRun
 }
 
@@ -182,21 +189,16 @@ async function selfHomeHasOpenLedger(
    *  no longer blocks THIS member's rollback. null = ordinary home (shard-blind, golden-lock). */
   selfShardKey: string | null,
 ): Promise<boolean> {
-  const { nodeRuns, nodeRunOutputs, taskQuestions } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const { taskQuestions } = tablesOf(db)
+  const runs = await createNodeRunQueries(db).list({ taskId: taskId })
   const outputRunIds = new Set(
     runs.length === 0
       ? []
       : (
-          await db
-            .select({ id: nodeRunOutputs.nodeRunId })
-            .from(nodeRunOutputs)
-            .where(
-              inArray(
-                nodeRunOutputs.nodeRunId,
-                runs.map((r) => r.id),
-              ),
-            )
+          await createNodeOutputQueries(db)
+            .runsWithOutput(runs.map((r) => r.id))
+            .then((runIds) => [...runIds].map((nodeRunId) => ({ nodeRunId })))
+            .then((rows) => rows.map((row) => ({ id: row.nodeRunId })))
         ).map((r) => r.id),
   )
   // (a) dispatched ledger on the home (any deferred role).
@@ -229,7 +231,7 @@ async function selfHomeHasOpenLedger(
   if (
     dispatchedEntries.length > 0 &&
     // RFC-133: this preflight guards the SELF rollback+dispatch — its mint is 'clarify-answer'.
-    hasOpenDispatchedEntryOnHome(
+    (await hasOpenDispatchedEntryOnHome(
       homeNodeId,
       dispatchedEntries,
       runs,
@@ -237,7 +239,7 @@ async function selfHomeHasOpenLedger(
       'clarify-answer',
       selfShardKey === null ? undefined : selfShardKey,
       shardOfEntry,
-    )
+    ))
   ) {
     return true
   }
@@ -785,7 +787,7 @@ export async function finishCommittedClarifyAutoDispatch(input: {
 export async function autoDispatchClarifyRoundWithDecision(
   args: AutoDispatchClarifyRoundArgs & { readonly decision?: ClarifyDecisionArgs },
 ): Promise<AutoDispatchClarifyDecisionResult> {
-  const { clarifyRounds, tasks } = tablesOf(args.db)
+  const { clarifyRounds } = tablesOf(args.db)
   const round = (
     await args.db
       .select({
@@ -804,11 +806,9 @@ export async function autoDispatchClarifyRoundWithDecision(
     )
   }
   const task = (
-    await args.db
-      .select({ lifecycleEventRevision: tasks.lifecycleEventRevision })
-      .from(tasks)
-      .where(eq(tasks.id, round.taskId))
-      .limit(1)
+    await createTaskGateQueries(args.db)
+      .listContexts([round.taskId])
+      .then((rows) => rows.map((row) => ({ lifecycleEventRevision: row.lifecycleEventRevision })))
   )[0]
   if (task === undefined) {
     throw new NotFoundError('task-not-found', `task ${round.taskId} not found`)
@@ -902,7 +902,7 @@ export async function autoDispatchClarifyRound(
 ): Promise<AutoDispatchClarifyRoundResult> {
   const { db, originNodeRunId } = args
 
-  const { clarifyRounds, tasks, taskQuestions } = tablesOf(db)
+  const { clarifyRounds, taskQuestions } = tablesOf(db)
   // 1. Locate the round (kind + task + questions + asking run + clarify node). The route already
   //    gated membership. askingNodeRunId + intermediaryNodeId feed the self-clarify rollback below.
   const round = (
@@ -972,14 +972,14 @@ export async function autoDispatchClarifyRound(
   //    flag is no longer read; only the worktree + snapshot (for the self-clarify rollback below)
   //    are loaded, plus a not-found guard.
   const taskRow = (
-    await db
-      .select({
-        worktreePath: tasks.worktreePath,
-        workflowSnapshot: tasks.workflowSnapshot,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, round.taskId))
-      .limit(1)
+    await createTaskGateQueries(db)
+      .listDefinitionContexts([round.taskId])
+      .then((rows) =>
+        rows.map((row) => ({
+          worktreePath: row.worktreePath,
+          workflowSnapshot: row.workflowSnapshot,
+        })),
+      )
   )[0]
   if (taskRow === undefined) {
     throw new NotFoundError('task-not-found', `task ${round.taskId} not found`)
@@ -1058,7 +1058,7 @@ export async function autoDispatchClarifyRound(
   //    revision, not reset to pre-question); the DOWNSTREAM-designer case loses the (usually no-op,
   //    RFC-023) rollback, consistent with every other board-dispatched self continuation.
   const selfRollbackRun =
-    round.kind === 'self' && entryIds.length > 0 && taskRow.worktreePath !== ''
+    round.kind === 'self' && entryIds.length > 0 && !isTaskWorkspaceUnbound(taskRow.worktreePath)
       ? await resolveSelfRollbackRun(
           db,
           round.askingNodeRunId,
@@ -1152,7 +1152,7 @@ export async function autoDispatchClarifyRound(
         const target = await loadRollbackTarget(db, round.taskId)
         if (target !== null) {
           try {
-            await rollbackNodeRunWorktrees(target, selfRun, { resetOnEmptySnapshot: false }, log)
+            await rollbackNodeRunWorktrees(target, selfRun.rollback, {}, log)
           } catch (err) {
             log.warn('autodispatch self rollback failed', {
               nodeRunId: selfRun.id,

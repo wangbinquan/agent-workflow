@@ -1,3 +1,8 @@
+import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
+import {
+  assertWorkflowCatalogIdWritable,
+  workflowCatalogPredicate,
+} from '../workflowCatalogPredicate'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -136,13 +141,17 @@ export interface CreateWorkflowOptions {
 // 入参此前写 `DbClient` 是纯类型债，它把这个读面挡在双引擎用例之外。
 export async function listWorkflows(db: PersistenceDb): Promise<Workflow[]> {
   const { workflows } = tablesOf(db)
-  const rows = await db.select().from(workflows)
+  const rows = await db.select().from(workflows).where(workflowCatalogPredicate(workflows.id))
   return rows.map(rowToWorkflow)
 }
 
 export async function getWorkflow(db: PersistenceDb, id: string): Promise<WorkflowDetail | null> {
   const { workflows } = tablesOf(db)
-  const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+  const rows = await db
+    .select()
+    .from(workflows)
+    .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+    .limit(1)
   const row = rows[0]
   return row ? rowToWorkflowDetail(row) : null
 }
@@ -173,7 +182,7 @@ export async function getWorkflowAclRow(
       builtin: workflows.builtin,
     })
     .from(workflows)
-    .where(eq(workflows.id, id))
+    .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
     .limit(1)
   const row = rows[0]
   if (row === undefined) return null
@@ -192,6 +201,7 @@ export async function createWorkflow(
   opts?: CreateWorkflowOptions,
 ): Promise<WorkflowDetail> {
   const id = opts?.id ?? ulid()
+  assertWorkflowCatalogIdWritable(id)
   const now = Date.now()
   const ownerUserId = opts?.ownerUserId ?? null
   assertInitialResourceOwner(opts?.actor, ownerUserId)
@@ -293,14 +303,19 @@ export async function copyWorkflow(
           builtin: workflows.builtin,
         })
         .from(workflows)
-        .where(eq(workflows.id, sourceId)),
+        .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, sourceId))),
     )
     if (aclRow === undefined || !(await canViewResourceForTx(tx, actor, 'workflow', aclRow))) {
       throwWorkflowNotFound(sourceId)
     }
     assertNotBuiltin('workflow', aclRow)
 
-    const currentRow = await first(tx.select().from(workflows).where(eq(workflows.id, sourceId)))
+    const currentRow = await first(
+      tx
+        .select()
+        .from(workflows)
+        .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, sourceId))),
+    )
     if (currentRow === undefined) throwWorkflowNotFound(sourceId)
     const source = rowToWorkflow(currentRow)
     const currentRevision = workflowRevisionOf(source)
@@ -333,7 +348,7 @@ export async function copyWorkflow(
       await tx
         .select({ name: workflows.name })
         .from(workflows)
-        .where(eq(workflows.ownerUserId, actor.user.id))
+        .where(workflowCatalogPredicate(workflows.id, eq(workflows.ownerUserId, actor.user.id)))
     ).map((row) => row.name)
     // RFC-264: persist the PARSED name — the schema is also the normalizer, so
     // ignoring its output would store an unfolded copy name.
@@ -539,7 +554,12 @@ export async function commitWorkflowSaveInTx(
   } = p
   const opts = { inTxGuard: p.inTxGuard }
   const { workflows } = tablesOf(tx)
-  const currentRow = await first(tx.select().from(workflows).where(eq(workflows.id, id)))
+  const currentRow = await first(
+    tx
+      .select()
+      .from(workflows)
+      .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id))),
+  )
   if (currentRow === undefined) throwWorkflowNotFound(id)
 
   const access = await assertPrincipalCanEditInTx(tx, principal, currentRow)
@@ -616,17 +636,17 @@ export async function commitWorkflowSaveInTx(
 
   const updatedAt = Date.now()
   const returned = await first(
-    tx
-      .update(workflows)
-      .set({
+    createWorkflowDefinitionWriteParticipant(tx).update({
+      id,
+      expectedVersion: parsed.data.expectedVersion,
+      set: {
         name: normalizedSnapshot.name,
         description: normalizedSnapshot.description,
         definition: definitionStorage,
         version: currentRow.version + 1,
         updatedAt,
-      })
-      .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
-      .returning(),
+      },
+    }),
   )
   if (returned === undefined) {
     // Defensive CAS-loss surface. In the synchronous SQLite transaction this
@@ -704,7 +724,11 @@ export async function deleteWorkflow(
     audience: WorkflowDeletedAudienceContext
   }>(async (tx) => {
     const { workflows, scheduledTasks } = tablesOf(tx)
-    const [currentRow] = await tx.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+    const [currentRow] = await tx
+      .select()
+      .from(workflows)
+      .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+      .limit(1)
     if (currentRow === undefined) throwWorkflowNotFound(id)
     await assertPrincipalCanGovernForTx(tx, principal, currentRow)
 
@@ -870,6 +894,7 @@ export async function insertWorkflowInTx(
     scriptPrincipal: ScriptAuthorPrincipal
   },
 ): Promise<WorkflowRow> {
+  assertWorkflowCatalogIdWritable(input.id)
   assertScriptAuthorAllowed({ next: input.definition, principal: input.scriptPrincipal })
   // RFC-269 — same persistence primitive, same provenance value (the two
   // principal types are structurally identical by design).
@@ -878,24 +903,20 @@ export async function insertWorkflowInTx(
     input.builtin || input.visibility === 'public'
       ? initialBuiltinResourceAcl(input.ownerUserId)
       : initialPrivateResourceAcl(input.ownerUserId)
-  const { workflows } = tablesOf(tx)
   const inserted = await first(
-    tx
-      .insert(workflows)
-      .values({
-        id: input.id,
-        name: input.name,
-        description: input.description,
-        definition: serializeWorkflowDefinitionStorageV1(input.definition),
-        version: 1,
-        // RFC-231: user resources are private; framework built-ins stay public.
-        ...initialAcl,
-        // RFC-104: built-in is internal-only and never accepted from HTTP.
-        builtin: input.builtin,
-        createdAt: input.now,
-        updatedAt: input.now,
-      })
-      .returning(),
+    createWorkflowDefinitionWriteParticipant(tx).insert({
+      id: input.id,
+      name: input.name,
+      description: input.description,
+      definition: serializeWorkflowDefinitionStorageV1(input.definition),
+      version: 1,
+      // RFC-231: user resources are private; framework built-ins stay public.
+      ...initialAcl,
+      // RFC-104: built-in is internal-only and never accepted from HTTP.
+      builtin: input.builtin,
+      createdAt: input.now,
+      updatedAt: input.now,
+    }),
   )
   if (inserted === undefined) throw new Error('workflow insert returned no row')
   return inserted
@@ -941,7 +962,11 @@ export function workflowSnapshotHashOf(snapshot: WorkflowDraftSnapshot): Workflo
 
 async function loadRawWorkflow(db: PersistenceDb, id: string): Promise<WorkflowRow | null> {
   const { workflows } = tablesOf(db)
-  const rows = await db.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+  const rows = await db
+    .select()
+    .from(workflows)
+    .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+    .limit(1)
   return rows[0] ?? null
 }
 

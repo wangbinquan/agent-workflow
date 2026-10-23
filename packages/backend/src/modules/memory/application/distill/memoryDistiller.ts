@@ -26,6 +26,7 @@
 //
 // Tests inject `runFn` to skip the real subprocess.
 
+import { clarifyAnswerContentForPrompt } from '@/modules/collaboration/public/queries'
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 import type {
@@ -304,7 +305,7 @@ export async function loadSourceEvents(
         taskId: r.taskId,
         nodeId: r.intermediaryNodeId,
         questions: r.questionsJson,
-        answers: r.answersJson ?? '[]',
+        answers: clarifyAnswerContentForPrompt(r.answers),
         sourceTranscriptMd: t.md,
         sourceTranscriptReason: t.reason,
       }

@@ -19,8 +19,7 @@
 // 头注释刻意**不点名**任一 provider 适配器的文件：`rfc359-w5-t19d-coverage-parity` 按「测试文件
 // 提到该侧模块名」计注意力，一句讲历史的散文就能把「PG 侧被更多测试盯着」的倒挂推深一格——
 // 而这条测试恰恰是喂两侧的。
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -68,8 +67,7 @@ async function seedTask(
 ): Promise<string> {
   const taskId = ulid()
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `wf-${workflowId}`,
     description: '',
@@ -78,7 +76,7 @@ async function seedTask(
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: `task-${taskId}`,
     workflowId,

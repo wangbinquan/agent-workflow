@@ -14,12 +14,10 @@
 // 合并后它护的是「将来别再分叉」。要证明它还活着，变异必须只动**一侧**——
 // 实测把 SQLite 路由的 payload `name` 缀一截（`{ ...task, name: \`${task.name}_MUT\` }`）
 // 当场红在行级比对上。
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readTaskFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-
-import { eq } from 'drizzle-orm'
 
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
@@ -201,15 +199,10 @@ describeEachProviderHttpApplication(
         'scratch 启动没有规划目录，spaceNodes 就该是空的（plan §5hn 批次二 ④）',
       ).toBe(0)
 
-      const { tasks } = tablesOf(scope.harness.db)
       // **落库那一行**也要比：响应体是 `taskProjection(...)` 现算的投影，不是回读
       //（变异实证见 `tests/helpers/taskRowParity.ts` 的头注释）。
       const row = (
-        await scope.harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, String(task['id'])))
-          .limit(1)
+        await readTaskFixtures(scope.harness.db, { id: String(task['id']) }, { limit: 1 })
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
       expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()

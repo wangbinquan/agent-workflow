@@ -8,8 +8,13 @@
 // 一份实现（boot 用 webhookClaims: 'all' 接管全部认领并回填 legacy tombstone）。场景移植自
 // rfc311-task-archive / rfc300-workspace-prune / rfc165-workspace-gc（SQLite 黄金锁仍保留）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -42,11 +47,10 @@ function archiveDirs(root: string) {
 async function seedTask(
   db: PersistenceDb,
   taskId: string,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  over: Partial<TaskFixtureSpec> = {},
 ): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-t15b',
     description: '',
@@ -54,7 +58,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -73,13 +77,14 @@ async function seedTask(
 }
 
 async function taskExists(db: PersistenceDb, taskId: string): Promise<boolean> {
-  const { tasks } = tablesOf(db)
-  return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length > 0
+  return (
+    (await readTaskFixtures(db, { id: taskId }).then((rows) => rows.map((row) => ({ id: row.id }))))
+      .length > 0
+  )
 }
 
 async function taskRow(db: PersistenceDb, taskId: string) {
-  const { tasks } = tablesOf(db)
-  return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+  return (await readTaskFixtures(db, { id: taskId }))[0]!
 }
 
 describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）', (harness) => {

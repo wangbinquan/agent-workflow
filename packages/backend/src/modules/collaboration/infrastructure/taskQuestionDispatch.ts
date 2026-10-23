@@ -30,52 +30,32 @@
 // exclusion / dispatch-time trigger_run_id binding are GONE — the per-node queue model
 // (buildExternalFeedbackContext / markClarifyRoundsConsumedBy) replaces them.
 
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
+import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { isClarifyQuestionSealed } from '../domain/clarifyAnswers'
+import {
+  createNodeRunQueries,
+  createRunSelectionOracleSnapshot,
+  createRunHistorySnapshot,
+  type NodeRunDispatchFacts,
+} from '@/modules/task-execution/public/queries'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+
+import { decodeTaskSubject, isTurnEngineTaskSubject } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 // RFC-311 (audit L2-5) — this file's per-task run fetches never consume the
 // heavy columns (prompt_text, iso/inventory/startup JSON, pre-snapshots…), but
 // two of them run INSIDE the dispatch write transaction, so the big-TEXT
 // decode extended write-lock hold time. All four share this light projection;
 // the compiler flags any future consumer of a column missing here.
-function dispatchRunColumns(db: object) {
-  const { nodeRuns } = tablesOf(db)
-  return {
-    id: nodeRuns.id,
-    seq: nodeRuns.seq,
-    taskId: nodeRuns.taskId,
-    nodeId: nodeRuns.nodeId,
-    status: nodeRuns.status,
-    iteration: nodeRuns.iteration,
-    retryIndex: nodeRuns.retryIndex,
-    parentNodeRunId: nodeRuns.parentNodeRunId,
-    childTaskId: nodeRuns.childTaskId,
-    shardKey: nodeRuns.shardKey,
-    wgRound: nodeRuns.wgRound,
-    reviewIteration: nodeRuns.reviewIteration,
-    mergeState: nodeRuns.mergeState,
-    forceActivated: nodeRuns.forceActivated,
-    startedAt: nodeRuns.startedAt,
-    finishedAt: nodeRuns.finishedAt,
-    pid: nodeRuns.pid,
-    exitCode: nodeRuns.exitCode,
-    errorMessage: nodeRuns.errorMessage,
-    failureCode: nodeRuns.failureCode,
-    opencodeSessionId: nodeRuns.opencodeSessionId,
-    rerunCause: nodeRuns.rerunCause,
-    supersededByReview: nodeRuns.supersededByReview,
-    rolledBack: nodeRuns.rolledBack,
-  } as const
-}
-
-type DispatchRunRow = Pick<
-  PersistenceTables['nodeRuns']['$inferSelect'],
-  keyof ReturnType<typeof dispatchRunColumns>
->
+type DispatchRunRow = NodeRunDispatchFacts
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import {
   type CauseClass,
@@ -83,7 +63,6 @@ import {
   isDispatchedEntryConsumed,
 } from '@/services/clarifyRerunLedger'
 import { evaluateDesignerRerunReadiness } from '@/services/clarify/service'
-import { pickFreshestRun } from '@/services/freshness'
 import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
@@ -119,15 +98,12 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import {
-  compareNodeRunMintOrder,
   isClarifyChannelEdge,
-  isTurnEngineWorkgroupTask,
   type RunLineageView,
   type TaskActorRole,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { runIdsWithOutput } from './nodeRunOutputPresence'
-import { humanGateNodeProjectionMember } from '@/modules/task-execution/public/participants'
 
 const log = createLogger('task-questions.dispatch')
 
@@ -418,7 +394,7 @@ async function assertRequestedEntriesSealed(
   requested: TaskQuestionRow[],
 ): Promise<void> {
   const clarifyEntries = requested.filter((e) => e.sourceKind !== 'manual')
-  const unsealed = clarifyEntries.filter((e) => e.sealedAt === null)
+  const unsealed = clarifyEntries.filter((e) => !isClarifyQuestionSealed(undefined, e.sealedAt))
   if (unsealed.length === 0) return
   // The remaining (sealed_at NULL) entries may still be on a fully-answered round (full seal
   // backfills no per-entry sealed_at). Resolve those rounds; only entries on a non-answered
@@ -433,7 +409,7 @@ async function assertRequestedEntriesSealed(
     .from(clarifyRounds)
     .where(inArray(clarifyRounds.intermediaryNodeRunId, originIds))
   const answeredOrigins = new Set(
-    rounds.filter((r) => r.status === 'answered').map((r) => r.origin),
+    rounds.filter((r) => isClarifyQuestionSealed(r.status, null)).map((r) => r.origin),
   )
   const stillUnsealed = unsealed.filter((e) => !answeredOrigins.has(e.originNodeRunId))
   if (stillUnsealed.length > 0) {
@@ -869,24 +845,27 @@ async function dispatchTaskQuestionsLocked(
   },
   committedEventIdentity?: DispatchTaskQuestionsCommittedEventIdentity,
 ): Promise<DispatchTaskQuestionsResult> {
-  const { tasks, taskQuestions } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
   // 0. RFC-132 PR-B (universal deferred model): every task dispatches through this ONE path now
   //    (the route routes ALL clarify answers to autoDispatchClarifyRound → dispatchTaskQuestions).
   //    The legacy immediate-mint path is route-unreachable, so there is no double-mint risk to gate
   //    against; the `deferredQuestionDispatch` flag is no longer read. Only the not-found + terminal
   //    guards remain.
   const taskRow = (
-    await db
-      .select({
-        snapshot: tasks.workflowSnapshot,
-        status: tasks.status,
-        lifecycleEventRevision: tasks.lifecycleEventRevision,
-        workgroupId: tasks.workgroupId,
-        workgroupConfigJson: tasks.workgroupConfigJson,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
+    await createTaskGateQueries(db)
+      .listDispatchContexts([taskId])
+      .then((rows) =>
+        rows.map((row) => ({
+          snapshot: row.workflowSnapshot,
+          status: row.status,
+          lifecycleEventRevision: row.lifecycleEventRevision,
+          workgroupId: row.workgroupId,
+          workflowId: row.workflowId,
+          codeRoundId: row.codeRoundId,
+          sourceAgentName: row.sourceAgentName,
+          workgroupConfig: row.workgroupConfig,
+        })),
+      )
   )[0]
   if (taskRow === undefined) {
     throw new NotFoundError('task-not-found', `task ${taskId} not found`)
@@ -965,7 +944,7 @@ async function dispatchTaskQuestionsLocked(
   //     (e.g. a leader-round question borrow-reassigned onto the member node). Gated on the task
   //     actually being a turn-engine workgroup so an ordinary workflow with a coincidentally-named
   //     node is unaffected (P2). Fail-fast (reject the batch) rather than silently hijack.
-  if (isTurnEngineWorkgroupTask(taskRow)) {
+  if (isTurnEngineTaskSubject(decodeTaskSubject(taskRow), taskRow.workgroupConfig?.launch.mode)) {
     const toSharedMember = requested.filter((e) => effectiveTarget(e) === '__wg_member__')
     if (toSharedMember.length > 0) {
       const shardByEntry = await resolveEntryShardKeys(db, toSharedMember)
@@ -1240,23 +1219,25 @@ async function commitDispatchPlan(
     // read→plan→stamp pipeline) — see the wrapper above; this block runs lock-held.
     {
       await databaseSessionFor(db).transaction(async (tx) => {
-        const { tasks, taskQuestions, nodeRuns, nodeRunOutputs } = tablesOf(tx)
+        const { taskQuestions } = tablesOf(tx)
+        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
         // PostgreSQL READ COMMITTED 下「先 SELECT 再 CAS」要靠任务聚合根行锁在同任务的并发派发之间串行；
         // SQLite 的 BEGIN IMMEDIATE 本就全库独占（no-op）。
-        await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskId)
+        await taskHumanGate.lockTask(taskId)
         // (Codex re-gate H2): the terminal pre-check (assertTaskAcceptsQuestions, above) is a
         // TOCTOU window — the scheduler can trySetTaskStatus(done/canceled) between it and this
         // tx. Re-read tasks.status INSIDE the tx and roll back the WHOLE tx (no stamp, no mint)
         // if the task went terminal, so nothing is minted onto a finished task. Reuses the SAME
         // terminal set as the pre-check (no drift).
         const curTask = (
-          await tx
-            .select({
-              status: tasks.status,
-              lifecycleEventRevision: tasks.lifecycleEventRevision,
-            })
-            .from(tasks)
-            .where(eq(tasks.id, taskId))
+          await createTaskGateQueries(tx)
+            .listContexts([taskId])
+            .then((rows) =>
+              rows.map((row) => ({
+                status: row.status,
+                lifecycleEventRevision: row.lifecycleEventRevision,
+              })),
+            )
         )[0]
         if (curTask === undefined || QUESTION_DISPATCH_CLOSED_TASK_STATUSES.has(curTask.status)) {
           throw new ConflictError(
@@ -1353,24 +1334,16 @@ async function commitDispatchPlan(
         // — re-run BOTH ledger gates inside the tx so a concurrent dispatch / quick-channel answer
         // committed between the prechecks and here can't slip a double-mint past. Fetch the task's
         // runs + output ids ONCE for both.
-        const txRuns = await tx
-          .select(dispatchRunColumns(tx))
-          .from(nodeRuns)
-          .where(eq(nodeRuns.taskId, taskId))
+        const txRuns = await createNodeRunQueries(tx).listDispatchFacts({ taskId })
         const txOutputIds: ReadonlySet<string> =
           txRuns.length === 0
             ? new Set<string>()
             : new Set(
                 (
-                  await tx
-                    .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-                    .from(nodeRunOutputs)
-                    .where(
-                      inArray(
-                        nodeRunOutputs.nodeRunId,
-                        txRuns.map((r) => r.id),
-                      ),
-                    )
+                  await createNodeOutputQueries(tx)
+                    .runsWithOutput(txRuns.map((r) => r.id))
+                    .then((runIds) => [...runIds].map((nodeRunId) => ({ nodeRunId })))
+                    .then((rows) => rows.map((row) => ({ nodeRunId: row.nodeRunId })))
                 ).map((r) => r.nodeRunId),
               )
         // (a) RFC-128 P5-BC (R2-2, §5.2.12 contract 3): the in-flight recheck spans ANY deferred role
@@ -1392,7 +1365,7 @@ async function commitDispatchPlan(
           // node-wide. Sync-resolve the (possibly newly-appeared) in-flight entries' shards; reuse
           // the pre-tx `mintShardsByTarget` (built from dispatchEntries, which don't change).
           const txInflightShards = await resolveEntryShardKeys(tx, txDispatched)
-          const blocker = findOpenDispatchTarget(
+          const blocker = await findOpenDispatchTarget(
             affected,
             {
               entries: txDispatched,
@@ -1468,11 +1441,7 @@ async function commitDispatchPlan(
           const projectionRows =
             rerunNodeRunIds.length === 0
               ? []
-              : await tx
-                  .select()
-                  .from(nodeRuns)
-                  .where(inArray(nodeRuns.id, rerunNodeRunIds))
-                  .limit(rerunNodeRunIds.length)
+              : await createNodeRunQueries(tx).humanGateProjection(rerunNodeRunIds)
           const accepted = await acceptHumanGateDecisionTx(tx, {
             taskId,
             // Task-execution owns only the two runtime park kinds. Question
@@ -1480,9 +1449,7 @@ async function commitDispatchPlan(
             // its finer `questions` audit identity.
             gate: { kind: 'clarify', ref: decision.gateRef },
             expectedTaskRevision: decision.request.expectedTaskRevision,
-            expectedNodeProjection: humanGateNodeProjectionFence(
-              projectionRows.map(humanGateNodeProjectionMember),
-            ),
+            expectedNodeProjection: humanGateNodeProjectionFence(projectionRows),
             continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
             operationId: begun.operation.id,
             now,
@@ -1729,7 +1696,7 @@ interface OpenDispatchBlocker {
  * (Codex design-gate P2) — a never-run / all-done target no longer wedges the dispatch
  * (isDispatchedEntryConsumed §RFC-133).
  */
-function findOpenDispatchTarget(
+async function findOpenDispatchTarget(
   affected: ReadonlySet<string>,
   inputs: OpenDispatchInputs,
   /** cause this batch will mint per FRONTIER node; absent key = no mint on that node. */
@@ -1744,7 +1711,7 @@ function findOpenDispatchTarget(
   /** in-flight entry → its shard (asking_shard_key; manual → null). Required with mintShardsByTarget.
    *  Keyed by entry id (shard resolved by the caller from full rows). */
   shardOfEntry?: (e: { id: string }) => string | null,
-): OpenDispatchBlocker | null {
+): Promise<OpenDispatchBlocker | null> {
   const lineageViews: RunLineageView[] = inputs.runs.map((r) => ({
     id: r.id,
     seq: r.seq,
@@ -1804,13 +1771,11 @@ function findOpenDispatchTarget(
     //     ledger forever, round-4/5).
     //   • done/skipped/exhausted → finished, no obligation.
     // (openRun is also the surfaced blocker below.)
-    const freshestByShard = new Map<string | null, (typeof inputs.runs)[number]>()
-    for (const r of inputs.runs) {
-      if (r.nodeId !== target || r.parentNodeRunId !== null) continue
-      const k = r.shardKey ?? null
-      const cur = freshestByShard.get(k)
-      if (cur === undefined || compareNodeRunMintOrder(r, cur) > 0) freshestByShard.set(k, r)
-    }
+    const history = await createRunHistorySnapshot(
+      '',
+      inputs.runs.map((row) => ({ ...row, taskId: '' })),
+    ).familyHistory('', { nodeId: target }, { topLevelOnly: true })
+    const freshestByShard = new Map(history.map((row) => [row.shardKey, row]))
     const openRun = inputs.runs.find((r) => {
       if (r.nodeId !== target || r.parentNodeRunId !== null) return false
       if (r.status === 'pending' || r.status === 'running') return true
@@ -1822,7 +1787,7 @@ function findOpenDispatchTarget(
     })
     if (
       (nullOnMultiShardHost && openRun !== undefined) ||
-      !isDispatchedEntryConsumed(
+      !(await isDispatchedEntryConsumed(
         e,
         inputs.runs,
         lineageViews,
@@ -1831,7 +1796,7 @@ function findOpenDispatchTarget(
         // null collapses to shard-blind (undefined) → non-workgroup consumption is byte-identical to
         // today; a real member shard scopes the anchor lineage + run-obligation scan to that member.
         eShard === null ? undefined : eShard,
-      )
+      ))
     ) {
       // Best-effort blocker run: the open (non-done top-level) run on the target — present for
       // the run-obligation & bound-handler cases, absent for a pure cause-serialization block.
@@ -1860,7 +1825,7 @@ async function assertNoInFlightDispatch(
    *  does not block. `undefined` = shard-blind (pre-172b). See findOpenDispatchTarget. */
   mintShardsByTarget?: ReadonlyMap<string, ReadonlySet<string | null>>,
 ): Promise<void> {
-  const { taskQuestions, nodeRuns } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
   // RFC-128 P5-BC (R2-2, §5.2.12 contract 3): span ANY deferred role (self/questioner/designer),
   // not designer-only — a home with an in-flight self/questioner dispatch must block a later
   // designer dispatch (and vice-versa), or the same-home reruns double-mint (cross-batch
@@ -1878,10 +1843,7 @@ async function assertNoInFlightDispatch(
       ),
     )
   if (entries.length === 0) return
-  const runs = await db
-    .select(dispatchRunColumns(db))
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
+  const runs = await createNodeRunQueries(db).listDispatchFacts({ taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
@@ -1890,7 +1852,7 @@ async function assertNoInFlightDispatch(
   // when the batch is shard-aware (mintShardsByTarget provided) — else stay node-wide (golden-lock).
   const inflightShards =
     mintShardsByTarget !== undefined ? await resolveEntryShardKeys(db, entries) : undefined
-  const blocker = findOpenDispatchTarget(
+  const blocker = await findOpenDispatchTarget(
     affected,
     { entries, runs, outputRunIds },
     mintCauseByTarget,
@@ -2076,7 +2038,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
   iteration: number,
   workflowDef: WorkflowDefinition,
 ): Promise<LedgerResolution> {
-  const { taskQuestions, clarifyRounds, nodeRuns } = tablesOf(db)
+  const { taskQuestions, clarifyRounds } = tablesOf(db)
   // Control-channel DISPATCHED self/questioner entries (dispatched_at set). Include no-override
   // rows so a "borrow X + run self" mix on one home is DETECTED (P2-1), not first-picked, AND so
   // an OPEN RUN-SELF dispatch is counted as an open ledger (Codex impl-gate run-self fix).
@@ -2110,10 +2072,7 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
       ),
     )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
-  const runs = await db
-    .select(dispatchRunColumns(db))
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
+  const runs = await createNodeRunQueries(db).listDispatchFacts({ taskId })
   const runById = new Map(runs.map((r) => [r.id, r]))
   const outputRunIds = await runIdsWithOutput(
     db,
@@ -2135,13 +2094,16 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
   // OPEN (unconsumed) home entries at THIS loop iteration, matched via the asking run (P2-3),
   // consumed via the dispatched-entry lineage (isDispatchedEntryConsumed, same oracle the
   // read-side resolveDispatchedEntryHandler + park source use).
-  const open = homeEntries.filter((e) => {
-    const round = roundByOrigin.get(e.originNodeRunId)
-    if (round === undefined) return false
-    const askingRun = runById.get(round.askingNodeRunId)
-    if (askingRun === undefined || askingRun.iteration !== iteration) return false
-    return !isDispatchedEntryConsumed(e, runs, lineageViews, 'revivable')
-  })
+  const openFlags = await Promise.all(
+    homeEntries.map(async (e) => {
+      const round = roundByOrigin.get(e.originNodeRunId)
+      if (round === undefined) return false
+      const askingRun = runById.get(round.askingNodeRunId)
+      if (askingRun === undefined || askingRun.iteration !== iteration) return false
+      return !(await isDispatchedEntryConsumed(e, runs, lineageViews, 'revivable'))
+    }),
+  )
+  const open = homeEntries.filter((_, index) => openFlags[index])
   if (open.length === 0) return CLOSED_LEDGER
 
   const borrows = new Set(
@@ -2190,7 +2152,7 @@ async function resolveDesignerBorrowForNode(
   iteration: number,
   workflowDef: WorkflowDefinition,
 ): Promise<LedgerResolution> {
-  const { taskQuestions, nodeRuns } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
   const entries = await db
     .select()
     .from(taskQuestions)
@@ -2208,10 +2170,7 @@ async function resolveDesignerBorrowForNode(
   const candidates = entries.filter((e) => effectiveTarget(e) === nodeId)
   if (candidates.length === 0) return CLOSED_LEDGER
 
-  const runs = await db
-    .select(dispatchRunColumns(db))
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
+  const runs = await createNodeRunQueries(db).listDispatchFacts({ taskId })
   const outputRunIds = await runIdsWithOutput(
     db,
     runs.map((r) => r.id),
@@ -2229,22 +2188,26 @@ async function resolveDesignerBorrowForNode(
     parentNodeRunId: r.parentNodeRunId,
     shardKey: r.shardKey ?? null, // RFC-172b T1
   }))
-  const openCandidates = candidates
-    .slice()
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .filter((e) => !isDispatchedEntryConsumed(e, runs, lineageViews, 'revivable'))
-  if (openCandidates.length === 0) return CLOSED_LEDGER
+  const openCandidates = candidates.slice().sort((a, b) => a.id.localeCompare(b.id))
+
+  const consumedFlags = await Promise.all(
+    openCandidates.map(
+      async (e) => await isDispatchedEntryConsumed(e, runs, lineageViews, 'revivable'),
+    ),
+  )
+  const unconsumedCandidates = openCandidates.filter((_, index) => !consumedFlags[index])
+  if (unconsumedCandidates.length === 0) return CLOSED_LEDGER
   // The dispatch per-home single-borrow gate (dispatchTaskQuestions step 4a) ensures the open
   // designer entries on a home agree on ONE handler (one rerun runs one agent). Pick the borrowed
   // one if any (else all run-self → null). The ledger is OPEN either way.
-  const borrowEntry = openCandidates.find((e) => isBorrowHomeFor(e, nodeId))
+  const borrowEntry = unconsumedCandidates.find((e) => isBorrowHomeFor(e, nodeId))
   const borrowNode = borrowEntry?.overrideTargetNodeId ?? null
   return {
     open: true,
     borrowAgentName: borrowNode === null ? null : resolveNodeAgentName(workflowDef, borrowNode),
     // RFC-139 ②: open BOUND entries' triggers = this ledger's handler-chain anchors (queued → none).
     anchorRunIds: new Set(
-      openCandidates.map((e) => e.triggerRunId).filter((id): id is string => id !== null),
+      unconsumedCandidates.map((e) => e.triggerRunId).filter((id): id is string => id !== null),
     ),
   }
 }
@@ -2311,11 +2274,11 @@ async function assertDesignerReady(
   // the rounds of a nested loop's different outer rounds never gate (or satisfy)
   // each other.
   const originFrames = new Map<string, string | null>()
-  const { nodeRuns } = tablesOf(db)
-  for (const row of await db
-    .select({ id: nodeRuns.id, seq: nodeRuns.seq, containerRunId: nodeRuns.containerRunId })
-    .from(nodeRuns)
-    .where(inArray(nodeRuns.id, [...dispatchedOrigins]))) {
+  for (const row of await createNodeRunQueries(db).listFields({ runIds: [...dispatchedOrigins] }, [
+    'id',
+    'seq',
+    'containerRunId',
+  ])) {
     originFrames.set(row.id, row.containerRunId)
   }
   const frames = new Map<string, { loopIter: number; containerRunId: string | null }>()
@@ -2378,15 +2341,19 @@ export async function buildFrontierMintPlan(
   // member inheritance set and regress it to `unsafe-dispatch-target`.
   shardKey: string | null | undefined,
 ): Promise<FrontierMintPlan> {
-  const { nodeRuns } = tablesOf(db)
-  const targetRuns = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, targetNodeId)))
-  // Scope the inheritance source + retry-index lineage to this shard (member); undefined = all.
-  const scoped =
-    shardKey === undefined ? targetRuns : targetRuns.filter((r) => r.shardKey === shardKey)
-  const last = pickFreshestRun(scoped, { topLevelOnly: false })
+  const targetRuns = await createNodeRunQueries(db).listWithCheckpoints({
+    taskId,
+    nodeId: targetNodeId,
+  })
+  const history = await createRunSelectionOracleSnapshot(targetRuns, {
+    scope: { kind: 'rows' },
+  }).familyHistory(taskId, {
+    nodeId: targetNodeId,
+    ...(shardKey === undefined ? {} : { shardKey }),
+  })
+  const byId = new Map(targetRuns.map((row) => [row.id, row]))
+  const scoped = history.map((ref) => byId.get(ref.id)!)
+  const last = scoped.at(-1)
   if (last === undefined) {
     throw new ConflictError(
       TASK_QUESTION_CONFLICT.unsafeDispatchTarget,
@@ -2404,6 +2371,7 @@ export async function buildFrontierMintPlan(
   const agentOverrideId =
     borrowOverrideNodeId === null ? null : resolveNodeAgentId(definition, borrowOverrideNodeId)
   const input: NodeRunMintInput = {
+    ...deriveNodeRunRole({ nodeId: targetNodeId, rerunCause: cause }),
     id: preId,
     taskId,
     nodeId: targetNodeId,
@@ -2411,13 +2379,26 @@ export async function buildFrontierMintPlan(
     cause,
     retryIndex,
     iteration: last.iteration,
-    inheritFrom: last,
+    inheritFrom: {
+      reviewIteration: last.reviewIteration,
+      shardKey: last.shardKey,
+      parentNodeRunId: last.parentNodeRunId,
+      containerRunId: last.containerRunId,
+      checkpointInheritance: last.checkpointInheritance,
+      continuationSlotKey: last.continuationSlotKey,
+      lineageSlotPathJson: last.lineageSlotPathJson,
+      operationGeneration: last.operationGeneration,
+    },
     // RFC-172: overwrite shard_key only for a shard-scoped (member) mint; undefined inherits `last`.
     overrides: {
-      startedAt: null,
-      agentOverrideName,
-      agentOverrideId,
-      ...(shardKey !== undefined ? { shardKey } : {}),
+      identity: {
+        startedAt: null,
+        ...(shardKey !== undefined ? { shardKey } : {}),
+      },
+      config: {
+        agentOverrideName,
+        agentOverrideId,
+      },
     },
   }
   return {

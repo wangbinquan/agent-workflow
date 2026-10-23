@@ -48,18 +48,6 @@ describe('RFC-349 Intent and Integration maintenance ports', () => {
           removed.push(turnId)
         },
       },
-      intentApplies: {
-        async converge(input) {
-          expect(input.activeJournalIds).toEqual(['intent-active'])
-          return { failed: 1, rolledForward: 2 }
-        },
-      },
-      resourcePackages: {
-        async converge(input) {
-          expect(input.activeApplyIds).toEqual(['bundle-active'])
-          return { failed: 3, rolledForward: 4 }
-        },
-      },
     })
 
     await expect(commands.scratch.sweep({ retentionHours: 1, now: 3_610_000 })).resolves.toEqual({
@@ -76,13 +64,9 @@ describe('RFC-349 Intent and Integration maintenance ports', () => {
     await expect(
       commands.recovery.recover({
         recoverTurnIds: ['turn-orphan'],
-        activeIntentApplyJournalIds: ['intent-active'],
-        activeBundleApplyIds: ['bundle-active'],
         now: 20_000,
       }),
     ).resolves.toEqual({
-      failed: 4,
-      rolledForward: 6,
       queuedWorkingSets: 1,
       orphanedTurns: 1,
       queuedSessionIds: ['queued-session'],

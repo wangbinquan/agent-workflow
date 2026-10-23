@@ -145,7 +145,17 @@ describe('RFC-345 provider-neutral Digital Employee Agent template catalog', () 
     // builtin 模版的写面判据：系统 owner + builtin 双条件定位、更新走 updatedAt + aclRevision 双 OCC，
     // 唯一冲突经能力矩阵映射（不认某一个方言的约束名）。
     expect(repository).toContain('runResourceCatalogTransaction(db, async (transaction) =>')
-    expect(repository).toContain("visibility: 'public', builtin: true")
+    expect(repository).toMatch(
+      /createAgentReferenceWriteParticipant\(transaction\)\.insert\(\{\s*id: input.id,\s*agent: input.definition,\s*ownerUserId: SYSTEM_USER_ID,\s*now: Date.now\(\),\s*visibility: 'public',\s*builtin: true,/,
+    )
+    expect(repository).toMatch(
+      /createAgentReferenceWriteParticipant\(transaction\)\.update\(\{[\s\S]*?ownerUserId: SYSTEM_USER_ID,\s*builtin: true,\s*expectedUpdatedAt: input.expectedUpdatedAt,\s*expectedAclRevision: input.expectedAclRevision,/,
+    )
+    const writer = resourceCatalogSource('infrastructure/agentReferenceWrite.ts')
+    expect(writer).toContain('eq(agents.ownerUserId, input.ownerUserId)')
+    expect(writer).toContain('eq(agents.builtin, input.builtin)')
+    expect(writer).toContain('eq(agents.updatedAt, input.expectedUpdatedAt)')
+    expect(writer).toContain('eq(agents.aclRevision, input.expectedAclRevision)')
     expect(repository).toContain('eq(agents.ownerUserId, SYSTEM_USER_ID)')
     expect(repository).toContain('eq(agents.builtin, true)')
     expect(repository).toContain('eq(agents.updatedAt, input.expectedUpdatedAt)')

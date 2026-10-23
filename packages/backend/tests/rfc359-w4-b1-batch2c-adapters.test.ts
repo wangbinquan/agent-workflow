@@ -3,8 +3,17 @@
 // 现在同走 `ownedTaskExecution.ts` 的统一写事务 + 围栏）与不活跃超时持久化（两个具名工厂退为别名）。
 // 围栏规则两引擎同一：显式上下文 > 环境上下文 > 无主围栏（仅 `claimed` 的活 owner 拒绝无主写入）。
 
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  readNodeRunFixtures,
+  readTaskRepoFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -43,8 +52,7 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -52,7 +60,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -114,11 +122,10 @@ async function ownerRevision(db: PersistenceDb, taskId: string): Promise<number 
 async function seedRun(
   db: PersistenceDb,
   taskId: string,
-  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  over: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n',
@@ -180,12 +187,11 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— 调度器收尾读写', (harne
   test('recordReadonlyDirty：显式上下文按 token 围栏；无上下文且 owner claimed ⇒ 拒绝', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const { taskRepos } = tablesOf(db)
-    await insertOne(db, taskRepos, {
+    await taskRepoFixture(db, {
       taskId,
       repoIndex: 0,
       repoPath: '/tmp/repo',
-      worktreeDirName: 'repo',
+      mountPath: 'repo',
       worktreePath: `/tmp/worktree/${taskId}/repo`,
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
@@ -208,10 +214,9 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— 调度器收尾读写', (harne
     await runWithTaskExecutionContext(context, () =>
       persistence.recordReadonlyDirty({ taskId, repoIndex: 0, changedCount: 4, now: 4 }),
     )
-    const rows = await db
-      .select({ dirty: taskRepos.readonlyDirtyCount })
-      .from(taskRepos)
-      .where(eq(taskRepos.taskId, taskId))
+    const rows = await readTaskRepoFixtures(db, { taskId }).then((rows) =>
+      rows.map((row) => ({ dirty: row.readonlyDirtyCount })),
+    )
     expect(rows[0]?.dirty).toBe(4)
     expect(await ownerRevision(db, taskId)).toBe(3)
   })
@@ -225,7 +230,8 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— 调度器收尾读写', (harne
     await seedRun(db, taskId, { status: 'done', nodeId: 'other' })
     const persistence = new DrizzleSchedulerCompletionPersistence(db)
     expect(await persistence.listDoneNodeRuns({ taskId, nodeId: 'n', iteration: 0 })).toEqual([
-      { seq: null, id: done, parentNodeRunId: null, status: 'done' },
+      // RFC-395 II-a A1: this is the first allocated run in the fresh provider fixture.
+      { seq: 1, id: done, parentNodeRunId: null, status: 'done' },
     ])
   })
 })
@@ -320,11 +326,9 @@ describeEachProvider('RFC-359 W4-B1 批 2c —— wrapper run 持久化', (harne
       code: 'task-execution-stale-owner',
     })
     await persistence.clearReuseDisabled({ nodeRunId: running, executionContext: context })
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select({ progress: nodeRuns.wrapperProgressJson })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, running))
+    const rows = await readNodeRunFixtures(db, { id: running }).then((rows) =>
+      rows.map((row) => ({ progress: row.wrapperProgressJson })),
+    )
     expect(JSON.parse(rows[0]?.progress ?? '{}')).toEqual({
       kind: 'fanout',
       phase: 'inner-running',

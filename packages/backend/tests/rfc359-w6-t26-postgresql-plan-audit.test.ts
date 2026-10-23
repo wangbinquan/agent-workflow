@@ -44,6 +44,13 @@
 // 不存在）。索引补齐后 PG 的计划会变，所以下面每条结论都只对**这个 schema 状态**成立；
 // 下面第一个 describe 用「SQLite 有的具名索引 PG 必须也有」把这个状态本身钉住。
 
+import {
+  type TaskFixtureSpec,
+  type TaskRepoFixtureSpec,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
@@ -205,8 +212,7 @@ function actorOf(id: string, role: 'admin' | 'user' = 'admin'): Actor {
  * 那条 CTE 才回到生产形状（实测：默认视图首页从 33ms 涨到 85ms，缺陷这才现形）。
  */
 async function seedAuditCorpus(db: PersistenceDb, n: number): Promise<void> {
-  const { users, workflows, tasks, taskRepos, cachedRepos, developmentMissions, lifecycleAlerts } =
-    tablesOf(db)
+  const { users, cachedRepos, developmentMissions, lifecycleAlerts } = tablesOf(db)
   await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
@@ -215,10 +221,10 @@ async function seedAuditCorpus(db: PersistenceDb, n: number): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'nightly', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'nightly', definition: '{}' })
 
-  const taskRows: PersistenceTables['tasks']['$inferInsert'][] = []
-  const repoRows: PersistenceTables['taskRepos']['$inferInsert'][] = []
+  const taskRows: TaskFixtureSpec[] = []
+  const repoRows: TaskRepoFixtureSpec[] = []
   const cacheRows: PersistenceTables['cachedRepos']['$inferInsert'][] = []
   const missionRows: PersistenceTables['developmentMissions']['$inferInsert'][] = []
   const alertRows: PersistenceTables['lifecycleAlerts']['$inferInsert'][] = []
@@ -295,8 +301,8 @@ async function seedAuditCorpus(db: PersistenceDb, n: number): Promise<void> {
   }
   const batch = 300
   for (let offset = 0; offset < taskRows.length; offset += batch) {
-    await db.insert(tasks).values(taskRows.slice(offset, offset + batch))
-    await db.insert(taskRepos).values(repoRows.slice(offset, offset + batch))
+    await taskFixture(db, taskRows.slice(offset, offset + batch))
+    await taskRepoFixture(db, repoRows.slice(offset, offset + batch))
     await db.insert(cachedRepos).values(cacheRows.slice(offset, offset + batch))
     await db.insert(developmentMissions).values(missionRows.slice(offset, offset + batch))
   }

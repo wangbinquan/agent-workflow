@@ -63,7 +63,7 @@ import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { ResourcePackageApplyArtifactRecoveryPort } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
-import { createSqliteResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
+import { createLegacyResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery'
 import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 import { opStagedDir } from '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 import {
@@ -191,7 +191,7 @@ describeEachProvider(
     function recoveryFor(appHome: string): ResourcePackageApplyArtifactRecoveryPort {
       const pluginsDir = join(appHome, 'plugins')
       return sqliteSide()
-        ? createSqliteResourcePackageApplyArtifactRecovery({
+        ? createLegacyResourcePackageApplyArtifactRecovery({
             db: harness.db as unknown as DbClient,
             appHome,
             pluginsDir,

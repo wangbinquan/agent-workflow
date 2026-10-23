@@ -62,7 +62,7 @@ describe('RFC-287 G7 — worktree-files 路由挡住「还没有工作树」', (
       resolve(import.meta.dir, '..', 'src', 'routes', 'worktree-files.ts'),
       'utf8',
     )
-    const guard = src.indexOf("task.worktreePath === ''")
+    const guard = src.indexOf('isTaskWorkspaceUnbound(task.worktreePath)')
     const useRoot = src.indexOf('resolve(task.worktreePath)')
     expect(guard, 'worktree-files 应有空 worktreePath 守卫').toBeGreaterThan(-1)
     expect(useRoot).toBeGreaterThan(-1)

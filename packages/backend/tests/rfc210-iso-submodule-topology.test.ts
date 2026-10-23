@@ -91,7 +91,7 @@ async function canonWithSubmodule(): Promise<{ canon: string; host: string; pool
 }
 
 function canonRepo(dir: string): CanonRepo {
-  return { repoPath: dir, worktreePath: dir, worktreeDirName: '', baseBranch: 'main' }
+  return { repoPath: dir, worktreePath: dir, mountPath: '', baseBranch: 'main' }
 }
 
 describe('RFC-210 iso submodule topology', () => {

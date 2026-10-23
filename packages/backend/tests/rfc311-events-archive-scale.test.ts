@@ -7,7 +7,7 @@
 // L3-4). This file pins the rewrite: range deletes in bounded batches, a
 // per-run incremental high-water scan, and a per-tick row budget.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -24,7 +24,7 @@ type Db = PersistenceDb
 
 async function seedRun(db: Db, taskId: string, runId: string): Promise<void> {
   const now = 1_788_278_400_000
-  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -36,13 +36,14 @@ async function seedRun(db: Db, taskId: string, runId: string): Promise<void> {
       updatedAt: now,
     })
     .onConflictDoNothing()
-  await db
-    .insert(workflows)
-    .values({ id: 'wf1', name: 'wf', definition: '{"nodes":[],"edges":[],"inputs":[]}' })
-    .onConflictDoNothing()
-  await db
-    .insert(tasks)
-    .values({
+  await workflowFixture(
+    db,
+    { id: 'wf1', name: 'wf', definition: '{"nodes":[],"edges":[],"inputs":[]}' },
+    { onConflict: 'ignore' },
+  )
+  await taskFixture(
+    db,
+    {
       id: taskId,
       name: taskId,
       workflowId: 'wf1',
@@ -57,9 +58,10 @@ async function seedRun(db: Db, taskId: string, runId: string): Promise<void> {
       finishedAt: 200,
       runningMs: 0,
       ownerUserId: 'u1',
-    })
-    .onConflictDoNothing()
-  await insertOne(db, nodeRuns, {
+    },
+    { onConflict: 'ignore' },
+  )
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'n1',

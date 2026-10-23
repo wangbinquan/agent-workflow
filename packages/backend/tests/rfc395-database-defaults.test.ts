@@ -1,11 +1,11 @@
 // RFC-395 I-b: native INSERT omission must use database defaults identical to every declared contract column.
+import { agentFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { rawRows } from '@/platform/persistence/queryHelpers'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { normalizeSqlText } from './helpers/schemaReconciliation'
 
@@ -117,11 +117,11 @@ describeEachProvider('RFC-395 I-b database defaults equal contract defaults', (h
   }, 180_000)
 
   test('native omitted values and explicitly provided null retain distinct meanings', async () => {
-    const { agents } = tablesOf(harness.db)
-    const [row] = await harness.db
-      .insert(agents)
-      .values({ id: 'rfc395_defaults', name: 'defaults', ownerUserId: null })
-      .returning()
+    const [row] = await agentFixture(harness.db, {
+      id: 'rfc395_defaults',
+      name: 'defaults',
+      ownerUserId: null,
+    })
     expect(row?.syncOutputsOnIterate).toBe(true)
     expect(row?.ownerUserId).toBeNull()
     expect(row?.createdAt).toBeGreaterThan(0)

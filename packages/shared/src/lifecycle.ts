@@ -421,6 +421,10 @@ export function allowedFromForTaskEvent(ev: TaskTransitionEvent): readonly TaskS
  */
 export type TaskWorkspacePhase = 'preparing' | 'available' | 'pruning' | 'pruned'
 
+export function isTaskWorkspaceUnbound(rootRef: string | null): boolean {
+  return rootRef === null || rootRef === ''
+}
+
 export function taskWorkspacePhase(row: {
   readonly worktreePath: string
   readonly workspacePruningAt: number | null
@@ -433,7 +437,7 @@ export function taskWorkspacePhase(row: {
   if (row.workspacePruningAt !== null) return 'pruning'
   // 空路径 + 无墓碑 + **确有准备行** = RFC-287 G7 的准备阶段。
   // 少了最后一条，存量物化失败行会被谎报成「准备未完成」并劝人去重试准备。
-  if (row.worktreePath === '' && row.hasRepoPrepRow) return 'preparing'
+  if (isTaskWorkspaceUnbound(row.worktreePath) && row.hasRepoPrepRow) return 'preparing'
   return 'available'
 }
 

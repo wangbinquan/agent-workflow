@@ -1,13 +1,16 @@
 // RFC-387: validate the persisted preparation attempt, atomically admit, then drive in the background.
+import { createNodeRunQueries } from './nodeRunQueries'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { decodeRequestedSource } from './taskRepositorySurface'
+import { taskRequestedSourceColumns, taskWorkspaceUnboundSql } from './taskRepositorySql'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   REPO_PREP_NODE_ID,
   StartTaskSchema,
   type StartTask,
   type TaskStatus,
 } from '@agent-workflow/shared'
-import { and, desc, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
@@ -77,13 +80,14 @@ function parseInputs(raw: string): Record<string, string> {
 }
 
 function retryPreparationInput(task: TaskRow): StartTask {
+  const requestedSource = decodeRequestedSource(task)
   const source =
-    task.repoGroupId !== null && task.repoGroupId.length > 0
-      ? { repoGroupId: task.repoGroupId }
-      : task.cachedRepoId !== null && task.cachedRepoId.length > 0
+    requestedSource.repoGroupId !== null && requestedSource.repoGroupId.length > 0
+      ? { repoGroupId: requestedSource.repoGroupId }
+      : requestedSource.cachedRepoId !== null && requestedSource.cachedRepoId.length > 0
         ? {
-            cachedRepoId: task.cachedRepoId,
-            ...(task.baseBranch === '' ? {} : { ref: task.baseBranch }),
+            cachedRepoId: requestedSource.cachedRepoId,
+            ...(requestedSource.requestedRef === '' ? {} : { ref: requestedSource.requestedRef }),
           }
         : null
   if (source === null) {
@@ -119,7 +123,7 @@ async function loadRetrySnapshot(
   dependencies: RepositoryPreparationRetryDependencies,
   taskId: string,
 ): Promise<{ readonly task: TaskRow; readonly prep: PrepRow }> {
-  const { tasks, nodeRuns } = tablesOf(dependencies.db)
+  const { tasks } = tablesOf(dependencies.db)
   const rows = await dependencies.db
     .select({
       id: tasks.id,
@@ -137,10 +141,8 @@ async function loadRetrySnapshot(
       gitUserEmail: tasks.gitUserEmail,
       workingBranch: tasks.workingBranch,
       autoCommitPush: tasks.autoCommitPush,
-      cachedRepoId: tasks.cachedRepoId,
-      repoGroupId: tasks.repoGroupId,
+      ...taskRequestedSourceColumns(dependencies.db),
       worktreePath: tasks.worktreePath,
-      baseBranch: tasks.baseBranch,
       lifecycleEventRevision: tasks.lifecycleEventRevision,
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePrunedAt: tasks.workspacePrunedAt,
@@ -164,7 +166,7 @@ async function loadRetrySnapshot(
       `task '${taskId}' is ${task.status}; repository preparation cannot be retried`,
     )
   }
-  if (task.worktreePath !== '') {
+  if (!isTaskWorkspaceUnbound(task.worktreePath)) {
     throw new ConflictError(
       'repo-prep-already-complete',
       `task '${taskId}' already has a materialized workspace`,
@@ -184,18 +186,19 @@ async function loadRetrySnapshot(
       `task '${taskId}' is fenced by its source termination`,
     )
   }
-  const prepRows = await dependencies.db
-    .select({ id: nodeRuns.id, retryIndex: nodeRuns.retryIndex, status: nodeRuns.status })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-    .orderBy(
-      desc(nodeRuns.retryIndex),
-      engineOf(dependencies.db).descNullsLast(nodeRuns.seq),
-      desc(nodeRuns.id),
-    )
-    .limit(1)
-  const prep = prepRows[0]
-  if (prep === undefined) {
+  const prep =
+    (
+      await createNodeRunQueries(dependencies.db).listFields(
+        {
+          taskId,
+          nodeId: REPO_PREP_NODE_ID,
+          order: 'retry-desc',
+          limit: 1,
+        },
+        ['id', 'status', 'retryIndex'],
+      )
+    )[0] ?? null
+  if (prep === null) {
     throw new ConflictError(
       'repo-prep-run-missing',
       `task '${taskId}' has no repository-preparation attempt to retry`,
@@ -239,7 +242,7 @@ async function admitRetry(
           eq(tasks.id, snapshot.task.id),
           eq(tasks.status, snapshot.task.status),
           eq(tasks.lifecycleEventRevision, snapshot.task.lifecycleEventRevision),
-          eq(tasks.worktreePath, ''),
+          taskWorkspaceUnboundSql(tasks.worktreePath),
           isNull(tasks.workspacePruningAt),
           isNull(tasks.workspacePrunedAt),
           isNull(tasks.sourceTerminationFence),

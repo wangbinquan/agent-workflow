@@ -1,6 +1,7 @@
 // RFC-395 II-pre：hosted 工件恢复改接生产 journal convergence，保留远端内容断言。
 // Real Intent resource commits, durable recovery and the worker envelope share
 // selected content owners. Neither provider is allowed to touch a local root.
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -10,7 +11,7 @@ import { INTENT_CHANGESET_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
-import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
+import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import {
   composeCrewStationIntentArtifacts,
   composeCrewStationIntentPluginRetention,
@@ -179,13 +180,15 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
     expect((await harness.db.select().from(intentApplyJournal))[0]!.state).toBe('committed')
     held = true
     const cold = create()
-    const convergence = composeIntentApplyConvergence({
-      db: harness.db,
-      appHome: 'must-not-access-local-content',
-      pluginsDir: 'must-not-access-local-plugins',
-      content: composeCrewStationIntentArtifacts(cold.intent).artifactContent,
-    })
-    await convergence.converge({ activeJournalIds: [] })
+    const convergence = createAtomicApplyRecovery([
+      composeIntentApplyRecoveryScene({
+        db: harness.db,
+        appHome: 'must-not-access-local-content',
+        pluginsDir: 'must-not-access-local-plugins',
+        content: composeCrewStationIntentArtifacts(cold.intent).artifactContent,
+      }),
+    ])
+    await convergence.converge({ intent: [] })
     expect(
       (await readTree(harness.db, skill.id, LIVE_TREE)).some(
         (file) => file.path === 'helper.txt' && Buffer.from(file.bytes).toString() === 'persisted',

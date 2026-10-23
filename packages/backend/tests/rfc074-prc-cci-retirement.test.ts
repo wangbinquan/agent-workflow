@@ -19,7 +19,7 @@
 // column. The `__clarify_iteration__` prompt PLACEHOLDER is a public agent
 // protocol token, unrelated to the node_runs column, and is also allowed.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
@@ -40,7 +40,10 @@ const SRC_ROOTS = [
 
 type Row = PersistenceTables['nodeRuns']['$inferSelect']
 function row(id: string): Row {
-  return { id } as unknown as Row
+  return {
+    seq: null,
+    id,
+  } as unknown as Row
 }
 
 function walkSourceFiles(root: string): string[] {
@@ -76,11 +79,18 @@ describe('RFC-074 PR-C — isFresherNodeRun pure-id ordering (C1-C4)', () => {
     // Even a row that would have had a higher cci/retry loses if its id is
     // smaller — there is no longer any axis above id.
     const earlierButHigherCounters = {
+      seq: null,
+
       id: '01A',
       clarifyIteration: 9,
       retryIndex: 9,
     } as unknown as Row
-    const laterFreshRerun = { id: '02B', clarifyIteration: 0, retryIndex: 0 } as unknown as Row
+    const laterFreshRerun = {
+      seq: null,
+      id: '02B',
+      clarifyIteration: 0,
+      retryIndex: 0,
+    } as unknown as Row
     expect(isFresherNodeRun(laterFreshRerun, earlierButHigherCounters)).toBe(true)
   })
 
@@ -113,15 +123,14 @@ describeEachProvider(
   'RFC-074 PR-C — node_run round-trips without the cci column (C10)',
   (harness) => {
     async function seedWorkflowTask(db: PersistenceDb): Promise<string> {
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: 'wf1',
         name: 'w',
         description: '',
         definition: '{}',
         version: 1,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: 'task1',
         name: 't',
         workflowId: 'wf1',
@@ -141,7 +150,7 @@ describeEachProvider(
       const db = harness.db
       const taskId = await seedWorkflowTask(db)
       const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: '01ROW',
         taskId,
         nodeId: 'n',
@@ -149,7 +158,7 @@ describeEachProvider(
         retryIndex: 0,
         iteration: 0,
         reviewIteration: 0,
-        consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }),
+        consumedEdges: [{ producerNodeId: 'up', producerRunId: '01UP' }],
       })
       const got = (await db.select().from(nodeRuns).limit(1))[0]
       expect(got?.id).toBe('01ROW')

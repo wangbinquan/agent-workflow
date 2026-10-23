@@ -8,6 +8,7 @@
 // 这里把校验、宿主快照合成、结果投影、取消语义写一次；provider 只出现在两件事上：
 // 「怎么启动一个借用工作区的宿主任务」与「怎么取消它」——由 `ActionExecutionEnvironment` 注入。
 
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
@@ -16,21 +17,16 @@ import { ulid } from 'ulid'
 
 import {
   isTerminalTaskStatus,
-  serializeWorkflowDefinitionStorageV1,
   ScriptNodeSchema,
-  WORKFLOW_SCHEMA_VERSION,
   type TaskStatus,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
-import { initialBuiltinResourceAcl } from '@/services/resourceAcl'
 import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
 import { sha256Hex } from '@/util/hash'
 import {
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME,
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
   synthesizeDigitalEmployeeHostSnapshot,
@@ -175,27 +171,6 @@ function parseScriptRef(value: string): { workflowId: string; digest: string } |
   if (at <= 0) return null
   const digest = value.slice(at + 1)
   return /^[0-9a-f]{64}$/.test(digest) ? { workflowId: value.slice(0, at), digest } : null
-}
-
-/** 数字员工宿主工作流的幂等播种（RFC-310）。两个引擎同一条 upsert。 */
-export async function ensureDigitalEmployeeHostWorkflow(db: PersistenceDb): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await db
-    .insert(workflows)
-    .values({
-      id: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-      name: DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME,
-      description: 'RFC-310 digital-employee attempt anchor — do not launch directly',
-      definition: serializeWorkflowDefinitionStorageV1({
-        $schema_version: WORKFLOW_SCHEMA_VERSION,
-        inputs: [],
-        nodes: [],
-        edges: [],
-      }),
-      ...initialBuiltinResourceAcl(null),
-      builtin: true,
-    })
-    .onConflictDoNothing({ target: workflows.id })
 }
 
 /** 共享的工作区 / 输入挂载前置校验（经所选工作区实现查存在性 + 纯函数）。 */
@@ -343,7 +318,6 @@ export function createAgentActionExecutionRunner(
         )
       }
 
-      await ensureDigitalEmployeeHostWorkflow(env.db)
       let executionRef: string
       try {
         executionRef = await env.launchHostTask({
@@ -404,13 +378,11 @@ export function createScriptActionExecutionRunner(
           'scriptRef must be workflow-id@definition-sha256',
         )
       }
-      const { workflows } = tablesOf(env.db)
+
       const row = (
-        await env.db
-          .select({ definition: workflows.definition })
-          .from(workflows)
-          .where(eq(workflows.id, parsedRef.workflowId))
-          .limit(1)
+        await createWorkflowExecutionQueries(env.db)
+          .documents([parsedRef.workflowId], true)
+          .then((rows) => rows.map((row) => ({ definition: row.definition })))
       )[0]
       if (row === undefined || sha256Hex(row.definition) !== parsedRef.digest) {
         return fail(
@@ -450,7 +422,6 @@ export function createScriptActionExecutionRunner(
         )
       }
 
-      await ensureDigitalEmployeeHostWorkflow(env.db)
       let executionRef: string
       try {
         executionRef = await env.launchHostTask({

@@ -13,8 +13,7 @@
 //   ② **两侧 composition 都必须交出 `inspectHumanReview`**——这是那条分叉的源头，
 //      少了任何一侧，PG 上的闸门就又会退回推断。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -35,14 +34,13 @@ async function seedExecution(
   opts: { readonly planPrompt: boolean },
 ): Promise<string> {
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
   })
   const taskId = `task_${ulid()}`
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -61,8 +59,7 @@ async function seedExecution(
 }
 
 async function seedReviewRun(db: PersistenceDb, taskId: string, status: string): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
@@ -148,7 +145,6 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
-      hostWorkflow: null as never,
       tasks: null as never,
       readModels: null as never,
       resourceUsage: null as never,

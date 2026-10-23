@@ -1,3 +1,4 @@
+import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   collectWorkflowCallRefs,
@@ -93,7 +94,7 @@ export function createWorkflowValidationPort(input: {
           input.db.select().from(skills),
           input.db.select().from(mcps),
           input.db.select().from(plugins),
-          input.db.select().from(workflows),
+          input.db.select().from(workflows).where(workflowCatalogPredicate(workflows.id)),
           input.db.select({ name: workgroups.name }).from(workgroups),
         ])
       const availableSkills: Skill[] = []
@@ -168,7 +169,12 @@ async function loadAdmissionRows(
           visibility: workflows.visibility,
         })
         .from(workflows)
-        .where(inArray(domain === 'id' ? workflows.id : workflows.name, selected))
+        .where(
+          workflowCatalogPredicate(
+            workflows.id,
+            inArray(domain === 'id' ? workflows.id : workflows.name, selected),
+          ),
+        )
     case 'workgroup':
       return db
         .select({

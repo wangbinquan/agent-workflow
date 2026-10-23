@@ -20,6 +20,7 @@
 // 只有一份实现之后，PostgreSQL 侧的同一组契约由共享场景在真库上覆盖
 // （`rfc357-postgresql-page.integration.test.ts`），不必也不该在这里再假造一个 provider。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TASK_LIST_VIEWS, type TaskOperationsFacets, type TaskStatus } from '@agent-workflow/shared'
@@ -70,7 +71,7 @@ async function catalogSource(db: Db): Promise<TaskCatalogSource> {
 }
 
 async function seed(db: Db): Promise<void> {
-  const { users, workflows, tasks, lifecycleAlerts } = tablesOf(db)
+  const { users, lifecycleAlerts } = tablesOf(db)
   await insertOne(db, users, {
     id: 'catalog-admin',
     username: 'catalog-admin',
@@ -80,7 +81,7 @@ async function seed(db: Db): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -89,7 +90,7 @@ async function seed(db: Db): Promise<void> {
   for (const [index, row] of FIXTURE.entries()) {
     startedAt += 1000
     const id = `task-${String(index + 1).padStart(3, '0')}`
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id,
       name: `task ${index + 1}`,
       workflowId: 'wf1',
@@ -108,7 +109,6 @@ async function seed(db: Db): Promise<void> {
       branchStartedAt: startedAt,
       rootTaskId: id,
       catalogVisibility: 'public',
-      repoCount: 1,
     })
     for (let alert = 0; alert < (row.alerts ?? 0); alert += 1) {
       await insertOne(db, lifecycleAlerts, {

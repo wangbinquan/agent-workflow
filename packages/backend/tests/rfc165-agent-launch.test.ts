@@ -32,6 +32,18 @@
 //   A9  F15 permission carve-out: tasks:launch WITHOUT agents:write may
 //       launch; agents:write WITHOUT tasks:launch may NOT.
 
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import {
+  type TaskFixtureSpec,
+  agentFixture,
+  patchAgentFixture,
+  patchTaskFixture,
+  readAgentFixtures,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
@@ -67,7 +79,6 @@ import {
   AGENT_HOST_AGENT_NODE_ID,
   AGENT_HOST_CLARIFY_NODE_ID,
   AGENT_HOST_INPUT_KEY,
-  AGENT_HOST_WORKFLOW_ID,
   buildAgentHostSnapshot,
 } from '../src/services/agentLaunch'
 import {
@@ -200,8 +211,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     // createAgent would demote an unknown token to project, so insert the row
     // directly (mirrors the deleted-plugin case below).
     const skillyId = ulid()
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: skillyId,
       name: 'skilly',
       description: '',
@@ -224,7 +234,7 @@ describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
     // createAgent validates plugin refs at SAVE time — simulate the historical
     // case (plugin deleted after the agent was saved) via a direct row insert.
     const pluggyId = ulid()
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: pluggyId,
       name: 'pluggy',
       description: '',
@@ -282,7 +292,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     )
 
     expect(task.status).toBe('pending')
-    expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
+    expect(task.workflowId).toBe(TASK_DEFINITION_HOSTS.agent.id)
     expect(task.sourceAgentName).toBe('solo')
     expect(task.spaceKind).toBe('scratch')
     expect(taskExecutionKind(task)).toBe('agent')
@@ -294,12 +304,8 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     // Platform-owned host snapshots freeze the shared canonical layout at the
     // task boundary; legacy rows use the same policy in the read projection.
     expect(snapshot.nodes.every((node) => node.position !== undefined)).toBe(true)
-    const { workflows } = tablesOf(db)
-    // FK anchor row exists and is builtin (lazily seeded).
-    const anchor = (
-      await db.select().from(workflows).where(eq(workflows.id, AGENT_HOST_WORKFLOW_ID))
-    )[0]!
-    expect(anchor.builtin).toBe(true)
+    // RFC-395 II-a A2: the synthesized definition does not seed a catalog row.
+    expect(await readWorkflowFixtures(db, { id: TASK_DEFINITION_HOSTS.agent.id })).toEqual([])
   })
 
   test('RFC-223 PR-7: service input is canonical id; an existing name is not resolved', async () => {
@@ -318,8 +324,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
         BODY(),
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
-    const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks)).length).toBe(0)
+    expect((await readTaskFixtures(db)).length).toBe(0)
   })
 
   test('A4 unknown and invisible agents 404 identically; builtin 403; no source 422', async () => {
@@ -340,8 +345,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       { ...AGENT_FIELDS, name: 'private-agent' },
       { ownerUserId: owner.id },
     )
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.name, 'private-agent'))
+    await patchAgentFixture(db, { name: 'private-agent' }, { visibility: 'private' })
     const strangerActor = buildActor({
       user: {
         id: stranger.id,
@@ -383,7 +387,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     ).rejects.toMatchObject({ code: 'agent-not-found' })
 
     const builtinId = ulid()
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: builtinId,
       name: 'sys-agent',
       description: '',
@@ -486,20 +490,18 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
     expect(reads).toBe(2)
     expect(preparations).toBe(0)
     expect(drives).toBe(0)
-    const { tasks } = tablesOf(db)
-    expect(await db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(db)).toHaveLength(0)
     expect(isAgentLaunching(solo.id)).toBe(false)
   })
 
   test('A8 delete: live task 409s; display rename is id-stable; terminal delete proceeds', async () => {
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
-    await composeAgentLaunchResourceOperations({ db }).ensureHostWorkflow()
+
     const liveId = ulid()
-    const { tasks, agents } = tablesOf(db)
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: liveId,
       name: 'live',
-      workflowId: AGENT_HOST_WORKFLOW_ID,
+      workflowId: TASK_DEFINITION_HOSTS.agent.id,
       workflowSnapshot: '{}',
       repoPath: '/tmp/x',
       worktreePath: '/tmp/x',
@@ -523,13 +525,10 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
       code: 'agent-tasks-active',
     })
 
-    await db
-      .update(tasks)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(tasks.id, liveId))
+    await patchTaskFixture(db, { id: liveId }, { status: 'done', finishedAt: Date.now() })
     // Terminal-only history no longer blocks deletion.
     await deleteAgent(db, solo.id, T6_ACTOR)
-    expect((await db.select().from(agents)).length).toBe(0)
+    expect((await readAgentFixtures(db)).length).toBe(0)
   })
 })
 
@@ -566,11 +565,10 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     })
     adminToken = (await createSession({ db, userId: admin.id })).token
     soloId = (await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })).id
-    const { agents } = tablesOf(db)
     // The A9 permission matrix intentionally launches the same fixture from
     // Bob's scoped PAT. Keep that cross-actor visibility explicit now that
     // RFC-231 changes canonical creates to private.
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, soloId))
+    await patchAgentFixture(db, { id: soloId }, { visibility: 'public' })
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
@@ -599,15 +597,9 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   }
 
   test('A6 lifecycle guards: agent host passes builtin lock; workgroup host stays 403; both sync 422', async () => {
-    await composeAgentLaunchResourceOperations({ db }).ensureHostWorkflow()
-    const { ensureWorkgroupHostWorkflow, WORKGROUP_HOST_WORKFLOW_ID } =
-      await import('@/modules/resource-catalog/infrastructure/legacy/workgroup/launch')
-    await ensureWorkgroupHostWorkflow(db)
-
-    const mk = async (over: Record<string, unknown>) => {
+    const mk = async (over: Partial<TaskFixtureSpec> & { workflowId: string }) => {
       const id = ulid()
-      const { tasks } = tablesOf(db)
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id,
         name: 'fixture',
         workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
@@ -619,12 +611,15 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
         inputs: '{}',
         startedAt: Date.now(),
         finishedAt: Date.now(),
-        ...(over as object),
-      } as never)
+        ...over,
+      })
       return id
     }
-    const agentTask = await mk({ workflowId: AGENT_HOST_WORKFLOW_ID, sourceAgentName: 'solo' })
-    const wgTask = await mk({ workflowId: WORKGROUP_HOST_WORKFLOW_ID, workgroupId: 'wg1' })
+    const agentTask = await mk({
+      workflowId: TASK_DEFINITION_HOSTS.agent.id,
+      sourceAgentName: 'solo',
+    })
+    const wgTask = await mk({ workflowId: TASK_DEFINITION_HOSTS.workgroup.id, workgroupId: 'wg1' })
 
     // Agent host: the builtin guard lets resume through (it fails later for
     // OTHER reasons — anything but builtin-readonly proves the carve-out).
@@ -669,9 +664,6 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('start-task-path-retired')
 
-    const { ensureWorkgroupHostWorkflow } =
-      await import('@/modules/resource-catalog/infrastructure/legacy/workgroup/launch')
-    await ensureWorkgroupHostWorkflow(db)
     const { createWorkgroup } = await import('../src/services/workgroups')
     const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
     const squad = await createWorkgroup(db, {
@@ -723,7 +715,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     expect(ok.status, await ok.clone().text()).toBe(201)
     const created = (await ok.json()) as { sourceAgentName: string | null; workflowId: string }
     expect(created.sourceAgentName).toBe('solo')
-    expect(created.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
+    expect(created.workflowId).toBe(TASK_DEFINITION_HOSTS.agent.id)
     const retiredNameRoute = await req('/api/agents/solo/tasks', launchPat, {
       method: 'POST',
       body: launchBody,
@@ -753,8 +745,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
 
   test('A7a boot auto-resume NOW resumes workgroup tasks too (RFC-186 PR-2 lifted the limitation)', async () => {
     const wf = ulid()
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wf,
       name: 'wf',
       definition: '{}',
@@ -763,7 +754,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
     })
     const mk = async (over: Record<string, unknown>) => {
       const id = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id,
         name: 'fixture',
         workflowId: wf,
@@ -777,7 +768,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
         inputs: '{}',
         startedAt: Date.now(),
         ...(over as object),
-      } as never)
+      })
       return id
     }
     const plain = await mk({})
@@ -849,10 +840,10 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
   test('A7b repair list marks revive options unavailable + apply refuses (workgroup task)', async () => {
     // RFC-359 第 8 刀：修复只剩一份实现，测试统一经 `tests/helpers/repairEngine.ts` 装配。
     const { createRepairEngine } = await import('./helpers/repairEngine')
-    const { lifecycleAlerts, workflows, tasks } = tablesOf(db)
+    const { lifecycleAlerts } = tablesOf(db)
     const engine = createRepairEngine(db, { appHome: '/tmp' })
     const wf = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wf,
       name: 'wf',
       definition: '{}',
@@ -860,7 +851,7 @@ describe('RFC-165 — workgroup exclusions (A7)', () => {
       updatedAt: Date.now(),
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'wg-task',
       workflowId: wf,
@@ -974,8 +965,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
         BODY({ expectedAgentId: 'stale-other-id' }),
       ),
     ).rejects.toMatchObject({ code: 'agent-id-mismatch' })
-    const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks)).length).toBe(2)
+    expect((await readTaskFixtures(db)).length).toBe(2)
   })
 
   test('reservation blocks delete until all holders release; display rename remains safe', async () => {

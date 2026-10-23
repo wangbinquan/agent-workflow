@@ -3,12 +3,14 @@
 // RFC-370 §10 V20：技能的字节与版本操作日志归 resource-catalog——apply 把提案树交给它暂存、在本仓的
 // 事务里经它的 participant 提交、事务后由它发布；这里不再碰文件系统，也不再自己写技能操作锁。
 
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, isNull } from 'drizzle-orm'
 import type { MemoryMembershipParticipantInTx } from '@/modules/memory/public/participants'
 import type {
+  FusionResourceSeedParticipant,
   SkillTreeVersionOperations,
   SkillVersionCommitParticipantInTx,
 } from '@/modules/resource-catalog/public/participants'
@@ -175,131 +177,31 @@ export function createFusionPersistence(input: {
   readonly memoryMembership: FusionMemoryMembership
   readonly fusedSkillReassignment: FusedSkillReassignment
   readonly skillVersionCommit: FusionSkillTrees
+  readonly resourceSeed?: FusionResourceSeedParticipant
 }): FusionPersistence {
   const { db, memoryMembership, fusedSkillReassignment, skillVersionCommit } = input
   const session = databaseSessionFor(db)
 
   async function seedResources(seed: FusionResourceSeed): Promise<void> {
-    const now = Date.now()
-    const { agents, workflows } = tablesOf(db)
-    const merger = await first(db.select().from(agents).where(eq(agents.id, seed.agent.id)))
-    if (merger !== undefined) {
-      if (merger.name !== seed.agent.name) {
-        throw new ConflictError(
-          'builtin-agent-id-collision',
-          `stable built-in agent id '${seed.agent.id}' is occupied`,
-        )
-      }
-      const drift =
-        merger.ownerUserId !== seed.ownerUserId ||
-        merger.visibility !== 'public' ||
-        merger.builtin !== true
-      if (drift) {
-        await db
-          .update(agents)
-          .set({
-            ownerUserId: seed.ownerUserId,
-            visibility: 'public',
-            builtin: true,
-            updatedAt: now,
-            aclRevision: merger.aclRevision + 1,
-          })
-          .where(eq(agents.id, seed.agent.id))
-      }
-    } else {
-      await insertOne(db, agents, {
-        id: seed.agent.id,
-        name: seed.agent.name,
-        description: seed.agent.description,
-        outputs: JSON.stringify(seed.agent.outputs),
-        inputs: '[]',
-        syncOutputsOnIterate: seed.agent.syncOutputsOnIterate,
-        runtime: null,
-        permission: '{}',
-        skills: '[]',
-        dependsOn: '[]',
-        mcp: '[]',
-        plugins: '[]',
-        frontmatterExtra: '{}',
-        bodyMd: seed.agent.bodyMd,
-        ownerUserId: seed.ownerUserId,
-        visibility: 'public',
-        aclRevision: 0,
-        builtin: true,
-        schemaVersion: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-
-    const workflow = await first(
-      db.select().from(workflows).where(eq(workflows.id, seed.workflow.id)),
-    )
-    if (workflow !== undefined) {
-      if (workflow.name !== seed.workflow.name) {
-        throw new ConflictError(
-          'builtin-workflow-id-collision',
-          `stable built-in workflow id '${seed.workflow.id}' is occupied`,
-        )
-      }
-      const repaired = repairFusionWorkflowDefinition(
-        workflow.definition,
-        seed.workflow.mergerAgentId,
-      )
-      const drift =
-        workflow.ownerUserId !== seed.ownerUserId ||
-        workflow.visibility !== 'public' ||
-        workflow.builtin !== true
-      if (repaired.changed || drift) {
-        await db
-          .update(workflows)
-          .set({
-            definition: repaired.definition,
-            version: workflow.version + 1,
-            ownerUserId: seed.ownerUserId,
-            visibility: 'public',
-            builtin: true,
-            ...(drift ? { aclRevision: workflow.aclRevision + 1, updatedAt: now } : {}),
-          })
-          .where(eq(workflows.id, seed.workflow.id))
-      }
-    } else {
-      const definition = repairFusionWorkflowDefinition(
-        JSON.stringify(seed.workflow.definition),
-        seed.workflow.mergerAgentId,
-      ).definition
-      await insertOne(db, workflows, {
-        id: seed.workflow.id,
-        name: seed.workflow.name,
-        description: seed.workflow.description,
-        definition,
-        version: 1,
-        ownerUserId: seed.ownerUserId,
-        visibility: 'public',
-        aclRevision: 0,
-        builtin: true,
-        schemaVersion: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
+    if (input.resourceSeed === undefined) throw new Error('fusion resource seeding is not bound')
+    await input.resourceSeed.seed(seed, { repair: repairFusionWorkflowDefinition })
   }
 
   async function loadBuiltinWorkflowId(
     seed: FusionBuiltinWorkflowSeed,
     ownerUserId: string,
   ): Promise<string> {
-    const { workflows } = tablesOf(db)
     const row = await first(
-      db
-        .select({
-          id: workflows.id,
-          name: workflows.name,
-          ownerUserId: workflows.ownerUserId,
-          builtin: workflows.builtin,
-        })
-        .from(workflows)
-        .where(eq(workflows.id, seed.id)),
+      createWorkflowExecutionQueries(db)
+        .summaries([seed.id])
+        .then((rows) =>
+          rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            ownerUserId: row.ownerUserId,
+            builtin: row.builtin,
+          })),
+        ),
     )
     if (
       row === undefined ||

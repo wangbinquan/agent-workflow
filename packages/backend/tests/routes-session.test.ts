@@ -4,11 +4,11 @@
 // with subagent nesting / 404 task / 404 node-run / 410 non-agent kind
 // / multi-attempt isolation.
 
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -61,8 +61,7 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -70,7 +69,7 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -85,7 +84,7 @@ async function seed(
     startedAt: 1000,
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId,
@@ -212,8 +211,7 @@ describeEachProviderHttpApplication(
       const { taskId, nodeRunId } = await seed(db, { promptText: 'go' })
       // Sibling node_run on the SAME task but distinct nodeRunId.
       const siblingId = ulid()
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: siblingId,
         taskId,
         nodeId: 'n2',
@@ -243,17 +241,17 @@ describeEachProviderHttpApplication(
     test('RFC-027 §UX merge: inline-session siblings get their events + prompts unified', async () => {
       const { db, app } = await buildApp(scope)
       const { taskId, nodeRunId } = await seed(db, { promptText: 'round-0 ask' })
-      const { nodeRuns } = tablesOf(db)
       // The seed gives us round 0 (clarifyIteration=0). Attach an
       // opencode session_id to it, then mint two more node_runs that
       // share the same session_id (RFC-026 inline reruns).
       // Real-world startedAt is always BEFORE the first event of the
       // run; force that ordering on round 0 by resetting startedAt
       // (the default seed used 1000, but our event below lands at 1100).
-      await db
-        .update(nodeRuns)
-        .set({ opencodeSessionId: 'opc_inline_1', startedAt: 1000 })
-        .where(eq(nodeRuns.id, nodeRunId))
+      await patchNodeRunFixture(
+        db,
+        { id: nodeRunId },
+        { opencodeSessionId: 'opc_inline_1', startedAt: 1000 },
+      )
       await insertEvent(db, nodeRunId, {
         ts: 1100,
         kind: 'text',
@@ -267,7 +265,7 @@ describeEachProviderHttpApplication(
       })
 
       const round1Id = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: round1Id,
         taskId,
         nodeId: 'n1',
@@ -292,7 +290,7 @@ describeEachProviderHttpApplication(
       })
 
       const round2Id = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: round2Id,
         taskId,
         nodeId: 'n1',
@@ -340,8 +338,7 @@ describeEachProviderHttpApplication(
       // Same node, no opencode session id — a follow-up retry should
       // NOT leak its events into this run's /session response.
       const siblingId = ulid()
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: siblingId,
         taskId,
         nodeId: 'n1',

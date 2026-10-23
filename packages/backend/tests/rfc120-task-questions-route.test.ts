@@ -5,7 +5,13 @@
 // Locks: list shape, write happy paths, cross-task entry → 404, missing task →
 // 404, missing targetNodeId → 422.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -32,8 +38,7 @@ const SNAPSHOT = JSON.stringify({
 })
 
 async function seedTask(db: PersistenceDb, taskId: string, lineage?: typeof providerTaskLineage) {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf-${taskId}`,
     name: 'wf',
     definition: '{}',
@@ -41,7 +46,7 @@ async function seedTask(db: PersistenceDb, taskId: string, lineage?: typeof prov
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     ownerUserId: '__system__',
@@ -66,8 +71,7 @@ async function seedRun(
   nodeId: string,
   cause?: string,
 ) {
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -75,16 +79,15 @@ async function seedRun(
     rerunCause: cause ?? null,
     iteration: 0,
   })
-  if (cause)
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'x' })
+  if (cause) await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'result', content: 'x' })
 }
 
 async function seedSelfAnswered(db: PersistenceDb, taskId: string) {
   await seedRun(db, taskId, `${taskId}-ask`, 'designer')
   await seedRun(db, taskId, `${taskId}-int`, 'clar')
   await seedRun(db, taskId, `${taskId}-h`, 'designer', 'clarify-answer')
-  const { clarifyRounds, taskQuestions } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  const { taskQuestions } = tablesOf(db)
+  await clarifyRoundFixture(db, {
     id: `${taskId}-r`,
     taskId,
     kind: 'self',
@@ -92,7 +95,7 @@ async function seedSelfAnswered(db: PersistenceDb, taskId: string) {
     askingNodeRunId: `${taskId}-ask`,
     intermediaryNodeId: 'clar',
     intermediaryNodeRunId: `${taskId}-int`,
-    questionsJson: JSON.stringify([
+    questions: JSON.stringify([
       {
         id: 'q1',
         title: 't',
@@ -151,8 +154,7 @@ describe('RFC-120 /api/tasks/:id/questions routes', () => {
       await seedTask(db, 'task-b')
       await seedRun(db, 'task-b', 'task-b-ask', 'auditor')
       await seedRun(db, 'task-b', 'task-b-int', 'clar')
-      const { clarifyRounds } = tablesOf(db)
-      await insertOne(db, clarifyRounds, {
+      await clarifyRoundFixture(db, {
         id: 'task-b-r',
         taskId: 'task-b',
         kind: 'cross',
@@ -161,7 +163,7 @@ describe('RFC-120 /api/tasks/:id/questions routes', () => {
         targetConsumerNodeId: 'coder',
         intermediaryNodeId: 'clar',
         intermediaryNodeRunId: 'task-b-int',
-        questionsJson: JSON.stringify([
+        questions: JSON.stringify([
           {
             id: 'q1',
             title: 't',

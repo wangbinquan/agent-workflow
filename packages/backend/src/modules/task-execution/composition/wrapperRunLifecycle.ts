@@ -1,3 +1,5 @@
+import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
+import { deriveNodeRunRole } from '../domain/nodeRunRole'
 import type { WrapperRunLedgerPort } from '../application/ports/wrapperRunLedger'
 import type { WrapperStatusPublisherPort } from '../application/ports/wrapperStatusPublisher'
 import {
@@ -61,8 +63,12 @@ async function settleTerminal(
       allowedFrom: ['running', 'awaiting_review', 'awaiting_human'],
       reason: 'wrapper-finalize',
       extra: {
-        finishedAt: Date.now(),
-        ...(settlement.errorMessage === undefined ? {} : { errorMessage: settlement.errorMessage }),
+        identity: {
+          finishedAt: Date.now(),
+          ...(settlement.errorMessage === undefined
+            ? {}
+            : { errorMessage: settlement.errorMessage }),
+        },
       },
       ...(state.opts.executionContext === undefined
         ? {}
@@ -158,6 +164,7 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
         })
       }
       const runId = await state.opts.persistence.nodeRuns.mint({
+        ...deriveNodeRunRole({ nodeId: request.node.id, rerunCause: 'wrapper-init' }),
         taskId: state.taskId,
         nodeId: request.node.id,
         status: 'pending',
@@ -166,7 +173,13 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
         iteration: request.iteration,
         ...(consumed === undefined
           ? {}
-          : { overrides: { consumedUpstreamRunsJson: JSON.stringify(consumed) } }),
+          : {
+              overrides: {
+                inputs: {
+                  ...prepareConsumedInputs({ record: consumed }),
+                },
+              },
+            }),
         ...(state.opts.executionContext === undefined
           ? {}
           : { executionContext: state.opts.executionContext }),

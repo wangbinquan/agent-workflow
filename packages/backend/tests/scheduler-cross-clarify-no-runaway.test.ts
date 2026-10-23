@@ -27,7 +27,7 @@
 // If any of these go red the runaway pending-row accumulation bug is
 // resurfacing — investigate before relaxing.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -85,8 +85,7 @@ function defaultDef(): WorkflowDefinition {
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const def = defaultDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -95,7 +94,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<string> {
     schemaVersion: 4,
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -168,7 +167,7 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
     // prior questioner emit).
     const preId = ulid()
     const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: preId,
       taskId,
       nodeId: 'cross1',

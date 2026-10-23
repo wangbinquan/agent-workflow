@@ -10,8 +10,7 @@
 //  - F-05/F-07: base-side queries and un-indexed documents degrade to
 //    baseline with an honest degradedReason.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -70,14 +69,13 @@ async function seedTask(
 ): Promise<string> {
   const taskId = `01CI${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -90,7 +88,6 @@ async function seedTask(
     inputs: '{}',
     startedAt: Date.now(),
     baseCommit: opts.baseCommit,
-    repoCount: 1,
   })
   return taskId
 }

@@ -3,8 +3,7 @@
 // for ordinary tasks; if the join silently drops the field, every row
 // renders empty.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
@@ -23,8 +22,7 @@ async function seed(
   const nrId = ulid()
   const csId = ulid()
   const now = Date.now()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -34,7 +32,7 @@ async function seed(
     createdAt: now,
     updatedAt: now,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     executionLineageId: tId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: tId, workflowRevision: null },
@@ -51,7 +49,7 @@ async function seed(
     inputs: '{}',
     startedAt: now,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nrId,
     taskId: tId,
     nodeId: 'clarify-1',
@@ -70,12 +68,12 @@ async function seed(
     intermediaryNodeId: 'clarify-1',
     intermediaryNodeRunId: nrId,
     iteration: 0,
-    questionsJson: JSON.stringify([
+    questions: JSON.stringify([
       { id: 'q1', title: 'Q?', kind: 'single', options: [{ label: 'a' }, { label: 'b' }] },
     ]),
-    answersJson: null,
+    answers: null,
     status: args.status ?? 'awaiting_human',
-    truncationWarningsJson: null,
+    truncationWarnings: null,
     createdAt: now,
     answeredAt: null,
     answeredBy: null,

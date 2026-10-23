@@ -1,5 +1,12 @@
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // RFC-040 — wrapper-loop / wrapper-git bubble awaiting_human / awaiting_review.
@@ -94,8 +101,7 @@ async function seedAgent(
   name: string,
   outputs: string[] = ['design'],
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: DESIGNER_AGENT_ID,
     name,
     description: 'test',
@@ -114,13 +120,12 @@ async function seedWorkflowAndTask(
 ): Promise<{ workflowId: string; taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -249,22 +254,21 @@ function registerLoopCases(provider: ProviderHarness) {
       }),
     )
 
-    const { clarifyRounds, tasks, nodeRuns } = tablesOf(h.db)
+    const { clarifyRounds, nodeRuns } = tablesOf(h.db)
     // The fundamental RFC-040 fix: exactly ONE clarify_session, not 3.
     const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(1)
     expect(sessions[0]?.status).toBe('awaiting_human')
 
     // Task chip parked on awaiting_human (bubbled all the way up).
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('awaiting_human')
 
     // Wrapper row also awaiting_human (status mirrors inner park) and
     // progress persists iteration=0 + phase=awaiting.
-    const loopRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'loop')))
+    const loopRuns = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId }, { nodeId: 'loop' }],
+    })
     expect(loopRuns.length).toBe(1) // not a second row from a doomed iter
     expect(loopRuns[0]?.status).toBe('awaiting_human')
     const progress = decodeWrapperProgress(loopRuns[0]?.wrapperProgressJson ?? null, () => {})
@@ -335,7 +339,7 @@ function registerLoopCases(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns, clarifyRounds, nodeRunOutputs, tasks } = tablesOf(h.db)
+    const { nodeRuns, clarifyRounds } = tablesOf(h.db)
     const loopRunsBefore = await h.db
       .select()
       .from(nodeRuns)
@@ -391,10 +395,7 @@ function registerLoopCases(provider: ProviderHarness) {
     expect(loopRunsAfter[0]?.status).toBe('done')
 
     // Exit condition satisfied → outputBinding wrote final port.
-    const outs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, wrapperRunIdBefore))
+    const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapperRunIdBefore })
     const finalPort = outs.find((o) => o.portName === 'final')
     expect(finalPort?.content).toBe('use postgres')
 
@@ -422,7 +423,7 @@ function registerLoopCases(provider: ProviderHarness) {
     expect(sessionsAfter[0]?.status).toBe('answered')
 
     // Final task status: done.
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('done')
 
     // RFC-354 PR-3 (gate P1): the clarify gate's park row lives in the asking
@@ -520,22 +521,15 @@ function registerGitCases(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(h.db)
     // Wrapper-git is awaiting_human, NOT done. Pre-RFC-040 this would have
     // been 'done' with a partial diff — the silent correctness bug.
-    const gwRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'gw')))
+    const gwRuns = await readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId: 'gw' }] })
     expect(gwRuns.length).toBe(1)
     expect(gwRuns[0]?.status).toBe('awaiting_human')
 
     // No git_diff output written (the wrapper hasn't reached the diff
     // computation step).
-    const outs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, gwRuns[0]!.id))
+    const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: gwRuns[0]!.id })
     expect(outs.find((o) => o.portName === 'git_diff')).toBeUndefined()
 
     // Baseline persisted on the wrapper row for resume.
@@ -545,7 +539,7 @@ function registerGitCases(provider: ProviderHarness) {
     expect(progress?.phase).toBe('awaiting')
 
     // Task chip parked on awaiting_human.
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('awaiting_human')
   })
 
@@ -597,11 +591,10 @@ function registerGitCases(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { nodeRuns, clarifyRounds, nodeRunOutputs } = tablesOf(h.db)
-    const gwRunsBefore = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'gw')))
+    const { nodeRuns, clarifyRounds } = tablesOf(h.db)
+    const gwRunsBefore = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId }, { nodeId: 'gw' }],
+    })
     const gwRunIdBefore = gwRunsBefore[0]!.id
     const baselineBefore = decodeWrapperProgress(
       gwRunsBefore[0]?.wrapperProgressJson ?? null,
@@ -650,10 +643,7 @@ function registerGitCases(provider: ProviderHarness) {
     expect(gwRunsAfter[0]?.status).toBe('done')
 
     // git_diff written exactly once.
-    const outs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, gwRunIdBefore))
+    const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: gwRunIdBefore })
     const diffOuts = outs.filter((o) => o.portName === 'git_diff')
     expect(diffOuts.length).toBe(1)
 
@@ -755,7 +745,7 @@ function registerNestedCases(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns, nodeRunOutputs, clarifyRounds } = tablesOf(h.db)
+    const { nodeRuns, clarifyRounds } = tablesOf(h.db)
     // Inner loop wrapper parked.
     const loopRuns = await h.db
       .select()
@@ -771,10 +761,7 @@ function registerNestedCases(provider: ProviderHarness) {
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'gw')))
     expect(gwRuns.length).toBe(1)
     expect(gwRuns[0]?.status).toBe('awaiting_human')
-    const gwOuts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, gwRuns[0]!.id))
+    const gwOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: gwRuns[0]!.id })
     expect(gwOuts.find((o) => o.portName === 'git_diff')).toBeUndefined()
 
     // Only 1 clarify_session despite nested wrappers.

@@ -1,3 +1,5 @@
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
+import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { ClarifyAnswerSchema, ClarifyQuestionSchema } from '@agent-workflow/shared'
@@ -32,12 +34,14 @@ export function createCommittedHumanInputQueries(input: {
         questions: z.array(ClarifyQuestionSchema).parse(JSON.parse(row.questionsJson)),
         answers:
           row.status === 'answered' && row.answersJson !== null
-            ? z.array(ClarifyAnswerSchema).parse(JSON.parse(row.answersJson))
+            ? z
+                .array(ClarifyAnswerSchema)
+                .parse(decodeLegacyClarifyAnswerColumns(row).requireAnswers())
             : [],
       }))
     },
     async reviewDecision(taskId, nodeRunId) {
-      const { collaborationGateOperations, docVersions, nodeRunOutputs } = tablesOf(db)
+      const { collaborationGateOperations, docVersions } = tablesOf(db)
       const operations = await db
         .select()
         .from(collaborationGateOperations)
@@ -65,17 +69,9 @@ export function createCommittedHumanInputQueries(input: {
         .where(and(eq(docVersions.taskId, taskId), eq(docVersions.reviewNodeRunId, nodeRunId)))
         .orderBy(desc(docVersions.versionIndex))
       const output = (
-        await db
-          .select()
-          .from(nodeRunOutputs)
-          .where(
-            and(
-              eq(nodeRunOutputs.nodeRunId, nodeRunId),
-              eq(nodeRunOutputs.portName, 'decision_meta'),
-              eq(nodeRunOutputs.active, true),
-            ),
-          )
-          .limit(1)
+        await createNodeOutputQueries(db)
+          .readPort(nodeRunId, 'decision_meta', true)
+          .then((output) => (output === null ? [] : [output]))
       )[0]
       if (output) {
         const metadata = z

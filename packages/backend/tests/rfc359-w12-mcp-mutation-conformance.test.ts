@@ -34,7 +34,7 @@ import {
   updateMcpRowInTx,
 } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { createMcpRepository } from '@/modules/resource-catalog/infrastructure/mcpRepository'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -392,7 +392,7 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
         execution: createPostgresqlResourcePackageExecutionAdapter({
           box,
           provider,
-          atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db, box }),
+          atomicApply: createResourcePackageAtomicApplyOperations({ db, box }),
         }),
       })
     }

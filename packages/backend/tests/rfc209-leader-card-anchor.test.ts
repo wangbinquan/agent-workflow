@@ -19,11 +19,12 @@ import {
   deriveWorkgroupRunHistory,
   type HostRunLite,
   type MemberLite,
-} from '../src/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
+} from './helpers/workgroupSelection'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 
 const LEADER = 'M_leader'
 const A1 = 'M_agent1'
@@ -51,24 +52,24 @@ function leaderRun(
 }
 
 describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
-  test('打过戳的行直接用 wg_round（不再从消息 round 反推）', () => {
+  test('打过戳的行直接用 wg_round（不再从消息 round 反推）', async () => {
     const runs = [leaderRun('L1-run', 'done', 1), leaderRun('L2-run', 'done', 2)]
     const messages = [{ id: 'M1-msg', authorMemberId: null, mentionMemberIds: [], round: 1 }]
-    const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
+    const history = await deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
     expect(history.map((e) => e.round)).toEqual([1, 2])
   })
 
-  test('协议重试与本轮**共享**轮号（RFC-182 impl-gate P2 的语义不回归）', () => {
+  test('协议重试与本轮**共享**轮号（RFC-182 impl-gate P2 的语义不回归）', async () => {
     const runs = [
       leaderRun('L1-run', 'failed', 1),
       leaderRun('L2-run', 'done', 1, 'wg-protocol-retry'),
       leaderRun('L3-run', 'running', 2),
     ]
-    const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], [])
+    const history = await deriveWorkgroupRunHistory(members, LEADER, runs, [], [])
     expect(history.map((e) => e.round)).toEqual([1, 1, 2])
   })
 
-  test('P0 失败场景直测：人在轮 2 跑动中发言，晚于它的重试行**不得**被标成轮 3', () => {
+  test('P0 失败场景直测：人在轮 2 跑动中发言，晚于它的重试行**不得**被标成轮 3', async () => {
     // 时序（ULID 升序）：
     //   L2a-run  leader 轮 2 的第一次尝试（mint 时就带 wgRound=2）
     //   H-msg    人在轮 2 跑动中发言 —— RFC-209 之后写的是**在飞轮** round=2
@@ -81,21 +82,21 @@ describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
     const messages = [
       { id: 'L2a-run-Z', authorMemberId: null, mentionMemberIds: [], round: 2 }, // 人类发言，id 介于两行之间
     ]
-    const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
+    const history = await deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
     expect(history.map((e) => e.nodeRunId)).toEqual(['L2a-run', 'L2b-run'])
     // 两行同属轮 2；改动前第二行会是 3，卡片被冲到房间底部。
     expect(history.map((e) => e.round)).toEqual([2, 2])
   })
 
-  test('wg_round 为 NULL 时回退旧的消息锚定推导（0095 回填前 / 引擎外 mint 的历史行）', () => {
+  test('wg_round 为 NULL 时回退旧的消息锚定推导（0095 回填前 / 引擎外 mint 的历史行）', async () => {
     const runs = [leaderRun('L1-run', 'done', null), leaderRun('L3-run', 'running', null)]
     const messages = [{ id: 'L2-msg', authorMemberId: null, mentionMemberIds: [], round: 1 }]
-    const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
+    const history = await deriveWorkgroupRunHistory(members, LEADER, runs, [], messages)
     // L1 之前无消息 → 1；L3 之前有 round-1 消息 → 2
     expect(history.map((e) => e.round)).toEqual([1, 2])
   })
 
-  test('非 leader 条目的 round 恒 null（成员轮按 ULID 交织，不参与回合锚定）', () => {
+  test('非 leader 条目的 round 恒 null（成员轮按 ULID 交织，不参与回合锚定）', async () => {
     const runs: HostRunLite[] = [
       leaderRun('L1-run', 'done', 1),
       {
@@ -108,7 +109,7 @@ describe('RFC-209 T9 — leader 卡片轮号读 wg_round', () => {
         wgRound: 1,
       },
     ]
-    const history = deriveWorkgroupRunHistory(members, LEADER, runs, [], [])
+    const history = await deriveWorkgroupRunHistory(members, LEADER, runs, [], [])
     expect(history.map((e) => e.round)).toEqual([1, null])
   })
 })

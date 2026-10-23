@@ -73,6 +73,17 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
         expect(handle).toBe(db)
         return { tasks: taskTable, clarifyRounds: roundTable }
       },
+      // RFC-395 II-a A7: bind the moved task-definition read with the same query accounting.
+      createTaskGateQueries: (handle: unknown) => {
+        expect(handle).toBe(db)
+        return {
+          async listDefinitionContexts(ids: string[]) {
+            expect(ids).toEqual(['task'])
+            queried.push(taskTable)
+            return [{ name: 'task', workflowSnapshot: '{"nodes":[]}', lifecycleEventRevision: 7 }]
+          },
+        }
+      },
       eq: () => undefined,
       and: () => undefined,
       desc: () => undefined,

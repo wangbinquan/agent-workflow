@@ -10,6 +10,7 @@ import {
   decodeResourcePackageReceipt,
   assertResourcePackageArtifactReceipt,
 } from '../infrastructure/postgresqlResourcePackageMaintenance'
+import { isCurrentResourcePackageArtifact } from '../infrastructure/resourcePackageArtifactCodec'
 import type { ResourcePackageApplyArtifactRecoveryPort } from '../application/resourcePackageMaintenance'
 
 export function composeCrewStationResourceArtifacts(
@@ -28,6 +29,8 @@ export function composeCrewStationResourceArtifacts(
     async rollForward(journal) {
       const receipt = decodeResourcePackageReceipt(journal)
       for (const artifact of decodeResourcePackageArtifacts(journal.preparedArtifactsJson)) {
+        if (!isCurrentResourcePackageArtifact(artifact))
+          throw new Error('hosted-resource-package-legacy-artifact-requires-migration')
         assertResourcePackageArtifactReceipt(receipt, artifact)
         if (artifact.kind === 'plugin-install') {
           plugins.recovery.assertReference(artifact)
@@ -39,6 +42,8 @@ export function composeCrewStationResourceArtifacts(
       for (const artifact of [
         ...decodeResourcePackageArtifacts(journal.preparedArtifactsJson),
       ].reverse()) {
+        if (!isCurrentResourcePackageArtifact(artifact))
+          throw new Error('hosted-resource-package-legacy-artifact-requires-migration')
         if (artifact.kind === 'plugin-install') {
           plugins.recovery.assertReference(artifact)
           await generations.discard(artifact.generationDirectory)

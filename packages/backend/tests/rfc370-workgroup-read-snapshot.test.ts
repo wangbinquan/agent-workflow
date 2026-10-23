@@ -2,6 +2,8 @@
 // conflicts. The read-only host graph must remain coherent without joining the
 // write transactions' SSI dependency graph. Exercise the actual persistence
 // factory and DatabaseSession; keep the original RFC-185 fan-out tests intact.
+
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
 import { describe, expect, test } from 'bun:test'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
@@ -140,28 +142,30 @@ describe('RFC-370 workgroup read snapshot CI repair', () => {
 
   test('the complete valid host graph and cursors are loaded on that same transaction', async () => {
     const f = fixture({
-      workgroupConfigJson: JSON.stringify({
-        workgroupId: 'group',
-        workgroupName: 'read snapshot',
-        mode: 'leader_worker',
-        leaderMemberId: 'human',
-        switches: { shareOutputs: true, directMessages: false, blackboard: false },
-        maxRounds: 3,
-        completionGate: false,
-        instructions: 'preserve the graph',
-        goal: 'read consistently',
-        members: [
-          {
-            id: 'human',
-            memberType: 'human',
-            agentId: null,
-            agentName: null,
-            userId: 'user',
-            displayName: 'human',
-            roleDesc: 'review',
-          },
-        ],
-      }),
+      workgroupConfig: decodeTaskWorkgroupConfig(
+        JSON.stringify({
+          workgroupId: 'group',
+          workgroupName: 'read snapshot',
+          mode: 'leader_worker',
+          leaderMemberId: 'human',
+          switches: { shareOutputs: true, directMessages: false, blackboard: false },
+          maxRounds: 3,
+          completionGate: false,
+          instructions: 'preserve the graph',
+          goal: 'read consistently',
+          members: [
+            {
+              id: 'human',
+              memberType: 'human',
+              agentId: null,
+              agentName: null,
+              userId: 'user',
+              displayName: 'human',
+              roleDesc: 'review',
+            },
+          ],
+        }),
+      ),
       hostRuns: [],
       leaderClarifyParked: false,
     })

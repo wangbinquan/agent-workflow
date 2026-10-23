@@ -2,15 +2,14 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import {
   DwStateSchema,
   WorkgroupOutputContractSchema,
-  WorkgroupRuntimeConfigSchema,
   WorkflowNameSchema,
   WORKGROUP_MAX_ROUNDS_LIMIT,
-  isWorkgroupTask,
   parseBatchShardKey,
   parseMsgShardKey,
   type DwState,
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
+  type TaskWorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
@@ -182,15 +181,14 @@ export function document(value: unknown): WorkgroupTaskJsonDocument {
   return Object.freeze({ kind: 'json-document' as const, body: JSON.stringify(value) })
 }
 
-export function parseConfig(value: string | null): {
+export function parseConfig(value: TaskWorkgroupRuntimeConfig | null | undefined): {
   readonly config: WorkgroupRuntimeConfig
   readonly raw: Record<string, unknown>
 } | null {
-  if (value === null) return null
+  if (value == null || value.config === null) return null
   try {
-    const raw = JsonObjectSchema.parse(JSON.parse(value))
-    const config = WorkgroupRuntimeConfigSchema.safeParse(raw)
-    return config.success ? { config: config.data, raw } : null
+    const raw = JsonObjectSchema.parse(value.raw)
+    return { config: value.config, raw }
   } catch {
     return null
   }
@@ -240,8 +238,8 @@ export async function loadVisibleTask(
   taskId: string,
 ) {
   const task = await participant.loadVisible(authority, taskId)
-  const parsed = parseConfig(task?.workgroupConfigJson ?? null)
-  if (task === null || !isWorkgroupTask(task) || parsed === null) {
+  const parsed = parseConfig(task?.workgroupConfig?.runtime)
+  if (task === null || task.subject.kind !== 'workgroup' || parsed === null) {
     throw new NotFoundError('workgroup-task-not-found', `workgroup task '${taskId}' not found`)
   }
   return { task, ...parsed, state: await loadState(transaction, taskId) }

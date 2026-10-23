@@ -3,6 +3,8 @@
 // Strategy: call the command functions in-process where possible. For stop +
 // status which need a real daemon, spawn one subprocess per scenario.
 
+import { openDb } from '@/db/client'
+import { taskFixture } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
@@ -291,24 +293,32 @@ describe('CLI subcommands (P-1-05)', () => {
       const scratch = join(tmp, 'claimed-scratch')
       mkdirSync(scratch)
       writeFileSync(join(scratch, 'ephemeral.txt'), 'delete me')
-      const seeded = new Database(join(tmp, 'db.sqlite'))
-      seeded.run(
-        `INSERT INTO tasks (
-           id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-           base_branch, branch, status, inputs, started_at, finished_at,
-           webhook_trigger_id, space_kind, workspace_pruning_at,
-           workspace_prune_cause
-         ) VALUES (
-           'rfc300-boot-task', 'rfc300 boot', 'deleted-soft-workflow', '{}',
-           ?, ?, 'main', 'agent-workflow/rfc300-boot', 'done', '{}', 1, 2,
-           'deleted-trigger', 'scratch', 123, 'webhook-terminal'
-         )`,
-        [scratch, scratch],
-      )
+      const seeded = openDb({
+        path: join(tmp, 'db.sqlite'),
+        migrationsFolder: resolve(import.meta.dir, '..', 'db/migrations'),
+      })
+      await taskFixture(seeded, {
+        id: 'rfc300-boot-task',
+        name: 'rfc300 boot',
+        workflowId: 'deleted-soft-workflow',
+        workflowSnapshot: {},
+        repoPath: scratch,
+        worktreePath: scratch,
+        baseBranch: 'main',
+        branch: 'agent-workflow/rfc300-boot',
+        status: 'done',
+        inputs: {},
+        startedAt: 1,
+        finishedAt: 2,
+        webhookTriggerId: 'deleted-trigger',
+        spaceKind: 'scratch',
+        workspacePruningAt: 123,
+        workspacePruneCause: 'webhook-terminal',
+      })
       // Hand the child a fully quiescent file, not an open/cached statement plus
       // WAL checkpoint race that only appears under full-suite process pressure.
-      seeded.exec('PRAGMA wal_checkpoint(TRUNCATE);')
-      seeded.close()
+      seeded.$client.exec('PRAGMA wal_checkpoint(TRUNCATE);')
+      seeded.$client.close()
 
       const child = Bun.spawn({
         cmd: ['bun', 'run', mainPath, 'start', '--port', '0'],

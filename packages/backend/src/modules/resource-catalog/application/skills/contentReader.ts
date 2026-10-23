@@ -1,3 +1,4 @@
+import type { SkillTextViewPolicy } from './textView'
 import type { FileNode } from '@agent-workflow/shared'
 
 /** Content is selected by the version already read by AW, never by a mutable name. */
@@ -12,8 +13,8 @@ export interface SkillContentReference {
  * projection. Every method reads the requested immutable version; the local
  * adapter retains the existing live-directory fallback for pre-version skills.
  */
-export interface SkillContentReader {
-  readMain(reference: SkillContentReference): string | Promise<string>
+export interface SkillContentReader extends SkillTextViewPolicy {
+  readMain(reference: SkillContentReference): Uint8Array | Promise<Uint8Array>
   listFiles(reference: SkillContentReference): FileNode[] | Promise<FileNode[]>
-  readFile(reference: SkillContentReference, path: string): string | Promise<string>
+  readFile(reference: SkillContentReference, path: string): Uint8Array | Promise<Uint8Array>
 }

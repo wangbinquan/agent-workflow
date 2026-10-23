@@ -53,12 +53,12 @@ async function captureTheirs(dir: string, mutate: () => void): Promise<string> {
   return theirs
 }
 
-function repoEntry(dir: string, worktreeDirName: string, base: string, baseHead: string): IsoRepo {
+function repoEntry(dir: string, mountPath: string, base: string, baseHead: string): IsoRepo {
   return {
     repoPath: dir,
     canonWorktreePath: dir,
     isoWorktreePath: join(dir, '.aw-unused-iso'),
-    worktreeDirName,
+    mountPath,
     baseBranch: 'main',
     baseSnapshot: base,
     taskBaseHead: baseHead,

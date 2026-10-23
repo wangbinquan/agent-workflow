@@ -9,10 +9,9 @@ import { admitTransferredWorkspace } from '../infrastructure/transferredWorkspac
 // 它在**两个引擎上都真跑过**（`rfc359-w5-kernel-launch-provider-parity`，plan §5hh），
 // 而 `startTask` 那条按定义只服务 SQLite。
 
-import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
+import { WorkflowDefinitionSchema, type TaskStartOptions } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID } from '../domain/digitalEmployeeHost'
 import type {
   RootTaskLaunchKernel,
   TaskRoutePreparedWorkspace,
@@ -108,8 +107,7 @@ export function createActionExecutionEnvironment(
     outcomes: deps.readModels.executionOutcome,
     statusProjection: deps.readModels.statusProjection,
     async launchHostTask(input: ActionHostTaskLaunch) {
-      const task: StartTask = {
-        workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+      const task: TaskStartOptions = {
         name: input.name,
         inputs: { ...input.inputs },
         ...(input.wallTimeMs === null ? {} : { maxDurationMs: input.wallTimeMs }),
@@ -121,8 +119,7 @@ export function createActionExecutionEnvironment(
         invoker: { type: 'user', launchKind: 'direct-json' },
         task,
         subject: {
-          workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-          workflowName: '__digital_employee_host__',
+          subject: { kind: 'digital-employee', sourceId: null },
           workflowVersion: 1,
           // 平台自有的合成宿主：写时冻结规范排版（plan §5hn）。
           builtin: true,

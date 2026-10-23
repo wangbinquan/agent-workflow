@@ -1,6 +1,3 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-193 T3 — archive-at-emit 归档制（design.md §4.3/§4.4，case 1/2/3/3b/3c/3d/3f/8）。
 //
 // 为什么存在：path 形端口的值只是路径字符串，RFC-130 后它是「悬挂指针」——
@@ -15,6 +12,15 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 //    归档引用落库、content 规范化（./ 前缀、绝对路径清洗）、两阶段无孤儿
 //    （首端口过/次端口挂 ⇒ 磁盘零归档）、gitignored 文件照样归档。
 
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import {
@@ -95,7 +101,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       nodeRunId: 'r1',
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'report.md' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     const parsed = parseArchiveJson(res.archiveJson)
@@ -121,7 +127,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       nodeRunId: 'r1',
       portName: 'img',
       items: [{ sourceAbs: abs, sourcePath: 'img.png' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
@@ -137,7 +143,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       nodeRunId: 'r1',
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'big.md' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
@@ -158,7 +164,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       nodeRunId: 'r1',
       portName: 'blob',
       items: [{ sourceAbs: abs, sourcePath: 'big.bin' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
@@ -174,7 +180,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       nodeRunId: 'r1',
       portName: '../evil',
       items: [{ sourceAbs: abs, sourcePath: 'a.md' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
@@ -191,7 +197,7 @@ describe('RFC-193 archivePortArtifacts (module)', () => {
       nodeRunId: 'r1',
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'report.md' }],
-      worktreeDirName: 'repoA',
+      mountPath: 'repoA',
       worktreeRootAbs: join(home, 'wt'),
     })
     expect(parseArchiveJson(res.archiveJson)!.items[0]!.path).toBe('repoA/report.md')
@@ -217,7 +223,7 @@ describe('RFC-193 readPortArtifact (module — fallback chain, case 6 core)', ()
       nodeRunId: 'r1',
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'r.md' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     writeFileSync(abs, 'WORKTREE NEW') // diverge after emit
@@ -328,7 +334,7 @@ describe('RFC-193 readPortArtifact (module — fallback chain, case 6 core)', ()
       nodeRunId: 'r1',
       portName: 'doc',
       items: [{ sourceAbs: abs, sourcePath: 'r.md' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     const meta = readPortArtifact({
@@ -458,8 +464,7 @@ async function seedAgent(
   outputs: string[],
   outputKinds: Record<string, string>,
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -493,13 +498,12 @@ async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<str
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-rfc193',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc193-e2e',
     id: taskId,
     workflowId,
@@ -531,17 +535,10 @@ async function runToEnd(h: Harness, taskId: string): Promise<void> {
 }
 
 async function outputRow(db: DbClient, taskId: string, port: string) {
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  const runs = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'w')))
+  const runs = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId: 'w' }] })
   const done = runs.find((r) => r.status === 'done')
   expect(done).toBeDefined()
-  const rows = await db
-    .select()
-    .from(nodeRunOutputs)
-    .where(and(eq(nodeRunOutputs.nodeRunId, done!.id), eq(nodeRunOutputs.portName, port)))
+  const rows = await readNodeRunOutputFixtures(db, { nodeRunId: done!.id, portName: port })
   return { run: done!, row: rows[0] }
 }
 

@@ -10,6 +10,7 @@
 //      match display names ⇒ zero rows ⇒ no missing). Now required; this file
 //      pins the source shape so a future "convenience default" cannot return.
 
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -50,8 +51,7 @@ describeEachProvider('RFC-282 D4 — name-domain grandfathering lives in the res
       })
     }
     for (const name of ['secret-a', 'secret-b']) {
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: ulid(),
         name,
         description: '',

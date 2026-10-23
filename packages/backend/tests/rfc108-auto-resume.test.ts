@@ -5,8 +5,7 @@
 // （放过其它状态/其它 errorSummary）；② 每条成功 resume 记 auto-resume recovery_event；
 // ③ 已隔离任务跳过；④ resume 抛错不中断循环、计入熔断；⑤ 熔断触顶后续跳过。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
@@ -37,9 +36,8 @@ async function seedTask(
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },

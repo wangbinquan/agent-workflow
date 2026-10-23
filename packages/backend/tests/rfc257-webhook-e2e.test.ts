@@ -7,6 +7,7 @@
 // 夹具只把库句柄换成 harness 现建的那一个。唯一仍是两份实现的是「任务源终止参与者」，
 // 按 `harness.capabilities.isolation` 取生产上同一侧的那份（同
 // `rfc359-w8-source-termination-conformance` 的姿势），否则 PG 上跑的是 SQLite 那台机器。
+import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -81,8 +82,8 @@ async function seedFixture(providerHarness: ProviderHarness) {
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  const { workflows, webhookEndpoints, webhookTriggers, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { webhookEndpoints, webhookTriggers } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'fix-wf',
     description: '',
@@ -139,7 +140,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
       if (failLaunchNames.has(renderedName))
         throw new Error(`fixture launch failed: ${renderedName}`)
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: renderedName,
         workflowId,
@@ -174,7 +175,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     },
     cancel: async (taskId) => {
       canceled.push(taskId)
-      await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status: 'canceled' })
     },
   })
   const eventCenter = await composeEventCenter({
@@ -303,7 +304,6 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
       const {
         webhookTriggers,
         webhookTriggerFires,
-        tasks,
         eventRecords,
         eventDeliveries,
         webhookDeliveries,
@@ -339,7 +339,7 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
         return rows.length === 2 ? rows : null
       })
       expect(fires.map((fire) => fire.outcome).sort()).toEqual(['launch-failed', 'launched'])
-      expect(await h.db.select().from(tasks)).toHaveLength(1)
+      expect(await readTaskFixtures(h.db)).toHaveLength(1)
 
       const event = (
         await h.db
@@ -397,18 +397,12 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
       })
       expect(fire.outcome).toBe('launched')
       expect(fire.streamKey).toBe('platform/api|mr:42')
-      const { webhookDeliveries, tasks, webhookTriggerFires } = tablesOf(h.db)
+      const { webhookDeliveries, webhookTriggerFires } = tablesOf(h.db)
       const delivery = (
         await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
       )[0]
       expect(delivery?.status).toBe('matched')
-      const task = (
-        await h.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, fire.taskId ?? ''))
-          .limit(1)
-      )[0]
+      const task = (await readTaskFixtures(h.db, { id: fire.taskId ?? '' }, { limit: 1 }))[0]
       expect(task?.webhookTriggerId).toBeNull()
       expect(task?.eventSubscriptionId).not.toBeNull()
       expect(task?.eventDeliveryId).toBe(fire.id)
@@ -433,7 +427,7 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
         return fires.find((entry) => entry.outcome === 'launched') ?? null
       })
       expect(h.canceled).toEqual([task?.id ?? '(missing)'])
-      const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
+      const running = await readTaskFixtures(h.db, { status: 'running' })
       expect(running.length).toBe(1) // 每流至多一活任务（AC-9/AC-11）
       await h.terminalControl.stop()
     })
@@ -503,7 +497,7 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
           .from(webhookTriggerFires)
           .where(eq(webhookTriggerFires.deliveryId, closeDeliveryId)),
       ).toHaveLength(0)
-      expect(await h.db.select().from(tasks)).toHaveLength(1)
+      expect(await readTaskFixtures(h.db)).toHaveLength(1)
       await h.terminalControl.stop()
     })
 
@@ -583,7 +577,7 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
           .from(webhookTriggerFires)
           .where(eq(webhookTriggerFires.deliveryId, mergedDeliveryId)),
       ).toHaveLength(0)
-      expect(await h.db.select().from(tasks)).toHaveLength(1)
+      expect(await readTaskFixtures(h.db)).toHaveLength(1)
       await h.terminalControl.stop()
     })
   })

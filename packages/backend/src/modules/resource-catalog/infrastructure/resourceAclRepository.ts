@@ -21,6 +21,7 @@ import type {
 import { OWNER_NAME_UNIQUE_CONSTRAINTS, OWNER_NAME_UNIQUE_TYPES } from './aclRegistry'
 import { ownedAclTable } from './aclReadRepository'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
+import { catalogResourcePredicate } from './workflowCatalogPredicate'
 
 export interface ResourceAclMutationLifecycle {
   afterWriteInTransaction?(
@@ -59,7 +60,7 @@ async function ownedIdentityForMutation(
         aclRevision: table.aclRevision,
       })
       .from(table)
-      .where(eq(table.id, resourceId))
+      .where(catalogResourcePredicate(type, table.id, eq(table.id, resourceId)))
       .limit(1)
   )[0]
   if (current === undefined) return undefined
@@ -71,10 +72,14 @@ async function ownedIdentityForMutation(
         .select({ id: table.id })
         .from(table)
         .where(
-          and(
-            eq(table.ownerUserId, nextOwnerUserId),
-            eq(table.name, current.name),
-            ne(table.id, resourceId),
+          catalogResourcePredicate(
+            type,
+            table.id,
+            and(
+              eq(table.ownerUserId, nextOwnerUserId),
+              eq(table.name, current.name),
+              ne(table.id, resourceId),
+            ),
           ),
         )
         .limit(1)

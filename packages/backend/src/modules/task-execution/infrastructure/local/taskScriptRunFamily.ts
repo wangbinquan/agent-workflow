@@ -224,10 +224,14 @@ export function createLocalTaskScriptRunFamily(): TaskScriptRunFamily {
       await input.persistence.patch({
         nodeRunId: input.nodeRunId,
         values: {
-          pid,
-          spawnBinaryPath,
-          spawnLaunchNonce: launchNonce ?? null,
-          runtimeParamsJson: input.runtimeParamsJson,
+          runtime: {
+            pid,
+            spawnBinaryPath,
+            spawnLaunchNonce: launchNonce ?? null,
+          },
+          config: {
+            runtimeParamsJson: input.runtimeParamsJson,
+          },
         },
         ...input.executionContext(),
       })

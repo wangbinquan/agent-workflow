@@ -78,6 +78,7 @@
 //   * e2e/rfc319-intent-create-and-list.spec.ts —— INTENT-05 守的是**创建**进行中的
 //     同一族守卫；X6 守的是**提交**进行中的那一份（两处各有自己的 pending 判据）。
 
+import { readNodeRunFixturesSql } from './fixtures/model'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -708,8 +709,10 @@ test.describe('RFC-319 settings', () => {
           () => {
             const rows = querySqlite<{ runtime: string | null; params: string | null }>(
               dbPath(daemon),
-              `SELECT runtime AS runtime, runtime_params_json AS params FROM node_runs ` +
-                `WHERE task_id = '${taskId}' AND node_id = 'agent_1'`,
+              readNodeRunFixturesSql(
+                { taskId, nodeId: 'agent_1' },
+                { runtime: 'runtime', params: 'runtimeParamsJson' },
+              ),
             )
             params = rows[0]?.params ?? null
             return params

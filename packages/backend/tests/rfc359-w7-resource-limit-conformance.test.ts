@@ -14,7 +14,7 @@
 //     两个引擎必须同样「不翻状态、不误伤 running 行」。
 //   · `recordLimitCancellation` 的降级：审计写失败只告警，**不能**把取消动作本身拖红。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -39,8 +39,7 @@ interface SeedTask {
 
 async function seedTask(db: PersistenceDb, input: SeedTask = {}): Promise<string> {
   const taskId = `task-${ulid()}`
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w7',
@@ -75,8 +74,7 @@ async function seedRun(
   },
 ): Promise<string> {
   const runId = `run-${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId: input.taskId,
     nodeId: 'node-w7',

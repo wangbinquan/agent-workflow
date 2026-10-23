@@ -1,5 +1,6 @@
 // RFC-359 W4-B1 —— 调度器收尾读写：一份实现，两个 provider 共用。
 
+import { createNodeRunQueries } from './nodeRunQueries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
@@ -24,22 +25,14 @@ export class DrizzleSchedulerCompletionPersistence implements SchedulerCompletio
   }
 
   async listDoneNodeRuns(input: Parameters<SchedulerCompletionPersistence['listDoneNodeRuns']>[0]) {
-    const { nodeRuns } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: nodeRuns.id,
-        seq: nodeRuns.seq,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
-        status: nodeRuns.status,
-      })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, input.taskId),
-          eq(nodeRuns.nodeId, input.nodeId),
-          eq(nodeRuns.iteration, input.iteration),
-          eq(nodeRuns.status, 'done'),
-        ),
-      )
+    return createNodeRunQueries(this.db).listFields(
+      {
+        taskId: input.taskId,
+        nodeId: input.nodeId,
+        iteration: input.iteration,
+        status: 'done',
+      },
+      ['id', 'seq', 'parentNodeRunId', 'status'],
+    )
   }
 }

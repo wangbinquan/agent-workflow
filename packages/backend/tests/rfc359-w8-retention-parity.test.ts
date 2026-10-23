@@ -34,6 +34,7 @@
 // `platform/background/maintenanceWorkerRuntime.ts` 的分片调度器驱动。整趟入口不同不影响
 // **每一片删什么**，本文件锁的是后者。
 
+import { taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -125,7 +126,6 @@ async function seed(db: PersistenceDb): Promise<void> {
     intentTurnEvents,
     mcpRuntimeTestSessions,
     mcpRuntimeTestEvents,
-    tasks,
     webhookTriggerFires,
   } = tablesOf(db)
   await insertOne(db, users, {
@@ -350,7 +350,7 @@ async function seed(db: PersistenceDb): Promise<void> {
       { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: 1 },
     ]),
   })
-  await db.insert(tasks).values([task('task-done', 'done'), task('task-running', 'running')])
+  await taskFixture(db, [task('task-done', 'done'), task('task-running', 'running')])
   await db.insert(webhookTriggerFires).values([
     // 删：过期 + 任务已终态。id 是 text ULID 位（`ORDER BY id` 按字典序），零填充保证稳定。
     {

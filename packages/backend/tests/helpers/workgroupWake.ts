@@ -16,6 +16,7 @@
 //   * `gate` 三个布尔折成 `state.gateStatus`（中立侧是单一状态机，见
 //     `WORKGROUP_TURN_GATE_TRANSITIONS`）。
 
+import { projectWorkgroupRunSelections } from '@/modules/task-execution/infrastructure/runSelection/workgroupProjection'
 import type {
   WorkgroupAssignment,
   WorkgroupMessage,
@@ -55,10 +56,10 @@ export interface LegacyWakeInput {
   }
 }
 
-function hostRunsForBudget(
+async function hostRunsForBudget(
   config: WorkgroupRuntimeConfig,
   budgetUsed: number,
-): WorkgroupHostLedgerRun[] {
+): Promise<WorkgroupHostLedgerRun[]> {
   const base = {
     shardKey: null,
     status: 'done' as const,
@@ -69,7 +70,7 @@ function hostRunsForBudget(
   if (config.mode === 'leader_worker') {
     // 领队预算 = 领队 run 的最大 wgRound（未标 round 的另算），一条就够表达。
     if (budgetUsed <= 0) return []
-    return [
+    return projectWorkgroupRunSelections([
       {
         seq: null,
         ...base,
@@ -77,16 +78,18 @@ function hostRunsForBudget(
         nodeId: WORKGROUP_TURN_LEADER_NODE_ID,
         wgRound: budgetUsed,
       },
-    ]
+    ])
   }
   // free-collab 预算 = 成员 run 计数。
-  return Array.from({ length: Math.max(0, budgetUsed) }, (_unused, index) => ({
-    ...base,
-    seq: null,
-    id: `wake-budget-member-${index}`,
-    nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
-    wgRound: null,
-  }))
+  return projectWorkgroupRunSelections(
+    Array.from({ length: Math.max(0, budgetUsed) }, (_unused, index) => ({
+      ...base,
+      seq: null,
+      id: `wake-budget-member-${index}`,
+      nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
+      wgRound: null,
+    })),
+  )
 }
 
 function gateStatusOf(
@@ -98,10 +101,10 @@ function gateStatusOf(
   return 'idle'
 }
 
-export function wakeSnapshotOf(input: LegacyWakeInput): {
+export async function wakeSnapshotOf(input: LegacyWakeInput): Promise<{
   snapshot: WorkgroupTurnsSnapshot
   inflight: InflightTurns
-} {
+}> {
   const readonlyIds = input.readonlyMemberIds ?? new Set<string>()
   const memberAgents: WorkgroupTurnMemberAgent[] = input.config.members
     .filter((member) => member.memberType === 'agent')
@@ -127,7 +130,7 @@ export function wakeSnapshotOf(input: LegacyWakeInput): {
       messages: input.messages,
       cursors: input.cursors,
       memberAgents,
-      hostRuns: hostRunsForBudget(input.config, input.budgetUsed),
+      hostRuns: await hostRunsForBudget(input.config, input.budgetUsed),
       leaderClarifyParked: input.leaderClarifyParked ?? false,
     },
     inflight: {

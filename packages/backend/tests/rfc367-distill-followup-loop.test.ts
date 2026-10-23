@@ -32,6 +32,7 @@ import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/service
 import { appHome } from '../src/util/paths'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 const NONCE = 'deadbeefcafe0001'
 
@@ -142,7 +143,7 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
     job: ReturnType<typeof rowToDistillJob>,
     runFn: RunDistillOptions['runFn'],
   ): RunDistillOptions => ({
-    store: new DrizzleMemoryDistillWorkStore(db, () => ({
+    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db), () => ({
       append: async () => {},
       setRootSessionId: async () => {},
       markTerminal: async () => {},

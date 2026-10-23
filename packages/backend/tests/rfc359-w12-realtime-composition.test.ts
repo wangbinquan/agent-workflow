@@ -2,7 +2,7 @@
 // events. Both provider factories are called; the database and event queries
 // are real. Unused composition inputs throw if accessed beyond construction.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -59,14 +59,13 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     edges: [],
     outputs: [],
   })
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'realtime composition',
     definition,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'realtime composition',
     workflowId,
@@ -84,8 +83,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
 
 async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: `node-${id}`,

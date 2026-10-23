@@ -1,6 +1,13 @@
 // RFC-359 —— 评审决定场景的双引擎夹具（移植自 review-decision-full-asserts.test.ts 的种子）。
 // 只用 provider-中立的 drizzle 写入，SQLite 与 PostgreSQL 共用；正文文件落在临时 appHome 下。
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -59,7 +66,7 @@ export async function seedReviewRound(
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
   const taskId = `t_${ulid()}`
   const agentName = `doc-${taskId}`
-  const { users, agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+  const { users, docVersions } = tablesOf(db)
   // tasks.owner_user_id 在 SQLite 迁移里带 FK → users（schema.ts 无 references，PG 投影没有这条
   // FK——RFC-359 W3-T16b 的又一条实证）；两引擎都插一行决定者，行为才是同一个起点。
   await db
@@ -73,7 +80,7 @@ export async function seedReviewRound(
     })
     .onConflictDoNothing()
   const definition = reviewDefinition(agentName)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name: agentName,
     description: '',
@@ -84,7 +91,7 @@ export async function seedReviewRound(
     bodyMd: '',
   })
   const workflowId = `wf_${taskId}`
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc359-review',
     description: '',
@@ -92,7 +99,7 @@ export async function seedReviewRound(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc359-review',
     workflowId,
@@ -112,7 +119,7 @@ export async function seedReviewRound(
     ]),
   })
   const agentRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: agentRunId,
     taskId,
     nodeId: DOC,
@@ -122,13 +129,13 @@ export async function seedReviewRound(
     startedAt: Date.now() - 1000,
     finishedAt: Date.now() - 900,
   })
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId: agentRunId,
     portName: 'docpath',
     content: bodies[0]!,
   })
   const reviewRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: reviewRunId,
     taskId,
     nodeId: REVIEW,

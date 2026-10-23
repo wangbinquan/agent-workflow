@@ -9,7 +9,12 @@
 // routing layer runs, not just the service layer. Each route's failure mode
 // (404 / 409 / 422) is locked here so the front-end can rely on stable codes.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -69,21 +74,21 @@ async function seedSession(
   }
   // Idempotently seed workflow + task rows for this clarify session.
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await db
-    .insert(workflows)
-    .values({
+  await workflowFixture(
+    db,
+    {
       id: workflowId,
       name: 'wf',
       description: '',
       definition: JSON.stringify(def),
       version: 1,
       schemaVersion: 3,
-    })
-    .onConflictDoNothing()
-  await db
-    .insert(tasks)
-    .values({
+    },
+    { onConflict: 'ignore' },
+  )
+  await taskFixture(
+    db,
+    {
       name: 'fixture-task',
 
       id: taskId,
@@ -98,10 +103,11 @@ async function seedSession(
       startedAt: Date.now(),
 
       ...(lineage?.(taskId) ?? {}),
-    })
-    .onConflictDoNothing()
+    },
+    { onConflict: 'ignore' },
+  )
   const sourceRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
@@ -236,17 +242,16 @@ describe('POST /api/clarify/:nodeRunId/answers', () => {
       expect(body.roundKind).toBe('self')
       // the auto-dispatched self continuation rerun
       expect((body.reruns[0]?.nodeRunId ?? '').length).toBeGreaterThan(0)
-      const { clarifyRounds } = tablesOf(db)
       // server-sealed labels (client forgery defended) + answered flip persist on the round.
       const round = (
-        await db
-          .select()
-          .from(clarifyRounds)
-          .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
-          .limit(1)
+        await readClarifyRoundFixtures(
+          db,
+          { intermediaryNodeRunId: clarifyNodeRunId },
+          { limit: 1 },
+        )
       )[0]
       expect(round?.status).toBe('answered')
-      const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+      const answers = JSON.parse(round?.answers ?? '[]') as ClarifyAnswer[]
       expect(answers[0]?.selectedOptionLabels).toEqual(['MySQL'])
     })
   })

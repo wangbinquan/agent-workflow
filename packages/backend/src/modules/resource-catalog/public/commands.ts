@@ -60,23 +60,6 @@ export interface PluginGenerationGcCommand {
   run(input: PluginGenerationGcInput): Promise<PluginGenerationGcReceipt>
 }
 
-export interface ResourcePackageApplyConvergenceInput {
-  /** Process-local apply ids that the recovery sweep must not reap. */
-  readonly activeApplyIds: readonly string[]
-}
-
-export interface ResourcePackageApplyConvergenceReceipt {
-  readonly failed: number
-  readonly rolledForward: number
-}
-
-/** Provider-neutral recovery command for the durable resource-package journal. */
-export interface ResourcePackageApplyMaintenanceCommand {
-  converge(
-    input: ResourcePackageApplyConvergenceInput,
-  ): Promise<ResourcePackageApplyConvergenceReceipt>
-}
-
 /** Task-scoped Workgroup mutations; transport parsing and provider clients stay private. */
 export interface WorkgroupTaskRoomCommands {
   postMessage(

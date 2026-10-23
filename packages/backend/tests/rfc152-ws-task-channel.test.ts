@@ -18,8 +18,7 @@
 //    means adding a ws/registry.ts spec; scattering a new branch into
 //    server.ts goes red here.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import type { Server } from 'bun'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -76,15 +75,14 @@ async function buildHarness(harness: ProviderDatabaseHarness): Promise<Harness> 
   const adminToken = (await createSession({ db, userId: admin.id })).token
 
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-gate',
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'gated-task',
     workflowId: 'wf-gate',

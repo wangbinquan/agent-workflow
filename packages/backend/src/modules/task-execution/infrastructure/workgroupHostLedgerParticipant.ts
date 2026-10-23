@@ -1,6 +1,9 @@
+import { projectWorkgroupRunSelections } from './runSelection/workgroupProjection'
+import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
+import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq, inArray, isNull } from 'drizzle-orm'
 
 import type {
   WorkgroupHostLedgerFailRunOperation,
@@ -30,7 +33,7 @@ async function loadSnapshot(
 ): Promise<WorkgroupHostLedgerSnapshot | null> {
   const { tasks, nodeRuns } = tablesOf(transaction)
   const taskRows = await transaction
-    .select({ workgroupConfigJson: tasks.workgroupConfigJson })
+    .select({ workgroupConfig: taskWorkgroupConfigSelection(transaction) })
     .from(tasks)
     .where(eq(tasks.id, taskId))
     .limit(1)
@@ -57,24 +60,26 @@ async function loadSnapshot(
           inArray(nodeRuns.nodeId, [WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID]),
         ),
       )
-      .orderBy(engineOf(transaction).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id)),
+      .orderBy(...runHistoryOrder(transaction, nodeRuns)),
     clarify.loadProjection(taskId),
   ])
   const askingNodeRunIds = new Set(clarifyProjection.askingNodeRunIds)
 
   return {
-    workgroupConfigJson: task.workgroupConfigJson,
-    hostRuns: hostRows.map((row) => ({
-      id: row.id,
-      seq: row.seq,
-      nodeId: row.nodeId,
-      shardKey: row.shardKey,
-      status: row.status,
-      rerunCause: row.rerunCause,
-      retryIndex: row.retryIndex,
-      wgRound: row.wgRound,
-      envelopeNonce: row.envelopeNonce ?? '',
-    })),
+    workgroupConfig: task.workgroupConfig,
+    hostRuns: await projectWorkgroupRunSelections(
+      hostRows.map((row) => ({
+        id: row.id,
+        seq: row.seq,
+        nodeId: row.nodeId,
+        shardKey: row.shardKey,
+        status: row.status,
+        rerunCause: row.rerunCause,
+        retryIndex: row.retryIndex,
+        wgRound: row.wgRound,
+        envelopeNonce: row.envelopeNonce ?? '',
+      })),
+    ),
     leaderClarifyParked: leaderClarifyParkedOf(hostRows, askingNodeRunIds),
   }
 }
@@ -121,7 +126,12 @@ async function failPendingHostRun(
     nodeRunId: operation.runId,
     to: 'failed',
     allowedFrom: ['pending'],
-    extra: { errorMessage: operation.message, finishedAt: Date.now() },
+    extra: {
+      identity: {
+        errorMessage: operation.message,
+        finishedAt: Date.now(),
+      },
+    },
     reason: 'workgroup-host-turn-internal-error',
   })
   return true
@@ -137,6 +147,7 @@ async function applyOperation(
     // node_runs while sibling workgroup turns are inserting into the same page.
     const envelopeNonce = generateNodeRunEnvelopeNonce()
     await createNodeRunMintParticipantInTx(transaction).mint({
+      ...deriveNodeRunRole({ nodeId: operation.nodeId, rerunCause: operation.cause }),
       id: operation.runId,
       taskId,
       nodeId: operation.nodeId,
@@ -144,11 +155,15 @@ async function applyOperation(
       cause: operation.cause,
       retryIndex: operation.retryIndex,
       overrides: {
-        shardKey: operation.shardKey,
-        agentOverrideName: operation.agentOverrideName,
-        agentOverrideId: operation.agentOverrideId,
-        wgRound: operation.wgRound,
-        envelopeNonce,
+        identity: {
+          shardKey: operation.shardKey,
+          wgRound: operation.wgRound,
+          envelopeNonce,
+        },
+        config: {
+          agentOverrideName: operation.agentOverrideName,
+          agentOverrideId: operation.agentOverrideId,
+        },
       },
     })
     return {

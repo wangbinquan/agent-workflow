@@ -53,6 +53,7 @@
 // `#!/bin/sh`——它只需要在 POSIX 上可执行，不需要为一条永远不会在 Windows 上跑的
 // 用例去造 `.cmd` 分支。
 
+import { nodeRunFixtureSql, taskFixtureSql } from './fixtures/model'
 import {
   chmodSync,
   existsSync,
@@ -290,22 +291,28 @@ function seedTaskRow(
     runningMs?: number
   },
 ): void {
-  const nullable = (value: number | null | undefined): string =>
-    value === null || value === undefined ? 'NULL' : String(value)
   runSqlite(
     databasePath(home),
-    `INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-       base_branch, branch, status, inputs, started_at, running_ms, finished_at,
-       parent_task_id, space_kind, repo_count, max_duration_ms, max_total_tokens)
-     VALUES ('${row.id}', '${row.id}', 'rfc319-ops-wf',
-       '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
-       '${join(home, 'fixture-repo')}', '${row.worktreePath ?? ''}',
-       'main', 'agent-workflow/${row.id}', '${row.status}', '{}',
-       ${row.startedAt ?? Date.now() - DAY_MS}, ${row.runningMs ?? 0},
-       ${nullable(row.finishedAt)},
-       ${row.parentTaskId === undefined || row.parentTaskId === null ? 'NULL' : `'${row.parentTaskId}'`},
-       '${row.spaceKind ?? 'remote'}', 1,
-       ${nullable(row.maxDurationMs)}, ${nullable(row.maxTotalTokens)});`,
+    taskFixtureSql({
+      id: row.id,
+      name: row.id,
+      workflowId: 'rfc319-ops-wf',
+      workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      repoPath: join(home, 'fixture-repo'),
+      worktreePath: row.worktreePath ?? '',
+      baseBranch: 'main',
+      branch: `agent-workflow/${row.id}`,
+      status: row.status,
+      inputs: '{}',
+      startedAt: row.startedAt ?? Date.now() - DAY_MS,
+      runningMs: row.runningMs ?? 0,
+      finishedAt: row.finishedAt ?? null,
+      parentTaskId:
+        row.parentTaskId === undefined || row.parentTaskId === null ? null : row.parentTaskId,
+      spaceKind: row.spaceKind ?? 'remote',
+      maxDurationMs: row.maxDurationMs ?? null,
+      maxTotalTokens: row.maxTotalTokens ?? null,
+    }),
   )
 }
 
@@ -315,9 +322,13 @@ function seedNodeRun(
 ): void {
   runSqlite(
     databasePath(home),
-    `INSERT INTO node_runs (id, task_id, node_id, status, tok_total)
-     VALUES ('${row.id}', '${row.taskId}', 'rfc319-node', '${row.status ?? 'done'}',
-       ${row.tokTotal === undefined || row.tokTotal === null ? 'NULL' : String(row.tokTotal)});`,
+    nodeRunFixtureSql({
+      id: row.id,
+      taskId: row.taskId,
+      nodeId: 'rfc319-node',
+      status: row.status ?? 'done',
+      tokTotal: row.tokTotal === undefined || row.tokTotal === null ? null : row.tokTotal,
+    }),
   )
 }
 

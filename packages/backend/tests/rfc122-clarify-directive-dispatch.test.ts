@@ -15,7 +15,12 @@
 // Plus a store round-trip and a source-level lock on the scheduler wiring (the
 // dispatch read + the three threads) so a refactor that drops any of them goes red.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -264,11 +269,7 @@ async function designerSelfClarifyWorkflow(c: Ctx, name: string) {
   return createWorkflow(c.db, { name, description: '', definition: def })
 }
 async function designerTop(db: DbClient, taskId: string) {
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
+  const rows = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId: 'designer' }] })
   return rows.filter((r) => r.parentNodeRunId === null).sort((a, b) => (a.id < b.id ? 1 : -1))
 }
 async function openClarifyRunId(db: DbClient, taskId: string): Promise<string> {
@@ -282,8 +283,7 @@ async function openClarifyRunId(db: DbClient, taskId: string): Promise<string> {
   return id
 }
 async function taskStatus(db: DbClient, taskId: string): Promise<string> {
-  const { tasks } = tablesOf(db)
-  const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+  const t = (await readTaskFixtures(db, { id: taskId }))[0]
   return t?.status ?? '??'
 }
 
@@ -561,8 +561,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
 describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   test('set / get / list round-trip; continue is read back identically', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'wf',
       name: 'wf',
       definition: '{}',
@@ -570,7 +569,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
       version: 1,
       schemaVersion: 3,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: 'tk',
       name: 't',
       ownerUserId: '__system__',

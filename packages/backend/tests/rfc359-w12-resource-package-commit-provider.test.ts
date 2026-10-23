@@ -3,6 +3,7 @@
 // receipt through a fresh catalog. Read assertions also pin ordered snapshots
 // and file bytes before the duplicated provider assembly is extracted.
 
+import { agentFixture, readAgentFixtures, readWorkflowFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -37,7 +38,7 @@ import {
 import type { PostgresqlResourcePackageApplyReceipt } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import type { ResourcePackageImportDecision } from '@/modules/resource-catalog/application/package/ports'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { errorHandler } from '@/util/errors'
@@ -429,7 +430,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
           execution: createPostgresqlResourcePackageExecutionAdapter({
             box,
             provider,
-            atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db, box }),
+            atomicApply: createResourcePackageAtomicApplyOperations({ db, box }),
           }),
         }),
       }
@@ -463,10 +464,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       ['package-graph-a', ['package-graph-leaf']],
       ['package-graph-b', ['package-graph-leaf']],
     ] as const) {
-      const { agents } = tablesOf(harness.db)
-      await insertOne(
+      await agentFixture(
         harness.db,
-        agents,
         createAgentPersistenceValues({
           id,
           agent: CreateAgentSchema.parse({ name: id, dependsOn }),
@@ -510,8 +509,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     const receipt = await apply(bytes, prepared.previewToken, decision)
     if (receipt.root === undefined) throw new Error('package Agent root missing')
     const id = receipt.root.resourceId
-    const { agents, resourceBundleApplies } = tablesOf(harness.db)
-    const before = await first(harness.db.select().from(agents).where(eq(agents.id, id)))
+    const { resourceBundleApplies } = tablesOf(harness.db)
+    const before = (await readAgentFixtures(harness.db, { id }))[0]
     if (before === undefined) throw new Error('package Agent row missing')
     expect(before).toEqual({
       id,
@@ -556,7 +555,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(await apply(bytes, prepared.previewToken, decision, f.compose().catalog)).toEqual(
       receipt,
     )
-    expect(await first(harness.db.select().from(agents).where(eq(agents.id, id)))).toEqual(before)
+    expect((await readAgentFixtures(harness.db, { id }))[0]).toEqual(before)
     expect(
       await harness.db
         .select()
@@ -573,7 +572,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       targetId: id,
     }
     const updateReceipt = await apply(updateBytes, updatePreview.previewToken, updateDecision)
-    const after = await first(harness.db.select().from(agents).where(eq(agents.id, id)))
+    const after = (await readAgentFixtures(harness.db, { id }))[0]
     if (after === undefined) throw new Error('updated package Agent row missing')
     expect(after).toEqual({
       ...before,
@@ -594,7 +593,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(
       await apply(updateBytes, updatePreview.previewToken, updateDecision, f.compose().catalog),
     ).toEqual(updateReceipt)
-    expect(await first(harness.db.select().from(agents).where(eq(agents.id, id)))).toEqual(after)
+    expect((await readAgentFixtures(harness.db, { id }))[0]).toEqual(after)
     expect(
       await harness.db
         .select()
@@ -837,8 +836,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     const receipt = await applyWith(catalog, f, bytes, prepared.previewToken, decision)
     if (receipt.root === undefined) throw new Error('package Workflow root missing')
     const id = receipt.root.resourceId
-    const { workflows } = tablesOf(harness.db)
-    const row = await first(harness.db.select().from(workflows).where(eq(workflows.id, id)))
+    const row = (await readWorkflowFixtures(harness.db, { id }))[0]
     if (row === undefined) throw new Error('package Workflow row missing')
     expect(row).toMatchObject({
       id,
@@ -869,9 +867,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
     expect(await applyWith(f.compose().catalog, f, bytes, prepared.previewToken, decision)).toEqual(
       receipt,
     )
-    expect(await first(harness.db.select().from(workflows).where(eq(workflows.id, id)))).toEqual(
-      row,
-    )
+    expect((await readWorkflowFixtures(harness.db, { id }))[0]).toEqual(row)
   })
 
   test('workgroup package create and replay persist the same row and receipt on both engines', async () => {

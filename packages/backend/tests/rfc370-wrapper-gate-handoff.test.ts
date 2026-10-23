@@ -1,6 +1,6 @@
 // A human-gate successor must cross every nested wrapper without publishing
 // completion, promoting empty outputs, or leaving admitted sibling work behind.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -520,13 +520,13 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
     const runId = ulid()
     const progress = JSON.stringify({ kind: 'loop', iteration: 1, phase: 'inner-running' })
     const workflowId = ulid()
-    const { workflows, tasks, nodeRuns } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    const { nodeRuns } = tablesOf(harness.db)
+    await workflowFixture(harness.db, {
       id: workflowId,
       name: 'handoff workflow fixture',
       definition: JSON.stringify(nestedDefinition),
     })
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       id: taskId,
       name: 'handoff fixture',
       workflowId,
@@ -539,7 +539,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
       branch: `agent-workflow/${taskId}`,
       workflowSnapshot: JSON.stringify(nestedDefinition),
     })
-    await insertOne(harness.db, nodeRuns, {
+    await nodeRunFixture(harness.db, {
       id: runId,
       taskId,
       nodeId: 'loop',
@@ -560,7 +560,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
         outcome: { kind: 'handoff' },
       },
     )
-    const interrupted = (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+    const interrupted = (await readNodeRunFixtures(harness.db, { id: runId }))[0]!
     expect(interrupted.status).toBe('interrupted')
     expect(interrupted.wrapperProgressJson).toBe(progress)
     expect(interrupted.finishedAt).toBeNull()

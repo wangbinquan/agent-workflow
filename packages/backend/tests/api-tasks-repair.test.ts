@@ -12,6 +12,7 @@
 //   - POST when preflight stale → 409 repair-preflight-stale + audit row
 //   - body.actorUserId is IGNORED — actor is from session
 
+import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -49,12 +50,12 @@ async function seedRunningTaskWithS3(
   }
   const taskId = ulid()
   const workflowId = ulid()
-  const { workflows, tasks, nodeRuns, lifecycleAlerts } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  const { lifecycleAlerts } = tablesOf(db)
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   // RFC-108 T6 (AR-15): repair's resumeAfterApply → resumeTask now 410s on a
   // MISSING worktree dir. Give the fixture a present dir (no git ops needed).
   const wt = mkdtempSync(join(tmpdir(), 'aw-repair-wt-'))
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -69,7 +70,7 @@ async function seedRunningTaskWithS3(
     ...(lineage?.(taskId) ?? {}),
   })
   const reviewRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -348,8 +349,8 @@ describe('RFC-057 — preflight stale', () => {
       const seed = await seedRunningTaskWithS3(db)
       // Simulate drift: flip task to a terminal state before the POST lands.
       const { eq } = await import('drizzle-orm')
-      const { tasks, lifecycleRepairAudit } = tablesOf(db)
-      await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, seed.taskId))
+      const { lifecycleRepairAudit } = tablesOf(db)
+      await patchTaskFixture(db, { id: seed.taskId }, { status: 'done' })
 
       const res = await app.request(
         `/api/tasks/${seed.taskId}/alerts/${seed.alertId}/repair`,

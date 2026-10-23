@@ -5,6 +5,7 @@
 // 461f299f4 的 PG CI 暴露：外层事务内必须用回调 tx 观察未提交行；root client
 // 经连接池只能读到旧已提交版本。回滚后仍用原 root client 验证整行恢复。
 
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -50,8 +51,7 @@ function emptyDefinition(
 
 async function storedRow(db: PersistenceDb, definition: string) {
   const id = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: '  Legacy  工作流  ',
     description: '描述\nsecond line',

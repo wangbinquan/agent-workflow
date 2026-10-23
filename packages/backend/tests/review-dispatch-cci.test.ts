@@ -26,7 +26,16 @@
 //      these go red the cci-aware short-circuit drifted; investigate before
 //      relaxing.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  consumedProducerIds,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -72,6 +81,11 @@ function row(
 ): PersistenceTables['nodeRuns']['$inferSelect'] {
   return {
     parentNodeRunId: null,
+    containerRunId: null,
+    consumedUpstreamRunsJson: null,
+    supersededByReview: null,
+    mergeState: null,
+    seq: null,
     iteration: 0,
     shardKey: null,
     retryIndex: 0,
@@ -107,43 +121,43 @@ afterAll(() => {
 })
 
 describe('RFC-056 patch-2026-05-26 — pickFreshestReviewRun', () => {
-  test('returns undefined for both when input is empty', () => {
-    const { reuse, latestDone } = pickFreshestReviewRun([])
+  test('returns undefined for both when input is empty', async () => {
+    const { reuse, latestDone } = await pickFreshestReviewRun([])
     expect(reuse).toBeUndefined()
     expect(latestDone).toBeUndefined()
   })
 
-  test('skips fan-out child rows (parentNodeRunId != null)', () => {
+  test('skips fan-out child rows (parentNodeRunId != null)', async () => {
     const top = row({ id: 'top', status: 'pending', retryIndex: 0 })
     const child = row({ id: 'child', status: 'done', retryIndex: 5, parentNodeRunId: 'top' })
-    const { reuse, latestDone } = pickFreshestReviewRun([top, child])
+    const { reuse, latestDone } = await pickFreshestReviewRun([top, child])
     expect(reuse?.id).toBe('top')
     // Child must NOT bubble into latestDone — fan-out aggregation is
     // dispatchReviewNode T14's job, not this helper's.
     expect(latestDone).toBeUndefined()
   })
 
-  test('reuse = freshest by isFresherNodeRun (pure ULID id-order)', () => {
+  test('reuse = freshest by isFresherNodeRun (pure ULID id-order)', async () => {
     // Causal ids: the pending rerun was minted after the old done row.
     const oldDone = row({ id: '01-old', status: 'done', retryIndex: 0 })
     const newPending = row({ id: '02-new', status: 'pending', retryIndex: 1 })
-    const { reuse } = pickFreshestReviewRun([oldDone, newPending])
+    const { reuse } = await pickFreshestReviewRun([oldDone, newPending])
     expect(reuse?.id).toBe('02-new')
   })
 
-  test('latestDone tracks the freshest done row independently of reuse', () => {
+  test('latestDone tracks the freshest done row independently of reuse', async () => {
     const doneAtR0 = row({ id: 'd0', status: 'done', retryIndex: 0 })
     const doneAtR2 = row({ id: 'd2', status: 'done', retryIndex: 2 })
     const pendingAtR3 = row({ id: 'p3', status: 'pending', retryIndex: 3 })
-    const { reuse, latestDone } = pickFreshestReviewRun([doneAtR0, doneAtR2, pendingAtR3])
+    const { reuse, latestDone } = await pickFreshestReviewRun([doneAtR0, doneAtR2, pendingAtR3])
     expect(reuse?.id).toBe('p3')
     expect(latestDone?.id).toBe('d2')
   })
 
-  test('latestDone returns undefined when all rows are non-done', () => {
+  test('latestDone returns undefined when all rows are non-done', async () => {
     const p1 = row({ id: 'p1', status: 'pending', retryIndex: 1 })
     const p2 = row({ id: 'p2', status: 'awaiting_review', retryIndex: 2 })
-    const { reuse, latestDone } = pickFreshestReviewRun([p1, p2])
+    const { reuse, latestDone } = await pickFreshestReviewRun([p1, p2])
     expect(reuse?.id).toBe('p2')
     expect(latestDone).toBeUndefined()
   })
@@ -188,8 +202,7 @@ describeEachProvider(
       reviewNode: WorkflowNode
     }> {
       const agentId = ulid()
-      const { agents, workflows, tasks } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: agentId,
         name: 'designer',
         description: '',
@@ -218,7 +231,7 @@ describeEachProvider(
         edges: [],
       }
       const workflowId = ulid()
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'w',
         description: '',
@@ -226,7 +239,7 @@ describeEachProvider(
         version: 1,
       })
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         name: 'cci-fixture',
         id: taskId,
         workflowId,
@@ -239,7 +252,7 @@ describeEachProvider(
         inputs: '{}',
         startedAt: Date.now(),
       })
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]!
       const reviewNode = definition.nodes.find((n) => n.id === 'rev')!
       return { taskId, task, definition, reviewNode }
     }
@@ -248,8 +261,8 @@ describeEachProvider(
       const { taskId, task, definition, reviewNode } = await seed()
       // Upstream designer done at cci=0.
       const designerRunId = ulid()
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { nodeRuns } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -259,13 +272,13 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: designerRunId,
         portName: 'docpath',
         content: '# inline body',
       })
       // Review done at cci=0 — RFC-052 baseline.
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: 'rev',
@@ -305,8 +318,8 @@ describeEachProvider(
       // Old designer done — the version the prior review approved. RFC-074 PR-C:
       // freshness is pure id-order, so ids are CAUSAL (new minted after old).
       const oldDesignerId = '01A_OLD_DESIGNER'
-      const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { docVersions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: oldDesignerId,
         taskId,
         nodeId: 'designer',
@@ -316,14 +329,14 @@ describeEachProvider(
         startedAt: Date.now() - 5000,
         finishedAt: Date.now() - 4000,
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: oldDesignerId,
         portName: 'docpath',
         content: '# original body',
       })
       // Fresher designer done (e.g. a later rerun) — this is the current source.
       const newDesignerId = '01B_NEW_DESIGNER'
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: newDesignerId,
         taskId,
         nodeId: 'designer',
@@ -333,20 +346,20 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: newDesignerId,
         portName: 'docpath',
         content: '# updated body',
       })
       // Prior review done that CONSUMED the old designer run (stale provenance).
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: 'rev',
         status: 'done',
         retryIndex: 0,
         iteration: 0,
-        consumedUpstreamRunsJson: JSON.stringify({ designer: oldDesignerId }),
+        consumedEdges: [{ producerNodeId: 'designer', producerRunId: oldDesignerId }],
         startedAt: Date.now() - 5000,
         finishedAt: Date.now() - 4000,
       })
@@ -362,14 +375,13 @@ describeEachProvider(
       })
       // Upstream advanced past what the review consumed → fresh re-review opens.
       expect(result.kind).toBe('awaiting_review')
-      const reviewRows = await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
+      const reviewRows = await readNodeRunFixtures(db, {
+        $and: [{ taskId }, { nodeId: 'rev' }],
+      })
       const fresh = reviewRows.find((r) => r.status === 'awaiting_review')
       expect(fresh).toBeDefined()
       // The fresh review row records consuming the NEW designer run.
-      expect(JSON.parse(fresh!.consumedUpstreamRunsJson ?? '{}').designer).toBe(newDesignerId)
+      expect(consumedProducerIds(fresh!.consumedEdges).designer).toBe(newDesignerId)
       // A v1 doc_version on the new review row was created against the updated body.
       const versions = await db
         .select()
@@ -383,8 +395,8 @@ describeEachProvider(
       // Workflow that never sees cross-clarify must not regress.
       const { taskId, task, definition, reviewNode } = await seed()
       const designerRunId = ulid()
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { nodeRuns } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -394,12 +406,12 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: designerRunId,
         portName: 'docpath',
         content: '# body',
       })
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: 'rev',
@@ -410,7 +422,7 @@ describeEachProvider(
         finishedAt: Date.now() - 500,
       })
       const stuckId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: stuckId,
         taskId,
         nodeId: 'rev',
@@ -436,8 +448,8 @@ describeEachProvider(
     test('No done review row at all → not short-circuited (must dispatch fresh)', async () => {
       const { taskId, task, definition, reviewNode } = await seed()
       const designerRunId = ulid()
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { nodeRuns } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -447,7 +459,7 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: designerRunId,
         portName: 'docpath',
         content: '# body',
@@ -483,7 +495,7 @@ describe('RFC-056 patch-2026-05-26 — source-text guards', () => {
   const src = readFileSync(REVIEW_SOURCE_PATH, 'utf8')
 
   test('review.ts exports pickFreshestReviewRun; the cci helper is gone (RFC-074 PR-C)', () => {
-    expect(src).toContain('export function pickFreshestReviewRun(')
+    expect(src).toContain('export async function pickFreshestReviewRun<')
     // PR-C deleted the cci-alignment short-circuit entirely.
     expect(src.includes('isReviewClarifyAlignedWithUpstream')).toBe(false)
   })

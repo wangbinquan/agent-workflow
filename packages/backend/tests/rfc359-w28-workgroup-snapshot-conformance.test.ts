@@ -1,6 +1,7 @@
 // The pure controls execute the three exact pre-W28 projection bodies. Private
 // source exposure is not a provider execution; DB cases call the selected real
 // package composition, and the existing W26 Intent controls run separately.
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -46,7 +47,7 @@ import {
   normalizeWorkgroupSnapshot,
   workgroupDraftMemberOf,
 } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { ValidationError } from '@/util/errors'
 import { encodeZip } from '@/util/zip'
@@ -487,11 +488,10 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
   async function fixture() {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-w28-snapshot-'))
     temporary.push(appHome)
-    const { users, agents } = tablesOf(harness.db)
+    const { users } = tablesOf(harness.db)
     await insertOne(harness.db, users, { ...actor.user, createdAt: T0, updatedAt: T0 })
-    await insertOne(
+    await agentFixture(
       harness.db,
-      agents,
       createAgentPersistenceValues({
         id: AGENT,
         agent: CreateAgentSchema.parse({ name: AGENT }),
@@ -528,7 +528,7 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
         execution: createPostgresqlResourcePackageExecutionAdapter({
           box,
           provider,
-          atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db, box }),
+          atomicApply: createResourcePackageAtomicApplyOperations({ db, box }),
         }),
       })
     }

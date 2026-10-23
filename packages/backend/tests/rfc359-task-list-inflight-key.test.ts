@@ -16,6 +16,7 @@
 // **整个 filters 对象**做规范序列化，整类 bug 一次性消失。本文件同时锁住两件事：
 //   1. 只差一个筛选项的并发查询**不得**被合并（逐项过一遍，新加的筛选项漏了就红）；
 //   2. 完全同形的并发查询**仍然**被合并（别把性能特性一起修没了）。
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -31,7 +32,7 @@ const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: imp
 const NOW = 1_788_300_000_000
 
 async function seedListFixture(db: PersistenceDb): Promise<void> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u-flight',
     username: 'flight',
@@ -41,7 +42,7 @@ async function seedListFixture(db: PersistenceDb): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-flight',
     name: 'flight',
     definition: JSON.stringify({ $schema_version: 5, inputs: [], nodes: [], edges: [] }),
@@ -60,15 +61,14 @@ async function seedListFixture(db: PersistenceDb): Promise<void> {
     finishedAt: NOW + 10,
     ownerUserId: 'u-flight',
     catalogVisibility: 'public' as const,
-    repoCount: 1,
   }
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     ...base,
     id: 'tk-schedule-0001',
     name: 'by schedule',
     launchOrigin: 'scheduled',
   })
-  await insertOne(db, tasks, { ...base, id: 'tk-api-0001', name: 'by api', launchOrigin: 'api' })
+  await taskFixture(db, { ...base, id: 'tk-api-0001', name: 'by api', launchOrigin: 'api' })
 }
 
 describeEachProvider('RFC-359 —— 任务列表单飞合并键覆盖全部筛选项', (harness) => {

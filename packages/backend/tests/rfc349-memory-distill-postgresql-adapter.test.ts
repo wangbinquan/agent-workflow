@@ -12,6 +12,7 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function rows(values: readonly (readonly unknown[])[]): SqlRows {
   return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
@@ -54,7 +55,10 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    queries: composePostgresqlMemoryDistillQueries(createPostgresqlDatabaseClient(runtime)),
+    queries: composePostgresqlMemoryDistillQueries(
+      createPostgresqlDatabaseClient(runtime),
+      createClarifyAnswerQueries(createPostgresqlDatabaseClient(runtime)),
+    ),
     executions,
   }
 }

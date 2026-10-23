@@ -1,4 +1,9 @@
 import {
+  legacyPortArchivePath,
+  legacyPortArchiveTaskRoot,
+  decodeLegacyPortArchiveFile,
+} from '@/platform/content/legacyPortArchive'
+import {
   copyFileSync,
   lstatSync,
   mkdirSync,
@@ -36,8 +41,11 @@ export function createFilePortArtifactContent(
       encodePortSegment(namespace.portName),
     )
   const archiveLocation = (taskId: string, reference: string) => {
-    const portsRootAbs = resolve(appHome, 'runs', taskId, 'ports')
-    const rel = relative(portsRootAbs, resolve(appHome, reference))
+    const portsRootAbs = resolve(appHome, legacyPortArchiveTaskRoot(taskId))
+    const rel = relative(
+      portsRootAbs,
+      resolve(appHome, decodeLegacyPortArchiveFile(reference).location.value),
+    )
     if (rel.startsWith('..') || isAbsolute(rel)) {
       log.warn('archive_json file outside task ports namespace — treating as missing', {
         file: reference,
@@ -57,13 +65,22 @@ export function createFilePortArtifactContent(
       mkdirSync(portAbs, { recursive: true })
     },
     reference(namespace: PortArtifactArchiveNamespace, index: number, extension: string) {
-      return join(portRel(namespace), `item_${index}${extension}`)
+      return legacyPortArchivePath(
+        namespace.taskId,
+        namespace.nodeRunId,
+        namespace.portName,
+        index,
+        extension,
+      )
     },
     size(source: PortArtifactWorkspaceFile) {
       return statSync(sourcePath(source)).size
     },
     copy(source: PortArtifactWorkspaceFile, reference: string) {
-      copyFileSync(sourcePath(source), resolve(appHome, reference))
+      copyFileSync(
+        sourcePath(source),
+        resolve(appHome, decodeLegacyPortArchiveFile(reference).location.value),
+      )
     },
     readPrefix(source: PortArtifactWorkspaceFile, maxBytes: number) {
       const fd = openSync(sourcePath(source), 'r')

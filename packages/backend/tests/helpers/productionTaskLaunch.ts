@@ -363,7 +363,7 @@ export async function launchTestTask(
       invoker,
       task,
       subject: {
-        workflowId: workflow.id,
+        subject: { kind: 'workflow' as const, sourceId: workflow.id },
         workflowName: workflow.name,
         workflowVersion: workflow.version,
         builtin: workflow.builtin === true,

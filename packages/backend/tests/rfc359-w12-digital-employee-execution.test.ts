@@ -1,9 +1,18 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 W12: exercise both production Digital Employee execution composers
 // through the complete selected TaskEngine and a real mock-opencode child.
 // Task, node, output, owner and usage rows are produced by the runtime itself.
+
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  workflowFixture,
+} from './helpers/model'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import {
   WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
@@ -26,7 +35,6 @@ import {
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import type { DigitalEmployeeWorkspacePort } from '@/modules/task-execution/composition/required-ports'
 import {
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
@@ -125,8 +133,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         const workflowId = ulid()
         const agentName = `employee-execution-${kind}`
         const now = Date.now()
-        const { users, agents, workflows, tasks, nodeRuns, nodeRunOutputs, taskExecutionIntents } =
-          tablesOf(harness.db)
+        const { users, agents, workflows, nodeRuns, taskExecutionIntents } = tablesOf(harness.db)
         await insertOne(harness.db, users, {
           id: userId,
           username: `employee-${userId}`,
@@ -138,7 +145,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
           createdAt: now,
           updatedAt: now,
         })
-        await insertOne(harness.db, agents, {
+        await agentFixture(harness.db, {
           id: agentId,
           name: agentName,
           description: 'Real subprocess fixture',
@@ -151,7 +158,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
           updatedAt: now,
         })
         const definition = workflow(agentId, agentName)
-        await insertOne(harness.db, workflows, {
+        await workflowFixture(harness.db, {
           id: workflowId,
           name: 'Employee execution workflow',
           definition: JSON.stringify(definition),
@@ -300,7 +307,9 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
           maxTotalTokens: 10_000,
         }
         const attempt = JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null })
-        expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
+        expect(
+          await readTaskFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+        ).toEqual([])
         const participant = compose()
         // RFC-368：执行身份由调用方（admission 事务）预分配，内核拿它当 taskId。
         const launched = await participant.launch({
@@ -308,10 +317,11 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
           attempt: JSON.parse(attempt) as { ordinal: 0; mode: 'initial'; previousError: null },
           taskId: `de-w12-${kind}-${Date.now()}`,
         })
-        const [task] = await harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, launched.executionRef))
+        // RFC-395 II-a A2: both execution implementations leave host rows absent.
+        for (const host of Object.values(TASK_DEFINITION_HOSTS)) {
+          expect(await readWorkflowFixtures(harness.db, { id: host.id })).toEqual([])
+        }
+        const [task] = await readTaskFixtures(harness.db, { id: launched.executionRef })
         expect(task, task?.errorMessage ?? undefined).toMatchObject({
           status: 'done',
           errorMessage: null,
@@ -320,7 +330,8 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
           catalogVisibility: 'internal',
           digitalEmployeeCaseId: caseId,
           digitalEmployeeRoundId: roundRef,
-          workflowId: kind === 'workflow' ? workflowId : DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+          workflowId:
+            kind === 'workflow' ? workflowId : TASK_DEFINITION_HOSTS['digital-employee'].id,
           maxDurationMs: 30_000,
           maxTotalTokens: 10_000,
         })
@@ -339,10 +350,9 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         const outputNode = snapshot.nodes.find((node) => node.kind === 'output')!
         const outputRun = runs.find((run) => run.nodeId === outputNode.id)!
         expect(
-          await harness.db
-            .select({ port: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-            .from(nodeRunOutputs)
-            .where(eq(nodeRunOutputs.nodeRunId, outputRun.id)),
+          await readNodeRunOutputFixtures(harness.db, { nodeRunId: outputRun.id }).then((rows) =>
+            rows.map((row) => ({ port: row.portName, content: row.content })),
+          ),
         ).toEqual([{ port: DIGITAL_EMPLOYEE_RESULT_PORT, content: output }])
         const invocations = readFileSync(capture, 'utf8')
           .trim()

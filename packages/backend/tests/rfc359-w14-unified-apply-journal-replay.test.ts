@@ -42,6 +42,7 @@
 // 同一份文案、同一条判据。它落在 journal **认领之后**、提交事务之内，正是要测的那一段。
 // PostgreSQL 那台的库是整份测试共用的，所以每处都 try/finally 卸掉。
 
+import { readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -57,7 +58,7 @@ import { AuthorityClaimRegistry } from '@/modules/identity-access/application/op
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composePostgresqlResourcePackageProvider } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { encodeZip } from '@/util/zip'
@@ -278,7 +279,7 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
             },
           },
         })
-        const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+        const atomicApply = createResourcePackageAtomicApplyOperations({
           db,
           box: deps.box,
         })
@@ -311,13 +312,13 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
 
     expect(receipt.applied).toHaveLength(1)
     expect(receipt.applied[0]?.resourceType).toBe('agent')
-    const { resourceBundleApplies, agents } = tablesOf(f.db)
+    const { resourceBundleApplies } = tablesOf(f.db)
     const journal = await f.db
       .select()
       .from(resourceBundleApplies)
       .where(eq(resourceBundleApplies.id, receipt.journalId))
     expect(journal[0]?.state).toBe('committed')
-    expect(await f.db.select().from(agents)).toHaveLength(1)
+    expect(await readAgentFixtures(f.db)).toHaveLength(1)
   })
 
   test('② committed 重放 ⇒ 原回执逐字相同，且不产生第二份资源', async () => {
@@ -328,8 +329,8 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
     const second = await f.commit(bytes, importId)
 
     expect(second).toEqual(first)
-    const { agents, resourceBundleApplies } = tablesOf(f.db)
-    expect(await f.db.select().from(agents)).toHaveLength(1)
+    const { resourceBundleApplies } = tablesOf(f.db)
+    expect(await readAgentFixtures(f.db)).toHaveLength(1)
     expect(await f.db.select().from(resourceBundleApplies)).toHaveLength(1)
   })
 
@@ -351,14 +352,13 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
       (e: unknown) => e as { code?: string },
     )
     expect(error?.code).toBe('bundle-apply-failed-replay')
-    const { agents } = tablesOf(f.db)
-    expect(await f.db.select().from(agents)).toHaveLength(0)
+    expect(await readAgentFixtures(f.db)).toHaveLength(0)
   })
 
   test('④ 未结（prepared）重放 ⇒ 409 未结：拒绝，而不是猜', async () => {
     const f = await fixture()
     const importId = ulid()
-    const { resourceBundleApplies, agents } = tablesOf(f.db)
+    const { resourceBundleApplies } = tablesOf(f.db)
     await insertOne(f.db, resourceBundleApplies, {
       id: ulid(),
       scope: 'package',
@@ -375,7 +375,7 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
       (e: unknown) => e as { code?: string },
     )
     expect(error?.code).toBe('bundle-apply-unsettled')
-    expect(await f.db.select().from(agents)).toHaveLength(0)
+    expect(await readAgentFixtures(f.db)).toHaveLength(0)
   })
 
   test('⑤ 提交事务中途失败 ⇒ 零资源可见，且 journal 终态化为 failed 并带原因', async () => {
@@ -389,8 +389,8 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
       await dropAbortTrigger(harness, ABORT)
     }
 
-    const { agents, resourceBundleApplies } = tablesOf(f.db)
-    expect(await f.db.select().from(agents)).toHaveLength(0)
+    const { resourceBundleApplies } = tablesOf(f.db)
+    expect(await readAgentFixtures(f.db)).toHaveLength(0)
     const journal = await f.db
       .select()
       .from(resourceBundleApplies)
@@ -409,8 +409,7 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
     const f = await fixture()
     await f.commitAll(dependentAgentsPackageZip(), ulid())
 
-    const { agents } = tablesOf(f.db)
-    const rows = await f.db.select().from(agents)
+    const rows = await readAgentFixtures(f.db)
     const lead = rows.find((row) => row.name === 'lead')
     const helper = rows.find((row) => row.name === 'helper')
     expect(lead).toBeDefined()
@@ -443,13 +442,13 @@ describeEachProvider('RFC-359 —— 统一 apply 引擎的 journal 三态重放
       )
     expect(error?.message).toContain('post-commit boom')
 
-    const { resourceBundleApplies, agents } = tablesOf(f.db)
+    const { resourceBundleApplies } = tablesOf(f.db)
     const journal = await f.db
       .select()
       .from(resourceBundleApplies)
       .where(eq(resourceBundleApplies.key, importId))
     expect(journal[0]?.state).toBe('committed')
     expect(journal[0]?.receiptJson ?? '').not.toBe('')
-    expect((await f.db.select().from(agents)).map((row) => row.name)).toEqual(['worker'])
+    expect((await readAgentFixtures(f.db)).map((row) => row.name)).toEqual(['worker'])
   })
 })

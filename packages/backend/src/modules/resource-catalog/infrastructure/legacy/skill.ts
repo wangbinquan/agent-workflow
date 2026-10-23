@@ -10,6 +10,7 @@
 // Reference check: an agent's frontmatter.skills[] referencing this skill
 // makes it un-deletable; same as agents <-> workflows in P-1-08.
 
+import { skillTextBytes, skillTextView } from '../../application/skills/textView'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
@@ -52,11 +53,8 @@ import {
   skillFilesAbs,
   skillFilesRel,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
-import {
-  findAgentsUsingManagedSkill,
-  matchesManagedSkillReference,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
-import { findAgentsReferencingIdInJsonColumn } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
+import { findAgentsUsingManagedSkill } from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
+import { createAgentSkillReferenceLookup } from '../referenceLookup'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
 import type {
   SkillContentReader,
@@ -204,10 +202,12 @@ export async function createManagedSkill(
     },
     {
       kind: 'main',
-      content: stringifyFrontmatter({
-        data: { name: input.name, description: input.description, ...input.frontmatterExtra },
-        body: input.bodyMd,
-      }),
+      content: skillTextBytes(
+        stringifyFrontmatter({
+          data: { name: input.name, description: input.description, ...input.frontmatterExtra },
+          body: input.bodyMd,
+        }),
+      ),
     },
   )
 }
@@ -289,7 +289,9 @@ export async function createManagedSkillWithFiles(
     // ② fs-staged: produce the files tree into the (still-invisible) files dir.
     await creation.initialize(
       contentPlan,
-      typeof produceFiles === 'function' ? { kind: 'main', content: '' } : produceFiles,
+      typeof produceFiles === 'function'
+        ? { kind: 'main', content: skillTextBytes('') }
+        : produceFiles,
     )
     await databaseSessionFor(db).transaction(
       async (tx) => await advancePhase(tx, opId, 'fs-staged'),
@@ -424,7 +426,9 @@ export async function stageManagedSkill(
   try {
     await creation.initialize(
       contentPlan,
-      typeof produceFiles === 'function' ? { kind: 'main', content: '' } : produceFiles,
+      typeof produceFiles === 'function'
+        ? { kind: 'main', content: skillTextBytes('') }
+        : produceFiles,
     )
     await databaseSessionFor(db).transaction(
       async (tx) => await advancePhase(tx, opId, 'fs-staged'),
@@ -542,12 +546,7 @@ export async function deleteSkill(
   const refs = await findAgentsUsingManagedSkill(
     {
       find: (skillId) => {
-        const { agents } = tablesOf(db)
-        return findAgentsReferencingIdInJsonColumn(db, {
-          column: agents.skills,
-          id: skillId,
-          matches: matchesManagedSkillReference,
-        })
+        return createAgentSkillReferenceLookup(db).find(skillId)
       },
     },
     existing.id,
@@ -601,7 +600,8 @@ export async function readSkillContent(
   // RFC-170 (G1-1): read the SKILL.md body + sign the token from the AUTHORITATIVE
   // version snapshot, not live — so the returned content always matches the token's
   // contentVersion and a torn live dir can't corrupt the read.
-  const raw = await contentReaderFor(opts).readMain(contentReferenceOf(skill))
+  const reader = contentReaderFor(opts)
+  const raw = skillTextView(await reader.readMain(contentReferenceOf(skill)), reader)
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
   const { skills } = tablesOf(db)
@@ -733,7 +733,7 @@ export async function writeSkillContent(
     db,
     opts,
     skillId,
-    { kind: 'write-main', content: md },
+    { kind: 'write-main', content: skillTextBytes(md) },
     {
       source: 'editor',
       authorUserId: authorUserId ?? null,
@@ -842,7 +842,8 @@ export async function readSkillFile(
   const skill = await getSkillById(db, skillId)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot, not live.
-  return await contentReaderFor(opts).readFile(contentReferenceOf(skill), relPath)
+  const reader = contentReaderFor(opts)
+  return skillTextView(await reader.readFile(contentReferenceOf(skill), relPath), reader)
 }
 
 export async function writeSkillFile(
@@ -877,7 +878,7 @@ export async function writeSkillFile(
     db,
     opts,
     skillId,
-    { kind: 'write-file', path: relPath, content },
+    { kind: 'write-file', path: relPath, content: skillTextBytes(content) },
     {
       source: 'editor',
       authorUserId: authorUserId ?? null,

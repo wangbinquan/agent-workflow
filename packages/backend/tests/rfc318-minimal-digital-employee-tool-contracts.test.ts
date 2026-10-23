@@ -1,6 +1,5 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchAgentFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   projectDevelopmentToolInputV2,
@@ -654,11 +653,11 @@ describe('RFC-318 minimal digital employee tool contracts', () => {
       await ensureDigitalEmployeeAgentTemplates(agentTemplates)
       expect(await listDigitalEmployeeAgentTemplates(agentTemplates)).toHaveLength(8)
 
-      const { agents } = tablesOf(db)
-      await db
-        .update(agents)
-        .set({ description: 'changed occupied definition' })
-        .where(eq(agents.id, DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2[0]))
+      await patchAgentFixture(
+        db,
+        { id: DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS_V2[0] },
+        { description: 'changed occupied definition' },
+      )
       await ensureDigitalEmployeeAgentTemplates(agentTemplates)
       expect((await listDigitalEmployeeAgentTemplates(agentTemplates))[0]?.description).toBe(
         DEVELOPMENT_DIGITAL_EMPLOYEE_AGENT_TEMPLATES_V2[0]?.definition.description,

@@ -32,6 +32,7 @@
 //
 // See design/test-guard-audit-2026-07-21 Top-5 (B5-ACL-cluster) / 逃逸机制③.
 
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -147,8 +148,7 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      const { agents } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         ...row,
         description: 'acl matrix subject',
         outputs: JSON.stringify(['answer']),
@@ -227,8 +227,7 @@ const CASES: ResourceCase[] = [
     missingKey: ulid(),
     seed: async (db, ownerUserId) => {
       const row = { id: ulid(), name: KEY }
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         ...row,
         description: 'acl matrix subject',
         definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),

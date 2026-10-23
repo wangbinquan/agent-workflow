@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -168,8 +168,8 @@ describeEachProvider('RFC-341 collaboration committed-event contracts', (harness
     const db = harness.db
     try {
       await dispatchCollaboration(db)
-      const { tasks, taskQuestions, collaborationGateOperations, committedEvents } = tablesOf(db)
-      await insertOne(db, tasks, {
+      const { taskQuestions, collaborationGateOperations, committedEvents } = tablesOf(db)
+      await taskFixture(db, {
         id: 'task-question-rollback',
         name: 'task-question-rollback',
         workflowId: 'workflow-question-rollback',

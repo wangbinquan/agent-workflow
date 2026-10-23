@@ -19,6 +19,7 @@ import {
 import type { NativeMemoryDistillRuntimeResolver } from '@/modules/memory/application/ports/distillWorkStore'
 import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 type NativeRunFixture = (options: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
 
@@ -138,7 +139,7 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
     createFileReviewArtifactContent(root),
   )
   return Object.freeze({
-    store: new DrizzleMemoryDistillWorkStore(db),
+    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts,
@@ -147,7 +148,7 @@ export function createSqliteMemoryDistillTestContext(db: PersistenceDb, root = a
 
 /** Provider-real test participant for consumers that only enqueue work. */
 export function createSqliteMemoryDistillEnqueuer(db: PersistenceDb): MemoryDistillEnqueuer {
-  const store = new DrizzleMemoryDistillWorkStore(db)
+  const store = new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db))
   return Object.freeze({
     enqueue: async (input) => await enqueueDistillJob(store, input),
   })

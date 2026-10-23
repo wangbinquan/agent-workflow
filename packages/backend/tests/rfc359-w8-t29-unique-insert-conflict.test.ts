@@ -64,6 +64,7 @@
 // 相关：架构账本 `tests/architecture/rfc359-w8-t29-unnormalized-unique-insert.test.ts` 数「这个形状
 // 还剩几处」，本文件回答「其中哪几处真会咬人」——两半合起来才是一条完整的判据（同 W6-T28 的分工）。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -161,8 +162,7 @@ const rootPath = (taskId: string): readonly LineageSlot[] => [
 async function seedTaskRow(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -170,7 +170,7 @@ async function seedTaskRow(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,

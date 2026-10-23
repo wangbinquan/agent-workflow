@@ -14,9 +14,8 @@
  * A drifted row is compared against the snapshot taken right after the first
  * seed, so these cases stay honest without restating the template text.
  */
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchAgentFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
@@ -54,15 +53,15 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     )
 
     for (const id of DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS) {
-      const { agents } = tablesOf(db)
-      await db
-        .update(agents)
-        .set({
+      await patchAgentFixture(
+        db,
+        { id },
+        {
           description: 'drifted description',
           bodyMd: 'drifted body',
           frontmatterExtra: '{}',
-        })
-        .where(eq(agents.id, id))
+        },
+      )
     }
 
     await ensureDigitalEmployeeAgentTemplates(catalog)
@@ -82,8 +81,7 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     const seeded = await definitionOf(db, id)
     const seededCount = (await listAgents(db)).length
 
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ name: 'drifted-name' }).where(eq(agents.id, id))
+    await patchAgentFixture(db, { id }, { name: 'drifted-name' })
     await ensureDigitalEmployeeAgentTemplates(catalog)
 
     expect(await definitionOf(db, id)).toEqual(seeded)
@@ -96,8 +94,7 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
 
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ description: 'drifted' }).where(eq(agents.id, id))
+    await patchAgentFixture(db, { id }, { description: 'drifted' })
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const repaired = await getAgentById(db, id)
 
@@ -113,8 +110,7 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
     await ensureDigitalEmployeeAgentTemplates(catalog)
     const privatedId = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS[8]
 
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, privatedId))
+    await patchAgentFixture(db, { id: privatedId }, { visibility: 'private' })
 
     await ensureDigitalEmployeeAgentTemplates(catalog)
 
@@ -138,8 +134,7 @@ describeEachProvider('digital employee Agent template reconciliation', (harness)
       await ensureDigitalEmployeeAgentTemplates(catalog)
       const [id] = DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS
 
-      const { agents } = tablesOf(db)
-      await db.update(agents).set(squat).where(eq(agents.id, id))
+      await patchAgentFixture(db, { id }, squat)
 
       await expect(ensureDigitalEmployeeAgentTemplates(catalog)).rejects.toMatchObject({
         code: 'builtin-agent-id-collision',

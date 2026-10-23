@@ -1,3 +1,4 @@
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -240,19 +241,19 @@ describe('RFC-368 实现门 findings', () => {
 
   describeEachProvider('P2-1：收割带真实原因取消', (harness) => {
     async function seedRunningTask(id: string): Promise<void> {
-      const { workflows, tasks } = tablesOf(harness.db)
-      await harness.db
-        .insert(workflows)
-        .values({
+      await workflowFixture(
+        harness.db,
+        {
           id: `wf-${id}`,
           name: `wf-${id}`,
           definition: '{}',
           version: 1,
           createdAt: 1,
           updatedAt: 1,
-        })
-        .onConflictDoNothing()
-      await insertOne(harness.db, tasks, {
+        },
+        { onConflict: 'ignore' },
+      )
+      await taskFixture(harness.db, {
         id,
         name: id,
         workflowId: `wf-${id}`,
@@ -279,15 +280,13 @@ describe('RFC-368 实现门 findings', () => {
         summary: 'task-time-limit-exceeded',
         message: 'task ran 61000ms, exceeding configured limit 60000ms',
       })
-      const { tasks } = tablesOf(harness.db)
-      const [row] = await harness.db
-        .select({
-          status: tasks.status,
-          errorSummary: tasks.errorSummary,
-          errorMessage: tasks.errorMessage,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, 'task-reaped'))
+      const [row] = await readTaskFixtures(harness.db, { id: 'task-reaped' }).then((rows) =>
+        rows.map((row) => ({
+          status: row.status,
+          errorSummary: row.errorSummary,
+          errorMessage: row.errorMessage,
+        })),
+      )
       expect(row).toEqual({
         status: 'canceled',
         errorSummary: 'task-time-limit-exceeded',

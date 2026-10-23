@@ -1,3 +1,4 @@
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
@@ -44,8 +45,7 @@ const actor: Actor = {
 async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): Promise<string> {
   const id = forcedId ?? ulid()
   const now = Date.now()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name,
     description: '',
@@ -55,7 +55,7 @@ async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): 
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['workflows']['$inferInsert'])
+  })
   return id
 }
 
@@ -86,8 +86,7 @@ function createProviderCallEdgeFixture(db: PersistenceDb, appHome: string) {
   async function seedWorkflow(name: string, nodes: unknown[], forcedId?: string): Promise<string> {
     const id = forcedId ?? ulid()
     const now = Date.now()
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id,
       name,
       description: '',
@@ -97,7 +96,7 @@ function createProviderCallEdgeFixture(db: PersistenceDb, appHome: string) {
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as PersistenceTables['workflows']['$inferInsert'])
+    })
     return id
   }
 

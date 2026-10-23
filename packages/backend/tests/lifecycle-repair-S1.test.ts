@@ -1,7 +1,7 @@
 // LOCKS: RFC-057 — S1 repair options (awaiting_review without pending doc_version).
 // 2 options × 3 cases = 6 tests.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunOutputFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 
@@ -54,8 +54,8 @@ describeEachProvider('RFC-057 — S1.recreate-doc-version', (provider) => {
       status: 'done',
       finishedAt: Date.now(),
     })
-    const { nodeRunOutputs, docVersions } = tablesOf(h.db)
-    await insertOne(h.db, nodeRunOutputs, {
+    const { docVersions } = tablesOf(h.db)
+    await nodeRunOutputFixture(h.db, {
       nodeRunId: srcRunId,
       portName: 'docpath',
       content: '# Demo doc body\n\nInline markdown sourced from src.',
@@ -125,8 +125,8 @@ describeEachProvider('RFC-057 — S1.recreate-doc-version', (provider) => {
       status: 'done',
       finishedAt: Date.now(),
     })
-    const { nodeRunOutputs, docVersions } = tablesOf(h.db)
-    await insertOne(h.db, nodeRunOutputs, {
+    const { docVersions } = tablesOf(h.db)
+    await nodeRunOutputFixture(h.db, {
       nodeRunId: srcRunId,
       portName: 'docpath',
       content: '# must not be recreated',
@@ -299,8 +299,7 @@ describeEachProvider('RFC-193 case 8d —— S1 的评审派发落在 wrapper �
       status: 'awaiting_review',
     })
     const sourceRunId = await insertNodeRun(h.db, h.taskId, { nodeId: 'doc', status: 'done' })
-    const { nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(h.db, {
       nodeRunId: sourceRunId,
       portName: 'docpath',
       content: '# wrapper doc body',
@@ -350,8 +349,7 @@ describeEachProvider('RFC-193 case 8d —— S1 的评审派发落在 wrapper �
       status: 'awaiting_review',
     })
     const sourceRunId = await insertNodeRun(h.db, h.taskId, { nodeId: 'doc', status: 'done' })
-    const { nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(h.db, {
       nodeRunId: sourceRunId,
       portName: 'docpath',
       content: '# wrapper doc body',

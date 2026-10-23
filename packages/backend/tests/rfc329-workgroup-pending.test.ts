@@ -1,3 +1,4 @@
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -105,7 +106,7 @@ async function seed(
   specs: ReadonlyArray<TaskSpec>,
   explicitLineage = false,
 ): Promise<void> {
-  const { users, workflows, tasks, workgroupTaskState, workgroupAssignments } = tablesOf(db)
+  const { users, workgroupTaskState, workgroupAssignments } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'bob', 'admin'].map((id) => ({
       id,
@@ -116,9 +117,9 @@ async function seed(
       updatedAt: NOW,
     })),
   )
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
   for (const spec of specs) {
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       ...(explicitLineage
         ? {
             executionLineageId: spec.id,
@@ -305,8 +306,7 @@ describeEachProvider(
           ],
           true,
         )
-        const { tasks } = tablesOf(db)
-        await insertOne(db, tasks, {
+        await taskFixture(db, {
           executionLineageId: 'broken',
           lineageSlotPathJson: JSON.stringify([
             { stableNodeKey: 'task-root', frozenOccurrenceKey: 'broken', workflowRevision: null },

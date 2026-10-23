@@ -1,5 +1,6 @@
 // The recovery inputs are persisted crash states and real plugin generations.
 // No artifact compensation, publication result, or database operation is mocked.
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -10,11 +11,11 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE } from '@/modules/intent/application/journalConvergence'
-import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
+import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import {
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
-} from '@/modules/intent/domain/journalArtifacts'
+} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -39,7 +40,9 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
 
   // RFC-359 —— 两个 provider 共用同一份恢复装配。此处此前是 `isolation === 'exclusive'` 的二分。
   function compose(input: { appHome: string; pluginsDir: string }) {
-    return composeIntentApplyConvergence({ ...input, db: harness.db, log })
+    return createAtomicApplyRecovery([
+      composeIntentApplyRecoveryScene({ ...input, db: harness.db, log }),
+    ])
   }
 
   function generation(pluginsDir: string) {
@@ -125,7 +128,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     const originalActive = await readJournal(activeJournal.id)
     const originalFresh = await readJournal(freshJournal.id)
 
-    expect(await compose(input).converge({ activeJournalIds: [activeJournal.id] })).toEqual({
+    expect(await compose(input).converge({ intent: [activeJournal.id] })).toEqual({
       failed: 1,
       rolledForward: 0,
     })
@@ -140,7 +143,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     expect(readFileSync(fresh.entry, 'utf8')).toBe(pluginBytes)
 
     // A new composition owns the same persisted journal and filesystem state.
-    expect(await compose(input).converge({ activeJournalIds: [] })).toEqual({
+    expect(await compose(input).converge({ intent: [] })).toEqual({
       failed: 1,
       rolledForward: 0,
     })
@@ -151,27 +154,25 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
       .update(intentApplyJournal)
       .set({ updatedAt: staleTimestamp() })
       .where(eq(intentApplyJournal.id, freshJournal.id))
-    expect(await compose(input).converge({ activeJournalIds: [] })).toEqual({
+    expect(await compose(input).converge({ intent: [] })).toEqual({
       failed: 1,
       rolledForward: 0,
     })
     expect(existsSync(fresh.generationDir)).toBe(false)
-    expect(await compose(input).converge({ activeJournalIds: [] })).toEqual({
+    expect(await compose(input).converge({ intent: [] })).toEqual({
       failed: 0,
       rolledForward: 0,
     })
   })
 
-  test('committed publication remains retryable until both its plugin row and entry file exist', async () => {
+  test('deleted plugin finishes; a present row with a missing entry remains retryable', async () => {
     const input = environment()
     const published = generation(input.pluginsDir)
     const committed = await journal({ state: 'committed', artifacts: [published.artifact] })
-    const recover = () => compose(input).converge({ activeJournalIds: [] })
-    expect(await recover()).toEqual({ failed: 0, rolledForward: 0 })
-    expect(await readJournal(committed.id)).toMatchObject({
-      state: 'committed',
-      error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
-    })
+    const recover = () => compose(input).converge({ intent: [] })
+    // RFC-395 II-a A6：删除插件是明确的完成处置；有行但无入口文件仍在下方锁定为 retryable。
+    expect(await recover()).toEqual({ failed: 0, rolledForward: 1 })
+    expect(await readJournal(committed.id)).toMatchObject({ state: 'committed', error: null })
     expect(readFileSync(published.entry, 'utf8')).toBe(pluginBytes)
 
     const { plugins } = tablesOf(harness.db)
@@ -217,7 +218,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
       artifacts: [published.artifact],
       corrupt: true,
     })
-    expect(await compose(input).converge({ activeJournalIds: [] })).toEqual({
+    expect(await compose(input).converge({ intent: [] })).toEqual({
       failed: 0,
       rolledForward: 0,
     })

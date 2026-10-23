@@ -14,7 +14,17 @@
 //      摘要携带子任务信息）。
 //   5. freezeCallClosure 纯服务：无 call 节点 → null；引用缺失 →
 //      workflow-call-ref-missing；A→B→A → workflow-call-cycle（id-only 载荷）。
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -144,8 +154,7 @@ async function buildHarness(): Promise<Harness> {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -225,15 +234,14 @@ interface Seeded {
 async function seedParentTask(h: Harness, workerId: string): Promise<Seeded> {
   const childDef = childDefinition(workerId)
   const childWorkflowId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: childWorkflowId,
     name: 'child-wf',
     definition: JSON.stringify(childDef),
   })
   const parentDef = parentDefinition()
   const parentWorkflowId = ulid()
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: parentWorkflowId,
     name: 'parent-wf',
     definition: JSON.stringify(parentDef),
@@ -242,7 +250,7 @@ async function seedParentTask(h: Harness, workerId: string): Promise<Seeded> {
     workflows: { 'child-wf': { id: childWorkflowId, version: 1, definition: childDef } },
   })
   const parentTaskId = ulid()
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: parentTaskId,
     name: 'rfc243-parent',
     workflowId: parentWorkflowId,
@@ -287,12 +295,12 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const { nodeRuns } = tablesOf(h.db)
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     expect(parent.status).toBe('done')
 
     // 子任务独立行：父链接 + inherited 空间 + done。
-    const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+    const children = await readTaskFixtures(h.db, { parentTaskId })
     expect(children.length).toBe(1)
     const child = children[0]!
     expect(child.status).toBe('done')
@@ -302,19 +310,13 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
 
     // 调用行：childTaskId / done / merged / 输出回填（F）。
     const callRow = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'call1')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'call1' }] })
     ).find((r) => r.parentNodeRunId === null)!
     expect(callRow.childTaskId).toBe(child.id)
     expect(callRow.status).toBe('done')
     expect(callRow.mergeState).toBe('merged')
     expect(child.parentNodeRunId).toBe(callRow.id)
-    const callOutputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, callRow.id))
+    const callOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: callRow.id })
     const byPort = new Map(callOutputs.map((o) => [o.portName, o.content]))
     expect(byPort.get('report')).toBe('CHILD SAYS HI')
     // D5 继承：子 agent 在自己的工作区读到了父 canonical 的未提交文件。
@@ -332,10 +334,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'pout')))
     )[0]!
-    const outPorts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, outRow.id))
+    const outPorts = await readNodeRunOutputFixtures(h.db, { nodeRunId: outRow.id })
     expect(outPorts.find((o) => o.portName === 'report')?.content).toBe('CHILD SAYS HI')
   })
 
@@ -346,8 +345,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       JSON.stringify({ worker: { output: { out: 'CHILD', echo: 'context' } } }),
     )
     const { parentTaskId } = await seedParentTask(h, workerId)
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     const closure = JSON.parse(parent.refClosureJson!) as {
       workflows: Record<
         string,
@@ -366,13 +364,14 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
         },
       },
     }
-    await h.db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      h.db,
+      { id: parentTaskId },
+      {
         refClosureJson: JSON.stringify(closure),
         triggerContextJson: JSON.stringify(context),
-      })
-      .where(eq(tasks.id, parentTaskId))
+      },
+    )
 
     await runTask({
       db: h.db,
@@ -381,9 +380,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const childTask = (
-      await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
-    )[0]!
+    const childTask = (await readTaskFixtures(h.db, { parentTaskId }))[0]!
     expect(JSON.parse(childTask.triggerContextJson!)).toEqual({
       ...context,
       contract: {
@@ -419,10 +416,7 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       },
     })
     const childRun = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, childTask.id), eq(nodeRuns.nodeId, 'work')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: childTask.id }, { nodeId: 'work' }] })
     )[0]!
     expect(childRun.promptText).toContain('child-inherited-trigger')
     expect(childRun.promptText).not.toContain('{{trigger.webhook.comment_text}}')
@@ -440,17 +434,13 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
       // 子任务 agent 重试烧时间——压到 0 让失败立即冒泡。
       defaultNodeRetries: 0,
     })
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     expect(parent.status).toBe('failed')
-    const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+    const children = await readTaskFixtures(h.db, { parentTaskId })
     expect(children.length).toBe(1)
     expect(children[0]!.status).toBe('failed')
     const callRow = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'call1')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'call1' }] })
     ).find((r) => r.parentNodeRunId === null)!
     expect(callRow.status).toBe('failed')
     expect(callRow.failureCode).toBe('child-task-failed')
@@ -479,25 +469,20 @@ describe('RFC-243 e2e — 生命周期', () => {
     // 等到子任务出现且 running（budget→iso→launch 全链完成）。
     let childId: string | null = null
     for (let i = 0; i < 200 && childId === null; i++) {
-      const { tasks } = tablesOf(h.db)
-      const rows = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+      const rows = await readTaskFixtures(h.db, { parentTaskId })
       if (rows[0]?.status === 'running') childId = rows[0].id
       else await Bun.sleep(50)
     }
     expect(childId).not.toBeNull()
     await cancelViaEngine(h.db, parentTaskId)
     await running
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
-    const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId!)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
+    const child = (await readTaskFixtures(h.db, { id: childId! }))[0]!
     expect(parent.status).toBe('canceled')
     expect(child.status).toBe('canceled')
     expect(child.errorMessage).toBe('canceled-by-parent-cascade')
     const callRow = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'call1')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'call1' }] })
     ).find((r) => r.parentNodeRunId === null)!
     expect(['canceled', 'failed']).toContain(callRow.status)
   }, 30000)
@@ -513,12 +498,8 @@ describe('RFC-243 e2e — 生命周期', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
       defaultNodeRetries: 0,
     })
-    const { nodeRuns, tasks } = tablesOf(h.db)
     const failedCall = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'call1')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'call1' }] })
     ).find((r) => r.parentNodeRunId === null)!
     expect(failedCall.status).toBe('failed')
     // 修好计划 → retryNode 换代。
@@ -543,13 +524,13 @@ describe('RFC-243 e2e — 生命周期', () => {
       nodeRunId: failedCall.id,
     })
     // retry 的复活是 fire-and-forget —— 轮询到终态再断言。
-    let parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    let parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     for (let i = 0; i < 300 && !['done', 'failed', 'canceled'].includes(parent.status); i++) {
       await Bun.sleep(50)
-      parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+      parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     }
     expect(parent.status).toBe('done')
-    const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+    const children = await readTaskFixtures(h.db, { parentTaskId })
     expect(children.length).toBe(2) // 旧 failed 历史行 + 新 done
     expect(children.map((c) => c.status).sort()).toEqual(['done', 'failed'])
   }, 30000)
@@ -602,24 +583,21 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       JSON.stringify({ worker: { output: { out: 'ROUND OUTPUT', echo: 'x' } } }),
     )
     const seeded = await seedParentTask(h, workerId)
-    const { tasks } = tablesOf(h.db)
     // 换成 loop 形态快照（复用已入库的 child-wf 与闭包）。
-    await h.db
-      .update(tasks)
-      .set({ workflowSnapshot: JSON.stringify(loopParentDefinition()) })
-      .where(eq(tasks.id, seeded.parentTaskId))
+    await patchTaskFixture(
+      h.db,
+      { id: seeded.parentTaskId },
+      { workflowSnapshot: JSON.stringify(loopParentDefinition()) },
+    )
     await runTask({
       db: h.db,
       taskId: seeded.parentTaskId,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
     })
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, seeded.parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: seeded.parentTaskId }))[0]!
     expect(parent.status).toBe('done')
-    const children = await h.db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.parentTaskId, seeded.parentTaskId))
+    const children = await readTaskFixtures(h.db, { parentTaskId: seeded.parentTaskId })
     expect(children.length).toBe(2) // 每轮一个
     expect(children.every((c) => c.status === 'done')).toBe(true)
   }, 40000)
@@ -658,29 +636,23 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
         },
       ],
     } as unknown as WorkflowDefinition
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    await h.db
-      .update(tasks)
-      .set({ workflowSnapshot: JSON.stringify(gitDef) })
-      .where(eq(tasks.id, seeded.parentTaskId))
+    await patchTaskFixture(
+      h.db,
+      { id: seeded.parentTaskId },
+      { workflowSnapshot: JSON.stringify(gitDef) },
+    )
     await runTask({
       db: h.db,
       taskId: seeded.parentTaskId,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
     })
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, seeded.parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: seeded.parentTaskId }))[0]!
     expect(parent.status).toBe('done')
     const gwRow = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, seeded.parentTaskId), eq(nodeRuns.nodeId, 'gw')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: seeded.parentTaskId }, { nodeId: 'gw' }] })
     ).find((r) => r.parentNodeRunId === null)!
-    const gwOutputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, gwRow.id))
+    const gwOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: gwRow.id })
     expect(gwOutputs.find((o) => o.portName === 'git_diff')?.content ?? '').toContain(
       'src/from-child.txt',
     )
@@ -704,8 +676,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     })
     let childId: string | null = null
     for (let i = 0; i < 200 && childId === null; i++) {
-      const { tasks } = tablesOf(h.db)
-      const rows = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+      const rows = await readTaskFixtures(h.db, { parentTaskId })
       if (rows[0]?.status === 'running') childId = rows[0].id
       else await Bun.sleep(50)
     }
@@ -717,8 +688,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     // 清空（真实重启后该表天然为空）。不等的话子任务仍被本进程持有，
     // resume 会以 task-active 冲突——那是测试假象，不是恢复语义。
     for (let i = 0; i < 200; i++) {
-      const { tasks } = tablesOf(h.db)
-      const rows = await h.db.select().from(tasks)
+      const rows = await readTaskFixtures(h.db)
       if (!rows.some((t) => isTaskActive(t.id))) break
       await Bun.sleep(50)
     }
@@ -734,22 +704,18 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       awaitScheduler: true,
       runConfig: { binaryOverride: ['bun', 'run', h.mockPath] },
     }).resume(parentTaskId)
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     expect(`${parent.status}:${parent.errorSummary ?? ''}:${parent.errorMessage ?? ''}`).toBe(
       'done::',
     )
-    const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+    const children = await readTaskFixtures(h.db, { parentTaskId })
     expect(children.length).toBe(1) // 领养同一子任务，绝不重复发起
     expect(children[0]!.id).toBe(childId!)
     expect(children[0]!.status).toBe('done')
     // 调用行原地复用（retryIndex 不递增）——领养绝不 mint 新代，否则
     // abandonSupersededMergeStates 会作废子任务 canonical 所在的 iso 世代。
     const callRows = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'call1')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'call1' }] })
     ).filter((r) => r.parentNodeRunId === null)
     expect(callRows.length).toBe(1)
     expect(callRows[0]!.retryIndex).toBe(0)
@@ -763,8 +729,8 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     // 构造崩溃后现场：子任务 done + 输出行在库；调用行 interrupted、
     // mergeState='merged'（合并早已完成）；父任务 pending 等待重驱。
     const childId = ulid()
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, tasks, {
+    const { nodeRuns } = tablesOf(h.db)
+    await taskFixture(h.db, {
       id: childId,
       name: 'seeded-child',
       workflowId: childWorkflowId,
@@ -782,7 +748,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       spaceKind: 'inherited',
     })
     const childOut = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: childOut,
       taskId: childId,
       nodeId: 'cout',
@@ -792,14 +758,14 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       startedAt: Date.now() - 60_000,
       finishedAt: Date.now() - 30_000,
     })
-    await insertOne(h.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(h.db, {
       nodeRunId: childOut,
       portName: 'report',
       content: 'MERGED ALREADY',
       kind: 'text',
     })
     const callRun = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: callRun,
       taskId: parentTaskId,
       nodeId: 'call1',
@@ -810,21 +776,18 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
       childTaskId: childId,
       mergeState: 'merged',
     })
-    await h.db.update(tasks).set({ parentNodeRunId: callRun }).where(eq(tasks.id, childId))
+    await patchTaskFixture(h.db, { id: childId }, { parentNodeRunId: callRun })
     await runTask({
       db: h.db,
       taskId: parentTaskId,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
     })
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     expect(parent.status).toBe('done')
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, callRun)))[0]!
     expect(row.status).toBe('done')
-    const outs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, callRun))
+    const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: callRun })
     expect(outs.find((o) => o.portName === 'report')?.content).toBe('MERGED ALREADY')
     // 领养复用同一行：无新代 call 行。
     const callRows = await h.db
@@ -838,8 +801,8 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
     const { parentTaskId } = await seedParentTask(h, workerId)
     const callRun = ulid()
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    const { nodeRuns } = tablesOf(h.db)
+    await nodeRunFixture(h.db, {
       id: callRun,
       taskId: parentTaskId,
       nodeId: 'call1',
@@ -859,7 +822,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, callRun)))[0]!
     expect(row.status).toBe('failed')
     expect(row.failureCode).toBe('child-deleted')
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     expect(parent.status).toBe('failed')
   })
 })
@@ -894,15 +857,14 @@ describe('RFC-243 §3.1 — freezeCallClosure', () => {
     }
     const idA = ulid()
     const idB = ulid()
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, { id: idB, name: 'wf-b', definition: JSON.stringify(defB) })
+    await workflowFixture(db, { id: idB, name: 'wf-b', definition: JSON.stringify(defB) })
     const defA = {
       $schema_version: 4,
       inputs: [],
       nodes: [{ id: 'ca', kind: 'call-workflow', workflowName: 'wf-b' }],
       edges: [],
     }
-    await insertOne(db, workflows, { id: idA, name: 'wf-a', definition: JSON.stringify(defA) })
+    await workflowFixture(db, { id: idA, name: 'wf-a', definition: JSON.stringify(defA) })
     const err = await freezeCallClosure(
       db,
       { id: idA, definition: defA as unknown as WorkflowDefinition },

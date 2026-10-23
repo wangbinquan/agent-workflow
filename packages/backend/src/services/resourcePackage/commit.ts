@@ -15,7 +15,7 @@
 //     （只写 reuse 那一半会让别的资源仍指向一个本次并不会创建的 local slug）。
 //
 // 幂等顺序那两条（duplicate lookup 先于过期检查、只有首次 claim 才查 `exp`）跟着编排走，
-// 现在的执行者与判据在 `platform/persistence/postgresqlResourcePackageAtomicApply.ts` 与
+// 现在的执行者与判据在 `modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts` 与
 // `tests/rfc359-w14-unified-apply-journal-replay.test.ts`。
 
 import type { Actor } from '@/auth/actor'

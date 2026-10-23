@@ -15,6 +15,7 @@
 // （提交大事务顺带写挂载清单 / replay 幂等 / 谱系退根 / handle 高水位）全在库里：
 // apply 引擎两个 provider 合一之后，同一份 body 在 SQLite 与 PostgreSQL 上各跑一遍。
 
+import { agentFixture, type AgentFixtureSpec } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
@@ -64,8 +65,7 @@ async function seedAgent(
 ): Promise<{ id: string; updatedAt: number }> {
   const id = ulid()
   const now = Date.now()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'existing',
@@ -74,7 +74,7 @@ async function seedAgent(
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['agents']['$inferInsert'])
+  } as AgentFixtureSpec)
   return { id, updatedAt: now }
 }
 

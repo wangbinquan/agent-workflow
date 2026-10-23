@@ -10,9 +10,15 @@
 // 一起退役——生产侧再没有同步调用方。通用的「一份 program 两种解释」契约仍由
 // `tests/rfc359-committed-append-program-conformance.test.ts` 看守。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first, queryRows, queryWrite } from '@/platform/persistence/queryHelpers'
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows, queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { canonicalJson } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
@@ -47,12 +53,12 @@ const ADDED: TaskNodeChangeV1 = {
 async function seedTask(
   db: PersistenceDb,
   id: string,
-  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  extra: Partial<TaskFixtureSpec> = {},
 ): Promise<void> {
   const workflowId = `workflow-${id}`
-  const { workflows, tasks, committedEventFamilyCutovers } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: workflowId, definition: '{}' })
-  await insertOne(db, tasks, {
+  const { committedEventFamilyCutovers } = tablesOf(db)
+  await workflowFixture(db, { id: workflowId, name: workflowId, definition: '{}' })
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -82,8 +88,7 @@ async function seedTask(
 }
 
 async function taskRow(db: PersistenceDb, id: string) {
-  const { tasks } = tablesOf(db)
-  const row = (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+  const row = (await readTaskFixtures(db, { id }))[0]
   if (row === undefined) throw new Error(`missing fixture task ${id}`)
   return row
 }
@@ -147,10 +152,8 @@ describe('RFC-359 lifecycle native writer contract', () => {
           taskRevision: 5,
           eventRefs: [{ eventId: 'task-lifecycle:native:5' }],
         })
-        const { tasks, committedEvents } = tablesOf(tx)
-        expect((await first(tx.select().from(tasks).where(eq(tasks.id, 'native'))))?.status).toBe(
-          'awaiting_review',
-        )
+        const { committedEvents } = tablesOf(tx)
+        expect((await readTaskFixtures(tx, { id: 'native' }))[0]?.status).toBe('awaiting_review')
         expect(await tx.select().from(committedEvents)).toHaveLength(1)
         throw sentinel
       }),
@@ -181,12 +184,10 @@ describe('RFC-359 lifecycle native writer contract', () => {
       async onTransitionTx(tx, transition, collector) {
         order.push('companion')
         expect(transition).toEqual({ from: 'running', to: 'done' })
-        const { tasks, committedEvents } = tablesOf(tx)
-        expect((await first(tx.select().from(tasks).where(eq(tasks.id, 'native'))))?.status).toBe(
-          'done',
-        )
+        const { committedEvents } = tablesOf(tx)
+        expect((await readTaskFixtures(tx, { id: 'native' }))[0]?.status).toBe('done')
         expect(await tx.select().from(committedEvents)).toEqual([])
-        await tx.update(tasks).set({ name: 'companion-written' }).where(eq(tasks.id, 'native'))
+        await patchTaskFixture(tx, { id: 'native' }, { name: 'companion-written' })
         collector.addNodeChanges([ADDED])
       },
       deferCommittedEventPublication(refs) {
@@ -218,8 +219,7 @@ describe('RFC-359 lifecycle native writer contract', () => {
         now: NOW,
         reason: 'native-rollback',
         onTransitionTx(tx) {
-          const { tasks } = tablesOf(tx)
-          queryWrite(tx.update(tasks).set({ name: 'must-rollback' }).where(eq(tasks.id, 'native')))
+          queryWrite(patchTaskFixture(tx, { id: 'native' }, { name: 'must-rollback' }))
           throw sentinel
         },
         deferCommittedEventPublication() {
@@ -265,11 +265,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
           expect(transition).toEqual({ from: 'running', to: 'done' })
           expect((await taskRow(companionTx, 'complete')).status).toBe('done')
           expect((await durableRows(companionTx)).events).toEqual([])
-          const { tasks } = tablesOf(companionTx)
-          await companionTx
-            .update(tasks)
-            .set({ name: 'companion-written' })
-            .where(eq(tasks.id, 'complete'))
+          await patchTaskFixture(companionTx, { id: 'complete' }, { name: 'companion-written' })
           collector.addNodeChanges([ADDED])
         },
       })
@@ -407,7 +403,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
     },
   ] satisfies readonly {
     name: string
-    row: Partial<PersistenceTables['tasks']['$inferInsert']>
+    row: Partial<TaskFixtureSpec>
     input: Partial<Parameters<typeof writeTaskRuntimeLifecycleInTx>[1]>
   }[])('$name stops before companion and event', async ({ row, input }) => {
     await seedTask(harness.db, 'miss', row)
@@ -437,11 +433,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
         writeTaskRuntimeLifecycleInTx(tx, {
           ...writeInput('rollback'),
           async onTransitionTx(companionTx) {
-            const { tasks } = tablesOf(companionTx)
-            await companionTx
-              .update(tasks)
-              .set({ name: 'must-rollback' })
-              .where(eq(tasks.id, 'rollback'))
+            await patchTaskFixture(companionTx, { id: 'rollback' }, { name: 'must-rollback' })
             throw sentinel
           },
         }),
@@ -466,11 +458,7 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
             order.push('entered')
             entered.resolve()
             await release.promise
-            const { tasks } = tablesOf(companionTx)
-            await companionTx
-              .update(tasks)
-              .set({ name: 'released' })
-              .where(eq(tasks.id, 'handshake'))
+            await patchTaskFixture(companionTx, { id: 'handshake' }, { name: 'released' })
             order.push('completed')
           },
         })

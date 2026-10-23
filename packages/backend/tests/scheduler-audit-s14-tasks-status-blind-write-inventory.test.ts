@@ -42,15 +42,15 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
  * Exact counts keep every physical writer visible.
  */
 const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
-  'modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts': 1,
-  'modules/task-execution/infrastructure/taskRouteOperations.ts': 2,
+  'modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts': 3,
+  'modules/task-execution/infrastructure/taskRouteOperations.ts': 1,
   'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts': 1,
   'modules/task-execution/infrastructure/taskExecutionShutdownOperations.ts': 1,
   'modules/task-execution/infrastructure/postgresqlSourceTerminationParticipant.ts': 1,
   'modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction.ts': 1,
   // RFC-359 W1-T1：human-gate 任务跃迁的一份中立实现（SQLite/PG 共用），CAS on lifecycleEventRevision。
   'modules/task-execution/infrastructure/humanGateTaskTransition.ts': 1,
-  'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 2,
+  'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 1,
   'modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts': 2,
 }
 
@@ -71,7 +71,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   //（RFC-311 P1-6）随之并入共用的 `services/taskDelete.ts`——那一份本来就有逐字同形的同一段。
   // 这个文件现在一处非状态 `update(tasks)` 都没有了。
   'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
-  'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts': 1,
+  'modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts': 1,
   // RFC-359 W12：来源终止的伴随列写从两个宿主收敛到同一任务执行 atom（SQLite 4 + PG 2 → 1）。
   // writeFence 只写 sourceTerminationFence / sourceTerminationEffectRev，并按任务 id 与
   // lifecycleEventRevision 做 CAS；翻状态仍委托已有的 writeTaskRuntimeLifecycleInTx。
@@ -92,6 +92,8 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-370 v3 V5：托管恢复后的 RFC-213 归一——只写 `auto_recovery_suspended`，不翻状态
   //（运行中任务的 interrupted 走共享的 writeTaskRuntimeLifecycleInTx 内核）。
   'modules/task-execution/infrastructure/hostedRestoreNormalization.ts': 1,
+  // RFC-395 II-a A7: transferTaskOwnerInTx moved from collaboration; writes ownerUserId only.
+  'modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts': 1,
   // RFC-359 AC-1（第 11 刀）：`cancel` 合一，`services/task.ts` 的 `cancelTask` 只剩薄壳
   //（3 → 2），它那处「父级联撞上一个**已经 canceled** 的子任务时补盖级联来源」的写点
   // 随实现搬到共用那份。RFC-243 §4.3：父任务崩溃后恢复要靠这个标记分清「我自己级联取消的」
@@ -99,8 +101,8 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 不翻状态，抢不到就是空操作，与上面 taskIdleTimeoutPersistence 那条同形。
   'modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts': 1,
   'platform/persistence/sqlite/taskLifecycle.ts': 1,
-  'services/task.ts': 1,
-  'services/taskDelete.ts': 1,
+  'modules/task-execution/infrastructure/taskPreparationParticipant.ts': 1,
+  'modules/task-execution/infrastructure/taskDeletionParticipant.ts': 1,
 }
 
 function walkTsFiles(dir: string): string[] {
@@ -192,8 +194,8 @@ describe('S-14 ratchet: direct tasks.status writes confined to provider lifecycl
     // allowlist 本身必须被占用：共享程序的那 1 处 CAS 写真实存在
     // （防止扫描器失效导致全文件 0 命中的空洞绿）。
     expect(
-      counts.status['modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts'],
-    ).toBe(1)
+      counts.status['modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts'],
+    ).toBe(3)
     expect(counts.status['platform/persistence/sqlite/taskLifecycle.ts']).toBeUndefined()
     expect(
       counts.status['modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts'],
@@ -207,7 +209,7 @@ describe('S-14 ratchet: direct tasks.status writes confined to provider lifecycl
         'modules',
         'task-execution',
         'infrastructure',
-        'taskLifecycleWriteSequence.ts',
+        'taskDefinitionWriteParticipant.ts',
       ),
       'utf8',
     )

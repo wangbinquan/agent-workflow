@@ -1,5 +1,5 @@
 // RFC-372: actual scheduler and native mock CLIs; no alternate Task host or continuation.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import {
@@ -98,8 +98,7 @@ async function setup(
   cross: boolean,
 ) {
   const agentId = ulid()
-  const { agents, workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, agents, {
+  await agentFixture(h.db, {
     id: agentId,
     name: 'designer',
     runtime: protocol,
@@ -159,8 +158,8 @@ async function setup(
   }
   const taskId = ulid()
   const workflowId = ulid()
-  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
-  await insertOne(h.db, tasks, {
+  await workflowFixture(h.db, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -228,7 +227,7 @@ describe('RFC-372 mindmap uses the original TaskEngine continuation', () => {
           await withEnv({ ...capture, [`${prefix}_CLARIFY_BODY`]: CLARIFY_BODY }, () =>
             runTask(common),
           )
-          const { clarifyRounds, tasks } = tablesOf(h.db)
+          const { clarifyRounds } = tablesOf(h.db)
           const round = (
             await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
           )[0]!
@@ -259,9 +258,7 @@ describe('RFC-372 mindmap uses the original TaskEngine continuation', () => {
             { ...capture, [`${prefix}_OUTPUTS`]: JSON.stringify({ design: 'ok' }) },
             () => runTask(common),
           )
-          expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-            'done',
-          )
+          expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
           expect(
             (await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round.id)))[0]
               ?.status,

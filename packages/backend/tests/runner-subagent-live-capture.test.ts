@@ -12,7 +12,7 @@
 //      the opencode DB after the final live tick, without double-writing
 //      anything the live poll already inserted.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { Agent } from '@agent-workflow/shared'
@@ -63,8 +63,7 @@ function makeAgent(): Agent {
 
 function seedTaskAndNodeRun(db: DbClient): { taskId: string; nodeRunId: string } {
   const wfId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  insertOne(db, workflows, {
+  workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: '{}',
@@ -72,7 +71,7 @@ function seedTaskAndNodeRun(db: DbClient): { taskId: string; nodeRunId: string }
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  insertOne(db, tasks, {
+  taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId: wfId,
@@ -86,7 +85,7 @@ function seedTaskAndNodeRun(db: DbClient): { taskId: string; nodeRunId: string }
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'n1', status: 'pending' })
+  nodeRunFixture(db, { id: nodeRunId, taskId, nodeId: 'n1', status: 'pending' })
   return { taskId, nodeRunId }
 }
 
@@ -151,8 +150,7 @@ function seedSubagentRow(
 
 async function insertNodeRun(db: DbClient, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 

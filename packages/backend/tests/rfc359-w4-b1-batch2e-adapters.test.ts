@@ -2,8 +2,16 @@
 // 恢复事件簿、自动恢复窗口 / 熔断、repo-prep 行、运行时会话租约的孤儿修复（复用 / 作废两支）、
 // 四条注入的状态迁移只做转发（周期性收割先看有无活 run）。
 
+import {
+  type NodeRunFixtureSpec,
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -22,14 +30,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(
-  db: PersistenceDb,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, over: Partial<TaskFixtureSpec> = {}): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -37,7 +41,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -57,11 +61,10 @@ async function seedTask(
 async function seedRun(
   db: PersistenceDb,
   taskId: string,
-  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  over: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n',
@@ -212,7 +215,7 @@ describeEachProvider('RFC-359 W4-B1 批 2e —— 运行时会话租约的孤儿
     const { operations } = operationsFor(db)
     expect(await operations.findHeldRuntimeSessionId(reusable)).toBe('ses-ok')
     expect(await createRuntimeSessionLeaseOperations(db).repairAfterOrphanReap(reusable)).toBe(1)
-    const { runtimeSessionLeases, nodeRuns } = tablesOf(db)
+    const { runtimeSessionLeases } = tablesOf(db)
     const released = await db
       .select({ leaseNodeRunId: runtimeSessionLeases.leaseNodeRunId })
       .from(runtimeSessionLeases)
@@ -233,10 +236,9 @@ describeEachProvider('RFC-359 W4-B1 批 2e —— 运行时会话租约的孤儿
         .from(runtimeSessionLeases)
         .where(eq(runtimeSessionLeases.sessionId, 'ses-bad')),
     ).toEqual([])
-    const run = await db
-      .select({ sessionId: nodeRuns.opencodeSessionId })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, invalid))
+    const run = await readNodeRunFixtures(db, { id: invalid }).then((rows) =>
+      rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+    )
     expect(run[0]?.sessionId).toBeNull()
   })
 

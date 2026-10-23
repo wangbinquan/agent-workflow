@@ -78,6 +78,109 @@ export const WorkgroupRuntimeConfigSchema = z.object({
 })
 export type WorkgroupRuntimeConfig = z.infer<typeof WorkgroupRuntimeConfigSchema>
 
+/** RFC-395: launch facts remain fixed while the task-owned runtime copy can be edited. */
+export const WorkgroupLaunchConfigSchema = WorkgroupRuntimeConfigSchema.pick({
+  workgroupId: true,
+  workgroupName: true,
+  mode: true,
+  goal: true,
+  leaderMemberId: true,
+})
+export type WorkgroupLaunchConfig = z.infer<typeof WorkgroupLaunchConfigSchema>
+
+/** Individual launch fields retain the existing tolerant display/dispatch reads. */
+export interface TaskWorkgroupLaunchConfig {
+  readonly workgroupId: WorkgroupLaunchConfig['workgroupId'] | null
+  readonly workgroupName: WorkgroupLaunchConfig['workgroupName'] | null
+  readonly mode: string | null
+  readonly goal: WorkgroupLaunchConfig['goal'] | null
+  readonly leaderMemberId: WorkgroupLaunchConfig['leaderMemberId']
+}
+
+type TaskWorkgroupJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly TaskWorkgroupJsonValue[]
+  | TaskWorkgroupJsonObject
+
+interface TaskWorkgroupJsonObject {
+  readonly [key: string]: TaskWorkgroupJsonValue
+}
+
+export interface TaskWorkgroupRuntimeConfig {
+  readonly config: WorkgroupRuntimeConfig | null
+  /** Keep unknown fields for room edits and partial historical configs for clarify. */
+  readonly raw: TaskWorkgroupJsonObject | null
+  /** II-a CAS token is the exact stored text, including whitespace and unknown keys. */
+  readonly revision: string | null
+}
+
+export interface TaskWorkgroupConfig {
+  readonly launch: TaskWorkgroupLaunchConfig
+  readonly runtime: TaskWorkgroupRuntimeConfig
+}
+
+function parseTaskWorkgroupJson(stored: string | null | undefined): TaskWorkgroupJsonObject | null {
+  try {
+    const value: unknown = stored == null ? null : JSON.parse(stored)
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value as TaskWorkgroupJsonObject)
+      : null
+  } catch {
+    // Missing/corrupt configuration keeps each consumer's existing fallback.
+    return null
+  }
+}
+
+function projectTaskWorkgroupLaunch(
+  raw: TaskWorkgroupJsonObject | null,
+): TaskWorkgroupLaunchConfig {
+  const text = (key: keyof WorkgroupLaunchConfig): string | null => {
+    const value = raw?.[key]
+    return typeof value === 'string' && value.length > 0 ? value : null
+  }
+  return {
+    workgroupId: text('workgroupId'),
+    workgroupName: text('workgroupName'),
+    mode: typeof raw?.mode === 'string' ? raw.mode : null,
+    goal: text('goal'),
+    leaderMemberId: text('leaderMemberId'),
+  }
+}
+
+/** Lists read launch display fields without validating the editable runtime document. */
+export function decodeTaskWorkgroupLaunchConfig(
+  stored: string | null | undefined,
+): TaskWorkgroupLaunchConfig {
+  return projectTaskWorkgroupLaunch(parseTaskWorkgroupJson(stored))
+}
+
+/** Pure source reader, also usable by the II-b converter without a database. */
+export function decodeTaskWorkgroupConfig(stored: string | null | undefined): TaskWorkgroupConfig {
+  const raw = parseTaskWorkgroupJson(stored)
+  const runtime = WorkgroupRuntimeConfigSchema.safeParse(raw)
+  return {
+    launch: projectTaskWorkgroupLaunch(raw),
+    runtime: {
+      config: runtime.success ? runtime.data : null,
+      raw,
+      revision: stored ?? null,
+    },
+  }
+}
+
+/** Epoch-1 whole-row adapter shared by the task and workgroup contexts. */
+export function taskWorkgroupConfigFromRow(row: { readonly workgroupConfigJson?: string | null }) {
+  return decodeTaskWorkgroupConfig(row.workgroupConfigJson)
+}
+
+export function workgroupLaunchMode(config: TaskWorkgroupLaunchConfig | null | undefined) {
+  const mode = WorkgroupModeSchema.safeParse(config?.mode)
+  return mode.success ? mode.data : null
+}
+
 // ---------------------------------------------------------------------------
 // Assignment / message enums + DTOs (workgroup_assignments / _messages)
 // ---------------------------------------------------------------------------

@@ -1,5 +1,4 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { isWorkgroupTask } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import {
   deriveBudgetUsed,
@@ -53,8 +52,8 @@ export function createWorkgroupTaskRoomQueries(
               )
       const gateByTask = new Map(states.map((state) => [state.taskId, state.gateStatus]))
       return tasks.flatMap((task) => {
-        const parsed = parseConfig(task.workgroupConfigJson)
-        if (!isWorkgroupTask(task) || parsed === null) return []
+        const parsed = parseConfig(task.workgroupConfig?.runtime)
+        if (task.subject.kind !== 'workgroup' || parsed === null) return []
         const gateStatus = gateByTask.get(task.id) ?? null
         const awaitingConfirmation =
           gateStatus === 'awaiting_confirmation' && task.status === 'awaiting_review'

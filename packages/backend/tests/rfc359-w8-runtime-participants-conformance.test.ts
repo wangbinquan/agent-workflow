@@ -1,3 +1,12 @@
+import {
+  agentFixture,
+  patchAgentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -256,8 +265,8 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
     const skillId = ulid()
     const mcpId = ulid()
     const pluginId = ulid()
-    const { agents, skills, mcps, plugins } = tablesOf(db)
-    await insertOne(db, agents, {
+    const { skills, mcps, plugins } = tablesOf(db)
+    await agentFixture(db, {
       id: agentId,
       name: `dynamic-${agentId}`,
       outputs: '["result"]',
@@ -295,10 +304,7 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
       options: { label: 'selected database' },
     })
     expect((await operations.persistence.loadAgent(agentId))?.id).toBe(agentId)
-    await db
-      .update(agents)
-      .set({ bodyMd: 'A later catalog revision.' })
-      .where(eq(agents.id, agentId))
+    await patchAgentFixture(db, { id: agentId }, { bodyMd: 'A later catalog revision.' })
     expect(
       (await operations.validationContext.load()).agents.find((row) => row.id === agentId),
     ).toMatchObject({ bodyMd: 'A later catalog revision.' })
@@ -314,8 +320,7 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
     const workgroupId = ulid()
     let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
     try {
-      const { users, agents, workflows, tasks, workgroupTaskState, nodeRuns, nodeRunOutputs } =
-        tablesOf(db)
+      const { users, workgroupTaskState, nodeRuns } = tablesOf(db)
       await insertOne(db, users, {
         id: userId,
         username: `dynamic-${userId}`,
@@ -325,7 +330,7 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: agentId,
         name: `dynamic-${agentId}`,
         outputs: '["result"]',
@@ -367,12 +372,12 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         ],
       })
       const dw = { ...initialDwState(), phase: 'awaiting_confirm', generatedDef: snapshot }
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: `dynamic-${workflowId}`,
         definition: JSON.stringify(snapshot),
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
@@ -432,9 +437,9 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         signal,
       })
 
-      const [parked] = await db.select().from(tasks).where(eq(tasks.id, taskId))
+      const [parked] = await readTaskFixtures(db, { id: taskId })
       expect(parked).toMatchObject({ status: 'awaiting_review', errorSummary: null })
-      const firstRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const firstRuns = await readNodeRunFixtures(db, { taskId })
       expect(firstRuns).toHaveLength(1)
       expect(firstRuns[0]).toMatchObject({
         nodeId: DW_ORCHESTRATOR_NODE_ID,
@@ -459,13 +464,11 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
       })
       const resumedRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       expect(resumedRuns.map((run) => run.id)).toEqual(firstRuns.map((run) => run.id))
-      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-        'awaiting_review',
-      )
+      expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('awaiting_review')
       expect(
         (await createTestDynamicWorkflowOperations(db).persistence.loadTask(taskId))?.dwStateJson,
       ).toBe(JSON.stringify(dw))
-      expect(await db.select().from(nodeRunOutputs)).toEqual([])
+      expect(await readNodeRunOutputFixtures(db)).toEqual([])
     } finally {
       await execution?.shutdown()
       rmSync(appHome, { recursive: true, force: true })

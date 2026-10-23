@@ -4,6 +4,7 @@
 // recorded in version metadata; every content port keeps its file-store
 // semantics; and real HTTP editing plus boot verification work end to end with
 // no skill file written to the local disk.
+import { skillTextView } from '@/modules/resource-catalog/application/skills/textView'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
@@ -85,14 +86,16 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
     })
     await content.creationContent.initialize(plan, {
       kind: 'files',
-      mainContent: '# hello',
+      mainContent: Buffer.from('# hello'),
       files: [
         { path: 'SKILL.md', content: enc('ignored: main content wins') },
         { path: 'docs/guide.md', content: enc('guide') },
         { path: 'bin/data', content: new Uint8Array([0, 9]) },
       ],
     })
-    expect(await content.content.readMain(reference(1))).toBe('# hello')
+    expect(skillTextView(await content.content.readMain(reference(1)), content.content)).toBe(
+      '# hello',
+    )
     expect(await content.content.listFiles(reference(1))).toEqual([
       { path: 'SKILL.md', type: 'file', size: 7, modifiedAt: 1_000 },
       { path: 'bin', type: 'dir' },
@@ -100,7 +103,9 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
       { path: 'docs', type: 'dir' },
       { path: 'docs/guide.md', type: 'file', size: 5, modifiedAt: 1_000 },
     ])
-    expect(await content.content.readFile(reference(1), 'docs/guide.md')).toBe('guide')
+    expect(
+      skillTextView(await content.content.readFile(reference(1), 'docs/guide.md'), content.content),
+    ).toBe('guide')
     await expect(content.content.readFile(reference(1), 'docs')).rejects.toMatchObject({
       code: 'skill-file-is-dir',
     })
@@ -118,7 +123,7 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
     const content = store()
     await content.creationContent.initialize(content.creationContent.plan(SKILL), {
       kind: 'main',
-      content: '# v1',
+      content: Buffer.from('# v1'),
     })
     expect(await content.lifecycleContent.captureInitial(SKILL)).toBe(
       hashSkillTree([{ path: 'SKILL.md', bytes: enc('# v1') }]),
@@ -135,7 +140,7 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
     expect(unchanged.matchesLive).toBe(true)
     const staged = await content.versionContent.stage(
       publication,
-      { kind: 'write-file', path: 'notes/a.md', content: 'A' },
+      { kind: 'write-file', path: 'notes/a.md', content: Buffer.from('A') },
       true,
     )
     expect(staged.matchesLive).toBe(false)
@@ -155,10 +160,15 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
       'does not match committed content hash',
     )
     await content.versionContent.publish(publication, staged.contentHash)
-    expect(await content.content.readFile(reference(2), 'notes/a.md')).toBe('A')
-    expect((await content.versionReader.readSnapshot({ skillId: SKILL, version: 2 })).main).toBe(
-      '# v1',
-    )
+    expect(
+      skillTextView(await content.content.readFile(reference(2), 'notes/a.md'), content.content),
+    ).toBe('A')
+    expect(
+      skillTextView(
+        (await content.versionReader.readSnapshot({ skillId: SKILL, version: 2 })).main!,
+        content.versionReader,
+      ),
+    ).toBe('# v1')
 
     // Deleting a directory path removes its subtree; restore-version copies an old tree.
     const third = content.versionContent.plan({
@@ -211,7 +221,7 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
     const content = store()
     await content.creationContent.initialize(content.creationContent.plan(SKILL), {
       kind: 'main',
-      content: '# keep',
+      content: Buffer.from('# keep'),
     })
     await content.lifecycleContent.captureInitial(SKILL)
     const plan = content.deletionContent.plan({ skillId: SKILL, operationId: OPERATION })
@@ -245,7 +255,7 @@ describeEachProvider('RFC-370 M0 database skill content ports', (harness) => {
     const content = store()
     await content.creationContent.initialize(content.creationContent.plan(SKILL), {
       kind: 'main',
-      content: '# boot',
+      content: Buffer.from('# boot'),
     })
     const hash = (await content.lifecycleContent.captureInitial(SKILL))!
     const versions = [

@@ -73,12 +73,14 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
       [['[{"name":"limit","kind":"number"}]', '{"limit":2}', '{"limit":3}']],
       [['task-1', 'running', 'local', '/workspace', 'base-sha', null]],
       [
-        ['', '', '/workspace', 'base-sha'],
-        ['packages/api', 'api', '/workspace/packages/api', 'api-sha'],
+        ['', '/workspace', 'base-sha'],
+        ['packages/api', '/workspace/packages/api', 'api-sha'],
       ],
-      // RFC-374: the node-run projection carries `seq` right after `id`.
-      [['run-1', null, 'pre-sha', null, 100, null]],
-      [['run-1', null, 'pre-sha', null, 100, '{"baselineCommit":"wrapper-sha"}']],
+      // Storage reads carry taskId to load the run's mount layout.
+      [['run-1', 'task-1', null, 'pre-sha', null, 100, null]],
+      [[''], ['packages/api']],
+      [['run-1', 'task-1', null, 'pre-sha', null, 100, '{"baselineCommit":"wrapper-sha"}']],
+      [[''], ['packages/api']],
     ])
     const params = createCapabilityParamRead(fake.db)
     const workspace = createCodeWorkspaceRead(fake.db)
@@ -99,13 +101,15 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
       {
         seq: null,
         id: 'run-1',
-        preSnapshot: 'pre-sha',
-        preSnapshotReposJson: null,
+        checkpoints: [],
         startedAt: 100,
         wrapperProgressJson: null,
       },
     ])
-    await expect(workspace.findNodeRun('run-1')).resolves.toMatchObject({ id: 'run-1' })
+    await expect(workspace.findNodeRun('run-1')).resolves.toMatchObject({
+      id: 'run-1',
+      checkpoints: [],
+    })
 
     const sql = fake.executions.map((execution) => execution.sql).join('\n')
     for (const table of [

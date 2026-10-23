@@ -24,7 +24,7 @@
 // ask on its first turn (RFC-100 mandatory ask-back), so "ran and never asked"
 // is not a reachable idle path; "never ran" and "not wired" are.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
@@ -48,6 +48,11 @@ type FrontierRow = Parameters<typeof deriveFrontier>[0][number]
 
 function row(over: Partial<FrontierRow>): FrontierRow {
   return {
+    seq: null,
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
     id: '01R',
     nodeId: 'n',
     iteration: 0,
@@ -170,7 +175,7 @@ const CROSS_DEF: WorkflowDefinition = {
 
 const TOP = { containerRunId: null, iteration: 0 }
 
-function frontierOf(
+async function frontierOf(
   definition: WorkflowDefinition,
   rows: FrontierRow[],
   openClarify: ReadonlySet<string> = new Set(),
@@ -184,7 +189,7 @@ function frontierOf(
   )
   return {
     upstreamsOf,
-    frontier: deriveFrontier(
+    frontier: await deriveFrontier(
       rows,
       definition,
       definition.nodes,
@@ -201,41 +206,41 @@ function frontierOf(
 describe('RFC-354 D7 — frontier: the asker is the gate’s structural upstream', () => {
   const in1Done = row({ id: '01A', nodeId: 'in1', consumedUpstreamRunsJson: '{}' })
 
-  test('the __clarify__ edge is a dependency: no asker row → the gate is neither ready nor completed', () => {
-    const { upstreamsOf, frontier } = frontierOf(SELF_DEF, [])
+  test('the __clarify__ edge is a dependency: no asker row → the gate is neither ready nor completed', async () => {
+    const { upstreamsOf, frontier } = await frontierOf(SELF_DEF, [])
     expect(upstreamsOf.get('c')).toEqual(['d'])
     expect(frontier.completed.has('c')).toBe(false)
     expect(frontier.ready).not.toContain('c')
     expect(frontier.ready).toContain('in1')
   })
 
-  test('asker done → the gate is READY (dispatched like any node), never silently completed', () => {
+  test('asker done → the gate is READY (dispatched like any node), never silently completed', async () => {
     const dDone = row({ id: '01B', nodeId: 'd', consumedUpstreamRunsJson: '{"in1":"01A"}' })
-    const { frontier } = frontierOf(SELF_DEF, [in1Done, dDone])
+    const { frontier } = await frontierOf(SELF_DEF, [in1Done, dDone])
     expect(frontier.completed.has('d')).toBe(true)
     expect(frontier.completed.has('c')).toBe(false)
     expect(frontier.ready).toContain('c')
   })
 
-  test('asker branch-skipped → the gate is READY too (the gateway then judges it inactive)', () => {
+  test('asker branch-skipped → the gate is READY too (the gateway then judges it inactive)', async () => {
     const dSkipped = row({
       id: '01B',
       nodeId: 'd',
       status: 'skipped',
       consumedUpstreamRunsJson: '{"in1":"01A"}',
     })
-    const { frontier } = frontierOf(SELF_DEF, [in1Done, dSkipped])
+    const { frontier } = await frontierOf(SELF_DEF, [in1Done, dSkipped])
     expect(frontier.completed.has('d')).toBe(true)
     expect(frontier.ready).toContain('c')
   })
 
-  test('an unwired gate has no upstream → ready at t0', () => {
-    const { upstreamsOf, frontier } = frontierOf(SELF_UNWIRED_DEF, [])
+  test('an unwired gate has no upstream → ready at t0', async () => {
+    const { upstreamsOf, frontier } = await frontierOf(SELF_UNWIRED_DEF, [])
     expect(upstreamsOf.get('c')).toEqual([])
     expect(frontier.ready).toContain('c')
   })
 
-  test('a fresh skipped row completes the gate; a fresher park row + open session parks it', () => {
+  test('a fresh skipped row completes the gate; a fresher park row + open session parks it', async () => {
     const dDone = row({ id: '01B', nodeId: 'd', consumedUpstreamRunsJson: '{"in1":"01A"}' })
     const skipped = row({
       id: '01C', // older than the park row below (ULID order = freshness)
@@ -243,12 +248,16 @@ describe('RFC-354 D7 — frontier: the asker is the gate’s structural upstream
       status: 'skipped',
       consumedUpstreamRunsJson: '{"d":"01B"}',
     })
-    const { frontier: f } = frontierOf(SELF_DEF, [in1Done, dDone, skipped])
+    const { frontier: f } = await frontierOf(SELF_DEF, [in1Done, dDone, skipped])
     expect(f.completed.has('c')).toBe(true)
     expect(f.allSettled).toBe(true)
 
     const parked = row({ id: '01D', nodeId: 'c', status: 'awaiting_human' })
-    const { frontier: g } = frontierOf(SELF_DEF, [in1Done, dDone, skipped, parked], new Set(['c']))
+    const { frontier: g } = await frontierOf(
+      SELF_DEF,
+      [in1Done, dDone, skipped, parked],
+      new Set(['c']),
+    )
     expect(g.completed.has('c')).toBe(false)
     expect(g.ready).not.toContain('c')
     expect(g.awaitingHuman).toContain('c')
@@ -292,8 +301,7 @@ async function seedAgent(
   outputs: string[],
   branchPorts: string[] = [],
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -316,13 +324,12 @@ async function seedWorkflowAndTask(
   const canonical = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonical),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc354-clarify-idle',
     id: taskId,
     workflowId,
@@ -387,8 +394,8 @@ describe('RFC-354 D7 — runtime: an untriggered clarify gate settles as one ski
     const taskId = await seedWorkflowAndTask(h, SELF_UNWIRED_DEF, { req: 'pick' })
     await run(taskId, { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'D' }) })
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const byNode = await statusByNode(taskId)
     expect(byNode.get('d')).toEqual(['done'])
@@ -414,8 +421,7 @@ describe('RFC-354 D7 — runtime: an untriggered clarify gate settles as one ski
       MOCK_OPENCODE_INACTIVE_PORTS: JSON.stringify({ judge: ['go'] }),
     })
 
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const byNode = await statusByNode(taskId)
     expect(byNode.get('j')).toEqual(['done'])
@@ -435,8 +441,7 @@ describe('RFC-354 D7 — runtime: an untriggered clarify gate settles as one ski
       MOCK_OPENCODE_INACTIVE_PORTS: JSON.stringify({ designer: ['design'] }),
     })
 
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const byNode = await statusByNode(taskId)
     expect(byNode.get('designer')).toEqual(['done'])

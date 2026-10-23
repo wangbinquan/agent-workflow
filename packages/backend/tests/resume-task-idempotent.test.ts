@@ -13,7 +13,15 @@
 // second call and throw 409 — this is the idempotency story we have today
 // (PR-D / PR-E may add outbox semantics later).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -25,7 +33,7 @@ import { ulid } from 'ulid'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
-import { gitStashSnapshot, runGit } from '../src/util/git'
+import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
@@ -75,14 +83,13 @@ async function buildHarness(
     edges: [],
   }
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -112,11 +119,11 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
 
   test('R1 resume from failed flips task→pending and clears error fields', async () => {
     h = await buildHarness('failed')
-    const { tasks } = tablesOf(h.db)
-    await h.db
-      .update(tasks)
-      .set({ errorSummary: 'boom', errorMessage: 'detail', failedNodeId: 'doc' })
-      .where(eq(tasks.id, h.taskId))
+    await patchTaskFixture(
+      h.db,
+      { id: h.taskId },
+      { errorSummary: 'boom', errorMessage: 'detail', failedNodeId: 'doc' },
+    )
 
     const after = await createResumeEngine(h.db, {
       appHome: h.appHome,
@@ -250,17 +257,17 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       edges: [],
     }
     const finishedAt = Date.now() - 10
-    const { tasks } = tablesOf(h.db)
-    await h.db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      h.db,
+      { id: h.taskId },
+      {
         workflowSnapshot: JSON.stringify(triggerDefinition),
         finishedAt,
         errorSummary: 'original-summary',
         errorMessage: 'original-detail',
         failedNodeId: 'doc',
-      })
-      .where(eq(tasks.id, h.taskId))
+      },
+    )
 
     await expect(
       createResumeEngine(h.db, {
@@ -273,7 +280,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       }).resume(h.taskId),
     ).rejects.toMatchObject({ code: 'trigger-context-missing' })
 
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    const row = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
     expect(row).toMatchObject({
       status: 'failed',
       finishedAt,
@@ -299,35 +306,35 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     const doneId = ulid()
     const finishedAt = Date.now() - 500
     const { nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: doneId,
       taskId: h.taskId,
       nodeId: 'doc',
       status: 'done',
       retryIndex: 0,
       iteration: 0,
-      // Done rows are never rolled back — a fake sha here proves it: were the
-      // rollback to touch this row, fail-closed would 409 the whole resume.
-      preSnapshot: 'sha-fake-done',
       startedAt: Date.now() - 1000,
       finishedAt,
+      // Done rows are never rolled back — a fake sha here proves it: were the
+      // rollback to touch this row, fail-closed would 409 the whole resume.
+      checkpoints: [{ mountPath: '', preSnapshot: 'sha-fake-done' }],
     })
     // A subsequent failed retry attempt with a REAL stash snapshot.
     writeFileSync(join(h.repoPath, 'README.md'), '# snapshot-time\n')
-    const realSha = await gitStashSnapshot(h.repoPath)
+    const realSha = await legacyStashSnapshotFixture(h.repoPath)
     expect(realSha).not.toBe('')
     const failedId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: failedId,
       taskId: h.taskId,
       nodeId: 'doc',
       status: 'failed',
       retryIndex: 1,
       iteration: 0,
-      preSnapshot: realSha,
       startedAt: Date.now() - 200,
       finishedAt: Date.now() - 100,
       errorMessage: 'boom',
+      checkpoints: [{ mountPath: '', preSnapshot: realSha }],
     })
 
     const after = await createResumeEngine(h.db, {
@@ -355,20 +362,19 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
   test("R8b snapshot lost: resumeTask throws 409 'snapshot-lost', task flips failed (errorSummary='snapshot-lost'), worktree untouched", async () => {
     h = await buildHarness('failed')
     const failedId = ulid()
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: failedId,
       taskId: h.taskId,
       nodeId: 'doc',
       status: 'failed',
       retryIndex: 0,
       iteration: 0,
-      // Well-formed sha that exists in NO odb — deterministic stand-in for a
-      // gc-pruned snapshot (same shape git-snapshot.test.ts uses).
-      preSnapshot: 'deadbeef'.repeat(5),
       startedAt: Date.now() - 200,
       finishedAt: Date.now() - 100,
       errorMessage: 'boom',
+      // Well-formed sha that exists in NO odb — deterministic stand-in for a
+      // gc-pruned snapshot (same shape git-snapshot.test.ts uses).
+      checkpoints: [{ mountPath: '', preSnapshot: 'deadbeef'.repeat(5) }],
     })
     // Dirty worktree state that the pre-fix destroy-then-fail rollback would
     // have eaten (tracked mutation + untracked stray).
@@ -391,7 +397,7 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     expect(code).toBe('snapshot-lost')
 
     // Task escalated pending → failed with the snapshot-lost summary + detail.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    const t = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
     expect(t.status).toBe('failed')
     expect(t.errorSummary).toBe('snapshot-lost')
     expect(t.errorMessage).toContain(failedId)
@@ -411,20 +417,20 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
   test('held native lease requires proven child reap before manual resume', async () => {
     h = await buildHarness('failed')
     writeFileSync(join(h.repoPath, 'README.md'), '# native-session-snapshot\n')
-    const realSha = await gitStashSnapshot(h.repoPath)
+    const realSha = await legacyStashSnapshotFixture(h.repoPath)
     const failedId = ulid()
-    const { nodeRuns, tasks, runtimeSessionLeases } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    const { runtimeSessionLeases } = tablesOf(h.db)
+    await nodeRunFixture(h.db, {
       id: failedId,
       taskId: h.taskId,
       nodeId: 'doc',
       status: 'running',
       retryIndex: 0,
       iteration: 0,
-      preSnapshot: realSha,
       opencodeSessionId: null,
       pid: null,
       startedAt: Date.now() - 200,
+      checkpoints: [{ mountPath: '', preSnapshot: realSha }],
     })
     await claimNewRuntimeSession(createRuntimeSessionLeaseOperations(h.db), {
       protocol: 'claude-code',
@@ -434,10 +440,11 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
       currentNodeRunId: failedId,
       leaseNonceDigest: 'a'.repeat(64),
     })
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'failed', finishedAt: Date.now() - 100 })
-      .where(eq(nodeRuns.id, failedId))
+    await patchNodeRunFixture(
+      h.db,
+      { id: failedId },
+      { status: 'failed', finishedAt: Date.now() - 100 },
+    )
 
     await expect(
       createResumeEngine(h.db, {
@@ -452,7 +459,11 @@ describe('RFC-053 PR-A T1e — resumeTask idempotency + race', () => {
     ).rejects.toMatchObject({ code: 'live-child-survived' })
 
     expect(
-      first(h.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, h.taskId))),
+      (
+        await readTaskFixtures(h.db, { id: h.taskId }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
+      )[0],
     ).toEqual({ status: 'failed' })
     expect(
       first(

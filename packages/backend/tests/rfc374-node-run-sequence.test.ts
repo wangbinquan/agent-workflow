@@ -1,4 +1,6 @@
 // RFC-374 AC-1/2: allocation order survives inverted IDs, clock skew, rollback and concurrent provider transactions.
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { patchNodeRunFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq, inArray } from 'drizzle-orm'
@@ -23,6 +25,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
       for (let n = 0; n < 205; n++)
         ids.push(
           await mint.mint({
+            ...deriveNodeRunRole({ nodeId: 'n', rerunCause: 'initial' }),
             id: ulid(at),
             taskId,
             nodeId: 'n',
@@ -32,8 +35,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
           }),
         )
     })
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(db, { taskId })
     const byId = new Map(rows.map((row) => [row.id, row]))
     for (let n = 1; n < ids.length; n++)
       expect(byId.get(ids[n]!)!.seq!).toBeGreaterThan(byId.get(ids[n - 1]!)!.seq!)
@@ -46,11 +48,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
         taskId = await seedSequenceTask(db)
       const old = await mintSequenceRun(db, taskId, { id: 'z-old' })
       const latest = await mintSequenceRun(db, taskId, { id: 'a-late', cause })
-      const { nodeRuns } = tablesOf(db)
-      await db
-        .update(nodeRuns)
-        .set({ mergeState: 'pending-merge' })
-        .where(inArray(nodeRuns.id, [old, latest]))
+      await patchNodeRunFixture(db, { id: [old, latest] }, { mergeState: 'pending-merge' })
       const reads = new DrizzleNodeExecutionPersistence(db)
       const rows = await reads.list({ taskId })
       expect(rows.map((row) => row.id)).toEqual([old, latest])
@@ -71,10 +69,7 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
     const first = await mintSequenceRun(db, taskId, { id: ulid(at) })
     const second = await mintSequenceRun(db, taskId, { id: ulid(at - 60_000) })
     expect(second < first).toBe(true)
-    const { nodeRuns } = tablesOf(db)
-    expect(
-      newestNodeRun(await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))?.id,
-    ).toBe(second)
+    expect(newestNodeRun(await readNodeRunFixtures(db, { taskId }))?.id).toBe(second)
   })
   test('allocation rolls back with a failed node insert; retry succeeds without a run-row update', async () => {
     const db = harness.db,
@@ -112,12 +107,20 @@ describeEachProvider('RFC-374 node run allocation', (harness) => {
       databaseSessionFor(db).serializable(async (tx) => {
         bodies[n]!++
         await createNodeRunMintParticipantInTx(tx).mint({
+          ...deriveNodeRunRole({
+            nodeId: n ? '__wg_member__' : '__wg_leader__',
+            rerunCause: n ? 'wg-assignment' : 'wg-leader-round',
+          }),
           id: `host-${n}`,
           taskId,
           nodeId: n ? '__wg_member__' : '__wg_leader__',
           status: 'pending',
           cause: n ? 'wg-assignment' : 'wg-leader-round',
-          overrides: { shardKey: n ? 'assignment' : null },
+          overrides: {
+            identity: {
+              shardKey: n ? 'assignment' : null,
+            },
+          },
         })
         if (harness.applicationBinding.provider === 'postgresql' && bodies[n] === 1) {
           if (++arrived === 2) barrier.resolve()

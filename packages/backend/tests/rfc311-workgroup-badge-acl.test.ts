@@ -7,6 +7,7 @@
 //
 // 这条锁的是最直接的用户后果:非成员的收件箱徽章不得因为别人的工作组任务而 +1。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -52,7 +53,7 @@ const CONFIG = {
 }
 
 async function seed(db: Db): Promise<void> {
-  const { users, workflows, tasks, workgroupTaskState } = tablesOf(db)
+  const { users, workgroupTaskState } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'bob', 'admin'].map((id) => ({
       id,
@@ -63,8 +64,8 @@ async function seed(db: Db): Promise<void> {
       updatedAt: NOW,
     })),
   )
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
+  await taskFixture(db, {
     id: 'wgtask',
     name: 'wg task',
     workflowId: 'wf1',

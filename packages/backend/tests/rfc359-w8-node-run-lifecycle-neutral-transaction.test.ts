@@ -21,7 +21,7 @@
 //    合一前后同一个错误码；消息文本从「mutation was fenced by a newer owner」变成
 //    「mutation was fenced」，全仓无断言依赖该文本。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -78,8 +78,7 @@ function continuation(taskId: string): CanonicalContinuationRequest {
 
 async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done') {
   const taskId = `w8nrl_${ulid()}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-w8-node-run-lifecycle',
     description: '',
@@ -87,7 +86,7 @@ async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done')
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -104,7 +103,7 @@ async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done')
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const runId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -164,7 +163,11 @@ describeEachProvider('RFC-359 W8 —— node_run 生命周期写事务中立化�
       db: h.db,
       nodeRunId: s.runId,
       event: { kind: 'mark-running' },
-      extra: { startedAt: Date.now() },
+      extra: {
+        identity: {
+          startedAt: Date.now(),
+        },
+      },
       executionContext: s.context,
     })
 
@@ -221,7 +224,11 @@ describeEachProvider('RFC-359 W8 —— node_run 生命周期写事务中立化�
       nodeRunId: s.runId,
       to: 'running',
       allowedFrom: ['pending'],
-      extra: { startedAt: Date.now() },
+      extra: {
+        identity: {
+          startedAt: Date.now(),
+        },
+      },
       reason: 'w8-neutral-transaction',
       executionContext: s.context,
     })

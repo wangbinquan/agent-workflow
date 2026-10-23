@@ -1,3 +1,5 @@
+import type { NodeRunStatus } from '@agent-workflow/shared'
+
 export type MemoryInjectionScope = 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
 
 export interface MemoryInjectionRecord {
@@ -22,7 +24,7 @@ export interface MemoryInjectionTaskContext {
 export interface MemoryInjectionRunRecord {
   readonly seq: number | null
   readonly id: string
-  readonly status: string
+  readonly status: NodeRunStatus
   readonly injectedMemoriesJson: string | null
 }
 

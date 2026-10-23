@@ -10,6 +10,14 @@
 //   ③ 链中途崩溃只归零链长、**不**消耗升级预算（崩溃是别无选择，不是主动放弃）。
 // 形状判定本身的真值表在 packages/shared/tests/rfc313-retry-shape.test.ts。
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
@@ -62,8 +70,7 @@ function buildHarness(): Harness {
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'rfc-313',
@@ -81,15 +88,14 @@ async function seedAgent(db: DbClient, name: string): Promise<string> {
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -141,8 +147,7 @@ function resumeFlags(argvLogPath: string): boolean[] {
 }
 
 async function attemptsOf(h: Harness, taskId: string) {
-  const { nodeRuns } = tablesOf(h.db)
-  const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const rows = await readNodeRunFixtures(h.db, { taskId })
   return rows.sort((a, b) => (a.retryIndex ?? 0) - (b.retryIndex ?? 0))
 }
 
@@ -183,8 +188,7 @@ describe('RFC-313 会话升级', () => {
     // ① attempt 序列的形状：首发新会话 → 接续 → **升级换会话** → 接续。
     expect(resumeFlags(h.argvLog)).toEqual([false, true, false, true])
 
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
 
     const rows = await attemptsOf(h, taskId)
@@ -342,6 +346,7 @@ describe('RFC-313 会话升级', () => {
     // 用仓内既有的铸行原语而不是手写 INSERT：手写行既缺必填列（nodePath 等），
     // 也会与真实铸行逐渐漂移。
     const runId = await mintNodeRun(h.db, {
+      ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'process-retry' }),
       taskId,
       nodeId: 'n1',
       status: 'failed',

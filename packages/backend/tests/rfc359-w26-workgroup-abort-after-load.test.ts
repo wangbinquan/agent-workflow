@@ -1,5 +1,6 @@
 // The real persistence port supplies every row and commit. Only host arrival
 // and load continuation are held to expose cancellation during an async read.
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -7,7 +8,8 @@ import { eq } from 'drizzle-orm'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { createAgent } from '@/services/agent'
 import { createLogger } from '@/util/log'
-import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -74,14 +76,14 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
       },
     ],
   }
-  const { workflows, tasks, nodeRuns, workgroupAssignments, workgroupMessages } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { workgroupAssignments, workgroupMessages } = tablesOf(db)
+  await workflowFixture(db, {
     id: 'w26-abort-workflow',
     name: 'host',
     definition: '{}',
     builtin: true,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'wg-batch-task',
     workflowId: 'w26-abort-workflow',
@@ -100,7 +102,7 @@ async function scenario(harness: ProviderHarness, holdSettlement: boolean) {
     workgroupId: config.workgroupId,
     workgroupConfigJson: JSON.stringify(config),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: pastRunId,
     taskId,
     nodeId: WG_MEMBER_NODE_ID,

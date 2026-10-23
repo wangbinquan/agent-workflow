@@ -35,6 +35,14 @@ type Row = PersistenceTables['nodeRuns']['$inferSelect']
 // Minimal row: isNodeRunFresh reads only (id, consumedUpstreamRunsJson).
 function run(id: string, consumed?: Record<string, string>): Row {
   return {
+    seq: null,
+    parentNodeRunId: null,
+    containerRunId: null,
+    shardKey: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+
     id,
     consumedUpstreamRunsJson: consumed === undefined ? null : JSON.stringify(consumed),
   } as unknown as Row
@@ -51,32 +59,32 @@ describe('RFC-074 — incident 01KSHVXCH6 replay (provenance resolution)', () =>
   // current freshest done row — they match → fresh → the scheduler keeps the
   // review completed and mints NO spurious re-review. The denormalized watermark
   // that desynced in the incident no longer exists.
-  test('A18: review consumed the freshest agent run → fresh → no spurious re-review', () => {
+  test('A18: review consumed the freshest agent run → fresh → no spurious re-review', async () => {
     const agentLatest = run('01AG_LATEST')
     const reviewApproved = run('01RV_APPROVED', { [AGENT_NODE]: '01AG_LATEST' })
     const freshest = new Map<string, Row>([[AGENT_NODE, agentLatest]])
-    expect(isNodeRunFresh(reviewApproved, freshest)).toBe(true)
+    expect(await isNodeRunFresh(reviewApproved, freshest)).toBe(true)
   })
 
   // A19 — RFC-005 US-2 preserved. If the agent genuinely produces a NEWER done
   // run (01AG_NEWER) after the review consumed an older one (01AG_OLDER), the
   // review is stale → re-review fires. This is the legitimate re-review the
   // contract must keep — distinct from the incident's spurious one.
-  test('A19: review consumed an older run, agent advanced → stale → re-review fires', () => {
+  test('A19: review consumed an older run, agent advanced → stale → re-review fires', async () => {
     const agentNewer = run('01AG_NEWER')
     const reviewApproved = run('01RV_APPROVED', { [AGENT_NODE]: '01AG_OLDER' })
     const freshest = new Map<string, Row>([[AGENT_NODE, agentNewer]])
-    expect(isNodeRunFresh(reviewApproved, freshest)).toBe(false)
+    expect(await isNodeRunFresh(reviewApproved, freshest)).toBe(false)
   })
 
   // A20 — null/legacy consumed = fresh (migration hard-cut D4): a pre-RFC-074
   // review row (no provenance) is treated as fresh so in-flight tasks don't
   // spuriously re-review on upgrade. Combined with A18/A19 this is the full
   // "approve is sticky unless the upstream actually re-ran" contract.
-  test('A20: null consumed provenance → fresh (legacy hard-cut, no spurious mint)', () => {
+  test('A20: null consumed provenance → fresh (legacy hard-cut, no spurious mint)', async () => {
     const agentLatest = run('01AG_LATEST')
     const legacyReview = run('01RV_LEGACY') // consumedUpstreamRunsJson = null
     const freshest = new Map<string, Row>([[AGENT_NODE, agentLatest]])
-    expect(isNodeRunFresh(legacyReview, freshest)).toBe(true)
+    expect(await isNodeRunFresh(legacyReview, freshest)).toBe(true)
   })
 })

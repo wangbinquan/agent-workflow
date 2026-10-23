@@ -1,12 +1,12 @@
+import { createAgentMcpReferenceLookup } from './referenceLookup'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { Mcp } from '@agent-workflow/shared'
-import { and, eq, isNull, like, ne } from 'drizzle-orm'
+import { and, eq, isNull, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type { McpAgentReference, McpProjection, McpRepository } from '../application/mcps/ports'
 import {
-  collectMcpAgentReferences,
   insertMcpRowInTx,
   mcpConfigHash,
   mcpFromPersistenceRow,
@@ -36,17 +36,6 @@ export interface McpTransactionLifecycle {
   deletePrepared(transaction: ResourceCatalogTransaction, mcpId: string): Promise<void>
 }
 
-const referenceSelect = (db: object) => {
-  const { agents } = tablesOf(db)
-  return {
-    id: agents.id,
-    name: agents.name,
-    raw: agents.mcp,
-    ownerUserId: agents.ownerUserId,
-    visibility: agents.visibility,
-  }
-}
-
 function ownerScopedNameWhere(
   db: object,
   ownerUserId: string | null,
@@ -63,20 +52,6 @@ function nameConflict(name: string, rename = false): ConflictError {
   return new ConflictError(
     'mcp-name-in-use',
     rename ? `mcp '${name}' already exists; pick a different name` : `mcp '${name}' already exists`,
-  )
-}
-
-async function findAgentReferencesInTransaction(
-  transaction: ResourceCatalogTransaction,
-  mcpId: string,
-): Promise<McpAgentReference[]> {
-  const { agents } = tablesOf(transaction)
-  return collectMcpAgentReferences(
-    await transaction
-      .select(referenceSelect(transaction))
-      .from(agents)
-      .where(like(agents.mcp, `%"${mcpId}"%`)),
-    mcpId,
   )
 }
 
@@ -206,14 +181,7 @@ export function createMcpRepository(input: {
       }
     },
     async findAgentReferences(id): Promise<readonly McpAgentReference[]> {
-      const { agents } = tablesOf(input.db)
-      return collectMcpAgentReferences(
-        await input.db
-          .select(referenceSelect(input.db))
-          .from(agents)
-          .where(like(agents.mcp, `%"${id}"%`)),
-        id,
-      )
+      return createAgentMcpReferenceLookup(input.db).find(id)
     },
     async delete(mutation): Promise<readonly McpAgentReference[]> {
       return runResourceCatalogTransaction(input.db, async (transaction) => {
@@ -223,7 +191,7 @@ export function createMcpRepository(input: {
         )[0]
         if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
         assertExpectedHash(mcpFromPersistenceRow(row), mutation.expectedConfigHash, 'deleting')
-        const references = await findAgentReferencesInTransaction(transaction, mutation.id)
+        const references = await createAgentMcpReferenceLookup(transaction).find(mutation.id)
         if (references.length > 0) return references
         await input.lifecycle.deletePrepared(transaction, mutation.id)
         await transaction.delete(mcps).where(eq(mcps.id, mutation.id))

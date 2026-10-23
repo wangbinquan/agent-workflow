@@ -1,3 +1,4 @@
+import { patchWorkflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -15,7 +16,6 @@ import { ulid } from 'ulid'
 
 import { buildActor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { eq } from 'drizzle-orm'
 
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
@@ -200,12 +200,8 @@ describeEachProvider('RFC-359 W4-D15 —— Workflow 仓库', (harness) => {
       description: '',
       definition: definition(),
     })
-    const { workflows } = tablesOf(harness.db)
     // 模拟 slug 规则之前写入的历史名字：绕过命令直接改行。
-    await harness.db
-      .update(workflows)
-      .set({ name: 'Legacy Name With Spaces' })
-      .where(eq(workflows.id, created.id))
+    await patchWorkflowFixture(harness.db, { id: created.id }, { name: 'Legacy Name With Spaces' })
     const kept = await repository.update(owner, created.id, {
       expectedVersion: 1,
       clientMutationId: ulid(),

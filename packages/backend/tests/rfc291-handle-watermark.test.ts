@@ -9,6 +9,7 @@
 // 这里用 `inventoryCap` 测试缝确定性复现该路径，并锁住修法：会话行持久化
 // per-type 高水位，allocator 取「清单推导值」与它的 max。
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -37,8 +38,7 @@ const actor: Actor = {
 async function seedAgent(name: string): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: name,
@@ -47,7 +47,7 @@ async function seedAgent(name: string): Promise<string> {
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['agents']['$inferInsert'])
+  })
   return id
 }
 

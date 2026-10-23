@@ -9,6 +9,16 @@
 // build. Shrinking should still bisect any failing trace into a minimal
 // repro.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { test } from 'bun:test'
@@ -47,15 +57,15 @@ interface Violation {
 }
 async function checkInvariants(db: PersistenceDb, taskId: string): Promise<Violation[]> {
   const v: Violation[] = []
-  const { tasks, nodeRuns, docVersions } = tablesOf(db)
-  const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  const { docVersions } = tablesOf(db)
+  const t = (await readTaskFixtures(db, { id: taskId }, { limit: 1 }))[0]
   if (t === undefined) return v
   const def = JSON.parse(t.workflowSnapshot) as { nodes?: Array<{ id?: string; kind?: string }> }
   const kindOf = new Map<string, string>()
   for (const n of def.nodes ?? []) {
     if (typeof n.id === 'string' && typeof n.kind === 'string') kindOf.set(n.id, n.kind)
   }
-  const allRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const allRuns = await readNodeRunFixtures(db, { taskId })
   const allDocs = await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
 
   for (const dv of allDocs) {
@@ -142,7 +152,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     '-m',
     'i',
   ])
-  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+  const { agents, docVersions } = tablesOf(db)
   // RFC-359 AC-1（第 9 刀）：库由 `describeEachProvider` 提供，整份 property 的**每一轮**
   // 共用同一个库（fast-check 一个用例跑几十轮）。代理名是唯一键，所以按名字幂等地种；
   // 其余种子行都带 `taskId`，而全部判据（`checkInvariants`）本就按 taskId 作用域，轮与轮之间不互相看见。
@@ -152,7 +162,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     .where(eq(agents.name, 'doc'))
     .limit(1)
   if (seededAgent.length === 0) {
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -183,13 +193,13 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     ],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -204,7 +214,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   })
   // Initial agent done + outputs.
   const agentRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: agentRunId,
     taskId,
     nodeId: 'doc',
@@ -214,14 +224,14 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     startedAt: Date.now() - 1000,
     finishedAt: Date.now() - 900,
   })
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId: agentRunId,
     portName: 'docpath',
     content: '# v0',
   })
   // Initial review row awaiting decision + pending dv.
   const reviewRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -245,7 +255,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     bodyPath: 'doc_versions/v1.md',
     decision: 'pending',
   })
-  await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
+  await patchTaskFixture(db, { id: taskId }, { status: 'awaiting_review' })
 
   return {
     db,
@@ -295,10 +305,9 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       return true
     }
     if (ev.kind === 'dispatch') {
-      const { tasks } = tablesOf(h.db)
       // Re-enter dispatch only when the review has no active awaiting row
       // (otherwise dispatch is no-op or idempotent).
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
       await dispatchReviewNode({
         db: h.db,
@@ -312,10 +321,10 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       return true
     }
     if (ev.kind === 'retry-agent') {
-      const { tasks, nodeRuns } = tablesOf(h.db)
+      const { nodeRuns } = tablesOf(h.db)
       // Need a task that's NOT pending/running. If task is awaiting_review or
       // failed/interrupted, retryNode accepts it. If task is running, skip.
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       if (task.status === 'running' || task.status === 'pending') return false
       // Pick the latest agent row that's not canceled.
       const rows = await h.db

@@ -1,10 +1,9 @@
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { createIntentApplyRecoveryScene } from '@/modules/intent/infrastructure/intentApplyRecovery'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
-import {
-  createIntentApplyJournalConvergence,
-  decodeIntentApplyRecoveryArtifacts,
-} from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
+import { decodeIntentApplyRecoveryArtifacts } from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -132,21 +131,23 @@ describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
   test('stale prepared journals compensate and settle through PostgreSQL CAS', async () => {
     const fake = fixture(100)
     let compensations = 0
-    const convergence = createIntentApplyJournalConvergence({
-      db: fake.db,
-      artifacts: {
-        async compensate() {
-          compensations += 1
+    const convergence = createAtomicApplyRecovery([
+      createIntentApplyRecoveryScene({
+        db: fake.db,
+        artifacts: {
+          async compensate() {
+            compensations += 1
+          },
+          async rollForward() {
+            throw new Error('prepared journal must not roll forward')
+          },
         },
-        async rollForward() {
-          throw new Error('prepared journal must not roll forward')
-        },
-      },
-      now: () => 1_000_000,
-      log,
-    })
+        now: () => 1_000_000,
+        log,
+      }),
+    ])
 
-    const result = await convergence.converge({ activeJournalIds: [] })
+    const result = await convergence.converge({ intent: [] })
     expect(result).toEqual({ failed: 1, rolledForward: 0 })
     expect(compensations).toBe(0)
     expect(
@@ -160,20 +161,22 @@ describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
 
   test('active or fresh journals are never reaped by maintenance', async () => {
     const fake = fixture(999_999)
-    const convergence = createIntentApplyJournalConvergence({
-      db: fake.db,
-      artifacts: {
-        async compensate() {
-          throw new Error('active journal must not compensate')
+    const convergence = createAtomicApplyRecovery([
+      createIntentApplyRecoveryScene({
+        db: fake.db,
+        artifacts: {
+          async compensate() {
+            throw new Error('active journal must not compensate')
+          },
+          async rollForward() {
+            throw new Error('active journal must not roll forward')
+          },
         },
-        async rollForward() {
-          throw new Error('active journal must not roll forward')
-        },
-      },
-      now: () => 1_000_000,
-      log,
-    })
-    await expect(convergence.converge({ activeJournalIds: ['journal-1'] })).resolves.toEqual({
+        now: () => 1_000_000,
+        log,
+      }),
+    ])
+    await expect(convergence.converge({ intent: ['journal-1'] })).resolves.toEqual({
       failed: 0,
       rolledForward: 0,
     })

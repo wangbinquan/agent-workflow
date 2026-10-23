@@ -1,5 +1,6 @@
 import type { NodeRunStatus } from '@agent-workflow/shared'
 
+import { decodeTaskCheckpoints } from './taskCheckpointCodec'
 import type { WrapperRunSnapshot } from '../domain/wrapperExecution'
 import { decodeWrapperProgress, encodeWrapperProgress } from '../domain/wrapperProgress'
 
@@ -15,17 +16,18 @@ export interface WrapperRunStorageRow {
   readonly isoSubmodulesReposJson: string | null
 }
 
-export function wrapperRunSnapshot(row: WrapperRunStorageRow): WrapperRunSnapshot {
+export function wrapperRunSnapshot(
+  row: WrapperRunStorageRow,
+  mountPaths: readonly string[],
+): WrapperRunSnapshot {
   return {
     id: row.id,
     status: row.status,
     wrapperProgressJson: row.wrapperProgressJson,
     consumedUpstreamRunsJson: row.consumedUpstreamRunsJson,
     mergeState: row.mergeState,
-    isoBaseSnapshot: row.isoBaseSnapshot,
-    isoBaseSnapshotReposJson: row.isoBaseSnapshotReposJson,
-    isoSubmodulesJson: row.isoSubmodulesJson,
-    isoSubmodulesReposJson: row.isoSubmodulesReposJson,
+    checkpoints: decodeTaskCheckpoints(row, mountPaths),
+    hasIsolationBase: row.isoBaseSnapshot !== null || row.isoBaseSnapshotReposJson !== null,
   }
 }
 

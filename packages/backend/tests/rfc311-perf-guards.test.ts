@@ -54,6 +54,14 @@
 // 离噪声极远的塌方阈值（见 CATASTROPHE_RATIO），通过也不代表原时延条款通过。
 // 各路径实际调用的函数见 GUARDED，生产装配覆盖与结构成本必须分别核验。
 
+import {
+  type TaskFixtureSpec,
+  type TaskRepoFixtureSpec,
+  patchTaskFixture,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
@@ -118,7 +126,7 @@ function actorOf(id: string, role: 'admin' | 'user' = 'admin'): Actor {
 }
 
 async function seed(db: PersistenceDb, n: number): Promise<void> {
-  const { users, workflows, tasks, taskRepos, cachedRepos, developmentMissions } = tablesOf(db)
+  const { users, cachedRepos, developmentMissions } = tablesOf(db)
   await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
@@ -127,9 +135,9 @@ async function seed(db: PersistenceDb, n: number): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'nightly', definition: '{}' })
-  const taskRows: PersistenceTables['tasks']['$inferInsert'][] = []
-  const repoRows: PersistenceTables['taskRepos']['$inferInsert'][] = []
+  await workflowFixture(db, { id: 'wf1', name: 'nightly', definition: '{}' })
+  const taskRows: TaskFixtureSpec[] = []
+  const repoRows: TaskRepoFixtureSpec[] = []
   const cacheRows: PersistenceTables['cachedRepos']['$inferInsert'][] = []
   const missionRows: PersistenceTables['developmentMissions']['$inferInsert'][] = []
   for (let i = 0; i < n; i += 1) {
@@ -198,8 +206,8 @@ async function seed(db: PersistenceDb, n: number): Promise<void> {
   // 分批插：PostgreSQL 的绑定参数上限是 65535，逐行插又会把整条 lane 拖成分钟级。
   const batch = 200
   for (let offset = 0; offset < taskRows.length; offset += batch) {
-    await db.insert(tasks).values(taskRows.slice(offset, offset + batch))
-    await db.insert(taskRepos).values(repoRows.slice(offset, offset + batch))
+    await taskFixture(db, taskRows.slice(offset, offset + batch))
+    await taskRepoFixture(db, repoRows.slice(offset, offset + batch))
     await db.insert(cachedRepos).values(cacheRows.slice(offset, offset + batch))
     await db.insert(developmentMissions).values(missionRows.slice(offset, offset + batch))
   }
@@ -444,7 +452,7 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
   test('生产 overview 的五组查询在写入后重新计数', async () => {
     const db = harness.db
     await seed(db, 3)
-    const { scheduledTasks, memories, workflows, cachedRepos, tasks } = tablesOf(db)
+    const { scheduledTasks, memories, cachedRepos } = tablesOf(db)
     await insertOne(db, scheduledTasks, {
       id: 'overview-schedule',
       name: 'nightly',
@@ -489,7 +497,7 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
     expect(Date.parse(first.generatedAt)).toBeGreaterThanOrEqual(firstStartedAt)
     expect(Date.parse(first.generatedAt)).toBeLessThanOrEqual(firstCompletedAt)
 
-    await insertOne(db, workflows, { id: 'wf2', name: 'daily', definition: '{}' })
+    await workflowFixture(db, { id: 'wf2', name: 'daily', definition: '{}' })
     await insertOne(db, cachedRepos, {
       id: 'overview-extra-repo',
       urlHash: 'overview-extra-hash',
@@ -501,10 +509,7 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
     })
     await db.delete(scheduledTasks).where(eq(scheduledTasks.id, 'overview-schedule'))
     await db.update(memories).set({ status: 'archived' }).where(eq(memories.id, 'overview-memory'))
-    await db
-      .update(tasks)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(tasks.id, 't0000'))
+    await patchTaskFixture(db, { id: 't0000' }, { status: 'done', finishedAt: Date.now() })
 
     const secondStartedAt = Date.now()
     const second = OverviewResponseSchema.parse(await overview.run(db))

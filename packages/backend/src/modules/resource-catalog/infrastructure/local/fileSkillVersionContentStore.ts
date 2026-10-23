@@ -107,14 +107,14 @@ function applyChange(
       return
     case 'write-main': {
       const target = realpathWriteInside(staging, join(staging, 'SKILL.md'))
-      writeFileSync(target, change.content, 'utf-8')
+      writeFileSync(target, change.content)
       return
     }
     case 'write-file': {
       const abs = safeJoin(staging, change.path)
       const target = realpathWriteInside(staging, abs)
       mkdirSync(dirname(target), { recursive: true })
-      writeFileSync(target, change.content, 'utf-8')
+      writeFileSync(target, change.content)
       return
     }
     case 'delete-file': {

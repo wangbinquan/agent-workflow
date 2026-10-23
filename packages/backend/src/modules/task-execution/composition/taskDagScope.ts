@@ -1,3 +1,4 @@
+import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
 import { decideScopeOutcome } from '@/services/dispatchFrontier'
 import { maybeRunCommitPush } from '@/services/scheduler'
 import { deriveFrontier } from './dagFrontier'
@@ -170,7 +171,11 @@ export async function runScope(
     rows: Awaited<ReturnType<typeof opts.persistence.nodeExecution.list>>,
   ): Promise<void> => {
     commitPushResumePending = false
-    const latest = rows.filter((row) => row.rerunCause === 'commit-push').at(-1)
+    // RFC-395 II-a: HEAD selects by the persisted cause across the task, without role labels.
+    const history = await createRunSelectionOracleSnapshot(rows, {
+      scope: { kind: 'rows' },
+    }).familyHistory(state.task.id, {}, { rerunCause: 'commit-push' })
+    const latest = history.at(-1)
     if (latest?.status !== 'interrupted' || latest.parentNodeRunId === null) return
     const trigger = rows.find((row) => row.id === latest.parentNodeRunId)
     const node = trigger === undefined ? undefined : scopeNodeById.get(trigger.nodeId)
@@ -185,7 +190,11 @@ export async function runScope(
         await opts.persistence.nodeRuns.transition({
           nodeRunId: session.id,
           event: { kind: 'cancel-by-supersede', reason: 'commit-push-rerun' },
-          extra: { finishedAt: Date.now() },
+          extra: {
+            identity: {
+              finishedAt: Date.now(),
+            },
+          },
           ...(opts.executionContext === undefined
             ? {}
             : { executionContext: opts.executionContext }),
@@ -218,7 +227,7 @@ export async function runScope(
       (opts.executionContext !== undefined &&
         (await opts.persistence.intents.hasPendingGateSuccessor(taskId)))
 
-    let f: ReturnType<typeof deriveFrontier> | undefined
+    let f: Awaited<ReturnType<typeof deriveFrontier>> | undefined
     if (!handoffRequested) {
       // RFC-140 W2 — auto-redispatch the auto-split-DEFERRED task questions (marker set at batch
       // dispatch + still undispatched + still staged) BEFORE deriving the frontier. The tick re-
@@ -251,7 +260,7 @@ export async function runScope(
       // role, so such a node RUNS its in-flight rerun + re-parks next tick.
       const deferredHandlerNodeIds =
         await opts.taskDagCollaboration.loadUndispatchedParkTargets(taskId)
-      f = deriveFrontier(
+      f = await deriveFrontier(
         rows,
         definition,
         scopeNodes,

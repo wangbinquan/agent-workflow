@@ -15,6 +15,13 @@
 //   T3  tasks.status='done'            ⟹ all output node_runs.status='done'
 //   U1  per (task, nodeId, iteration), ≤ 1 row in {awaiting_review, awaiting_human}
 
+import {
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readTaskFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -42,8 +49,8 @@ interface Violation {
 
 async function checkInvariants(db: PersistenceDb, taskId: string): Promise<Violation[]> {
   const v: Violation[] = []
-  const { tasks, nodeRuns, docVersions, clarifyRounds } = tablesOf(db)
-  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  const { docVersions, clarifyRounds } = tablesOf(db)
+  const taskRow = (await readTaskFixtures(db, { id: taskId }, { limit: 1 }))[0]
   if (taskRow === undefined) return v
 
   const def = JSON.parse(taskRow.workflowSnapshot) as {
@@ -53,7 +60,7 @@ async function checkInvariants(db: PersistenceDb, taskId: string): Promise<Viola
   for (const n of def.nodes ?? []) {
     if (typeof n.id === 'string' && typeof n.kind === 'string') kindOf.set(n.id, n.kind)
   }
-  const allRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const allRuns = await readNodeRunFixtures(db, { taskId })
   const allDocs = await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
   const allSessions = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
 
@@ -205,14 +212,13 @@ async function buildHarness(
     edges: [],
   }
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -259,8 +265,7 @@ async function insertNodeRun(
   },
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId,

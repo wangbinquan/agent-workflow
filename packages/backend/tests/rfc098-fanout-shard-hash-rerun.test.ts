@@ -15,7 +15,16 @@
 // children carrying hashes of the OLD content, run with NEW content, assert
 // exactly the changed shard re-spawns.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -63,8 +72,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -86,15 +94,14 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -181,8 +188,8 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
     // it, consumed NULL = legacy → the consumed generation gate stays open;
     // the value hash is the deciding mechanism here).
     const wrapperRunId = ulid()
-    const { nodeRuns, tasks, nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    const { nodeRuns } = tablesOf(h.db)
+    await nodeRunFixture(h.db, {
       id: wrapperRunId,
       taskId,
       nodeId: 'fan',
@@ -199,7 +206,7 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
       [doneShard0, '0', 'alpha', 'OLD-A'],
       [doneShard1, '1', 'beta-OLD', 'OLD-B'],
     ] as const) {
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id,
         taskId,
         nodeId: 'inner',
@@ -212,7 +219,7 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content })
+      await nodeRunOutputFixture(h.db, { nodeRunId: id, portName: 'result', content })
     }
 
     const argvCapture = join(h.appHome, 'argv-capture.jsonl')
@@ -230,7 +237,7 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
         }),
     )
 
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // Wrapper row reused (RFC-040 resume), not re-minted.
@@ -255,9 +262,9 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
     // Row-level shape: shard '0' still owns exactly its pre-seeded row
     // (untouched, OLD-A output preserved); shard '1' gained a fresh row
     // stamped with the NEW value hash, while the stale row stays as history.
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapperRunId)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapperRunId,
+    )
     const key0 = innerRows.filter((r) => r.shardKey === '0')
     const key1 = innerRows.filter((r) => r.shardKey === '1')
     expect(key0.length).toBe(1)
@@ -267,18 +274,12 @@ describe('RFC-098 B3 — restart + changed upstream content re-runs ONLY the aff
     const fresh1 = key1.find((r) => r.id !== doneShard1)!
     expect(fresh1.status).toBe('done')
     expect(fresh1.shardValueHash).toBe(sha256Hex('beta-NEW'))
-    const fresh1Outs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, fresh1.id))
+    const fresh1Outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: fresh1.id })
     expect(fresh1Outs.find((o) => o.portName === 'result')?.content).toBe('FRESH')
     // The stale row keeps its original hash + output (history stays true).
     const stale1 = key1.find((r) => r.id === doneShard1)!
     expect(stale1.shardValueHash).toBe(sha256Hex('beta-OLD'))
-    const stale1Outs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, stale1.id))
+    const stale1Outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: stale1.id })
     expect(stale1Outs.find((o) => o.portName === 'result')?.content).toBe('OLD-B')
   }, 60_000)
 })

@@ -15,8 +15,9 @@
 // 重扫全表」这两类回归的直接签名。墙钟仍然打印出来作诊断基线（RFC-359 AC-11 要的「两个
 // 引擎各取各的 P95」），但不再是判据。
 
+import { type TaskFixtureSpec, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
 import { buildActor } from '../src/auth/actor'
@@ -56,7 +57,7 @@ const ROWS_FETCHED_RATCHET = 21_100
 describeEachProvider('RFC-244 task operations capacity smoke', (harness) => {
   test('20k tasks support one root page plus twenty bounded child expansions', async () => {
     const db: PersistenceDb = harness.db
-    const { users, workflows, tasks } = tablesOf(db)
+    const { users } = tablesOf(db)
     await insertOne(db, users, {
       id: 'capacity-owner',
       username: 'capacity-owner',
@@ -65,13 +66,13 @@ describeEachProvider('RFC-244 task operations capacity smoke', (harness) => {
       createdAt: 1,
       updatedAt: 1,
     })
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'capacity-workflow',
       name: 'Capacity workflow',
       definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
     })
 
-    const rows: PersistenceTables['tasks']['$inferInsert'][] = []
+    const rows: TaskFixtureSpec[] = []
     for (let rootIndex = 0; rootIndex < ROOT_COUNT; rootIndex += 1) {
       const rootId = `capacity-root-${String(rootIndex).padStart(2, '0')}`
       rows.push(taskRow(rootId, null, rootIndex * 10_000))
@@ -87,7 +88,7 @@ describeEachProvider('RFC-244 task operations capacity smoke', (harness) => {
     }
     // 分批插：PostgreSQL 的绑定参数上限是 65535，逐行插会把整条 lane 拖成分钟级。
     for (let offset = 0; offset < rows.length; offset += 200) {
-      await db.insert(tasks).values(rows.slice(offset, offset + 200))
+      await taskFixture(db, rows.slice(offset, offset + 200))
     }
 
     const actor = buildActor({
@@ -156,11 +157,7 @@ describe('RFC-244 capacity smoke —— 判据本身的形状', () => {
   })
 })
 
-function taskRow(
-  id: string,
-  parentTaskId: string | null,
-  startedAt: number,
-): PersistenceTables['tasks']['$inferInsert'] {
+function taskRow(id: string, parentTaskId: string | null, startedAt: number): TaskFixtureSpec {
   return {
     id,
     name: id,

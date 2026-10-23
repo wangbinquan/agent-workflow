@@ -12,8 +12,7 @@
 // **记一条判据教训**：中立实现住进 provider 目录、或引用住在 provider 目录里的中立代码，
 // 都会让「按锚点判边」的账本得出错误结论——而那个结论的方向是**多记债**，不是少记。
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
-import type { TaskStatus } from '@agent-workflow/shared'
+import type { TaskStatus, Task } from '@agent-workflow/shared'
 
 import { createLogger } from '@/util/log'
 import type { WorkspacePruneCause } from './sqlite/taskLifecycle'
@@ -40,9 +39,9 @@ export type TerminalWorkspacePruneDecision =
 export type TerminalWorkspacePrunePolicy = (
   row: {
     taskId: string
-    spaceKind: PersistenceTables['tasks']['$inferSelect']['spaceKind']
+    spaceKind: Task['spaceKind']
     workspacePruningAt: number | null
-    workspacePruneCause: PersistenceTables['tasks']['$inferSelect']['workspacePruneCause']
+    workspacePruneCause: WorkspacePruneCause | null
     workspacePrunedAt: number | null
   },
   to: TaskStatus,

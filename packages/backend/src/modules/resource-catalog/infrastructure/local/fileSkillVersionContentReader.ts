@@ -1,7 +1,6 @@
 import type { FileNode } from '@agent-workflow/shared'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { sha256Hex } from '@/util/hash'
 import { realpathInside } from '@/util/safePath'
 import type {
   SkillVersionContentReader,
@@ -16,9 +15,7 @@ export function createFileSkillVersionContentReader(appHome: string): SkillVersi
     readSnapshot(reference) {
       const root = skillVersionAbs(appHome, reference.skillId, reference.version)
       const mainPath = join(root, 'SKILL.md')
-      const main = existsSync(mainPath)
-        ? readFileSync(realpathInside(root, mainPath), 'utf-8')
-        : null
+      const main = existsSync(mainPath) ? readFileSync(realpathInside(root, mainPath)) : null
       return { main, files: fileTreeOf(root) }
     },
     readTree(reference) {
@@ -27,7 +24,7 @@ export function createFileSkillVersionContentReader(appHome: string): SkillVersi
   } satisfies SkillVersionContentReader)
 }
 
-/** Read a files/ tree into a path→entry map (binary detected by NUL byte). */
+/** Read a files/ tree into a path→bytes map; text/binary projection belongs to the caller. */
 function readTree(dir: string): Map<string, TreeEntry> {
   const out = new Map<string, TreeEntry>()
   if (!existsSync(dir)) return out
@@ -35,12 +32,7 @@ function readTree(dir: string): Map<string, TreeEntry> {
   collectFiles(dir, '', rels)
   for (const rel of rels) {
     const buf = readFileSync(join(dir, rel))
-    out.set(
-      rel,
-      buf.includes(0)
-        ? { kind: 'binary', hash: sha256Hex(buf) }
-        : { kind: 'text', content: buf.toString('utf-8') },
-    )
+    out.set(rel, buf)
   }
   return out
 }

@@ -11,7 +11,7 @@
 //   4. the fixed-clock 7-day window boundary (D10 / design gate P2-1);
 //   5. the response contract (OverviewResponseSchema + generatedAt).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -403,14 +403,14 @@ function taskRow(
  */
 async function seedTasks(h: Harness): Promise<void> {
   const now = Date.now()
-  const { workflows, tasks, taskCollaborators } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  const { taskCollaborators } = tablesOf(h.db)
+  await workflowFixture(h.db, {
     id: 'wf-ov',
     name: 'wf-ov',
     description: '',
     definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
   })
-  await h.db.insert(tasks).values([
+  await taskFixture(h.db, [
     taskRow('t1', h.alice.id, 'running'),
     taskRow('t2', h.alice.id, 'awaiting_review'),
     taskRow('t3', h.bob.id, 'awaiting_human'),
@@ -557,9 +557,10 @@ describeEachProviderHttpApplication(
       const rows = (await response.json()) as Array<{ id: string }>
       expect(rows.some((row) => row.id === 'internal-done')).toBe(false)
       expect((await getOverview(h, h.admin.token)).tasks?.done7d).toBe(2)
-      const { tasks } = tablesOf(h.db)
       expect(
-        (await h.db.select({ id: tasks.id }).from(tasks)).some((row) => row.id === 'internal-done'),
+        (await readTaskFixtures(h.db).then((rows) => rows.map((row) => ({ id: row.id })))).some(
+          (row) => row.id === 'internal-done',
+        ),
       ).toBe(true)
     })
 
@@ -656,14 +657,13 @@ describeEachProviderHttpApplication(
     test('7d 边界（注入时钟）：cutoff-1ms 不计 / 恰好 cutoff 计 / cutoff+1ms 计', async () => {
       const T0 = 1_900_000_000_000 // fixed, far from wall-clock seed noise
       const cutoff = T0 - 7 * 86_400_000
-      const { workflows, tasks } = tablesOf(h.db)
-      await insertOne(h.db, workflows, {
+      await workflowFixture(h.db, {
         id: 'wf-bd',
         name: 'wf-bd',
         description: '',
         definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
       })
-      await h.db.insert(tasks).values([
+      await taskFixture(h.db, [
         taskRow('bd-out', h.alice.id, 'done', {
           startedAt: cutoff - 10,
           finishedAt: cutoff - 1,

@@ -23,11 +23,15 @@
 // The headline assertion below (stray.txt must NOT exist after a successful
 // retry) fails against today's buggy code because rollback was skipped.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -69,8 +73,7 @@ async function seedAgent(
   extra: Record<string, unknown> = {},
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -91,15 +94,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -210,13 +212,12 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
     // The retry (attempt 1) succeeds, so the task is done.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // Sanity: attempt 0 failed (wrote stray.txt) and attempt 1 succeeded.
-    const runs = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+    const runs = (await readNodeRunFixtures(h.db, { taskId }))
       .filter((r) => r.nodeId === 'a1')
       .sort((a, b) => a.retryIndex - b.retryIndex)
     expect(runs.length).toBe(2)
@@ -224,7 +225,9 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect(runs[1]?.status).toBe('done')
     // The failed attempt's pre-snapshot was '' (clean tree) — this is the exact
     // input that makes the buggy `snap !== ''` gate skip rollback.
-    expect(runs[0]?.preSnapshot ?? '').toBe('')
+    expect(
+      runs[0]?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? '',
+    ).toBe('')
 
     // HEADLINE RED ASSERTION: the failed attempt's partial write must have been
     // rolled back (reset --hard + clean -fd) before the retry ran. Today the

@@ -13,8 +13,13 @@
 // Fix = revive-by-re-mint at engine entry (like the DAG revives a terminal row) + an
 // auto-resume sweep that recognises this second wedge shape.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type NodeRunFixtureSpec,
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -67,8 +72,8 @@ describe('RFC-187 T13 — isKilledClarifyContinuation', () => {
   })
 })
 
-type TaskInsert = PersistenceTables['tasks']['$inferInsert']
-type NodeRunInsert = PersistenceTables['nodeRuns']['$inferInsert']
+type TaskInsert = TaskFixtureSpec
+type NodeRunInsert = NodeRunFixtureSpec
 
 async function seedWedged(
   db: PersistenceDb,
@@ -80,9 +85,8 @@ async function seedWedged(
 ): Promise<string> {
   const taskId = ulid()
   const wfId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: `wf-${taskId}`, definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: wfId, name: `wf-${taskId}`, definition: '{}' })
+  await taskFixture(db, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -101,7 +105,7 @@ async function seedWedged(
     startedAt: Date.now(),
     workgroupId: 'wg1',
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: '__wg_leader__',
@@ -191,6 +195,7 @@ describe('RFC-187 T13 — source locks (driver-entry revive)', () => {
     expect(RUNNER).toMatch(/cause:\s*latest\.rerunCause === 'clarify-answer'/)
     // 只复活每组最新那条（更早的 interrupted 续跑已被取代，属于历史）。RFC-374：「最新」按铸造
     // 序显式选取，不再依赖装载顺序的最后一条。
-    expect(RUNNER).toContain('const latest = newestNodeRun(group)')
+    // RFC-395 II-a A3: the oracle stamps the same group-current selection before driving.
+    expect(RUNNER).toContain('const latest = group.find((run) => run.selection.legacyGroupCurrent)')
   })
 })

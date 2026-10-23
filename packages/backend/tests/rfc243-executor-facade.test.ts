@@ -19,7 +19,9 @@
 //      (failed/interrupted included — the single-slot RFC-202 hook only fires
 //      for done|canceled); missing-row resolve; poll fallback catches a row
 //      deleted after registration; abort resolves 'aborted'.
-import { insertOne } from '@/platform/persistence/singleInsert'
+
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -134,36 +136,68 @@ describe('RFC-243 T3 — resolveTaskEngine (extracted fork, byte-equal semantics
   const dwConfig = JSON.stringify({ mode: 'dynamic_workflow' })
 
   test('non-workgroup task → dag, no wg dispatch', () => {
-    expect(resolveTaskEngine({ workgroupId: null }, null)).toEqual({
+    expect(
+      resolveTaskEngine({ subject: { kind: 'workflow', sourceId: 'authored' } }, null),
+    ).toEqual({
       engine: 'dag',
       wgDispatch: null,
     })
   })
 
   test('leader_worker → workgroup-turns (dw phase irrelevant)', () => {
-    expect(resolveTaskEngine({ workgroupId: ulid(), workgroupConfigJson: lwConfig }, null)).toEqual(
-      { engine: 'workgroup-turns', wgDispatch: 'turn-engine' },
-    )
+    expect(
+      resolveTaskEngine(
+        {
+          subject: { kind: 'workgroup', sourceId: ulid() },
+          workgroupConfig: decodeTaskWorkgroupConfig(lwConfig),
+        },
+        null,
+      ),
+    ).toEqual({ engine: 'workgroup-turns', wgDispatch: 'turn-engine' })
   })
 
   test('unparsable config falls back to leader_worker → turn engine (RFC-217 T2)', () => {
     expect(
-      resolveTaskEngine({ workgroupId: ulid(), workgroupConfigJson: 'not json' }, null),
+      resolveTaskEngine(
+        {
+          subject: { kind: 'workgroup', sourceId: ulid() },
+          workgroupConfig: decodeTaskWorkgroupConfig('not json'),
+        },
+        null,
+      ),
     ).toEqual({ engine: 'workgroup-turns', wgDispatch: 'turn-engine' })
   })
 
   test('dynamic_workflow without executing phase → dw-generate', () => {
-    expect(resolveTaskEngine({ workgroupId: ulid(), workgroupConfigJson: dwConfig }, null)).toEqual(
-      { engine: 'dw-generate', wgDispatch: 'dw-generate' },
-    )
     expect(
-      resolveTaskEngine({ workgroupId: ulid(), workgroupConfigJson: dwConfig }, 'awaiting_confirm'),
+      resolveTaskEngine(
+        {
+          subject: { kind: 'workgroup', sourceId: ulid() },
+          workgroupConfig: decodeTaskWorkgroupConfig(dwConfig),
+        },
+        null,
+      ),
+    ).toEqual({ engine: 'dw-generate', wgDispatch: 'dw-generate' })
+    expect(
+      resolveTaskEngine(
+        {
+          subject: { kind: 'workgroup', sourceId: ulid() },
+          workgroupConfig: decodeTaskWorkgroupConfig(dwConfig),
+        },
+        'awaiting_confirm',
+      ),
     ).toEqual({ engine: 'dw-generate', wgDispatch: 'dw-generate' })
   })
 
   test('dynamic_workflow executing → dag with dw-execute marker', () => {
     expect(
-      resolveTaskEngine({ workgroupId: ulid(), workgroupConfigJson: dwConfig }, 'executing'),
+      resolveTaskEngine(
+        {
+          subject: { kind: 'workgroup', sourceId: ulid() },
+          workgroupConfig: decodeTaskWorkgroupConfig(dwConfig),
+        },
+        'executing',
+      ),
     ).toEqual({ engine: 'dag', wgDispatch: 'dw-execute' })
   })
 })
@@ -205,13 +239,12 @@ async function seedTask(db: PersistenceDb, status: TaskStatus): Promise<string> 
   const definition = { $schema_version: 4, inputs: [], nodes: [], edges: [] }
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `wf-${workflowId.slice(-6).toLowerCase()}`,
     definition: JSON.stringify(definition),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc243-watch',
     workflowId,

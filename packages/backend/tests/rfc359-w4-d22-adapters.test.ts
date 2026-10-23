@@ -5,7 +5,7 @@
 // id 被占用与同名冲突、改名与更新的双 OCC 围栏（updatedAt + aclRevision），以及「不是系统 builtin 的行
 // 一律按 id 被占用拒绝」。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -124,7 +124,7 @@ describeEachProvider('RFC-359 W4-D22 —— 数字员工岗位模版目录', (ha
     const repository = createDigitalEmployeeAgentTemplateRepository(db)
     const id = ulid()
     const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id,
       name: `user-agent-${id.slice(-8).toLowerCase()}`,
       description: '',

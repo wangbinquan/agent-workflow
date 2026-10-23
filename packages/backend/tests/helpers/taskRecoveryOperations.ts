@@ -1,6 +1,7 @@
+import { patchNodeRunFixture, patchTaskFixture, readNodeRunFixtures } from './model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TERMINAL_NODE_RUN_STATUSES } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskRecoveryOperations } from '../../src/modules/task-execution/application/ports/taskRecoveryOperations'
@@ -17,18 +18,17 @@ export function taskRecoveryOperations(db: PersistenceDb): TaskRecoveryOperation
     async interruptBootOrphanTask(input) {
       // RFC-359：同步孪生 `terminalizeTaskExecutionIntentsTx` 退役，这条夹具跟着搬到中立事务口。
       return await databaseSessionFor(db).transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        const interrupted = await tx
-          .update(tasks)
-          .set({
+        const interrupted = await patchTaskFixture(
+          tx,
+          { id: input.taskId, status: input.from },
+          {
             status: 'interrupted',
             finishedAt: input.now,
             errorSummary: input.failureCode,
             errorMessage: input.errorMessage,
-          })
-          .where(and(eq(tasks.id, input.taskId), eq(tasks.status, input.from)))
-          .returning({ id: tasks.id })
-        if (interrupted.length !== 1) return false
+          },
+        )
+        if (interrupted !== 1) return false
         await terminalizeTaskExecutionIntentsUncheckedInTx(tx, {
           taskId: input.taskId,
           state: 'failed',
@@ -40,26 +40,23 @@ export function taskRecoveryOperations(db: PersistenceDb): TaskRecoveryOperation
     },
 
     async interruptNodeRun(input) {
-      const { nodeRuns } = tablesOf(db)
-      const interrupted = await db
-        .update(nodeRuns)
-        .set({
+      const interrupted = await patchNodeRunFixture(
+        db,
+        { id: input.nodeRunId, status: ['running', 'pending'] },
+        {
           status: 'interrupted',
           finishedAt: input.now,
           ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
-        })
-        .where(
-          and(eq(nodeRuns.id, input.nodeRunId), inArray(nodeRuns.status, ['running', 'pending'])),
-        )
-        .returning({ id: nodeRuns.id })
-      return interrupted.length === 1
+        },
+      )
+      return interrupted === 1
     },
 
     async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
       // RFC-359 AC-6：从 SQLite 专属的同步事务 `dbTxSync` 搬到中立事务口。
       // 事务体逐条改成 await：`.get()` → `(await …limit(1))[0]`，`.all()` / `.run()` → 直接 await。
       return await databaseSessionFor(db).transaction(async (tx) => {
-        const { runtimeSessionLeases, nodeRuns } = tablesOf(tx)
+        const { runtimeSessionLeases } = tablesOf(tx)
         const lease = (
           await tx
             .select()
@@ -75,15 +72,13 @@ export function taskRecoveryOperations(db: PersistenceDb): TaskRecoveryOperation
           return 0
         }
         const run = (
-          await tx
-            .select({
-              status: nodeRuns.status,
-              sessionId: nodeRuns.opencodeSessionId,
-              failureCode: nodeRuns.failureCode,
-            })
-            .from(nodeRuns)
-            .where(eq(nodeRuns.id, nodeRunId))
-            .limit(1)
+          await readNodeRunFixtures(tx, { id: nodeRunId }, { limit: 1 }).then((rows) =>
+            rows.map((row) => ({
+              status: row.status,
+              sessionId: row.opencodeSessionId,
+              failureCode: row.failureCode,
+            })),
+          )
         )[0]
         if (run === undefined || !TERMINAL_RUN_STATUSES.has(run.status)) return 0
         if (
@@ -104,10 +99,11 @@ export function taskRecoveryOperations(db: PersistenceDb): TaskRecoveryOperation
             .returning({ sessionId: runtimeSessionLeases.sessionId })
           return released.length === 1 ? 1 : 0
         }
-        await tx
-          .update(nodeRuns)
-          .set({ opencodeSessionId: null })
-          .where(and(eq(nodeRuns.id, nodeRunId), eq(nodeRuns.opencodeSessionId, lease.sessionId)))
+        await patchNodeRunFixture(
+          tx,
+          { id: nodeRunId, opencodeSessionId: lease.sessionId },
+          { opencodeSessionId: null },
+        )
         const discarded = await tx
           .delete(runtimeSessionLeases)
           .where(
@@ -123,13 +119,12 @@ export function taskRecoveryOperations(db: PersistenceDb): TaskRecoveryOperation
     },
 
     async interruptPeriodicTaskIfIdle(input) {
-      const { tasks } = tablesOf(db)
-      const interrupted = await db
-        .update(tasks)
-        .set({ status: 'interrupted', finishedAt: input.now, errorSummary: input.failureCode })
-        .where(and(eq(tasks.id, input.taskId), eq(tasks.status, 'running')))
-        .returning({ id: tasks.id })
-      return interrupted.length === 1
+      const interrupted = await patchTaskFixture(
+        db,
+        { id: input.taskId, status: 'running' },
+        { status: 'interrupted', finishedAt: input.now, errorSummary: input.failureCode },
+      )
+      return interrupted === 1
     },
   })
 }

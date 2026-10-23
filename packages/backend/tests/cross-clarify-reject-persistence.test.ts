@@ -23,9 +23,8 @@
 // user's "I refuse to be asked again" intent is being lost — investigate
 // before relaxing.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -101,8 +100,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = twoCrossDef()
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'reject-persistence',
     description: '',
@@ -115,7 +113,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -132,23 +130,21 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
 
 async function seedQRun(db: PersistenceDb, taskId: string, nodeId: string): Promise<string> {
   const id = `nr_${nodeId}_${Math.random().toString(36).slice(2, 6)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -161,15 +157,14 @@ async function seedQRun(db: PersistenceDb, taskId: string, nodeId: string): Prom
 
 async function seedDesignerRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = `nr_d_${Math.random().toString(36).slice(2, 6)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: 'snap-c4',
+    checkpoints: [{ mountPath: '', preSnapshot: 'snap-c4' }],
   })
   return id
 }
@@ -284,8 +279,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     })
     // Simulate a parallel self-clarify session on the designer — unrelated.
     const designerSelfClarifyNrId = `nr_d_self_${Math.random().toString(36).slice(2, 6)}`
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: designerSelfClarifyNrId,
       taskId,
       nodeId: 'designer',
@@ -368,7 +362,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     // must short-circuit it to done.
     const freshId = `nr_cross1_${Math.random().toString(36).slice(2, 6)}`
     const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: freshId,
       taskId,
       nodeId: 'cross1',

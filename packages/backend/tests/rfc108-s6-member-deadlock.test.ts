@@ -5,6 +5,7 @@
 // → S6 告警；② 属主活跃 → 无 S6；③ system-owned（无人类成员边界）→ 无 S6；④ 属主停用
 // 但有活跃协作者 → 无 S6（仍有人能应答）。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -37,9 +38,8 @@ async function seedAwaitingTask(db: PersistenceDb, ownerUserId: string | null): 
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },

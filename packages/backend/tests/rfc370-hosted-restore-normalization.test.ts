@@ -5,6 +5,7 @@
 // Operations freezes the restored execution authority, fails the snapshot's
 // other building backups and re-adopts the restore source's archive pin. Every
 // participant is idempotent because a resumed restore runs it again.
+import { patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -37,11 +38,9 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
 
   test('Task Execution suspends live tasks, interrupts running work and cancels unsettled executions', async () => {
     for (const id of ['t-running', 't-gate', 't-done']) await seedTask(harness.db, id)
-    const { tasks, hostedExecutionBindings, hostedRecoveryRequests, nodeRuns } = tablesOf(
-      harness.db,
-    )
-    await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, 't-running'))
-    await harness.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, 't-done'))
+    const { hostedExecutionBindings, hostedRecoveryRequests, nodeRuns } = tablesOf(harness.db)
+    await patchTaskFixture(harness.db, { id: 't-running' }, { status: 'running' })
+    await patchTaskFixture(harness.db, { id: 't-done' }, { status: 'done' })
     const running = await seedRun(harness.db, 't-running', 'n-running', { status: 'running' })
     const done = await seedRun(harness.db, 't-running', 'n-done', { status: 'done' })
     await harness.db.insert(hostedExecutionBindings).values([
@@ -76,7 +75,7 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
       failedRecoveryRequests: 1,
     })
     const taskRows = new Map(
-      (await harness.db.select().from(tasks)).map((row) => [row.id, row] as const),
+      (await readTaskFixtures(harness.db)).map((row) => [row.id, row] as const),
     )
     expect(taskRows.get('t-running')).toMatchObject({
       status: 'interrupted',

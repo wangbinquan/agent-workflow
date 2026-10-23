@@ -11,6 +11,7 @@
 //     visibility middleware decides the 404 path)
 //   - WS broadcast fires on lifecycle.alert with the right shape
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -54,13 +55,12 @@ async function seedTask(
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes, edges: [], outputs: [] }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -113,8 +113,8 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         { id: 'rev_1', kind: 'review' } as WorkflowNode,
       ])
       const runId = ulid()
-      const { nodeRuns, docVersions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { docVersions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: 'rev_1',
@@ -159,8 +159,8 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         { id: 'rev_1', kind: 'review' } as WorkflowNode,
       ])
       const runId = ulid()
-      const { nodeRuns, docVersions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { docVersions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: 'rev_1',
@@ -264,8 +264,8 @@ describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
         { id: 'rev_1', kind: 'review' } as WorkflowNode,
       ])
       const runId = ulid()
-      const { nodeRuns, docVersions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { docVersions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: 'rev_1',

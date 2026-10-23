@@ -1,3 +1,4 @@
+import { agentFixture, readAgentFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -57,10 +58,10 @@ async function seedResource(
   ownerUserId: string,
 ): Promise<AclRow> {
   const acl = { ownerUserId, visibility: 'public' as const, aclRevision: 0 }
-  const { agents, skills, mcps, plugins, workflows, workgroups, capabilityTemplates } = tablesOf(db)
+  const { skills, mcps, plugins, workgroups, capabilityTemplates } = tablesOf(db)
   switch (type) {
     case 'agent':
-      await insertOne(db, agents, { id, name, ...acl })
+      await agentFixture(db, { id, name, ...acl })
       break
     case 'skill':
       await insertOne(db, skills, { id, name, ...acl })
@@ -80,7 +81,7 @@ async function seedResource(
       })
       break
     case 'workflow':
-      await insertOne(db, workflows, { id, name, definition: '{}', ...acl })
+      await workflowFixture(db, { id, name, definition: '{}', ...acl })
       break
     case 'workgroup':
       await insertOne(db, workgroups, { id, name, ...acl })
@@ -184,18 +185,16 @@ describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) =>
         expectedAclRevision: 1,
       }),
     ).rejects.toBeInstanceOf(ForbiddenError)
-    const { agents } = tablesOf(db)
     expect(
-      await first(
-        db
-          .select({
-            ownerUserId: agents.ownerUserId,
-            visibility: agents.visibility,
-            aclRevision: agents.aclRevision,
-          })
-          .from(agents)
-          .where(eq(agents.id, source.id)),
-      ),
+      (
+        await readAgentFixtures(db, { id: source.id }).then((rows) =>
+          rows.map((row) => ({
+            ownerUserId: row.ownerUserId,
+            visibility: row.visibility,
+            aclRevision: row.aclRevision,
+          })),
+        )
+      )[0],
     ).toEqual({ ownerUserId: 'owner-b', visibility: 'public', aclRevision: 1 })
   })
 

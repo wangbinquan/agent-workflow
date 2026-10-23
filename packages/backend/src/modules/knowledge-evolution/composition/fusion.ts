@@ -1,3 +1,4 @@
+import type { FusionResourceSeedParticipant } from '@/modules/resource-catalog/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
@@ -23,6 +24,8 @@ interface FusionCompositionDependencies {
 export interface FusionParticipants {
   readonly memoryMembership: FusionMemoryMembership
   readonly skillVersionCommit: FusionSkillVersionCommit
+  /** Restore-only recovery does not seed catalog resources. */
+  readonly resourceSeed?: { bind(db: PersistenceDb): FusionResourceSeedParticipant }
 }
 
 /**
@@ -37,7 +40,10 @@ export interface FusionParticipants {
  * 绑出的同一个 participant 同时给仓库（暂存 / 提交 / 发布）与编排（种子树 / 候选树）。
  */
 function persistenceOf(
-  input: { readonly db: PersistenceDb } & Pick<FusionParticipants, 'memoryMembership'>,
+  input: { readonly db: PersistenceDb } & Pick<
+    FusionParticipants,
+    'memoryMembership' | 'resourceSeed'
+  >,
   skillTrees: FusionSkillTrees,
 ): FusionPersistence {
   const { memoryMembership } = input
@@ -46,6 +52,9 @@ function persistenceOf(
     db: input.db,
     memoryMembership,
     skillVersionCommit: skillTrees,
+    ...(input.resourceSeed === undefined
+      ? {}
+      : { resourceSeed: input.resourceSeed.bind(input.db) }),
     // RFC-353 T6/T7：provenance 修复也走 memory 的同一个 participant。逐条各自开事务——
     // 单条 UPDATE 与此前的裸写等价，但不再需要把 provider 的原始 client 泄漏到 public 面上。
     fusedSkillReassignment: Object.freeze({
@@ -72,7 +81,8 @@ export function composeFusionPersistenceFor(
 export function composeFusionOperationsFor(
   input: FusionCompositionDependencies & {
     readonly db: PersistenceDb
-  } & FusionParticipants,
+  } & FusionParticipants &
+    Required<Pick<FusionParticipants, 'resourceSeed'>>,
 ): FusionOperations {
   const skillTrees = input.skillVersionCommit.bind({ db: input.db, appHome: input.appHome })
   return Object.freeze({

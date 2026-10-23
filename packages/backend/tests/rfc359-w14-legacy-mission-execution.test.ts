@@ -1,6 +1,15 @@
 // RFC-359 P0-9: legacy mission -> action launcher -> real TaskEngine child ->
 // persisted output -> original terminal observer -> attempt settlement.
 // A no-change action settles here; this is not a completed mission delivery.
+
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
@@ -46,7 +55,6 @@ import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/a
 import { bindChangeCandidateParticipant } from '@/modules/source-control/composition'
 import {
   DIGITAL_EMPLOYEE_AGENT_NODE_ID,
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_OUTPUT_NODE_ID,
   DIGITAL_EMPLOYEE_RESULT_PORT,
   DIGITAL_EMPLOYEE_SCRIPT_NODE_ID,
@@ -225,13 +233,8 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         const {
           users,
           cachedRepos,
-          agents,
-          workflows,
           developmentAgentAttempts,
-          tasks,
           developmentWakeHints,
-          nodeRuns,
-          nodeRunOutputs,
           developmentActionRuns,
           taskExecutionIntents,
         } = tablesOf(db)
@@ -254,7 +257,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           lastFetchedAt: now,
           createdAt: now,
         })
-        await insertOne(db, agents, {
+        await agentFixture(db, {
           id: agentId,
           name: 'legacy-mission-agent',
           description: 'Real legacy child fixture',
@@ -284,7 +287,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           ],
           edges: [],
         })
-        await insertOne(db, workflows, {
+        await workflowFixture(db, {
           id: scriptId,
           name: 'legacy-mission-script',
           definition,
@@ -417,9 +420,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         // returned. A missing observer forwarding must fail on durable state,
         // before waiting for the drive signal it would never produce.
         await within(terminalCompleted.promise, 'legacy mission terminal callback')
-        expect((await db.select().from(tasks).where(eq(tasks.id, executionRef)))[0]?.status).toBe(
-          'done',
-        )
+        expect((await readTaskFixtures(db, { id: executionRef }))[0]?.status).toBe('done')
         const settlement = {
           attemptStatus: (await store.listAttempts(actionRunId))[0]?.status,
           wakeDeliveryKeys: (
@@ -446,13 +447,13 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           },
         })
         expect(terminalRefs).toEqual([{ kind, executionRef }])
-        const [task] = await db.select().from(tasks).where(eq(tasks.id, executionRef))
+        const [task] = await readTaskFixtures(db, { id: executionRef })
         expect(task, task?.errorMessage ?? undefined).toMatchObject({
           status: 'done',
           errorSummary: null,
           errorMessage: null,
           catalogVisibility: 'internal',
-          workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+          workflowId: TASK_DEFINITION_HOSTS['digital-employee'].id,
           digitalEmployeeRoundId: actionRunId,
           baseCommit: baselineSha,
         })
@@ -484,7 +485,7 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         const executionNodeId =
           kind === 'agent' ? DIGITAL_EMPLOYEE_AGENT_NODE_ID : DIGITAL_EMPLOYEE_SCRIPT_NODE_ID
         expect(snapshot.nodes.map((node) => node.id)).toContain(executionNodeId)
-        const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, executionRef))
+        const runs = await readNodeRunFixtures(db, { taskId: executionRef })
         expect(runs).toHaveLength(3)
         expect(runs.every((run) => run.status === 'done')).toBe(true)
         const executedRun = runs.find((run) => run.nodeId === executionNodeId)!
@@ -492,10 +493,9 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         expect(capture.cwd).toBe(executedRun.isoWorktreePath ?? task!.worktreePath)
         const outputRun = runs.find((run) => run.nodeId === DIGITAL_EMPLOYEE_OUTPUT_NODE_ID)!
         expect(
-          await db
-            .select({ port: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-            .from(nodeRunOutputs)
-            .where(eq(nodeRunOutputs.nodeRunId, outputRun.id)),
+          await readNodeRunOutputFixtures(db, { nodeRunId: outputRun.id }).then((rows) =>
+            rows.map((row) => ({ port: row.portName, content: row.content })),
+          ),
         ).toEqual([{ port: DIGITAL_EMPLOYEE_RESULT_PORT, content: capture.frame }])
         expect(await launchers[`${kind}Launcher`].fetchOutcome(executionRef)).toEqual({
           kind: 'exited',
@@ -523,7 +523,9 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
           )[0]?.settledAt,
         ).toBeGreaterThanOrEqual(now)
         expect(await store.getActionRun(actionRunId)).toMatchObject({ status: 'settled' })
-        expect(await db.select({ id: tasks.id }).from(tasks)).toEqual([{ id: executionRef }])
+        expect(
+          await readTaskFixtures(db).then((rows) => rows.map((row) => ({ id: row.id }))),
+        ).toEqual([{ id: executionRef }])
         expect(
           await db
             .select({ id: developmentActionRuns.id })
@@ -569,8 +571,9 @@ describeEachProvider('RFC-359 P0-9 legacy mission real execution', (harness) => 
         writeFileSync(releasePath, 'teardown release\n')
         try {
           if (execution !== undefined && launchers !== undefined) {
-            const { tasks } = tablesOf(db)
-            const launchedTasks = await db.select({ id: tasks.id }).from(tasks)
+            const launchedTasks = await readTaskFixtures(db).then((rows) =>
+              rows.map((row) => ({ id: row.id })),
+            )
             for (const task of launchedTasks) {
               if (execution.isActive(task.id)) await launchers[`${kind}Launcher`].cancel(task.id)
               await waitUntilReleased(execution, task.id)

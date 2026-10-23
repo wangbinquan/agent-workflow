@@ -1,9 +1,13 @@
 // P-4-04: per-task duration + token limit enforcement.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,21 +31,17 @@ function buildHarness(db: PersistenceDb): Harness {
   }
 }
 
-async function seedTask(
-  db: PersistenceDb,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
-): Promise<string> {
+async function seedTask(db: PersistenceDb, overrides: Partial<TaskFixtureSpec>): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -57,7 +57,10 @@ async function seedTask(
     // RFC-328：SQLite 的 `rfc328_tasks_lineage_after_insert` 触发器按设计没有 PG 对应物，
     // 直接写 `tasks` 的夹具必须自己把这两列填上，两个引擎才从同一个起点出发。
     executionLineageId: taskId,
-    lineageSlotPathJson: JSON.stringify([{ kind: 'task-root', taskId }]),
+    // RFC-395 II-a: the run builder derives lineage from the same valid root path as HEAD minting.
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
     ...overrides,
   })
   return taskId
@@ -89,8 +92,7 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
     })
     const r = await enforceLimits(h.db, Date.now())
     expect(r.canceled).toEqual([taskId])
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('canceled')
     expect(t?.errorSummary).toBe('task-time-limit-exceeded')
   })
@@ -100,16 +102,14 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
     const taskId = await seedTask(h.db, { maxDurationMs: 60_000, startedAt })
     const r = await enforceLimits(h.db)
     expect(r.canceled).toEqual([])
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('running')
   })
 
   test('cancels task when total tokens exceed maxTotalTokens', async () => {
     const taskId = await seedTask(h.db, { maxTotalTokens: 100 })
-    const { nodeRuns, tasks } = tablesOf(h.db)
     // Two node_runs with 60 and 80 tokens → total 140 > 100.
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: ulid(),
       taskId,
       nodeId: 'a',
@@ -119,7 +119,7 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
       startedAt: Date.now(),
       tokTotal: 60,
     })
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: ulid(),
       taskId,
       nodeId: 'b',
@@ -131,15 +131,14 @@ describeEachProvider('enforceLimits（双引擎）', (harness: ProviderHarness) 
     })
     const r = await enforceLimits(h.db)
     expect(r.canceled).toEqual([taskId])
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.errorSummary).toBe('task-token-limit-exceeded')
     expect(t?.errorMessage).toContain('140')
   })
 
   test('maxTotalTokens=0 disables the token cap', async () => {
     const taskId = await seedTask(h.db, { maxTotalTokens: 0 })
-    const { nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: ulid(),
       taskId,
       nodeId: 'a',

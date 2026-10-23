@@ -1,3 +1,8 @@
+import { assertAgentDependencyGraph as validateDependencyGraph } from '../../domain/agentDependencies'
+import { createAgentDependencyReadPort } from '../agentDependencyRead'
+import { createAgentReferenceWriteParticipant } from '../agentReferenceWrite'
+import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -15,6 +20,8 @@ import {
   resolveWorkgroupLeaderMemberId as workgroupLeaderMemberId,
 } from '../workgroupPersistence'
 import {
+  collectWorkflowDependencyRefs,
+  agentReferenceIds,
   CreateAgentSchema,
   CreateManagedSkillSchema,
   CreateMcpSchema,
@@ -51,13 +58,7 @@ import {
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type { McpTransactionLifecycle } from '../mcpRepository'
-import {
-  agentFromPersistenceRow,
-  createAgentPersistenceValues,
-  updateAgentPersistenceValues,
-} from '../agentPersistence'
-import { assertAgentDependencyTraversal } from '../agentDependencyTraversal'
-import { parseAgentDependencyIds } from '../agentDependencyJson'
+import { agentFromPersistenceRow } from '../agentPersistence'
 import { assertBranchPortsDeclared } from '../agentBranchPorts'
 import { insertMcpRowInTx, mcpFromPersistenceRow, updateMcpRowInTx } from '../mcpPersistence'
 import {
@@ -135,10 +136,6 @@ function missingReference(type: AclResourceType, id: string): ValidationError {
 
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values)]
-}
-
-function stringArray(raw: string): string[] {
-  return parseAgentDependencyIds(() => JSON.parse(raw))
 }
 
 async function resolveIdentityReference(input: {
@@ -250,9 +247,7 @@ async function assertAgentResourceRows(input: {
     }
   }
 
-  const skillIds = uniqueStrings(
-    input.skillRefs.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
-  )
+  const skillIds = uniqueStrings(agentReferenceIds({ skills: input.skillRefs }, 'skill'))
   if (skillIds.length > 0) {
     const { skills } = tablesOf(input.transaction)
     const known = new Set(
@@ -279,18 +274,12 @@ async function assertAgentDependencyGraph(
   agentId: string,
   dependencyIds: readonly string[],
 ): Promise<void> {
-  if (dependencyIds.includes(agentId)) {
-    throw new ValidationError('agent-dependency-self', 'agent cannot depend on itself')
-  }
-  await assertAgentDependencyTraversal(agentId, uniqueStrings(dependencyIds), async (id) => {
-    const { agents } = tablesOf(transaction)
-    const row = await first(
-      transaction
-        .select({ id: agents.id, dependsOn: agents.dependsOn })
-        .from(agents)
-        .where(eq(agents.id, id)),
-    )
-    return row === undefined ? undefined : stringArray(row.dependsOn)
+  await validateDependencyGraph({
+    candidateId: agentId,
+    dependencies: dependencyIds,
+    roots: uniqueStrings(dependencyIds),
+    load: createAgentDependencyReadPort(transaction, 'package').load,
+    semantics: 'catalog',
   })
 }
 
@@ -310,9 +299,7 @@ async function resolvedAgentInput(input: {
         ...(current === undefined
           ? {}
           : {
-              grandfatheredIds: new Set(
-                current.skills.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
-              ),
+              grandfatheredIds: new Set(agentReferenceIds(current, 'skill')),
             }),
       }),
     ),
@@ -531,14 +518,13 @@ export async function commitPostgresqlAgentPackageMutation(
     if (collision !== undefined) {
       throw new ConflictError('agent-name-in-use', `agent '${canonical.name}' already exists`)
     }
-    const values = createAgentPersistenceValues({
-      id: input.resourceId,
-      agent: canonical,
-      ownerUserId: input.context.actor.user.id,
-      now: input.now(),
-    })
     try {
-      await insertOne(input.transaction, agents, values)
+      await createAgentReferenceWriteParticipant(input.transaction).insert({
+        id: input.resourceId,
+        agent: canonical,
+        ownerUserId: input.context.actor.user.id,
+        now: input.now(),
+      })
     } catch (error) {
       if (isPostgresqlUniqueViolation(error, ['agents_owner_name_unique'])) {
         throw new ConflictError('agent-name-in-use', `agent '${canonical.name}' already exists`)
@@ -593,21 +579,17 @@ export async function commitPostgresqlAgentPackageMutation(
     skillRefs: next.skills,
   })
   await assertAgentDependencyGraph(input.transaction, current.id, next.dependsOn)
-  const changed = await first(
-    input.transaction
-      .update(agents)
-      .set(updateAgentPersistenceValues(current, patch, monotonicNow(current.updatedAt)))
-      .where(
-        and(
-          eq(agents.id, input.resourceId),
-          eq(agents.updatedAt, input.mutation.expect.expectedUpdatedAt),
-          eq(agents.aclRevision, input.mutation.expect.expectedAclRevision),
-          eq(agents.ownerUserId, input.context.actor.user.id),
-          eq(agents.builtin, false),
-        ),
-      )
-      .returning({ id: agents.id }),
-  )
+  const changed = (
+    await createAgentReferenceWriteParticipant(input.transaction).update({
+      current,
+      patch,
+      updatedAt: monotonicNow(current.updatedAt),
+      expectedUpdatedAt: input.mutation.expect.expectedUpdatedAt,
+      expectedAclRevision: input.mutation.expect.expectedAclRevision,
+      ownerUserId: input.context.actor.user.id,
+      builtin: false,
+    })
+  )[0]
   if (changed === undefined) {
     throw staleConflictError('agent', `agent '${input.resourceId}' changed; reload and retry`)
   }
@@ -1016,17 +998,18 @@ function workflowGrandfatheredReferences(
   const workflowNames = new Set<string>()
   const workgroupIds = new Set<string>()
   const workgroupNames = new Set<string>()
-  for (const node of definition.nodes) {
-    if (node.kind === 'agent-single' && typeof node.agentId === 'string') {
-      agentIds.add(node.agentId)
+  for (const ref of collectWorkflowDependencyRefs(definition, {
+    throwOnNullNode: true,
+    allStringSelectors: true,
+  })) {
+    if (ref.resourceType === 'agent') agentIds.add(ref.value)
+    if (ref.resourceType === 'workflow') {
+      if (ref.selectorDefined !== false) workflowNames.add(ref.value)
+      if (ref.idCache !== undefined) workflowIds.add(ref.idCache)
     }
-    if (node.kind === 'call-workflow') {
-      if (typeof node.workflowId === 'string') workflowIds.add(node.workflowId)
-      if (typeof node.workflowName === 'string') workflowNames.add(node.workflowName)
-    }
-    if (node.kind === 'call-workgroup') {
-      if (typeof node.workgroupId === 'string') workgroupIds.add(node.workgroupId)
-      if (typeof node.workgroupName === 'string') workgroupNames.add(node.workgroupName)
+    if (ref.resourceType === 'workgroup') {
+      if (ref.selectorDefined !== false) workgroupNames.add(ref.value)
+      if (ref.idCache !== undefined) workgroupIds.add(ref.idCache)
     }
   }
   return Object.freeze({ agentIds, workflowIds, workflowNames, workgroupIds, workgroupNames })
@@ -1059,10 +1042,7 @@ export async function commitPostgresqlWorkflowPackageMutation(
   if (input.mutation.kind === 'workflow-create') {
     const candidate = await workflowCandidate(input)
     const now = input.now()
-    const { workflows } = tablesOf(input.transaction)
-    await insertOne(
-      input.transaction,
-      workflows,
+    await createWorkflowDefinitionWriteParticipant(input.transaction).insert(
       createWorkflowPersistenceValues({
         id: input.resourceId,
         workflow: candidate,
@@ -1082,7 +1062,10 @@ export async function commitPostgresqlWorkflowPackageMutation(
   })
   const { workflows } = tablesOf(input.transaction)
   const row = await first(
-    input.transaction.select().from(workflows).where(eq(workflows.id, input.resourceId)),
+    input.transaction
+      .select()
+      .from(workflows)
+      .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, input.resourceId))),
   )
   if (row === undefined) {
     throw new NotFoundError('workflow-not-found', `workflow '${input.resourceId}' not found`)
@@ -1098,25 +1081,20 @@ export async function commitPostgresqlWorkflowPackageMutation(
     serializeWorkflowEditableSnapshotV1(candidate)
   if (!logicalSame || row.definition !== definitionStorage) {
     const changed = await first(
-      input.transaction
-        .update(workflows)
-        .set({
+      createWorkflowDefinitionWriteParticipant(input.transaction).update({
+        id: input.resourceId,
+        expectedVersion: input.mutation.expect.expectedVersion,
+        expectedAclRevision: row.aclRevision,
+        ownerUserId: input.context.actor.user.id,
+        builtin: false,
+        set: {
           name: candidate.name,
           description: candidate.description,
           definition: definitionStorage,
           version: row.version + 1,
           updatedAt: monotonicNow(row.updatedAt),
-        })
-        .where(
-          and(
-            eq(workflows.id, input.resourceId),
-            eq(workflows.version, input.mutation.expect.expectedVersion),
-            eq(workflows.ownerUserId, input.context.actor.user.id),
-            eq(workflows.aclRevision, row.aclRevision),
-            eq(workflows.builtin, false),
-          ),
-        )
-        .returning({ id: workflows.id }),
+        },
+      }),
     )
     if (changed === undefined) {
       throw staleConflictError(

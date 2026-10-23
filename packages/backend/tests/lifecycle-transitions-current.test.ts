@@ -17,6 +17,18 @@
 //   - shutdown.ts graceful drives the same as cancel (covered by
 //     daemon-related tests)
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -69,7 +81,7 @@ async function buildHarness(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
-  const { agents, workflows, tasks } = tablesOf(db)
+  const { agents } = tablesOf(db)
   // RFC-359 AC-1（第 9 刀）：库由 `describeEachProvider` 提供，一个用例内可能建**两次**
   // harness（A7 就在测试体里再建一次带兄弟评审节点的），两次共用同一个库。
   // 代理名是唯一键，所以这里按名字幂等地种——合并前每次 harness 各自建一个内存库，
@@ -80,7 +92,7 @@ async function buildHarness(
     .where(eq(agents.name, 'doc'))
     .limit(1)
   if (seededAgent.length === 0) {
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -114,13 +126,13 @@ async function buildHarness(
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -151,8 +163,7 @@ async function seedAgentDone(
 ): Promise<string> {
   const id = ulid()
   const ports = opts.ports ?? { docpath: '# v1', sidecar: '# side v1' }
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'doc',
@@ -163,7 +174,7 @@ async function seedAgentDone(
     finishedAt: Date.now() - 100,
   })
   for (const [portName, content] of Object.entries(ports)) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName, content })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName, content })
   }
   return id
 }
@@ -176,8 +187,7 @@ async function seedReviewRow(
   reviewIteration = 0,
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -191,8 +201,7 @@ async function seedReviewRow(
 }
 
 async function parkTaskAtReviewForFixture(h: Harness): Promise<void> {
-  const { tasks } = tablesOf(h.db)
-  await h.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, h.taskId))
+  await patchTaskFixture(h.db, { id: h.taskId }, { status: 'awaiting_review' })
 }
 
 // RFC-359 AC-1（第 9 刀）：本文件的重试段验的是**共用**那一份 `retry`（两份实现已合一），
@@ -210,8 +219,8 @@ describeEachProvider(
     describe('Section A: review', () => {
       test('A1 dispatchReviewNode mints fresh awaiting_review row when none exists', async () => {
         await seedAgentDone(h.db, h.taskId)
-        const { tasks, nodeRuns } = tablesOf(h.db)
-        const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+        const { nodeRuns } = tablesOf(h.db)
+        const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
         const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
 
         const res = await dispatchReviewNode({
@@ -236,8 +245,8 @@ describeEachProvider(
 
       test('A2 dispatchReviewNode reuse: pending row → awaiting_review (post-iterate path)', async () => {
         await seedAgentDone(h.db, h.taskId)
-        const { tasks, nodeRuns } = tablesOf(h.db)
-        const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+        const { nodeRuns } = tablesOf(h.db)
+        const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
         const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'pending', 3)
         const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
 
@@ -259,8 +268,8 @@ describeEachProvider(
 
       test('A3 dispatchReviewNode is idempotent on existing awaiting_review + pending doc_version', async () => {
         await seedAgentDone(h.db, h.taskId)
-        const { tasks, docVersions } = tablesOf(h.db)
-        const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+        const { docVersions } = tablesOf(h.db)
+        const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
         const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 0)
         // Pre-existing pending doc_version (simulates daemon restart resume).
         const dvId = ulid()
@@ -301,7 +310,7 @@ describeEachProvider(
         await parkTaskAtReviewForFixture(h)
         mkdirSync(join(h.appHome, 'doc_versions'), { recursive: true })
         writeFileSync(join(h.appHome, 'doc_versions', 'v3.md'), '# body')
-        const { docVersions, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+        const { docVersions, nodeRuns } = tablesOf(h.db)
         await insertOne(h.db, docVersions, {
           id: ulid(),
           taskId: h.taskId,
@@ -328,10 +337,7 @@ describeEachProvider(
         const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
         expect(after.status).toBe('done')
         expect(after.finishedAt).not.toBeNull()
-        const outs = await h.db
-          .select()
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, reviewRunId))
+        const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: reviewRunId })
         const ports = new Set(outs.map((o) => o.portName))
         expect(ports.has('approved_doc')).toBe(true)
         expect(ports.has('approval_meta')).toBe(true)
@@ -382,10 +388,9 @@ describeEachProvider(
         expect(agentAfter.errorMessage ?? '').toContain('superseded-by-review-iterated')
 
         // A fresh upstream agent row at retryIndex+1 is minted as pending.
-        const agentRows = await h.db
-          .select()
-          .from(nodeRuns)
-          .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
+        const agentRows = await readNodeRunFixtures(h.db, {
+          $and: [{ taskId: h.taskId }, { nodeId: 'doc' }],
+        })
         const fresh = agentRows.find((r) => r.retryIndex === 1)
         expect(fresh).toBeDefined()
         expect(fresh!.status).toBe('pending')
@@ -502,12 +507,12 @@ describeEachProvider(
 
       test('A8 submitReviewDecision on already-done row throws ConflictError(review-not-awaiting)', async () => {
         const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 0)
-        const { nodeRuns } = tablesOf(h.db)
         // Pre-flip to done — simulates a second concurrent approve.
-        await h.db
-          .update(nodeRuns)
-          .set({ status: 'done', finishedAt: Date.now() })
-          .where(eq(nodeRuns.id, reviewRunId))
+        await patchNodeRunFixture(
+          h.db,
+          { id: reviewRunId },
+          { status: 'done', finishedAt: Date.now() },
+        )
 
         let threw = false
         let code: string | undefined
@@ -549,13 +554,9 @@ describeEachProvider(
 
     describe('Section B: retry cascade mint', () => {
       test('B1 retryNode on agent: mints retry+1 row at status=failed errorMessage=queued for retry', async () => {
-        const { tasks, nodeRuns } = tablesOf(h.db)
-        await h.db
-          .update(tasks)
-          .set({ status: 'failed', errorSummary: 'boom' })
-          .where(eq(tasks.id, h.taskId))
+        await patchTaskFixture(h.db, { id: h.taskId }, { status: 'failed', errorSummary: 'boom' })
         const agentRunId = ulid()
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: agentRunId,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -572,7 +573,7 @@ describeEachProvider(
           cascade: false,
         })
 
-        const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
+        const rows = await readNodeRunFixtures(h.db, { taskId: h.taskId })
         const fresh = rows.find((r) => r.nodeId === 'doc' && r.retryIndex === 1)
         expect(fresh).toBeDefined()
         expect(fresh!.status).toBe('failed')
@@ -580,15 +581,12 @@ describeEachProvider(
       })
 
       test('B2 retryNode with cascade: review/clarify/output downstream are NOT minted (RFC-052)', async () => {
-        const { tasks, nodeRuns } = tablesOf(h.db)
+        const { nodeRuns } = tablesOf(h.db)
         // Already covered exhaustively in retry-node-no-review-cascade.test.ts;
         // re-asserted here as the canonical entry in the transition matrix.
-        await h.db
-          .update(tasks)
-          .set({ status: 'failed', errorSummary: 'boom' })
-          .where(eq(tasks.id, h.taskId))
+        await patchTaskFixture(h.db, { id: h.taskId }, { status: 'failed', errorSummary: 'boom' })
         const agentRunId = ulid()
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: agentRunId,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -615,10 +613,10 @@ describeEachProvider(
 
     describe('Section C: orphan reap', () => {
       test('C1 reapOrphanRuns flips running tasks → interrupted', async () => {
-        const { tasks, nodeRuns } = tablesOf(h.db)
-        await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
+        const { nodeRuns } = tablesOf(h.db)
+        await patchTaskFixture(h.db, { id: h.taskId }, { status: 'running' })
         const runRunId = ulid()
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: runRunId,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -628,7 +626,7 @@ describeEachProvider(
           startedAt: Date.now() - 100,
         })
         const pendingRunId = ulid()
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: pendingRunId,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -642,7 +640,7 @@ describeEachProvider(
         expect(result.tasks).toBe(1)
         expect(result.runs).toBe(2)
 
-        const taskAfter = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+        const taskAfter = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
         expect(taskAfter.status).toBe('interrupted')
         expect(taskAfter.errorSummary).toBe('daemon-restart')
 
@@ -656,11 +654,11 @@ describeEachProvider(
       })
 
       test('C2 reapOrphanRuns leaves awaiting_review / done rows alone', async () => {
-        const { tasks, nodeRuns } = tablesOf(h.db)
-        await h.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, h.taskId))
+        const { nodeRuns } = tablesOf(h.db)
+        await patchTaskFixture(h.db, { id: h.taskId }, { status: 'awaiting_review' })
         const awaitingId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 0)
         const doneId = ulid()
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: doneId,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -673,7 +671,7 @@ describeEachProvider(
 
         await reapOrphanRuns(taskRecoveryOperations(h.db))
 
-        const taskAfter = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+        const taskAfter = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
         // awaiting_review tasks are NOT reaped (only `running` is).
         expect(taskAfter.status).toBe('awaiting_review')
         const awaitingAfter = (
@@ -693,7 +691,7 @@ describeEachProvider(
         // the answer dispatch resolves its agent/target from the snapshot.
         const agentRunId = ulid()
         const { nodeRuns, clarifyRounds } = tablesOf(h.db)
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: agentRunId,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -707,7 +705,7 @@ describeEachProvider(
         // service keys off the clarify node_run id / round row. Seed the clarify
         // run row to be closed.
         const clarifyRunId = ulid()
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: clarifyRunId,
           taskId: h.taskId,
           nodeId: 'clarify_x',
@@ -773,10 +771,9 @@ describeEachProvider(
         // mints at retryIndex = max(top-level retryIndex at the anchor iteration)
         // + 1 — the seeded doc run sits at retryIndex 0, so the rerun lands at 1
         // (the legacy immediate mint used retryIndex 0).
-        const agentRows = await h.db
-          .select()
-          .from(nodeRuns)
-          .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
+        const agentRows = await readNodeRunFixtures(h.db, {
+          $and: [{ taskId: h.taskId }, { nodeId: 'doc' }],
+        })
         const fresh = agentRows.find((r) => r.status === 'pending')
         expect(fresh).toBeDefined()
         expect(fresh!.retryIndex).toBe(1)

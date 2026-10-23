@@ -1,3 +1,4 @@
+import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'
 import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -53,8 +54,11 @@ export { composeMemoryCatalogOperations, type MemoryCatalogTestHooks, type Memor
 // 一律在 bootstrap / system-operation 根上完成，模块之间只交换 provider 中性的端口。
 // RFC-359 W4-D5：融合提交的成员关系写入面只剩中立的 `composeSkillMemoryFusionParticipantFactory`。
 
-export function composeMemoryDistillQueries(db: PersistenceDb) {
-  return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db))
+export function composeMemoryDistillQueries(
+  db: PersistenceDb,
+  clarifyAnswers: ClarifyAnswerQueries,
+) {
+  return createMemoryDistillQueries(new DrizzleMemoryDistillReadStore(db, clarifyAnswers))
 }
 export {
   composeMemoryDistillQueries as composePostgresqlMemoryDistillQueries,
@@ -121,6 +125,7 @@ export interface MemoryCatalogBinding {
 }
 
 export interface ComposeMemoryOperationsOptions {
+  readonly clarifyAnswers: ClarifyAnswerQueries
   readonly db: PersistenceDb
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly nodeRunPrompts: NodeRunPromptReader
@@ -146,8 +151,8 @@ export function composeMemoryOperationsFor(
 ): MemoryOperations {
   const nativeRuntimeResolver = new DrizzleMemoryDistillRuntimeResolver(input.db)
   return composeMemoryOperations({
-    readStore: new DrizzleMemoryDistillReadStore(input.db),
-    workStore: new DrizzleMemoryDistillWorkStore(input.db),
+    readStore: new DrizzleMemoryDistillReadStore(input.db, input.clarifyAnswers),
+    workStore: new DrizzleMemoryDistillWorkStore(input.db, input.clarifyAnswers),
     runtimeResolver: {
       async resolve(request) {
         return input.systemAgentBinding.bindRuntime(await nativeRuntimeResolver.resolve(request))

@@ -95,7 +95,7 @@ async function canonWithSubmodule(subSeed: string): Promise<string> {
 }
 
 function canonRepo(dir: string): CanonRepo {
-  return { repoPath: dir, worktreePath: dir, worktreeDirName: '', baseBranch: 'main' }
+  return { repoPath: dir, worktreePath: dir, mountPath: '', baseBranch: 'main' }
 }
 
 describe('RFC-210 per-submodule three-way merge', () => {

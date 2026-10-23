@@ -1,7 +1,7 @@
 // RFC-359 AC1: preserve real Workgroup create/copy/save and package writes
 // while sharing their member, leader and content-field constructors.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, patchAgentFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
@@ -38,7 +38,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { createWorkgroupRepository } from '@/modules/resource-catalog/infrastructure/workgroupRepository'
 import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { ValidationError } from '@/util/errors'
@@ -57,7 +57,7 @@ async function seed(db: PersistenceDb) {
     user: { id: OWNER, username: OWNER, displayName: OWNER, role: 'admin', status: 'active' },
     source: 'daemon',
   })
-  const { users, agents } = tablesOf(db)
+  const { users } = tablesOf(db)
   await db.insert(users).values([
     { ...actor.user, createdAt: T0, updatedAt: T0 },
     { id: HUMAN, username: HUMAN, displayName: 'Human', createdAt: T0, updatedAt: T0 },
@@ -66,9 +66,8 @@ async function seed(db: PersistenceDb) {
     [A, 'original-agent-a'],
     [B, 'original-agent-b'],
   ] as const) {
-    await insertOne(
+    await agentFixture(
       db,
-      agents,
       createAgentPersistenceValues({
         id,
         agent: CreateAgentSchema.parse({ name }),
@@ -249,8 +248,7 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
       )
       expect(f.calls()).toEqual({ ids: input.members.length, clocks: 0 })
 
-      const { agents } = tablesOf(harness.db)
-      await harness.db.update(agents).set({ name: 'renamed-agent-a' }).where(eq(agents.id, A))
+      await patchAgentFixture(harness.db, { id: A }, { name: 'renamed-agent-a' })
       const copied = await f.repository.copy({
         authority,
         request: {
@@ -439,7 +437,7 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
         execution: createPostgresqlResourcePackageExecutionAdapter({
           box,
           provider,
-          atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db, box }),
+          atomicApply: createResourcePackageAtomicApplyOperations({ db, box }),
         }),
       })
     }
@@ -517,8 +515,8 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
     expect(new Set(before.members.map((member) => member.id)).size).toBe(2)
     expect(await apply(bytes, prepared.previewToken, decision, compose())).toEqual(receipt)
     expect(await physical(harness.db, id)).toEqual(before)
-    const { agents, resourceBundleApplies } = tablesOf(harness.db)
-    await harness.db.update(agents).set({ name: 'renamed-agent-a' }).where(eq(agents.id, A))
+    const { resourceBundleApplies } = tablesOf(harness.db)
+    await patchAgentFixture(harness.db, { id: A }, { name: 'renamed-agent-a' })
     const updateBytes = packageBytes(2)
     const updatePreview = await preview(updateBytes)
     const updateDecision = { localSlug: 'row-team', action: 'overwrite' as const, targetId: id }

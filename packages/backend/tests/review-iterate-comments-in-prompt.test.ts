@@ -21,6 +21,7 @@
 //   packages/backend/src/services/scheduler.ts (buildReviewPromptContext
 //     call before runNode in BOTH the agent-single and agent-multi paths).
 
+import { readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -272,11 +273,9 @@ describe('RFC-005 review iterate — comments reach the upstream re-run prompt',
       binaryOverride: h.stubOpencode,
     })
 
-    const { nodeRuns } = tablesOf(h.db)
-    const designerRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'designer')))
+    const designerRuns = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId: h.taskId }, { nodeId: 'designer' }],
+    })
     const tops = designerRuns
       .filter((r) => r.parentNodeRunId === null)
       .sort((a, b) => a.retryIndex - b.retryIndex)

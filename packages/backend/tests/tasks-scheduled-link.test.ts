@@ -5,8 +5,7 @@
 // taskListSummariesProjection({ scheduledTaskId }) filters to a schedule's run history. The
 // startTask threading (deps.scheduledTaskId → row) is source-locked here and
 // exercised end-to-end by the scheduler fire path.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -21,12 +20,12 @@ async function seedTask(
   id: string,
   scheduledTaskId: string | null,
 ): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await db
-    .insert(workflows)
-    .values({ id: `wf-${id}`, name: `wf-${id}`, description: '', definition: '{}' })
-    .onConflictDoNothing()
-  await insertOne(db, tasks, {
+  await workflowFixture(
+    db,
+    { id: `wf-${id}`, name: `wf-${id}`, description: '', definition: '{}' },
+    { onConflict: 'ignore' },
+  )
+  await taskFixture(db, {
     id,
     name: `task-${id}`,
     workflowId: `wf-${id}`,

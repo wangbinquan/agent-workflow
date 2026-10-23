@@ -79,7 +79,7 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
         references.push(reference)
         entered.release()
         await ready.pending
-        return '---\nname: ignored-content-name\ncustom: kept\n---\nremote body'
+        return Buffer.from('---\nname: ignored-content-name\ncustom: kept\n---\nremote body')
       },
       async listFiles(reference) {
         references.push(reference)
@@ -88,7 +88,7 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
       async readFile(reference, path) {
         references.push(reference)
         expect(path).toBe('support.txt')
-        return 'remote'
+        return Buffer.from('remote')
       },
     }
     const catalog = composeSkillCatalog({
@@ -169,7 +169,7 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
           async readMain() {
             const { skills } = tablesOf(harness.db)
             await harness.db.delete(skills).where(eq(skills.id, skill.id))
-            return 'body after delete'
+            return Buffer.from('body after delete')
           },
         },
       },
@@ -185,8 +185,12 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
     writeFileSync(join(live, 'SKILL.md'), 'live body')
     mkdirSync(join(snapshot, 'support'))
     writeFileSync(join(snapshot, 'support', 'note.txt'), 'snapshot note')
-    expect(await reader.readMain(skill)).toContain('original local body')
-    expect(await reader.readFile(skill, 'support/note.txt')).toBe('snapshot note')
+    expect(Buffer.from(await reader.readMain(skill)).toString('utf8')).toContain(
+      'original local body',
+    )
+    expect(Buffer.from(await reader.readFile(skill, 'support/note.txt')).toString('utf8')).toBe(
+      'snapshot note',
+    )
     const tree = await reader.listFiles(skill)
     expect(tree).toContainEqual({ path: 'support', type: 'dir' })
     expect(tree.find((node) => node.path === 'support/note.txt')).toMatchObject({
@@ -201,7 +205,7 @@ describeEachProvider('RFC-370 skill content reader', (harness) => {
       { code: 'skill-file-not-found' },
     )
     rmSync(snapshot, { recursive: true })
-    expect(await reader.readMain(skill)).toBe('live body')
+    expect(Buffer.from(await reader.readMain(skill)).toString('utf8')).toBe('live body')
     rmSync(live, { recursive: true })
     expect(await reader.listFiles(skill)).toEqual([])
     await expect(readSkillContent(harness.db, { appHome }, skill.id)).rejects.toMatchObject({

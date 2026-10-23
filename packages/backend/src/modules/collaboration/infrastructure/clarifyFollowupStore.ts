@@ -1,3 +1,8 @@
+import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
+import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
+import { appendClarifyQuestions, clarifyQuestionsRevision } from '../domain/clarifyQuestions'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNotNull } from 'drizzle-orm'
 import {
@@ -5,16 +10,13 @@ import {
   ClarifyMindmapConfigSchema,
   clarifyContentKey,
   clarifyFollowupContext,
-  effectiveClarifyAnswers,
   isMindmapRound,
-  validateClarifyMindmap,
-  type ClarifyDraftValue,
   type ClarifyFollowupTarget,
   type ClarifyQuestion,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
@@ -33,7 +35,7 @@ export function createClarifyFollowupStore(
     nodeRunId: string,
     target: ClarifyFollowupTarget,
   ): Promise<ClarifyFollowupSnapshot> => {
-    const { clarifyRounds, tasks, taskQuestions } = tablesOf(reader)
+    const { clarifyRounds, taskQuestions } = tablesOf(reader)
     const round = (
       await reader
         .select()
@@ -43,11 +45,11 @@ export function createClarifyFollowupStore(
     )[0]
     if (!round) throw new NotFoundError('clarify-round-not-found', 'Clarify round not found.')
     const task = (
-      await reader
-        .select({ status: tasks.status, workflowSnapshot: tasks.workflowSnapshot })
-        .from(tasks)
-        .where(eq(tasks.id, round.taskId))
-        .limit(1)
+      await createTaskGateQueries(reader)
+        .listDefinitionContexts([round.taskId])
+        .then((rows) =>
+          rows.map((row) => ({ status: row.status, workflowSnapshot: row.workflowSnapshot })),
+        )
     )[0]
     const questions = JSON.parse(round.questionsJson) as ClarifyQuestion[]
     if (!isMindmapRound(questions))
@@ -82,10 +84,7 @@ export function createClarifyFollowupStore(
       askingNodeRunId: round.askingNodeRunId!,
       questions,
       categoryPaths: config.success ? clarifyCategoryPaths(config.data.categories) : [],
-      drafts: effectiveClarifyAnswers(
-        JSON.parse(round.draftAnswersJson ?? '{}') as Record<string, ClarifyDraftValue>,
-        JSON.parse(round.answersJson ?? '[]'),
-      ),
+      drafts: decodeLegacyClarifyAnswerColumns(round).requireEffectiveAnswers(),
       instruction:
         typeof gate?.mindmap === 'object' && gate.mindmap
           ? String((gate.mindmap as { instructions?: string }).instructions ?? '')
@@ -102,8 +101,8 @@ export function createClarifyFollowupStore(
       const first = await read(db, nodeRunId, target)
       await getTaskQuestionWriteSem(first.taskId).run(async () => {
         await databaseSessionFor(db).transaction(async (tx) => {
-          const { tasks, clarifyRounds } = tablesOf(tx)
-          await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, first.taskId)
+          const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+          await taskHumanGate.lockTask(first.taskId)
           const current = await read(tx, nodeRunId, target)
           if (!current.canAppend)
             throw new ConflictError(
@@ -128,13 +127,13 @@ export function createClarifyFollowupStore(
               'clarify-followup-stale',
               'The branch changed while generating. Retry with the current answers.',
             )
-          const questions = [...current.questions, ...additions]
-          const error = validateClarifyMindmap(questions, true)
+          const revision = appendClarifyQuestions(
+            clarifyQuestionsRevision(current.questions),
+            additions,
+          )
+          const error = revision.error
           if (error) throw new ConflictError('clarify-followup-invalid', error)
-          await tx
-            .update(clarifyRounds)
-            .set({ questionsJson: JSON.stringify(questions) })
-            .where(eq(clarifyRounds.id, current.roundId))
+          await createClarifyAnswerWritePort(db).appendQuestions(tx, current.roundId, revision)
         })
       })
       await events.publish({

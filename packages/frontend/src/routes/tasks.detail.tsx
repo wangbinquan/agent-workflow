@@ -662,17 +662,20 @@ function TaskDetailPage() {
               /tasks/new wizard with ALL launch params pre-filled from THIS task
               (?relaunchFrom=). Suppressed for internal/fusion tasks: their subject
               is a builtin workflow (assertNotBuiltin would 403) — not user
-              relaunchable (§5, R4-F1). */}
-            {isTerminal(tk.status) && tk.spaceKind !== 'internal' && (
-              <Link
-                to="/tasks/new"
-                search={{ relaunchFrom: tk.id }}
-                className="btn"
-                data-testid="task-detail-relaunch"
-              >
-                {t('tasks.relaunchButton')}
-              </Link>
-            )}
+              relaunchable (§5, R4-F1). RFC-395: digital-employee hosts likewise
+              have no catalog workflow to load in the wizard. */}
+            {isTerminal(tk.status) &&
+              tk.spaceKind !== 'internal' &&
+              subjectKind !== 'digital-employee' && (
+                <Link
+                  to="/tasks/new"
+                  search={{ relaunchFrom: tk.id }}
+                  className="btn"
+                  data-testid="task-detail-relaunch"
+                >
+                  {t('tasks.relaunchButton')}
+                </Link>
+              )}
             {showResume && (
               <button
                 type="button"
@@ -1157,14 +1160,15 @@ function TaskDetailPage() {
               </dt>
               <dd>
                 <TaskSubjectLink task={tk} taskId={tk.id} />
-                {subjectKind === 'workflow' && tk.workflowName !== null && (
-                  <>
-                    {' '}
-                    <span className="data-table__muted">
-                      (<code>{tk.workflowId}</code>)
-                    </span>
-                  </>
-                )}
+                {(subjectKind === 'workflow' || subjectKind === 'digital-employee') &&
+                  tk.workflowName !== null && (
+                    <>
+                      {' '}
+                      <span className="data-table__muted">
+                        (<code>{tk.workflowId}</code>)
+                      </span>
+                    </>
+                  )}
               </dd>
               {tk.repoUrl !== null && (
                 <>

@@ -389,3 +389,36 @@ export interface RuntimeProfileTestInvalidationInTx<Transaction> {
 export interface McpRuntimeTestReconciliationParticipant {
   reconcileDurableIntents(): Promise<void>
 }
+
+/** RFC-395 II-a A5：融合种子经目录 owner 写入，definition 修订规则仍由融合提供。 */
+export interface FusionResourceSeedParticipant {
+  seed(
+    input: {
+      readonly ownerUserId: string
+      readonly agent: {
+        readonly id: string
+        readonly name: string
+        readonly description: string
+        readonly outputs: readonly string[]
+        readonly syncOutputsOnIterate: boolean
+        readonly bodyMd: string
+      }
+      readonly workflow: {
+        readonly id: string
+        readonly name: string
+        readonly description: string
+        readonly definition: WorkflowDefinition
+        readonly mergerAgentId: string
+      }
+    },
+    repairDefinition: {
+      repair(
+        definition: string,
+        mergerAgentId: string,
+      ): {
+        readonly definition: string
+        readonly changed: boolean
+      }
+    },
+  ): Promise<void>
+}

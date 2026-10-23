@@ -12,6 +12,10 @@
 
 import {
   WorkgroupRuntimeConfigSchema,
+  WorkflowDefinitionSchema,
+  WORKFLOW_SCHEMA_VERSION,
+  buildClarifyEdges,
+  type WorkflowDefinition,
   resolveWorkgroupOutputContract,
   type Workgroup,
   type WorkgroupRuntimeConfig,
@@ -49,4 +53,42 @@ export function buildWorkgroupRuntimeConfig(
       roleDesc: member.roleDesc,
     })),
   })
+}
+
+// RFC-395 II-a: production and fixtures share the parsed host snapshot and group projection.
+// These values are wire-frozen in task snapshots and node-run identities. They
+// are repeated here deliberately: TaskExecution must not import Resource
+// Catalog provider-private workgroup infrastructure merely to launch a task.
+const WG_LEADER_NODE_ID = '__wg_leader__'
+const WG_MEMBER_NODE_ID = '__wg_member__'
+const WG_CLARIFY_NODE_ID = '__wg_clarify__'
+
+export function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): WorkflowDefinition {
+  const leaderMember = config.members.find((member) => member.id === config.leaderMemberId)
+  const firstAgent = config.members.find((member) => member.memberType === 'agent')
+  const leaderAgentName = leaderMember?.agentName ?? firstAgent?.agentName ?? 'workgroup-member'
+  const memberAgentName = firstAgent?.agentName ?? 'workgroup-member'
+  return WorkflowDefinitionSchema.parse({
+    $schema_version: WORKFLOW_SCHEMA_VERSION,
+    inputs: [],
+    nodes: [
+      { id: WG_LEADER_NODE_ID, kind: 'agent-single', agentName: leaderAgentName },
+      { id: WG_MEMBER_NODE_ID, kind: 'agent-single', agentName: memberAgentName },
+      { id: WG_CLARIFY_NODE_ID, kind: 'clarify', sessionMode: 'isolated' },
+    ],
+    edges: [
+      ...buildClarifyEdges(WG_LEADER_NODE_ID, WG_CLARIFY_NODE_ID),
+      ...buildClarifyEdges(WG_MEMBER_NODE_ID, WG_CLARIFY_NODE_ID),
+    ],
+  })
+}
+
+export function resolveWorkgroupCollaborators(
+  explicit: readonly string[] | undefined,
+  group: Workgroup,
+): readonly string[] {
+  const humanUserIds = group.members.flatMap((member) =>
+    member.memberType === 'human' && member.userId !== null ? [member.userId] : [],
+  )
+  return [...new Set([...(explicit ?? []), ...humanUserIds])]
 }

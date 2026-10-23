@@ -37,6 +37,14 @@
 // PostgreSQL 的**异步** `transaction`，返回一个没人 await 的 Promise ⇒ 写既不落库也不报错。
 // 所以夹具一律直接 `insert`，不借用尚未切换的写路径。
 
+import {
+  type AgentFixtureSpec,
+  type TaskFixtureSpec,
+  type WorkflowFixtureSpec,
+  agentFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -104,7 +112,7 @@ interface SeededAgent {
 
 async function seedAgent(
   harness: ProviderHarness,
-  overrides: Partial<PersistenceTables['agents']['$inferInsert']> = {},
+  overrides: Partial<AgentFixtureSpec> = {},
 ): Promise<SeededAgent> {
   const now = Date.now()
   const row = {
@@ -131,8 +139,7 @@ async function seedAgent(
     updatedAt: now,
     ...overrides,
   }
-  const { agents } = tablesOf(harness.db)
-  await insertOne(harness.db, agents, row as PersistenceTables['agents']['$inferInsert'])
+  await agentFixture(harness.db, row)
   return {
     id: row.id,
     name: row.name,
@@ -143,7 +150,7 @@ async function seedAgent(
 
 async function seedWorkflow(
   harness: ProviderHarness,
-  overrides: Partial<PersistenceTables['workflows']['$inferInsert']> = {},
+  overrides: Partial<WorkflowFixtureSpec> = {},
 ): Promise<{ id: string; version: number }> {
   const now = Date.now()
   const row = {
@@ -161,8 +168,7 @@ async function seedWorkflow(
     updatedAt: now,
     ...overrides,
   }
-  const { workflows } = tablesOf(harness.db)
-  await insertOne(harness.db, workflows, row as PersistenceTables['workflows']['$inferInsert'])
+  await workflowFixture(harness.db, row)
   return { id: row.id, version: row.version }
 }
 
@@ -196,12 +202,11 @@ async function seedWorkgroup(
 /** 一行非终态任务；`workflowId` 必填，按被测的引用面挂 sourceAgentId / workgroupId。 */
 async function seedRunningTask(
   harness: ProviderHarness,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  overrides: Partial<TaskFixtureSpec> = {},
 ): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  const { tasks } = tablesOf(harness.db)
-  await insertOne(harness.db, tasks, {
+  await taskFixture(harness.db, {
     id,
     name: 'running task',
     workflowId: overrides.workflowId ?? ulid(),
@@ -213,10 +218,8 @@ async function seedRunningTask(
     status: 'running',
     inputs: '{}',
     startedAt: now,
-    createdAt: now,
-    updatedAt: now,
     ...overrides,
-  } as PersistenceTables['tasks']['$inferInsert'])
+  })
   return id
 }
 

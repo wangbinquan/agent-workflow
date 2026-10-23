@@ -1,3 +1,4 @@
+import { legacyArchiveEntry } from '@/platform/content/legacyDirectories'
 import {
   appendFileSync,
   existsSync,
@@ -30,7 +31,7 @@ export function restoreFileArchiveMovedDirectories(
 
 export function createFileTaskArchiveContent(): TaskArchiveContentPort {
   return {
-    resolve: (reference, ...segments) => join(reference, ...segments),
+    resolve: (reference, ...segments) => legacyArchiveEntry(join, reference, ...segments),
     exists: (reference) => existsSync(reference),
     list: (reference) => readdirSync(reference),
     createDirectory(reference) {

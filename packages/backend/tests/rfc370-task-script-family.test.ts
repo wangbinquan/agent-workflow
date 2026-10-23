@@ -1,5 +1,11 @@
 // RFC-370: exercise the selected script family through complete real provider
 // Task drives. These owner-issued references are fixtures, not CS acceptance.
+import {
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -168,7 +174,11 @@ class SelectedScriptFamily implements TaskScriptRunFamily {
     expect(input.receipt).toBe(this.startReceipt)
     await input.persistence.patch({
       nodeRunId: input.nodeRunId,
-      values: { runtimeParamsJson: input.runtimeParamsJson },
+      values: {
+        config: {
+          runtimeParamsJson: input.runtimeParamsJson,
+        },
+      },
       ...input.executionContext(),
     })
   }
@@ -306,7 +316,7 @@ describeEachProvider(
         let family: SelectedScriptFamily | undefined,
           selections = 0
         try {
-          const { users, workflows, tasks, nodeRuns, taskExecutionEffectAttempts } = tablesOf(db)
+          const { users, taskExecutionEffectAttempts } = tablesOf(db)
           await insertOne(db, users, {
             id: userId,
             username: userId,
@@ -343,12 +353,12 @@ describeEachProvider(
             ],
             edges: [],
           }
-          await insertOne(db, workflows, {
+          await workflowFixture(db, {
             id: workflowId,
             name: workflowId,
             definition: JSON.stringify(definition),
           })
-          await insertOne(db, tasks, {
+          await taskFixture(db, {
             id: taskId,
             executionLineageId: taskId,
             lineageSlotPathJson: JSON.stringify([
@@ -447,7 +457,7 @@ describeEachProvider(
             })
           }
           expect(selections).toBe(1)
-          const rows = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).sort(
+          const rows = (await readNodeRunFixtures(db, { taskId })).sort(
             (a, b) => (a.retryIndex ?? 0) - (b.retryIndex ?? 0),
           )
           expect(rows).toHaveLength(scenario === 'retry' ? 2 : 1)
@@ -505,7 +515,7 @@ describeEachProvider(
             }
           }
           if (scenario !== 'interpreter-missing') expect(events).not.toContain('describe-missing')
-          const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+          const task = (await readTaskFixtures(db, { id: taskId }))[0]!
           expect(task.status).toBe(
             succeeds ? 'done' : scenario === 'aborted' ? 'canceled' : 'failed',
           )

@@ -23,6 +23,7 @@
 // 每个用例都配一条**反向对照**（大小写以外真的不同的值必须插得进去），否则「两行都插不进」
 // 也能来自一条过宽的约束，绿得没有意义。
 
+import { readWorkflowFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -46,8 +47,7 @@ async function rejected(write: () => Promise<unknown>): Promise<boolean> {
 }
 
 async function seedWorkflow(db: PersistenceDb, id: string): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: `wf-${id}`,
     description: '',
@@ -59,8 +59,7 @@ async function seedWorkflow(db: PersistenceDb, id: string): Promise<void> {
 
 async function seedTask(db: PersistenceDb, id: string): Promise<void> {
   await seedWorkflow(db, `wf_for_${id}`)
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: 'w7-parity',
     workflowId: `wf_for_${id}`,
@@ -180,8 +179,7 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
   })
 
   test('workflows：内建工作流重名闸是**部分**唯一索引——只管 builtin 行', async () => {
-    const { workflows } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: 'wf_builtin_1',
       name: 'code-review',
       description: '',
@@ -193,7 +191,7 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
 
     expect(
       await rejected(() => {
-        return harness.db.insert(workflows).values({
+        return workflowFixture(harness.db, {
           id: 'wf_builtin_2',
           name: 'code-review',
           description: '',
@@ -207,7 +205,7 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
     ).toBe(true)
 
     // 反向对照 ①：谓词之外的行不受管——用户自建的同名工作流照常允许（重名由导入对话框处理）。
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: 'wf_user',
       name: 'code-review',
       description: '',
@@ -217,7 +215,7 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
       schemaVersion: 4,
     })
     // 反向对照 ②：另一个名字的内建工作流照常允许。
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: 'wf_builtin_other',
       name: 'code-audit',
       description: '',
@@ -226,7 +224,9 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
       builtin: true,
       schemaVersion: 4,
     })
-    expect(await harness.db.select({ id: workflows.id }).from(workflows)).toHaveLength(3)
+    expect(
+      await readWorkflowFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+    ).toHaveLength(3)
   })
 
   test('intent_turn_events：部分唯一索引与全量唯一索引在两个引擎上等价（W5 账本判定的判据）', async () => {

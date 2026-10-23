@@ -13,10 +13,10 @@
 //      当场拒绝，且拒绝之后那一行原样不动。这是迁移**带来的**行为变化——旧的同步网关在无上下文
 //      分支里既不开事务也不设围栏，直接裸写；PG 侧一直是有围栏的，合一即以有围栏的那侧为准。
 
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -27,8 +27,7 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTaskWithNodeRun(db: PersistenceDb): Promise<{ taskId: string; runId: string }> {
   const taskId = `d28b_${ulid()}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-d28b',
     description: '',
@@ -36,7 +35,7 @@ async function seedTaskWithNodeRun(db: PersistenceDb): Promise<{ taskId: string;
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -55,7 +54,7 @@ async function seedTaskWithNodeRun(db: PersistenceDb): Promise<{ taskId: string;
     ]),
   })
   const runId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -84,12 +83,9 @@ async function seedLiveOwner(db: PersistenceDb, taskId: string): Promise<void> {
 }
 
 async function mergeStateOf(db: PersistenceDb, runId: string): Promise<string | null> {
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db
-    .select({ mergeState: nodeRuns.mergeState })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.id, runId))
-    .limit(1)
+  const rows = await readNodeRunFixtures(db, { id: runId }, { limit: 1 }).then((rows) =>
+    rows.map((row) => ({ mergeState: row.mergeState })),
+  )
   return rows[0]?.mergeState ?? null
 }
 

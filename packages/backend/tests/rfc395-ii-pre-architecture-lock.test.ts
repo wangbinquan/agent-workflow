@@ -118,11 +118,11 @@ describe('RFC-395 II-pre deletion locks', () => {
     expect(readSource('modules/intent/infrastructure/intentApplyEngine.ts')).not.toMatch(
       /\bconverge\s*\(/,
     )
-    expect(readSource('modules/intent/infrastructure/intentApplyArtifactLifecycle.ts')).toContain(
-      'createIntentApplyJournalConvergence',
+    expect(readSource('modules/intent/infrastructure/intentApplyRecovery.ts')).toContain(
+      'createIntentApplyRecoveryScene',
     )
-    expect(readSource('modules/intent/application/journalConvergence.ts')).toContain(
-      'decideIntentApplyConverge',
+    expect(readSource('platform/atomic-apply/convergence.ts')).toContain(
+      'decideAtomicApplyConverge',
     )
     const bundle = readSource('services/bundle/provider.ts')
     for (const name of [

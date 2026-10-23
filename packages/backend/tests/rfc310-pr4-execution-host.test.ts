@@ -13,13 +13,13 @@
 //   5. 终态 onTerminal 回调（DA 侧 wake hint 的注入缝）。
 // 真子进程面 = mock-opencode（bun 子进程、真 spawn/env/cwd/stdout 链）。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first as firstRow, queryWrite } from '@/platform/persistence/queryHelpers'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { patchTaskFixture, readTaskFixtures } from './helpers/model'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
@@ -40,10 +40,7 @@ import {
   composeAgentActionExecution,
   type AgentActionExecutionRunner,
 } from '../src/modules/task-execution/composition/agentActionExecution'
-import {
-  DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-  DIGITAL_EMPLOYEE_RESULT_PORT,
-} from '../src/modules/task-execution/domain/digitalEmployeeHost'
+import { DIGITAL_EMPLOYEE_RESULT_PORT } from '../src/modules/task-execution/domain/digitalEmployeeHost'
 import { createAgent, getAgentById } from '../src/services/agent'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -262,11 +259,10 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     expect(snap.taskStatus).toBe('done')
     expect(snap.resultText).toBe(frame)
 
-    const { tasks } = tablesOf(h.db)
     // separate-writer/disposable：工作区就是传入目录（无 worktree 拷贝）、
     // space_kind='internal'、终态后目录健在（borrowed）、未提交 overlay 未损。
-    const row = firstRow(h.db.select().from(tasks).where(eq(tasks.id, launched.executionRef)))!
-    expect(row.workflowId).toBe(DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID)
+    const row = (await readTaskFixtures(h.db, { id: launched.executionRef }))[0]!
+    expect(row.workflowId).toBe(TASK_DEFINITION_HOSTS['digital-employee'].id)
     expect(row.catalogVisibility).toBe('internal')
     expect(row.worktreePath).toBe(h.workspacePath)
     expect(row.spaceKind).toBe('internal')
@@ -400,13 +396,11 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     // 等子进程真的跑起来（pending → running），再取消。
     const deadline = Date.now() + 20_000
     while (Date.now() < deadline) {
-      const { tasks } = tablesOf(h.db)
-      const row = firstRow(
-        h.db
-          .select({ status: tasks.status })
-          .from(tasks)
-          .where(eq(tasks.id, launched.executionRef)),
-      )
+      const row = (
+        await readTaskFixtures(h.db, { id: launched.executionRef }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
+      )[0]
       if (row?.status === 'running') break
       await Bun.sleep(25)
     }
@@ -434,13 +428,10 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     )
     expect(launched.ok).toBe(true)
     if (!launched.ok) return
-    const { tasks } = tablesOf(h.db)
     // 模拟 daemon 崩溃残留：行退回 running + 死 pid（重启后无 owner），
     // 然后跑**真实**的 boot 修复入口 reapOrphanRuns——DE host 行走的就是
     // 普通任务的 interrupted 收敛，没有专用逻辑。
-    queryWrite(
-      h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, launched.executionRef)),
-    )
+    queryWrite(patchTaskFixture(h.db, { id: launched.executionRef }, { status: 'running' }))
     const { reapOrphanRuns } = await import('../src/services/orphans')
     await reapOrphanRuns(taskRecoveryOperations(h.db))
     const snap = await r.fetchOutcome(launched.executionRef)

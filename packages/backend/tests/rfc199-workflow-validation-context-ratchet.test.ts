@@ -285,6 +285,8 @@ describe('RFC-199 validation-context semantic source ratchet', () => {
     ).toEqual([
       'packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
       'packages/shared/src/nodePorts.ts',
+      // RFC-395 II-a A5: the shared collector reads the same authored reference fields.
+      'packages/shared/src/resourceReferences.ts',
       'packages/shared/src/wrapperFanout.ts',
     ])
 

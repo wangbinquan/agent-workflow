@@ -1,3 +1,4 @@
+import { legacyPromptPath } from '@/platform/content/legacyPrompt'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { SynchronousNodeRunPromptContentEffects } from '../../application/ports/nodeRunPromptContent'
@@ -9,7 +10,7 @@ export function createFileNodeRunPromptContent(
   return Object.freeze({
     reference(taskId: string, nodeRunId: string) {
       // Keep durable prompts outside the runner's temporary node-run directory.
-      return join(taskId, 'prompts', `${nodeRunId}.md`)
+      return legacyPromptPath(taskId, nodeRunId)
     },
     write(reference: string, prompt: string) {
       const abs = join(runsDir, reference)

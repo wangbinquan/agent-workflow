@@ -96,9 +96,11 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
 
     expect(adapter).toContain('createChildExecutionLaunchOperations')
     expect(adapter).toContain('withSerializableTaskExecution')
+    const creation = read('modules/task-execution/infrastructure/taskCreationParticipant.ts')
+    expect(adapter).toContain('createTaskCreationParticipantInTx(')
+    expect(creation).toContain('insertOne(tx, tasks,')
+    expect(creation).toContain('tx.insert(taskRepos)')
     for (const write of [
-      'insertOne(tx, tasks,',
-      'tx.insert(taskRepos)',
       'insertOne(tx, taskExecutionIntents,',
       'insertOne(tx, workgroupTaskState,',
       'appendTaskCreatedCommittedEvent',
@@ -109,7 +111,8 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(adapter).toContain("completionMode: 'background'")
     expect(adapter).toContain('dependencies.workgroup.loadExistingAgentIds')
     expect(adapter).toContain('dependencies.workgroup.integrity.assertUsable')
-    expect(adapter).toContain('dependencies.workgroup.ensureHostWorkflow')
+    expect(adapter).not.toContain('ensureHostWorkflow')
+    expect(adapter).toContain("prepared.subject.subject.kind === 'workflow'")
     expect(adapter).not.toContain('StartTaskSchema.parse')
     expect(adapter).not.toContain("from '@/db/client'")
     expect(adapter).not.toContain('createSqliteChildExecutionLaunchOperations')

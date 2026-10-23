@@ -21,6 +21,7 @@
 // uses (buildWorkgroupHooks in scheduler.ts) — this module never imports
 // scheduler.ts (module-cycle ban) and tests drive it with fake hooks.
 
+import { deriveNodeRunRole, nodeRunAttemptIndex } from '@/modules/task-execution/public/types'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   DW_VALIDATION_CODES,
@@ -30,7 +31,6 @@ import {
   fenceUntrusted,
   parseTriggerContextJson,
   triggerContextContract,
-  WorkgroupRuntimeConfigSchema,
   type Agent,
   type DwState,
   type DwTokenMap,
@@ -93,15 +93,9 @@ async function loadDwDbState(
   taskId: string,
 ): Promise<DwDbState | null> {
   const row = await persistence.loadTask(taskId)
-  if (row === null || row.workgroupConfigJson === null || row.dwStateJson === null) return null
-  let rawConfig: Record<string, unknown>
-  try {
-    rawConfig = JSON.parse(row.workgroupConfigJson) as Record<string, unknown>
-  } catch {
-    return null
-  }
-  const config = WorkgroupRuntimeConfigSchema.safeParse(rawConfig)
-  if (!config.success) return null
+  if (row === null || row.dwStateJson === null) return null
+  const config = row.workgroupConfig?.runtime.config
+  if (config == null) return null
   // RFC-217 T2 — the dw checkpoint lives in workgroup_task_state (complete
   // DwState, zod-validated, single writer while the task runs).
   let dw: DwState
@@ -112,7 +106,7 @@ async function loadDwDbState(
   } catch {
     return null
   }
-  return { config: config.data, dw, triggerSource: parseTriggerContextJson(row.triggerContextJson) }
+  return { config, dw, triggerSource: parseTriggerContextJson(row.triggerContextJson) }
 }
 
 /**
@@ -233,6 +227,7 @@ async function resolvePool(
 /** Mint the confirm-gate holder run (task awaiting_review lifecycle invariant). */
 async function openDwGate(nodeRuns: NodeRunLifecyclePersistence, taskId: string): Promise<void> {
   const gateRunId = await nodeRuns.mint({
+    ...deriveNodeRunRole({ nodeId: DW_ORCHESTRATOR_NODE_ID, rerunCause: DW_GATE_CAUSE }),
     taskId,
     nodeId: DW_ORCHESTRATOR_NODE_ID,
     status: 'pending',
@@ -347,14 +342,17 @@ export async function runDynamicWorkflowGenerate(
 
     const priorRunCount = await persistence.countNodeRuns(taskId, DW_ORCHESTRATOR_NODE_ID)
     const runId = await nodeRuns.mint({
+      ...deriveNodeRunRole({ nodeId: DW_ORCHESTRATOR_NODE_ID, rerunCause: DW_GENERATE_CAUSE }),
       taskId,
       nodeId: DW_ORCHESTRATOR_NODE_ID,
       status: 'pending',
       cause: DW_GENERATE_CAUSE,
-      retryIndex: priorRunCount,
+      retryIndex: nodeRunAttemptIndex({ kind: 'count', count: priorRunCount }),
       overrides: {
-        agentOverrideName: orchestrator.name,
-        agentOverrideId: orchestrator.id,
+        config: {
+          agentOverrideName: orchestrator.name,
+          agentOverrideId: orchestrator.id,
+        },
       },
     })
     const envelopeNonce = await nodeRuns.loadEnvelopeNonce(runId)

@@ -38,3 +38,6 @@ export {
   TASK_PLATFORM_INPUT_PATH_MAX_LENGTH,
   TASK_PLATFORM_INPUT_PATHS_MAX,
 } from '../domain/taskPlatformInputPaths'
+
+// RFC-395: compose config reads into the caller's existing provider statement.
+export { taskWorkgroupConfigSelection } from '../infrastructure/taskWorkgroupConfig'

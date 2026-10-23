@@ -4,8 +4,19 @@
 // whole scratch-repository deletion, active-owner deferral, lease retry, boot
 // replay, adjacent exclusions, and idempotent crash windows.
 
+import {
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -30,20 +41,16 @@ beforeEach(async () => {
   db = createInMemoryDb(MIGRATIONS)
   root = mkdtempSync(join(tmpdir(), 'aw-rfc300-prune-'))
   workflowId = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'rfc300', definition: '{}' })
+  await workflowFixture(db, { id: workflowId, name: 'rfc300', definition: '{}' })
 })
 
 afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-async function seedTask(
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-): Promise<string> {
+async function seedTask(overrides: Partial<TaskFixtureSpec> = {}): Promise<string> {
   const id = overrides.id ?? ulid()
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: 'rfc300-prune',
     workflowId,
@@ -66,8 +73,7 @@ async function seedTask(
 }
 
 async function rowOf(id: string) {
-  const { tasks } = tablesOf(db)
-  return (await db.select().from(tasks).where(eq(tasks.id, id)))[0]!
+  return (await readTaskFixtures(db, { id }))[0]!
 }
 
 async function createLinkedWorktreeTask(status: 'done' | 'canceled') {
@@ -159,8 +165,8 @@ describe('RFC-300 physical workspace deletion', () => {
         spaceKind: 'scratch',
       })
       const nodeRunId = ulid()
-      const { nodeRuns, nodeRunOutputs, nodeRunEvents } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { nodeRunEvents } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: nodeRunId,
         taskId: id,
         nodeId: 'persisted-result',
@@ -175,7 +181,7 @@ describe('RFC-300 physical workspace deletion', () => {
         v: 1,
         items: [{ path: 'result.txt', file: archivePath, size: 30, truncated: false }],
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId,
         portName: 'result',
         content: 'persisted outside the workspace',
@@ -196,12 +202,10 @@ describe('RFC-300 physical workspace deletion', () => {
       const row = await rowOf(id)
       expect(row.status).toBe(status)
       expect(row.workspacePrunedAt).toBe(201)
-      const persistedRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
+      const persistedRun = (await readNodeRunFixtures(db, { id: nodeRunId }))[0]
       expect(persistedRun?.status).toBe(status)
       expect(persistedRun?.opencodeSessionId).toBe(`session-${status}`)
-      const persistedOutput = (
-        await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
-      )[0]
+      const persistedOutput = (await readNodeRunOutputFixtures(db, { nodeRunId }))[0]
       expect(persistedOutput?.content).toBe('persisted outside the workspace')
       expect(persistedOutput?.archiveJson).toBe(archiveJson)
       expect(existsSync(archivePath)).toBe(true)
@@ -255,11 +259,10 @@ describe('RFC-300 physical workspace deletion', () => {
       repoPath: repos[0]!.source,
       worktreePath: container,
       branch: repos[0]!.branch,
-      repoCount: repos.length,
       spaceKind: 'remote',
     })
-    const { taskRepos } = tablesOf(db)
-    await db.insert(taskRepos).values(
+    await taskRepoFixture(
+      db,
       repos.map((repo, index) => ({
         taskId: id,
         repoIndex: index,
@@ -267,7 +270,7 @@ describe('RFC-300 physical workspace deletion', () => {
         baseBranch: 'main',
         branch: repo.branch,
         worktreePath: repo.worktree,
-        worktreeDirName: `repo-${index}`,
+        mountPath: `repo-${index}`,
         schemaVersion: 1,
       })),
     )

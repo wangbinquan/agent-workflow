@@ -24,8 +24,14 @@
 // End-to-end downstream re-run after a cross-clarify is covered by the
 // combination scenarios (S13/S15) running the real scheduler.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -144,8 +150,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = cascadeDef()
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'cascade',
     description: '',
@@ -153,7 +158,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -177,11 +182,10 @@ async function seedDoneRun(
   db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  fields: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = `nr_${nodeId}_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -208,7 +212,9 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       // Seed a done designer + done downstream chain mirroring the
       // production failure shape.
       await seedDoneRun(db, taskId, 'in')
-      await seedDoneRun(db, taskId, 'designer', { preSnapshot: 'snap-a' })
+      await seedDoneRun(db, taskId, 'designer', {
+        checkpoints: [{ mountPath: '', preSnapshot: 'snap-a' }],
+      })
       await seedDoneRun(db, taskId, 'rev1')
       const qRun = await seedDoneRun(db, taskId, 'questioner')
       // rev2 / out haven't run yet — exercise the "node never ran" branch.
@@ -370,10 +376,10 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       // cross-clarify fired — the cascade must not destroy this history.
       await seedDoneRun(db, taskId, 'rev1', {
         retryIndex: 2,
-        preSnapshot: 'snap-r1-final',
+        checkpoints: [{ mountPath: '', preSnapshot: 'snap-r1-final' }],
       })
       const qRun = await seedDoneRun(db, taskId, 'questioner', {
-        preSnapshot: 'snap-q-final',
+        checkpoints: [{ mountPath: '', preSnapshot: 'snap-q-final' }],
       })
 
       const sess = await createClarifyRound({
@@ -394,18 +400,19 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
         answers: [makeAns('q1')],
         actor,
       })
-      const { nodeRuns } = tablesOf(db)
-      const rev1Rows = await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev1')))
+      const rev1Rows = await readNodeRunFixtures(db, {
+        $and: [{ taskId }, { nodeId: 'rev1' }],
+      })
       // RFC-074: no cascade row is minted, so rev1's hard-won history (cci=3,
       // retry=2, preSnapshot) is left exactly as-is — there is no append-only
       // pending row to validate. The designer rerun + lazy freshness will
       // re-dispatch rev1 later (recording fresh consumed) without destroying this.
       expect(rev1Rows.length, 'rev1 keeps its single done row').toBe(1)
       expect(rev1Rows[0]?.status).toBe('done')
-      expect(rev1Rows[0]?.preSnapshot).toBe('snap-r1-final')
+      expect(
+        rev1Rows[0]?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ??
+          null,
+      ).toBe('snap-r1-final')
       expect(rev1Rows[0]?.retryIndex).toBe(2)
     })
   })

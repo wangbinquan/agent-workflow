@@ -54,9 +54,7 @@ export class GitStrategy implements WrapperStrategy<'wrapper-git'> {
     const freshGeneration =
       existing !== null &&
       (existing.mergeState === 'merged' ||
-        (existing.mergeState === 'isolating' &&
-          existing.isoBaseSnapshot === null &&
-          existing.isoBaseSnapshotReposJson === null))
+        (existing.mergeState === 'isolating' && !existing.hasIsolationBase))
     if (existing !== null) {
       const progress = decodeWrapperProgress(existing.wrapperProgressJson, (message) =>
         this.data.reportDiagnostic({ level: 'warn', message }),

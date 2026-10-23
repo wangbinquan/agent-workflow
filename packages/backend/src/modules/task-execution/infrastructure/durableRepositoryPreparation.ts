@@ -1,3 +1,4 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { repositoryPreparationLane } from './workspaceLaunchLane'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
@@ -132,7 +133,7 @@ export async function prepareDurableRepositoryWorkspace(input: {
         current.ownerFence !== ownerFence ||
         current.state === 'admitted' ||
         task === undefined ||
-        task.path !== ''
+        !isTaskWorkspaceUnbound(task.path)
       )
         throw new ConflictError(
           'workspace-preparation-owner-changed',
@@ -277,7 +278,7 @@ export async function cleanupDurableRepositoryWorkspace(input: {
         current?.operationRef !== plan.operationRef ||
         current.ownerFence !== plan.ownerFence ||
         current.state === 'admitted' ||
-        (task !== undefined && task.path !== '')
+        (task !== undefined && !isTaskWorkspaceUnbound(task.path))
       )
         throw new ConflictError(
           'workspace-preparation-owner-changed',

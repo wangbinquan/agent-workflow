@@ -1,15 +1,14 @@
 // RFC-332 — pure DAG frontier owner.
 
 import type { MergeStateOrNull, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { compareNodeRunMintOrder, isMergeStateSettled } from '@agent-workflow/shared'
+import { isMergeStateSettled } from '@agent-workflow/shared'
 import {
   areTransitiveUpstreamsCompleted,
   buildFreshestSettledPerNode,
-  isFresherNodeRun,
   isNodeRunFresh,
-  parseConsumedJson,
   type NodeRunRow,
 } from '@/services/freshness'
+import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
 import {
   isDispatchable,
   isReviewSupersededRow,
@@ -85,20 +84,29 @@ export interface Frontier {
  * the generation of new evidence, so the release fires once per upstream re-run
  * rather than once per tick.
  */
-function freshestUpstreamEvidenceId(
+async function freshestUpstreamEvidenceId(
   skippedRow: NodeRunRow,
   upstreams: readonly string[],
   freshestSettled: Map<string, NodeRunRow>,
-): string | undefined {
-  const consumed = parseConsumedJson(skippedRow.consumedUpstreamRunsJson)
-  let best: NodeRunRow | undefined
-  for (const upstreamId of upstreams) {
+): Promise<string | undefined> {
+  const consumed = await createRunSelectionOracleSnapshot([skippedRow], {
+    scope: { kind: 'rows' },
+  }).consumed(skippedRow.id)
+  const candidates = upstreams.flatMap((upstreamId) => {
     const current = freshestSettled.get(upstreamId)
-    if (current === undefined) continue
-    if (consumed[upstreamId] === current.id) continue // this leg is unchanged
-    if (best === undefined || compareNodeRunMintOrder(current, best) > 0) best = current
-  }
-  return best?.id
+    return current === undefined ||
+      consumed.some(
+        (edge) => edge.producerNodeId === upstreamId && edge.producerRunId === current.id,
+      )
+      ? []
+      : [current]
+  })
+  return (
+    await createRunSelectionOracleSnapshot(
+      candidates.map((row) => ({ ...row, taskId: '' })),
+      { scope: { kind: 'rows' } },
+    ).familyHistory('', {})
+  ).at(-1)?.id
 }
 
 /** RFC-311 — the frontier consumes the freshness column contract (see
@@ -106,7 +114,7 @@ function freshestUpstreamEvidenceId(
  *  those columns instead of dragging prompt_text / iso JSON along. */
 export type FrontierRunRow = NodeRunRow
 
-export function deriveFrontier(
+export async function deriveFrontier(
   rows: ReadonlyArray<FrontierRunRow>,
   definition: WorkflowDefinition,
   scopeNodes: WorkflowNode[],
@@ -128,18 +136,28 @@ export function deriveFrontier(
   // and parked awaiting_human until batch-dispatch mints its rerun. Empty for
   // every non-deferred task → byte-for-byte today's frontier (golden-lock).
   deferredHandlerNodeIds: ReadonlySet<string> = new Set(),
-): Frontier {
-  const { containerRunId, iteration } = frame
+): Promise<Frontier> {
+  const selection = createRunSelectionOracleSnapshot(
+    rows.map((row) => ({ ...row, taskId: '' })),
+    { scope: { kind: 'rows' } },
+  )
+  const current = await selection.currentInFrame('', frame)
   const latestPerNode = new Map<string, FrontierRunRow>()
-  for (const r of rows) {
-    // `?? null` normalizes plain test-fixture rows (same idiom as
-    // isReviewSupersededRow); a real DB row always carries the column.
-    if ((r.containerRunId ?? null) !== containerRunId || r.iteration !== iteration) continue
-    if (!scopeIds.has(r.nodeId)) continue
-    if (r.parentNodeRunId !== null) continue // skip fan-out child rows
-    if (isFresherNodeRun(r, latestPerNode.get(r.nodeId))) latestPerNode.set(r.nodeId, r)
+  for (const nodeId of new Set(
+    rows
+      .filter(
+        (row) =>
+          scopeIds.has(row.nodeId) &&
+          row.parentNodeRunId === null &&
+          (row.containerRunId ?? null) === frame.containerRunId &&
+          row.iteration === frame.iteration,
+      )
+      .map((row) => row.nodeId),
+  )) {
+    const row = rows.find((row) => row.id === current.get(nodeId)?.id)
+    if (row !== undefined) latestPerNode.set(nodeId, row)
   }
-  const freshestSettled = buildFreshestSettledPerNode(rows, scopeIds, frame)
+  const freshestSettled = await buildFreshestSettledPerNode(rows, scopeIds, frame)
 
   // Pass 1 — done∧fresh (old seed口径) + exhausted (loop-max true terminal,
   // HIGH-2). An asking agent's `done` run with an OPEN clarify session is NOT a
@@ -162,7 +180,7 @@ export function deriveFrontier(
     // merge_state NULL and pass this gate byte-for-byte (golden-lock).
     if (
       r.status === 'done' &&
-      isNodeRunFresh(r, freshestSettled) &&
+      (await isNodeRunFresh(r, freshestSettled)) &&
       // RFC-144: the settled set {NULL, merged} now derives from the shared
       // transition table (SETTLED_MERGE_STATES) — in-flight iso states
       // ('isolating' / 'pending-merge' / 'conflict-human' / 'merge-failed' /
@@ -182,7 +200,7 @@ export function deriveFrontier(
     // `joinMode: 'any'` a node fed by one skipped and one live upstream must
     // still run. Propagation is the emergent result of that per-node judgment,
     // never a graph walk that assumes it.
-    else if (r.status === 'skipped' && isNodeRunFresh(r, freshestSettled)) {
+    else if (r.status === 'skipped' && (await isNodeRunFresh(r, freshestSettled))) {
       completed.add(nodeId)
     }
     // 'exhausted' (loop hit maxIterations without exit) is a TERMINAL FAILURE,
@@ -280,7 +298,7 @@ export function deriveFrontier(
       latest !== undefined &&
       (latest.status === 'awaiting_human' || latest.status === 'awaiting_review') &&
       WRAPPER_KINDS.has(n.kind)
-        ? wrapperRevivalEvidence(latest, rows, definition)
+        ? await wrapperRevivalEvidence(latest, rows, definition)
         : null
     const wrapperAnchorReleasable =
       wrapperEvidence !== null &&
@@ -303,8 +321,12 @@ export function deriveFrontier(
     const staleSkipEvidenceId =
       latest !== undefined &&
       latest.status === 'skipped' &&
-      !isNodeRunFresh(latest, freshestSettled)
-        ? (freshestUpstreamEvidenceId(latest, upstreamsOf.get(n.id) ?? [], freshestSettled) ?? null)
+      !(await isNodeRunFresh(latest, freshestSettled))
+        ? ((await freshestUpstreamEvidenceId(
+            latest,
+            upstreamsOf.get(n.id) ?? [],
+            freshestSettled,
+          )) ?? null)
         : null
     const staleSkipReleasable =
       staleSkipEvidenceId !== null && !dispatchedPendingRowIds.has(staleSkipEvidenceId)
@@ -321,7 +343,7 @@ export function deriveFrontier(
         wrapperAnchorReleasable ||
         staleSkipReleasable ||
         !dispatchedThisInvocation.has(n.id)) &&
-      isDispatchable(latest, n.kind, freshestSettled, rows, definition)
+      (await isDispatchable(latest, n.kind, freshestSettled, rows, definition))
     if (dispatchable) {
       ready.push(n.id)
       if (latest !== undefined && latest.status === 'pending') {

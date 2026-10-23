@@ -3,9 +3,18 @@
 // （提交 / continuation / 待处理 gate successor）、intent 终态化（按 epoch 过滤 + replay 授权释放）。
 // 此前 SQLite 侧四个薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 等同步内核，PG 侧各自整份实现。
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  readNodeRunFixtures,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
@@ -49,14 +58,10 @@ const rootPath = (taskId: string): readonly LineageSlot[] => [
   { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
 ]
 
-async function seedTask(
-  db: PersistenceDb,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, over: Partial<TaskFixtureSpec> = {}): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -64,7 +69,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -117,16 +122,14 @@ async function seedClaimedOwner(
 }
 
 async function taskRow(db: PersistenceDb, taskId: string) {
-  const { tasks } = tablesOf(db)
-  const rows = await db
-    .select({
-      status: tasks.status,
-      revision: tasks.lifecycleEventRevision,
-      errorSummary: tasks.errorSummary,
-      runningSince: tasks.runningSince,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
+  const rows = await readTaskFixtures(db, { id: taskId }).then((rows) =>
+    rows.map((row) => ({
+      status: row.status,
+      revision: row.lifecycleEventRevision,
+      errorSummary: row.errorSummary,
+      runningSince: row.runningSince,
+    })),
+  )
   return rows[0]
 }
 
@@ -183,28 +186,25 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
           async (tx) => {
             order.push('guard')
             expect(await taskRow(tx, taskId)).toEqual(before)
-            const { tasks } = tablesOf(tx)
-            await tx.update(tasks).set({ name: 'guard-written' }).where(eq(tasks.id, taskId))
+            await patchTaskFixture(tx, { id: taskId }, { name: 'guard-written' })
           },
         ),
       ).toBe(true)
       order.push('returned')
       expect(order).toEqual(['guard', 'publish', 'returned'])
       expect(published).toEqual([{ status: 'running', eventIds: [`task-lifecycle:${taskId}:2`] }])
-      const { tasks } = tablesOf(db)
-      const committed = await first(db.select().from(tasks).where(eq(tasks.id, taskId)))
+      const committed = (await readTaskFixtures(db, { id: taskId }))[0]
       const sentinel = new Error('guard rollback')
       await expect(
         lifecycle.trySetWithGuard(
           { taskId, to: 'done', allowedFrom: ['running'], now: 30, reason: 'failed-guard' },
           async (tx) => {
-            const { tasks } = tablesOf(tx)
-            await tx.update(tasks).set({ name: 'must-rollback' }).where(eq(tasks.id, taskId))
+            await patchTaskFixture(tx, { id: taskId }, { name: 'must-rollback' })
             throw sentinel
           },
         ),
       ).rejects.toBe(sentinel)
-      expect(await first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toEqual(committed)
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toEqual(committed)
       expect(published).toHaveLength(1)
     } finally {
       registerAfterCommitEventPump(null)
@@ -292,8 +292,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
       now: 15,
       reason: 'fail-again',
     })
-    const { tasks } = tablesOf(db)
-    await db.update(tasks).set({ workspacePrunedAt: 15 }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { workspacePrunedAt: 15 })
     await expect(
       lifecycle.trySet({
         taskId,
@@ -330,6 +329,7 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— node run 生命周期', (harne
     const taskId = await seedTask(db)
     const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
     const runId = await lifecycle.mint({
+      ...deriveNodeRunRole({ nodeId: 'n', rerunCause: 'initial' }),
       taskId,
       nodeId: 'n',
       status: 'pending',
@@ -341,7 +341,11 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— node run 生命周期', (harne
       await lifecycle.transition({
         nodeRunId: runId,
         event: { kind: 'mark-running' },
-        extra: { startedAt: 1 },
+        extra: {
+          identity: {
+            startedAt: 1,
+          },
+        },
       }),
     ).toEqual({ from: 'pending', to: 'running' })
     // 非法事件（running 上再 mark-running）抛 IllegalNodeRunTransition；缺行 ⇒ node-run-not-found。
@@ -356,7 +360,11 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— node run 生命周期', (harne
         nodeRunId: runId,
         to: 'done',
         allowedFrom: ['running'],
-        extra: { finishedAt: 2 },
+        extra: {
+          identity: {
+            finishedAt: 2,
+          },
+        },
         reason: 'test',
       }),
     ).toEqual({ from: 'running', to: 'done' })
@@ -374,16 +382,26 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— node run 生命周期', (harne
 
     const { context } = await seedClaimedOwner(db, taskId)
     await expect(
-      lifecycle.mint({ taskId, nodeId: 'm', status: 'pending', cause: 'initial' }),
+      lifecycle.mint({
+        ...deriveNodeRunRole({ nodeId: 'm', rerunCause: 'initial' }),
+        taskId,
+        nodeId: 'm',
+        status: 'pending',
+        cause: 'initial',
+      }),
     ).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
     const minted = await runWithTaskExecutionContext(context, () =>
-      lifecycle.mint({ taskId, nodeId: 'm', status: 'pending', cause: 'initial' }),
+      lifecycle.mint({
+        ...deriveNodeRunRole({ nodeId: 'm', rerunCause: 'initial' }),
+        taskId,
+        nodeId: 'm',
+        status: 'pending',
+        cause: 'initial',
+      }),
     )
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select({ nodeId: nodeRuns.nodeId, status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, minted))
+    const rows = await readNodeRunFixtures(db, { id: minted }).then((rows) =>
+      rows.map((row) => ({ nodeId: row.nodeId, status: row.status })),
+    )
     expect(rows[0]).toEqual({ nodeId: 'm', status: 'pending' })
   })
 })
@@ -394,21 +412,21 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— born-done 行与初始输出�
     const taskId = await seedTask(db)
     const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
     const runId = await lifecycle.mint({
+      ...deriveNodeRunRole({ nodeId: 'in1', rerunCause: 'io-virtual' }),
       taskId,
       nodeId: 'in1',
       status: 'done',
       cause: 'io-virtual',
       outputs: [{ portName: 'k1', content: 'AAA' }],
     })
-    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
-    const outputs = await db
-      .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, runId))
+    const outputs = await readNodeRunOutputFixtures(db, { nodeRunId: runId }).then((rows) =>
+      rows.map((row) => ({ portName: row.portName, content: row.content })),
+    )
     expect(outputs).toEqual([{ portName: 'k1', content: 'AAA' }])
     // 同一端口重复 ⇒ 唯一键冲突 ⇒ 行随输出一起回滚。
     await expect(
       lifecycle.mint({
+        ...deriveNodeRunRole({ nodeId: 'in2', rerunCause: 'io-virtual' }),
         taskId,
         nodeId: 'in2',
         status: 'done',
@@ -419,10 +437,9 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— born-done 行与初始输出�
         ],
       }),
     ).rejects.toBeDefined()
-    const rows = await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.nodeId, 'in2'))
+    const rows = await readNodeRunFixtures(db, { nodeId: 'in2' }).then((rows) =>
+      rows.map((row) => ({ id: row.id })),
+    )
     expect(rows.filter((row) => row.id !== runId)).toEqual([])
   })
 })

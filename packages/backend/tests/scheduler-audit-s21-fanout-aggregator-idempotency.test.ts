@@ -23,7 +23,16 @@
 //   fail-all + 同代原地重跑挡住了"非 done 行进聚合"的确定性集成构造，这一半
 //   仍按调研分工指引保留为源码文本断言（改写成正向形态）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -88,8 +97,7 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -111,15 +119,14 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -250,8 +257,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     //     prior-child 分支会原样复用，不再 spawn）；
     //   - 上一代 aggregator 子行被 reap 成 'interrupted' 残留。
     const wrapperRunId = ulid()
-    const { nodeRuns, tasks, nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    const { nodeRuns } = tablesOf(h.db)
+    await nodeRunFixture(h.db, {
       id: wrapperRunId,
       taskId,
       nodeId: 'fan',
@@ -268,7 +275,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       [doneShardA, 'a.md', 'A-out'],
       [doneShardB, 'b.md', 'B-out'],
     ] as const) {
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id,
         taskId,
         nodeId: 'inner',
@@ -280,10 +287,10 @@ function registerProviderCases1(provider: ProviderHarness) {
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content })
+      await nodeRunOutputFixture(h.db, { nodeRunId: id, portName: 'result', content })
     }
     const staleAggId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: staleAggId,
       taskId,
       nodeId: 'aggNode',
@@ -311,7 +318,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // wrapper 行被复用（RFC-040 wrapper resume），没有重铸。
@@ -344,7 +351,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // 修复面（RFC-098 B3 aggregator 复用分支）：aggNode 总行数 1 —— 残留的
     // interrupted 行被原地复用重跑（同代非终态分支：id === staleAggId、
     // reset pending 后由 runNode 跑成 done），不再新铸、不再残留。
-    const aggRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'aggNode'))
+    const aggRows = await readNodeRunFixtures(h.db, { nodeId: 'aggNode' })
     expect(aggRows.length).toBe(1)
     const reusedRow = aggRows[0]!
     expect(reusedRow.id).toBe(staleAggId) // 原地复用，非新铸
@@ -354,10 +361,7 @@ function registerProviderCases1(provider: ProviderHarness) {
 
     // 聚合结果本身正确（本场景全 done，无 status 过滤"碰巧"无害）：
     // outlet 'final' 拿到 aggregator 输出。
-    const wrapperOuts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, wrapperRunId))
+    const wrapperOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapperRunId })
     expect(wrapperOuts.find((o) => o.portName === 'final')?.content).toBe('AGG')
   }, 60_000)
 }
@@ -396,8 +400,17 @@ function registerNativeCases2() {
     // (a) 挑行必须走 pickReusableShardRun（freshness.ts 的 done-only +
     //     isFresherNodeRun + hash null=match picker）——perShard 与 shared
     //     两个分支都不允许退回裸 find 首行匹配。
-    expect(body).toContain('pickReusableShardRun(innerRows, {')
-    expect(body).toContain('pickReusableShardRun(innerRows, { shardKey: null, valueHash: null })')
+    expect(body).toMatch(
+      /createRunSelectionOracleSnapshot\(innerRows,\s*\{\s*scope: \{ kind: 'rows' \},?\s*\}\)\.shardSet\(taskId, \{/,
+    )
+    expect(body).toContain(
+      'const request = { nodeId: edge.source.nodeId, shardKey: null, valueHash: null }',
+    )
+    expect(
+      body.match(
+        /createRunSelectionOracleSnapshot\(innerRows,\s*\{\s*scope: \{ kind: 'rows' \},?\s*\}\)\.shardSet/g,
+      ),
+    ).toHaveLength(2)
     expect(body).not.toContain('innerRows.find((r) => r.shardKey === s.shardKey)')
     expect(body).not.toContain('innerRows.find((r) => r.shardKey === null)')
 
@@ -425,7 +438,9 @@ function registerNativeCases2() {
     expect(shardStart).toBeGreaterThan(-1)
     expect(shardStart).toBeLessThan(start)
     const shardBody = src.slice(shardStart, start)
-    expect(shardBody).toContain('pickReusableShardRun(candidates, {')
+    expect(shardBody).toContain(
+      "createRunSelectionOracleSnapshot(candidates, { scope: { kind: 'rows' } }).shardSet",
+    )
   })
 }
 

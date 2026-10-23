@@ -77,6 +77,12 @@
 //     EVENT-48 只借它建规则的姿势，断言的是**推送到每一个打开的标签页**；
 //     EVENT-X2 断言的是**改配置**，两者都不重复触发语义。
 
+import {
+  nodeRunFixtureSql,
+  taskFixtureSql,
+  readTaskFixturesSql,
+  fixtureSqlParameter,
+} from './fixtures/model'
 import { createHmac } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -256,21 +262,33 @@ function seedOrphanRunningTask(daemon: DaemonHandle, taskId: string, runId: stri
   const now = Date.now()
   runSqlite(
     db,
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,' +
-      ' base_branch, branch, status, inputs, started_at, running_ms, space_kind, repo_count)' +
-      ` VALUES (${sqlText(taskId)}, ${sqlText('RFC-319 orphan reconcile fixture')},` +
-      ` ${sqlText('rfc319-orphan-wf')},` +
-      ` ${sqlText('{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}')},` +
-      ` ${sqlText(join(daemon.home, 'fixture-repo'))}, ${sqlText('')}, ${sqlText('main')},` +
-      ` ${sqlText(`agent-workflow/${taskId}`)}, ${sqlText('running')}, ${sqlText('{}')},` +
-      ` ${String(now - 5 * 60_000)}, 0, ${sqlText('scratch')}, 1);`,
+    taskFixtureSql({
+      id: taskId,
+      name: 'RFC-319 orphan reconcile fixture',
+      workflowId: 'rfc319-orphan-wf',
+      workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      repoPath: join(daemon.home, 'fixture-repo'),
+      worktreePath: '',
+      baseBranch: 'main',
+      branch: `agent-workflow/${taskId}`,
+      status: 'running',
+      inputs: '{}',
+      startedAt: now - 5 * 60_000,
+      runningMs: 0,
+      spaceKind: 'scratch',
+    }),
   )
   runSqlite(
     db,
-    'INSERT INTO node_runs (id, task_id, node_id, status, pid, spawn_binary_path, started_at)' +
-      ` VALUES (${sqlText(runId)}, ${sqlText(taskId)}, ${sqlText('rfc319-orphan-node')},` +
-      ` ${sqlText('running')}, 424242,` +
-      ` ${sqlText('/nonexistent/rfc319-never-spawned-binary')}, ${String(now - 5 * 60_000)});`,
+    nodeRunFixtureSql({
+      id: runId,
+      taskId,
+      nodeId: 'rfc319-orphan-node',
+      status: 'running',
+      pid: 424242,
+      spawnBinaryPath: '/nonexistent/rfc319-never-spawned-binary',
+      startedAt: now - 5 * 60_000,
+    }),
   )
 }
 
@@ -592,8 +610,10 @@ test('RFC-319 EVENT-08: 带正确 HMAC 签名的 GitHub 投递一路走到「真
     delivery: string | null
   }>(
     databasePath(daemon),
-    'SELECT launch_origin AS origin, event_subscription_id AS subscription,' +
-      ' event_delivery_id AS delivery FROM tasks WHERE id = ?;',
+    readTaskFixturesSql(
+      { id: fixtureSqlParameter },
+      { origin: 'launchOrigin', subscription: 'eventSubscriptionId', delivery: 'eventDeliveryId' },
+    ),
     [fire.taskId!],
   )
   expect(
@@ -1337,15 +1357,21 @@ test('RFC-319 REPO-39: 没有任务行锚定的孤儿工作树与半成品镜像
   // 找到锚」——所以这条对照腿是整条用例的核心：删得动孤儿、又不许碰有主的。
   runSqlite(
     databasePath(daemon),
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,' +
-      ' base_branch, branch, status, inputs, started_at, finished_at, space_kind, repo_count)' +
-      ` VALUES (${sqlText(anchoredTaskId)}, ${sqlText('RFC-319 anchored worktree')},` +
-      ` ${sqlText('rfc319-gc-wf')},` +
-      ` ${sqlText('{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}')},` +
-      ` ${sqlText(join(daemon.home, 'fixture-repo'))}, ${sqlText(anchored)}, ${sqlText('main')},` +
-      ` ${sqlText(`agent-workflow/${anchoredTaskId}`)}, ${sqlText('done')}, ${sqlText('{}')},` +
-      ` ${String(Date.now() - 30 * DAY_MS)}, ${String(Date.now() - 30 * DAY_MS)},` +
-      ` ${sqlText('remote')}, 1);`,
+    taskFixtureSql({
+      id: anchoredTaskId,
+      name: 'RFC-319 anchored worktree',
+      workflowId: 'rfc319-gc-wf',
+      workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      repoPath: join(daemon.home, 'fixture-repo'),
+      worktreePath: anchored,
+      baseBranch: 'main',
+      branch: `agent-workflow/${anchoredTaskId}`,
+      status: 'done',
+      inputs: '{}',
+      startedAt: Date.now() - 30 * DAY_MS,
+      finishedAt: Date.now() - 30 * DAY_MS,
+      spaceKind: 'remote',
+    }),
   )
   expect(
     querySqlite<{ id: string }>(databasePath(daemon), 'SELECT id FROM tasks ORDER BY id;').map(

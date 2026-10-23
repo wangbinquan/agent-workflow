@@ -1,5 +1,12 @@
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-046 — locks the runner's persistence path for
 // `node_runs.injected_memories_json`:
@@ -15,7 +22,6 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { readFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -23,7 +29,7 @@ import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // RFC-074 PR-C: monotonic ids for synchronous seeding under pure-id freshness
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { runNode } from './helpers/runner'
+import { runNode } from './helpers/runner' // RFC-074 PR-C: monotonic ids for synchronous seeding under pure-id freshness
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -61,15 +67,14 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -94,11 +99,10 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 async function insertNodeRun(
   db: PersistenceDb,
   taskId: string,
-  overrides: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  overrides: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n1',
@@ -127,12 +131,10 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 }
 
 async function readJson(db: PersistenceDb, nodeRunId: string): Promise<string | null> {
-  const { nodeRuns } = tablesOf(db)
   const row = (
-    await db
-      .select({ json: nodeRuns.injectedMemoriesJson })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
+    await readNodeRunFixtures(db, { id: nodeRunId }).then((rows) =>
+      rows.map((row) => ({ json: row.injectedMemories })),
+    )
   )[0]
   return row?.json ?? null
 }
@@ -245,7 +247,7 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
       nodeId: 'agent-x',
       retryIndex: 0,
       status: 'failed',
-      injectedMemoriesJson: attempt0Json,
+      injectedMemories: attempt0Json,
       opencodeSessionId: 'sess_resume',
       envelopeNonce,
     })
@@ -308,7 +310,7 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
       nodeId: 'agent-y',
       retryIndex: 0,
       status: 'failed',
-      injectedMemoriesJson: null,
+      injectedMemories: null,
       opencodeSessionId: 'sess_resume_null',
     })
     const followupId = await insertNodeRun(h.db, h.taskId, {

@@ -1,7 +1,9 @@
 // RFC-027 T3 — exercises captureChildSessions against a hand-built
+// RFC-395 II-a: await the workflow/task/run builders before session capture.
 // opencode-shaped SQLite fixture. Covers the path BFS, message+part
 // transcoding, the missing-DB fallback, and the readonly contract.
 
+import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
@@ -25,10 +27,9 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)
 
-function seedNodeRun(db: DbClient): string {
+async function seedNodeRun(db: DbClient): Promise<string> {
   const wfId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -37,7 +38,7 @@ function seedNodeRun(db: DbClient): string {
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -53,7 +54,7 @@ function seedNodeRun(db: DbClient): string {
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'n1',
@@ -142,9 +143,9 @@ describe('resolveOpencodeDbPath', () => {
 describe('captureChildSessions', () => {
   let db: DbClient
   let nodeRunId: string
-  beforeEach(() => {
+  beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    nodeRunId = seedNodeRun(db)
+    nodeRunId = await seedNodeRun(db)
   })
 
   test('missing opencode DB writes a subagent_capture_failed marker and returns failed=true', async () => {
@@ -377,14 +378,16 @@ describe('captureChildSessions', () => {
   })
 
   test('RFC-026 inline-mode dedup: child sessions already captured by sibling node_runs are skipped', async () => {
-    const { nodeRuns, nodeRunEvents } = tablesOf(db)
+    const { nodeRunEvents } = tablesOf(db)
     // Two node_runs in the same task share the same opencode root
     // session. First run already captured child session 'shared'.
     // Second run's capture must skip 'shared' and only write 'new'.
-    const taskRow = queryRows(db.select({ taskId: nodeRuns.taskId }).from(nodeRuns))[0]!
+    const taskRow = (
+      await readNodeRunFixtures(db).then((rows) => rows.map((row) => ({ taskId: row.taskId })))
+    )[0]!
     const taskId = taskRow.taskId
     const siblingId = ulid()
-    insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: siblingId,
       taskId,
       nodeId: 'n2',

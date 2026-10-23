@@ -1,3 +1,4 @@
+import { legacySkillStagingPath } from '@/platform/content/legacySkill'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { BundleSkillPayloadSchema, IntentSkillPayloadSchema } from '@agent-workflow/shared'
@@ -36,7 +37,7 @@ interface SkillStage {
   readonly version: number
 }
 const stageReference = (stage: SkillStage) =>
-  `${skillFilesRel(stage.skillId)}.op-${stage.operationId}.staged`
+  legacySkillStagingPath(stage.skillId, stage.operationId)
 function assertStage(stage: SkillStage) {
   if (
     ![stage.skillId, stage.operationId].every((id) => /^[A-Za-z0-9_-]+$/.test(id)) ||

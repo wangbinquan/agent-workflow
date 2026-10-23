@@ -2,12 +2,12 @@
 // 任务反馈存储、评审人存储（替换走统一事务）、协作侧任务可见性 / 角色、评审侧任务关系、
 // 人工门 continuation 恢复查询、任务终态清扫（挂起 run 取消 + node-statuses committed event）。
 
+import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
@@ -48,8 +48,7 @@ function actorFor(userId: string, role: 'admin' | 'user' = 'user'): Actor {
 async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -57,7 +56,7 @@ async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -118,7 +117,7 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
     const stranger = await seedUser(db)
     const admin = await seedUser(db, 'admin')
     const taskId = await seedTask(db, owner)
-    const { taskCollaborators, nodeRuns } = tablesOf(db)
+    const { taskCollaborators } = tablesOf(db)
     await insertOne(db, taskCollaborators, {
       taskId,
       userId: collaborator,
@@ -127,7 +126,7 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
       addedAt: 1,
     })
     const runId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runId,
       taskId,
       nodeId: 'n',
@@ -174,7 +173,7 @@ describeEachProvider('RFC-359 W4-B3a —— continuation 恢复与终态清扫',
     const owner = await seedUser(db)
     const taskId = await seedTask(db, owner)
     const intentId = `intent_${ulid()}`
-    const { taskExecutionIntents, nodeRuns } = tablesOf(db)
+    const { taskExecutionIntents } = tablesOf(db)
     await insertOne(db, taskExecutionIntents, {
       id: intentId,
       taskId,
@@ -198,7 +197,7 @@ describeEachProvider('RFC-359 W4-B3a —— continuation 恢复与终态清扫',
 
     const parked = ulid()
     const done = ulid()
-    await db.insert(nodeRuns).values([
+    await nodeRunFixture(db, [
       { id: parked, taskId, nodeId: 'gate', status: 'awaiting_human', retryIndex: 0, iteration: 0 },
       { id: done, taskId, nodeId: 'x', status: 'done', retryIndex: 0, iteration: 0 },
     ])
@@ -206,10 +205,9 @@ describeEachProvider('RFC-359 W4-B3a —— continuation 恢复与终态清扫',
     const result = await sweep.run({ taskId, cause: 'task-canceled', now: 9 })
     expect(result.canceledRuns).toEqual([{ nodeRunId: parked, nodeId: 'gate' }])
     expect(result.sealedSelfRounds).toBe(0)
-    const rows = await db
-      .select({ id: nodeRuns.id, status: nodeRuns.status, errorMessage: nodeRuns.errorMessage })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(db, { taskId }).then((rows) =>
+      rows.map((row) => ({ id: row.id, status: row.status, errorMessage: row.errorMessage })),
+    )
     expect(rows.find((row) => row.id === parked)).toMatchObject({
       status: 'canceled',
       errorMessage: 'task-canceled',

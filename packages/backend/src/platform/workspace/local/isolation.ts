@@ -74,7 +74,7 @@ export interface IsoRepo {
   /** The isolated worktree — the node's opencode cwd. */
   isoWorktreePath: string
   /** '' for single-repo; the per-repo sub-dir name for multi-repo. */
-  worktreeDirName: string
+  mountPath: string
   baseBranch: string
   /** Full-state snapshot commit the iso branched from (merge base). */
   baseSnapshot: string
@@ -170,7 +170,7 @@ export interface IsoHandle {
 export interface CanonRepo {
   repoPath: string
   worktreePath: string
-  worktreeDirName: string
+  mountPath: string
   baseBranch: string
 }
 
@@ -294,7 +294,7 @@ export async function chooseIsoWorkspaceKey(opts: {
     let reclaimed = 0
     let blocked: { residualPath: string; lastError: string } | null = null
     for (const repo of opts.canonRepos) {
-      const isoPath = isoWorktreePathFor(opts.appHome, opts.taskId, key, repo.worktreeDirName)
+      const isoPath = isoWorktreePathFor(opts.appHome, opts.taskId, key, repo.mountPath)
       const outcome = await reclaimWorktreePath({
         repoPath: repo.worktreePath,
         worktreePath: isoPath,
@@ -413,7 +413,7 @@ export async function createNodeIso(opts: {
         repoPath: r.repoPath,
         canonWorktreePath: r.worktreePath,
         isoWorktreePath: r.worktreePath, // run in place
-        worktreeDirName: r.worktreeDirName,
+        mountPath: r.mountPath,
         baseBranch: r.baseBranch,
         baseSnapshot: '',
         taskBaseHead: '',
@@ -430,9 +430,9 @@ export async function createNodeIso(opts: {
       opts.appHome,
       opts.taskId,
       opts.nodeRunId,
-      r.worktreeDirName,
+      r.mountPath,
     )
-    const forcedRepoRelPaths = repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName)
+    const forcedRepoRelPaths = repoRelForcedPaths(opts.forcedContainerPaths, r.mountPath)
     const taskBaseHead = await headOf(r.worktreePath)
     const baseSnapshot = await snapshotFullState(r.worktreePath, {
       pinRef: isoRefName(opts.taskId, opts.nodeRunId, 'base'),
@@ -489,7 +489,7 @@ export async function createNodeIso(opts: {
       repoPath: r.repoPath,
       canonWorktreePath: r.worktreePath,
       isoWorktreePath,
-      worktreeDirName: r.worktreeDirName,
+      mountPath: r.mountPath,
       baseBranch: r.baseBranch,
       baseSnapshot,
       taskBaseHead,
@@ -588,7 +588,7 @@ export function rebuildIsoHandle(opts: {
   forcedContainerPaths?: string[]
   /**
    * RFC-210: per-repo submodule topology read back from `iso_submodules_json` /
-   * `iso_submodules_repos_json`, keyed by `worktreeDirName`.
+   * `iso_submodules_repos_json`, keyed by `mountPath`.
    *
    * Replay MUST carry this. Without it a resumed merge-back falls back to a
    * parent-only merge, where a gitlink both sides moved resolves as "take
@@ -607,20 +607,15 @@ export function rebuildIsoHandle(opts: {
   const repos: IsoRepo[] = opts.canonRepos.map((r) => ({
     repoPath: r.repoPath,
     canonWorktreePath: r.worktreePath,
-    isoWorktreePath: isoWorktreePathFor(
-      opts.appHome,
-      opts.taskId,
-      opts.nodeRunId,
-      r.worktreeDirName,
-    ),
-    worktreeDirName: r.worktreeDirName,
+    isoWorktreePath: isoWorktreePathFor(opts.appHome, opts.taskId, opts.nodeRunId, r.mountPath),
+    mountPath: r.mountPath,
     baseBranch: r.baseBranch,
-    baseSnapshot: opts.baseSnapshots[r.worktreeDirName] ?? '',
-    taskBaseHead: opts.taskBaseHeads[r.worktreeDirName] ?? '',
-    forcedRepoRelPaths: repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName),
-    subBases: opts.submodules?.[r.worktreeDirName]?.subBases ?? {},
-    poolDirs: opts.submodules?.[r.worktreeDirName]?.poolDirs ?? {},
-    pendingSubResolves: opts.submodules?.[r.worktreeDirName]?.pendingSubResolves ?? [],
+    baseSnapshot: opts.baseSnapshots[r.mountPath] ?? '',
+    taskBaseHead: opts.taskBaseHeads[r.mountPath] ?? '',
+    forcedRepoRelPaths: repoRelForcedPaths(opts.forcedContainerPaths, r.mountPath),
+    subBases: opts.submodules?.[r.mountPath]?.subBases ?? {},
+    poolDirs: opts.submodules?.[r.mountPath]?.poolDirs ?? {},
+    pendingSubResolves: opts.submodules?.[r.mountPath]?.pendingSubResolves ?? [],
   }))
   return {
     taskId: opts.taskId,
@@ -675,12 +670,12 @@ export async function snapshotNodeIsoFinal(
     // would later resolve the gitlink to an unreachable object.
     await publishSubmoduleHeads(handle, r)
 
-    out[r.worktreeDirName] = await snapshotFullState(r.isoWorktreePath, {
+    out[r.mountPath] = await snapshotFullState(r.isoWorktreePath, {
       pinRef: isoRefName(handle.taskId, handle.nodeRunId, 'node'),
       log,
       forceIncludePaths: [
         ...r.forcedRepoRelPaths,
-        ...repoRelForcedPaths(extraForcedContainerPaths, r.worktreeDirName),
+        ...repoRelForcedPaths(extraForcedContainerPaths, r.mountPath),
       ],
     })
   }
@@ -947,7 +942,7 @@ async function tryAgentResolveSubmodule(
 
   const conflict: MergeBackConflict = {
     // Names the resolve-iso directory; slugged because subPath has slashes.
-    worktreeDirName: `sub/${subSlug(subPath)}`,
+    mountPath: `sub/${subSlug(subPath)}`,
     // These paths are relative to the submodule worktree. The parent gitlink
     // name is not a conflicted file and would always fail the manifest guard.
     paths: mt.conflicts,
@@ -1134,7 +1129,7 @@ async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo): Promise<voi
  * conflict-CLASS classification), and the merge base + canon refs.
  */
 export interface MergeBackConflict {
-  worktreeDirName: string
+  mountPath: string
   /** Conflicted paths (back-compat with pre-PR-B callers). */
   paths: string[]
   /** Conflicted auto-merge tree OID — `commit-tree` this to seed resolve-iso (§6.2①). */
@@ -1172,7 +1167,7 @@ export interface MergeBackResult {
  * Conflict → left for the caller (merge agent / awaiting_human, PR-B); canonical
  * for that repo is NOT touched (D27 — kept clean for sibling merge-backs).
  *
- * `nodeTrees` maps worktreeDirName → node_tree sha (from snapshotNodeIsoFinal, or
+ * `nodeTrees` maps mountPath → node_tree sha (from snapshotNodeIsoFinal, or
  * re-read from the persisted column on a replay).
  */
 export async function mergeBackNodeIso(
@@ -1195,7 +1190,7 @@ export async function mergeBackNodeIso(
   if (handle.passthrough) return { clean: true, conflicts: [] }
   const conflicts: MergeBackResult['conflicts'] = []
   for (const r of handle.repos) {
-    let theirs = nodeTrees[r.worktreeDirName]
+    let theirs = nodeTrees[r.mountPath]
     if (theirs === undefined) continue
     // RFC-210 §2.3: resolve每个 submodule FIRST, folding the result back into
     // `theirs`. git's own merge-tree refuses a gitlink both sides moved
@@ -1215,7 +1210,7 @@ export async function mergeBackNodeIso(
       // conflict (the gitlink is one entry, the disagreement is inside it), so
       // the whole repo is withheld and handed to the human/agent resolve path.
       conflicts.push({
-        worktreeDirName: r.worktreeDirName,
+        mountPath: r.mountPath,
         paths: subMerge.conflicts.map((p) => `${p} (submodule)`),
         mergedTree: '',
         rawConflictOutput: subMerge.conflicts
@@ -1285,11 +1280,11 @@ export async function mergeBackNodeIso(
       }
       if (gitlinkConflict !== undefined) {
         log?.warn('gitlink conflict — withholding repo instead of salvaging', {
-          worktreeDirName: r.worktreeDirName,
+          worktreeDirName: r.mountPath,
           subPath: gitlinkConflict,
         })
         conflicts.push({
-          worktreeDirName: r.worktreeDirName,
+          mountPath: r.mountPath,
           paths: merge.conflicts,
           mergedTree: merge.mergedTree,
           rawConflictOutput: merge.rawConflictOutput,
@@ -1310,7 +1305,7 @@ export async function mergeBackNodeIso(
         })
       } catch (err) {
         log?.warn('salvage tree construction failed (falling back to withhold-all)', {
-          worktreeDirName: r.worktreeDirName,
+          worktreeDirName: r.mountPath,
           error: err instanceof Error ? err.message : String(err),
         })
       }
@@ -1325,7 +1320,7 @@ export async function mergeBackNodeIso(
         salvagedPaths = salvage.landedPaths
       }
       conflicts.push({
-        worktreeDirName: r.worktreeDirName,
+        mountPath: r.mountPath,
         paths: merge.conflicts,
         mergedTree: merge.mergedTree,
         rawConflictOutput: merge.rawConflictOutput,
@@ -1679,7 +1674,7 @@ export async function prepareConflictResolution(
   // reaching here means it did not resolve; park directly.
   if (conflict.mergedTree === '') {
     log?.info('submodule conflict has no parent-level merged tree — parking without resolve-iso', {
-      worktreeDirName: conflict.worktreeDirName,
+      worktreeDirName: conflict.mountPath,
       paths: conflict.paths.join(', '),
     })
     return {
@@ -1687,7 +1682,7 @@ export async function prepareConflictResolution(
       outcome: {
         resolved: false,
         unresolved: conflict.paths.map((p) => ({
-          worktreeDirName: conflict.worktreeDirName,
+          mountPath: conflict.mountPath,
           path: p,
           type: 'submodule' as const,
         })),
@@ -1709,7 +1704,7 @@ export async function prepareConflictResolution(
     forceIncludePaths: conflict.forcedRepoRelPaths,
   })
   const cmt = await commitTree(repoGit, conflict.mergedTree, oursAtConflict, 'aw-conflict')
-  const suffix = conflict.worktreeDirName === '' ? 'repo' : conflict.worktreeDirName
+  const suffix = conflict.mountPath === '' ? 'repo' : conflict.mountPath
   const resolveIso = join(containerPath, `resolve-${suffix}`)
   // A stale resolve-iso (crash mid-resolution) would make `worktree add` fail;
   // remove it first (best-effort), then fail LOUD if the add still fails — running
@@ -1728,7 +1723,7 @@ export async function prepareConflictResolution(
     throw new Error(`merge-resolve setup failed: worktree add ${resolveIso}: ${add.stderr.trim()}`)
   }
 
-  const manifest = parseConflictManifest(conflict.rawConflictOutput, conflict.worktreeDirName)
+  const manifest = parseConflictManifest(conflict.rawConflictOutput, conflict.mountPath)
   // Fail closed on UNRECOGNIZED conflict classes (Codex P1): git may report a class
   // the classifier does not model (rename/rename, file/directory, …) — its path is
   // in `conflict.paths` but absent from `manifest`, so the agent is never told and
@@ -1738,7 +1733,7 @@ export async function prepareConflictResolution(
   const manifestPaths = new Set(manifest.map((e) => e.path))
   const unhandled: MergeConflictEntry[] = conflict.paths
     .filter((p) => !manifestPaths.has(p))
-    .map((p) => ({ worktreeDirName: conflict.worktreeDirName, path: p, type: 'content' }))
+    .map((p) => ({ mountPath: conflict.mountPath, path: p, type: 'content' }))
   return {
     kind: 'agent',
     conflict,
@@ -1826,13 +1821,13 @@ function gatherResolvedStates(
   for (const e of manifest) {
     const abs = join(resolveIso, e.path)
     if (!existsSync(abs)) {
-      out.push({ worktreeDirName: e.worktreeDirName, path: e.path, present: false, content: null })
+      out.push({ mountPath: e.mountPath, path: e.path, present: false, content: null })
       continue
     }
     const buf = readFileSync(abs)
     // git's binary heuristic: a NUL byte ⟹ binary → no text markers to grep.
     const content = buf.includes(0) ? null : buf.toString('utf8')
-    out.push({ worktreeDirName: e.worktreeDirName, path: e.path, present: true, content })
+    out.push({ mountPath: e.mountPath, path: e.path, present: true, content })
   }
   return out
 }
@@ -1847,7 +1842,7 @@ function gatherResolvedStates(
  * A repo whose resolve-iso is missing / still-conflicting / has residual markers
  * stays unresolved → the caller keeps it parked (awaiting_human another round).
  *
- * `nodeTrees` maps worktreeDirName → the node's persisted final tree (iso_node_tree).
+ * `nodeTrees` maps mountPath → the node's persisted final tree (iso_node_tree).
  */
 export async function completeHumanResolvedConflict(
   handle: IsoHandle,
@@ -1863,14 +1858,14 @@ export async function completeHumanResolvedConflict(
     // conflict nobody ever settled.
     if (r.pendingSubResolves.length > 0) {
       log?.warn('conflict-human resume: submodule conflicts still unresolved', {
-        worktreeDirName: r.worktreeDirName,
+        worktreeDirName: r.mountPath,
         subPaths: r.pendingSubResolves,
       })
-      unresolved.push(r.worktreeDirName)
+      unresolved.push(r.mountPath)
       continue
     }
-    const nodeTree = nodeTrees[r.worktreeDirName]
-    const suffix = r.worktreeDirName === '' ? 'repo' : r.worktreeDirName
+    const nodeTree = nodeTrees[r.mountPath]
+    const suffix = r.mountPath === '' ? 'repo' : r.mountPath
     const resolveIso = join(handle.containerPath, `resolve-${suffix}`)
     // No recorded delta for this repo — FAIL CLOSED (Codex impl-gate P2):
     // every repo of a real run gets a snapshot commit (even a no-op delta),
@@ -1879,7 +1874,7 @@ export async function completeHumanResolvedConflict(
     // Treating it as resolved would advance merge_state without ever merging
     // a final tree.
     if (nodeTree === undefined) {
-      unresolved.push(r.worktreeDirName)
+      unresolved.push(r.mountPath)
       continue
     }
     // RFC-187 (design-gate P1-9 precondition) — a repo WITHOUT a resolve-iso is
@@ -1902,7 +1897,7 @@ export async function completeHumanResolvedConflict(
         theirs: nodeTree,
       })
       if (probe.conflicts.length > 0) {
-        unresolved.push(r.worktreeDirName)
+        unresolved.push(r.mountPath)
         continue
       }
       const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
@@ -1925,12 +1920,12 @@ export async function completeHumanResolvedConflict(
       ours: oursAtConflict,
       theirs: nodeTree,
     })
-    const manifest = parseConflictManifest(probe.rawConflictOutput, r.worktreeDirName)
+    const manifest = parseConflictManifest(probe.rawConflictOutput, r.mountPath)
     const states = gatherResolvedStates(resolveIso, manifest)
     const manifestPaths = new Set(manifest.map((e) => e.path))
     const unhandled = probe.conflicts.filter((p) => !manifestPaths.has(p))
     if (!evaluateResolution(manifest, states).resolved || unhandled.length > 0) {
-      unresolved.push(r.worktreeDirName)
+      unresolved.push(r.mountPath)
       continue
     }
     // §6.3 — re-merge the human's resolution against the CURRENT canonical, based at
@@ -1950,7 +1945,7 @@ export async function completeHumanResolvedConflict(
       theirs: resolvedTree,
     })
     if (merge.conflicts.length > 0) {
-      unresolved.push(r.worktreeDirName)
+      unresolved.push(r.mountPath)
       continue
     }
     const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)

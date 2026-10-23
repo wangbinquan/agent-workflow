@@ -12,6 +12,7 @@
 // count runs under the SAME visibility predicate as the list itself. If the two
 // ever diverge, the arrow starts promising rows the viewer cannot open.
 
+import { taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
@@ -62,8 +63,8 @@ async function seed(
   rows: { id: string; owner: string | null; parent?: string; status?: string }[],
 ): Promise<void> {
   await rawExec(db, sql`PRAGMA foreign_keys = OFF`)
-  const { tasks } = tablesOf(db)
-  await db.insert(tasks).values(
+  await taskFixture(
+    db,
     rows.map((r) => ({
       ...baseTask(r.id, r.owner),
       ...(r.parent === undefined ? {} : { parentTaskId: r.parent, invocationDepth: 1 }),
@@ -83,8 +84,8 @@ async function seedQueryRows(db: PersistenceDb, rows: Parameters<typeof seed>[1]
       frames: { stableNodeKey: string; frozenOccurrenceKey: string; workflowRevision: null }[]
     }
   >()
-  const { tasks } = tablesOf(db)
-  await db.insert(tasks).values(
+  await taskFixture(
+    db,
     rows.map((r) => {
       const parent = r.parent === undefined ? undefined : lineageByTaskId.get(r.parent)
       const frames = [

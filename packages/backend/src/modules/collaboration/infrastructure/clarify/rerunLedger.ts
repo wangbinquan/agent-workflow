@@ -6,20 +6,21 @@
 //   - clarifyQueue.ts / crossClarify.ts (derived aging): isTargetNodeConsumed.
 //
 // This module sits BELOW all of {clarify, crossClarify, taskQuestions, taskQuestionDispatch} in the
-// dependency order (it imports only schema/shared), so any of them may import it.
+// dependency order: task-execution owns selection; collaboration owns question consumption.
+
+import {
+  resolveHandlerRun,
+  createRunHistorySnapshot,
+  type NodeRunDispatchFacts,
+} from '@/modules/task-execution/public/queries'
 
 import { type PersistenceTables } from '@/platform/persistence/sessionTables'
-import {
-  compareNodeRunMintOrder,
-  nodeRunOrderAnchor,
-  resolveHandlerRun,
-  type RunLineageView,
-} from '@agent-workflow/shared'
+import { nodeRunOrderAnchor, type RunLineageView } from '@agent-workflow/shared'
 
 // RFC-311：本 ledger 消费的运行行列合同（dispatch 侧的四处 per-task 查询按此
 // 投影，不再携带 prompt_text / iso JSON 大列;新消费列先在此登记）。
 type NodeRunRow = Pick<
-  PersistenceTables['nodeRuns']['$inferSelect'],
+  NodeRunDispatchFacts,
   | 'id'
   | 'seq'
   | 'nodeId'
@@ -100,7 +101,7 @@ export type LedgerOpenMode = 'revivable' | 'in-flight'
  *  so it must neither keep the home dispatch-blocked (else a multi-round clarify chain DEAD-LOCKS
  *  — 2026-07-01 fix) nor count as an open rerun ledger (else the next round's rerun dies on the
  *  borrow-ledger-conflict reject — RFC-139 fix). */
-export function isDispatchedEntryConsumed(
+export async function isDispatchedEntryConsumed(
   entry: Pick<
     TaskQuestionRow,
     'triggerRunId' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'roleKind' | 'sourceKind'
@@ -119,7 +120,7 @@ export function isDispatchedEntryConsumed(
    *  node-wide scan, golden-lock. In-memory `r.shardKey === shardKey` — null-safe, no SQL
    *  eq(col,null) hazard. */
   shardKey?: string | null,
-): boolean {
+): Promise<boolean> {
   if (entry.triggerRunId === null) {
     if (mode === 'revivable') return false // queued → open, unconditionally (borrow unchanged)
     const target = entry.overrideTargetNodeId ?? entry.defaultTargetNodeId
@@ -153,7 +154,7 @@ export function isDispatchedEntryConsumed(
       : lineageViews.map((v) =>
           supersededIds.has(v.id) ? { ...v, status: 'done' as NodeRunRow['status'] } : v,
         )
-  const hr = resolveHandlerRun({
+  const hr = await resolveHandlerRun({
     effectiveTargetNodeId: anchorRow.nodeId,
     iteration: anchorRow.iteration,
     loopIter: 0,
@@ -217,7 +218,7 @@ function toLineageViews(
  *  terminated and cannot double-mint, so it must NOT block the next round's mint (else deadlock).
  *  The data-loss guard for a dispatched round is roundHasDispatchedSelfQuestioner (keys dispatched_at,
  *  incl. consumed), which runs BEFORE this check — so releasing done-no-output here is safe. */
-export function hasOpenDispatchedEntryOnHome(
+export async function hasOpenDispatchedEntryOnHome(
   homeNodeId: string,
   dispatchedEntries: ReadonlyArray<
     Pick<
@@ -244,7 +245,7 @@ export function hasOpenDispatchedEntryOnHome(
    *  no-op since every entry on such a home is null-shard. Needs `shardOfEntry` when set. */
   shardKey?: string | null,
   shardOfEntry?: (e: Pick<TaskQuestionRow, 'originNodeRunId' | 'sourceKind'>) => string | null,
-): boolean {
+): Promise<boolean> {
   const onHome = dispatchedEntries.filter((e) => {
     if ((e.overrideTargetNodeId ?? e.defaultTargetNodeId) !== homeNodeId) return false
     // RFC-172b (T6): scope to the SAME shard — a sibling member's ledger is not MY open ledger.
@@ -255,19 +256,20 @@ export function hasOpenDispatchedEntryOnHome(
   })
   if (onHome.length === 0) return false
   const lineageViews = toLineageViews(runs, outputRunIds)
-  return onHome.some(
-    // null collapses to shard-blind (undefined) → ordinary/leader homes are byte-identical; a real
-    // member shard scopes the anchor lineage + run-obligation scan to that member (RFC-172b T6).
-    (e) =>
-      !isDispatchedEntryConsumed(
-        e,
+  for (const entry of onHome) {
+    if (
+      !(await isDispatchedEntryConsumed(
+        entry,
         runs,
         lineageViews,
         'in-flight',
         mintCause,
         shardKey === null || shardKey === undefined ? undefined : shardKey,
-      ),
-  )
+      ))
+    )
+      return true
+  }
+  return false
 }
 
 /** RFC-131 — 派生式老化判据（取代 isQueueEntryRenderableForRun 的 window 消费 + isDispatchedEntryConsumed
@@ -299,16 +301,21 @@ export function hasOpenDispatchedEntryOnHome(
 // RFC-145：判据切到结构化列 superseded_by_review（与 dispatchFrontier.isReviewSupersededRow 同源
 // 语义、零常量 fork——旧 inline 前缀常量与其 parity 文本锁随列化退役）。
 
-export function isTargetNodeConsumed(
+export async function isTargetNodeConsumed(
   targetNodeId: string,
   iteration: number,
   sinceRunId: string | null,
   runs: ReadonlyArray<NodeRunRow>,
   outputRunIds: ReadonlySet<string>,
-): boolean {
+): Promise<boolean> {
   if (sinceRunId === null) return false
   const anchor = nodeRunOrderAnchor(runs, sinceRunId)
-  return runs.some(
+  const history = await createRunHistorySnapshot('', runs).familyHistory(
+    '',
+    { nodeId: targetNodeId, iteration },
+    { topLevelOnly: true, from: anchor },
+  )
+  return history.some(
     (r) =>
       r.nodeId === targetNodeId &&
       r.iteration === iteration &&
@@ -326,7 +333,6 @@ export function isTargetNodeConsumed(
       // IS the produced/consumed signal (they consumed the answer and continued).
       // Literal ids (not the WG_*_NODE_ID consts) keep this leaf module free of a
       // workgroupLaunch import; rfc186-clarify-aging.test.ts locks the equality.
-      (outputRunIds.has(r.id) || r.nodeId === '__wg_leader__' || r.nodeId === '__wg_member__') &&
-      compareNodeRunMintOrder(r, anchor) >= 0,
+      (outputRunIds.has(r.id) || r.nodeId === '__wg_leader__' || r.nodeId === '__wg_member__'),
   )
 }

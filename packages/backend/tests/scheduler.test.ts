@@ -2,7 +2,15 @@
 // Bypasses startTask's worktree creation by inserting the task row directly —
 // real worktree creation is exercised in tasks.test.ts.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readAgentFixtures,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -66,8 +74,7 @@ async function seedAgent(
   outputs: string[] = ['summary'],
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -87,8 +94,9 @@ async function seedWorkflowAndTask(
   definition: WorkflowDefinition,
   inputs: Record<string, string> = {},
 ): Promise<{ workflowId: string; taskId: string }> {
-  const { agents, workflows, tasks } = tablesOf(h.db)
-  const agentRows = await h.db.select({ id: agents.id, name: agents.name }).from(agents)
+  const agentRows = await readAgentFixtures(h.db).then((rows) =>
+    rows.map((row) => ({ id: row.id, name: row.name })),
+  )
   const agentIdByName = new Map(agentRows.map((row) => [row.name, row.id]))
   const canonicalDefinition: WorkflowDefinition = {
     ...definition,
@@ -102,14 +110,14 @@ async function seedWorkflowAndTask(
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -209,8 +217,8 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(finalTask?.status).toBe('done')
     expect(finalTask?.errorMessage).toBeNull()
 
@@ -220,18 +228,12 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect(runs.find((r) => r.nodeId === 'a1')?.status).toBe('done')
 
     const a1 = runs.find((r) => r.nodeId === 'a1')
-    const outputRows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, a1?.id ?? ''))
+    const outputRows = await readNodeRunOutputFixtures(h.db, { nodeRunId: a1?.id ?? '' })
     expect(outputRows.find((r) => r.portName === 'findings')?.content).toBe('nothing wrong')
 
     // Input node also persisted as a virtual run with its outputs.
     const inRun = runs.find((r) => r.nodeId === 'in')
-    const inOutputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, inRun?.id ?? ''))
+    const inOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: inRun?.id ?? '' })
     // RFC-004: input node's output port name === inputKey, not 'out'.
     expect(inOutputs[0]?.portName).toBe('requirement')
     expect(inOutputs[0]?.content).toBe('do the thing')
@@ -260,8 +262,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorSummary).toContain('no-such-agent')
     expect(t?.failedNodeId).toBe('a1')
@@ -286,8 +287,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorSummary).toContain('wrapper-git')
   })
@@ -322,8 +322,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorSummary).toContain('cycle')
   })
@@ -346,8 +345,8 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorSummary).toBe('workflow-node-id-duplicate')
     expect(task?.errorMessage).toContain("node id 'dup' appears 2 times")
@@ -372,8 +371,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.failedNodeId).toBe('a1')
     expect(t?.errorMessage).toContain('exited with code 5')
@@ -422,8 +420,8 @@ function registerNativeCases2() {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -432,10 +430,7 @@ function registerNativeCases2() {
     expect(outRun).toBeDefined()
     expect(outRun?.status).toBe('done')
 
-    const outPorts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, outRun!.id))
+    const outPorts = await readNodeRunOutputFixtures(h.db, { nodeRunId: outRun!.id })
     expect(outPorts).toHaveLength(1)
     expect(outPorts[0]?.portName).toBe('final')
     expect(outPorts[0]?.content).toBe('ok')
@@ -467,8 +462,7 @@ function registerNativeCases2() {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       signal: controller.signal,
     })
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('canceled')
     expect(t?.errorSummary).toContain('canceled')
   })
@@ -498,8 +492,7 @@ function registerNativeCases2() {
           signal: controller.signal,
         }),
     )
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('canceled')
   })
 }
@@ -573,12 +566,11 @@ function registerProviderCases3(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // The agent node's prompt should contain both inputs separated by ---.
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const aRun = runs.find((r) => r.nodeId === 'a')
     expect(readNodeRunPrompt(aRun, join(h.appHome, 'runs'))).toContain('AAA')
     expect(readNodeRunPrompt(aRun, join(h.appHome, 'runs'))).toContain('BBB')
@@ -613,8 +605,8 @@ function registerProviderCases3(provider: ProviderHarness) {
           maxConcurrentNodes: 2,
         }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // Parallelism is asserted STRUCTURALLY via execution-window OVERLAP, NOT a
     // total-elapsed bound. The old `elapsed < 2700ms` check was a timing flake: two
@@ -668,8 +660,8 @@ function registerProviderCases3(provider: ProviderHarness) {
           defaultNodeRetries: 2,
         }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // We should have 3 node_runs: retry_index 0,1 failed; 2 done.
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -715,8 +707,8 @@ function registerProviderCases3(provider: ProviderHarness) {
           sessionRestartBudget: 0,
         }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.failedNodeId).toBe('a1')
     const runs = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
@@ -785,8 +777,8 @@ process.exit(0)
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', shimPath],
     })
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const wrapRun = (
       await h.db
@@ -796,12 +788,7 @@ process.exit(0)
     )[0]
     expect(wrapRun?.status).toBe('done')
     const diffPort = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(eq(nodeRunOutputs.nodeRunId, wrapRun!.id), eq(nodeRunOutputs.portName, 'git_diff')),
-        )
+      await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapRun!.id, portName: 'git_diff' })
     )[0]
     // RFC-060 PR-E: git_diff is now a newline-separated path list, not a
     // unified diff. Assert the modified file appears in the list.
@@ -852,13 +839,12 @@ process.exit(0)
           maxConcurrentNodes: 4,
         }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // Both writers reached done AND merged their iso delta back into canonical.
     // merge_state='merged' proves the isolate→merge-back path ran per node (a
     // shared-worktree run would leave it null / 'conflict-*' / 'merge-failed').
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     for (const name of ['w1', 'w2']) {
       const r = runs.find((x) => x.nodeId === name)
       expect(r?.status).toBe('done')
@@ -924,8 +910,8 @@ function registerProviderCases4(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const loopRun = (
       await h.db
@@ -935,10 +921,7 @@ function registerProviderCases4(provider: ProviderHarness) {
     )[0]
     expect(loopRun?.status).toBe('done')
     const finalOut = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(and(eq(nodeRunOutputs.nodeRunId, loopRun!.id), eq(nodeRunOutputs.portName, 'final')))
+      await readNodeRunOutputFixtures(h.db, { nodeRunId: loopRun!.id, portName: 'final' })
     )[0]
     expect(finalOut?.content).toBe('')
     // Inner ran exactly once (iteration=0).
@@ -977,8 +960,8 @@ function registerProviderCases4(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-exhausted')
     const loopRun = (
@@ -1037,8 +1020,8 @@ function registerProviderCases4(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const loopRun = runs.find((run) => run.nodeId === 'loop')
@@ -1047,18 +1030,10 @@ function registerProviderCases4(provider: ProviderHarness) {
     expect(publishRun?.status).toBe('done')
 
     const loopOutput = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(and(eq(nodeRunOutputs.nodeRunId, loopRun!.id), eq(nodeRunOutputs.portName, 'final')))
+      await readNodeRunOutputFixtures(h.db, { nodeRunId: loopRun!.id, portName: 'final' })
     )[0]
     const publishOutput = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(eq(nodeRunOutputs.nodeRunId, publishRun!.id), eq(nodeRunOutputs.portName, 'result')),
-        )
+      await readNodeRunOutputFixtures(h.db, { nodeRunId: publishRun!.id, portName: 'result' })
     )[0]
     expect(loopOutput?.content).toBe('last result')
     expect(publishOutput?.content).toBe('last result')
@@ -1096,8 +1071,8 @@ function registerProviderCases4(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-continue-on-max-iterations')
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -1133,8 +1108,8 @@ function registerProviderCases4(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     expect(runs.find((run) => run.nodeId === 'loop')?.status).toBe('failed')
@@ -1178,8 +1153,8 @@ function registerProviderCases4(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const auditRuns = await h.db
       .select()
@@ -1221,8 +1196,7 @@ function registerProviderCases4(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
   })
 
@@ -1267,8 +1241,8 @@ function registerProviderCases4(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // Loop done after iter 0; wrapper-git ran once.
     const wgRuns = await h.db
@@ -1291,8 +1265,7 @@ async function seedReadonlyAgent(
   outputs: string[],
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',

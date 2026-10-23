@@ -60,6 +60,8 @@ const FACTORIES = [
   'composeDevelopmentAutomationMaintenanceCommands',
   'composeDigitalEmployeeMaintenanceCommands',
   'composeIntentMaintenanceCommandsForDatabase',
+  'createAtomicApplyRecovery',
+  'composeIntentApplyRecoveryScene',
   'composeMaintenanceSystemOperations',
 ] as const
 function walk(node: ts.Node, visit: (node: ts.Node) => void): void {

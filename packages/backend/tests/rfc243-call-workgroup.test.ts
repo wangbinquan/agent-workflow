@@ -11,7 +11,13 @@
 //      `result` 端口 = leader done decision 的 body → 父 output 节点消费。
 //   4. 子任务行：workgroupId 判别（taskExecutionKind='workgroup'）+
 //      parentTaskId/spaceKind='inherited' 正交并存。
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -200,8 +206,8 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       ],
     } as unknown as WorkflowDefinition
     const parentWorkflowId = ulid()
-    const { workflows, tasks, workgroupTaskState, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, workflows, {
+    const { workgroupTaskState, nodeRuns } = tablesOf(h.db)
+    await workflowFixture(h.db, {
       id: parentWorkflowId,
       name: 'parent-wg-wf',
       definition: JSON.stringify(parentDef),
@@ -211,7 +217,7 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       workgroups: { 'e2e-wg': { id: group.id, version: group.version, group } },
     })
     const parentTaskId = ulid()
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       id: parentTaskId,
       name: 'rfc243-wg-parent',
       workflowId: parentWorkflowId,
@@ -236,10 +242,10 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       defaultPerNodeTimeoutMs: 10_000,
     })
 
-    const parent = (await h.db.select().from(tasks).where(eq(tasks.id, parentTaskId)))[0]!
+    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
     expect(parent.status).toBe('done')
 
-    const children = await h.db.select().from(tasks).where(eq(tasks.parentTaskId, parentTaskId))
+    const children = await readTaskFixtures(h.db, { parentTaskId })
     expect(children.length).toBe(1)
     const child = children[0]!
     expect(child.status).toBe('done')
@@ -256,17 +262,11 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
     expect(state.resultMessageId).not.toBeNull()
 
     const callRow = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'callwg')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'callwg' }] })
     ).find((r) => r.parentNodeRunId === null)!
     expect(callRow.status).toBe('done')
     expect(callRow.childTaskId).toBe(child.id)
-    const callOutputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, callRow.id))
+    const callOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: callRow.id })
     expect(callOutputs.find((o) => o.portName === 'result')?.content).toBe('ALPHA DELIVERED')
 
     // 父 output 节点消费 result。
@@ -276,10 +276,7 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'pout')))
     )[0]!
-    const outPorts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, outRow.id))
+    const outPorts = await readNodeRunOutputFixtures(h.db, { nodeRunId: outRow.id })
     expect(outPorts.find((o) => o.portName === 'report')?.content).toBe('ALPHA DELIVERED')
   })
 })

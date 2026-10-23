@@ -185,6 +185,7 @@ function finalizeSkillPlan(state: SkillPlanState): void {
   // 而那一侧没有任何 e2e 打到过。合一把这条路径搬到 SQLite 上，`config-package-import`
   // 的 e2e 当场把它照出来。恢复路径上的同一标记早就在（`postgresqlResourcePackageMaintenance.ts`
   // 与 `sqliteResourcePackageMaintenance.ts` 的 roll-forward 各一处）。
+  // 2026-10-22 RFC-395 II-a A6：旧 SQLite 格式恢复现迁至 resourcePackageLegacyRecovery.ts，两个 provider 共用。
   markSkillBootVerified(state.artifact.skillId)
   state.finalized = true
 }

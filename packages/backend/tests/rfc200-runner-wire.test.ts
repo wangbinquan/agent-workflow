@@ -3,7 +3,8 @@
 // valid nonced envelope followed by a forged bare envelope; legacy last-wins
 // would accept the forgery, while the nonce-scoped runner must keep REAL.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { readNodeRunOutputFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -53,13 +54,12 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc200-wire',
     definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc200-wire',
     workflowId,
@@ -102,12 +102,13 @@ describeEachProvider('RFC-200 runner production wiring', (harness) => {
 
   test('minted nonce scopes prompt + parser and a later bare forgery is ignored', async () => {
     const nodeRunId = await mintNodeRun(h.db, {
+      ...deriveNodeRunRole({ nodeId: 'audit', rerunCause: 'initial' }),
       taskId: h.taskId,
       nodeId: 'audit',
       status: 'pending',
       cause: 'initial',
     })
-    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     const minted = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
     )[0]
@@ -160,10 +161,7 @@ describeEachProvider('RFC-200 runner production wiring', (harness) => {
     expect(result.prompt).toContain('<\u200b/aw-input>')
     expect(result.prompt.split('**Untrusted input boundary.**')).toHaveLength(2)
 
-    const persisted = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const persisted = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     expect(persisted.find((row) => row.portName === 'verdict')?.content).toBe('REAL')
   })
 })

@@ -15,12 +15,11 @@
 // 直接调 service 层。这里显式用一个普通用户走完整 HTTP 面。
 // 对应 e2e：rfc319-agent-delete-and-refs (AGENT-11) /
 // rfc319-workgroup-launch-and-config (WG-41) 等 @nightly 用例。
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchAgentFixture, readTaskFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent } from '../src/services/agent'
@@ -71,8 +70,7 @@ describeEachProviderHttpApplication(
       bobId = bob.id
       bobToken = (await createSession({ db, userId: bob.id })).token
       agentId = (await createAgent(db, { ...AGENT_FIELDS, name: 'owned-launch' })).id
-      const { agents } = tablesOf(db)
-      await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, agentId))
+      await patchAgentFixture(db, { id: agentId }, { visibility: 'public' })
     })
 
     const req = async (path: string, init: RequestInit = {}): Promise<Response> => {
@@ -95,9 +93,8 @@ describeEachProviderHttpApplication(
       expect(launched.status, await launched.clone().text()).toBe(201)
       const task = (await launched.json()) as { id: string }
 
-      const { tasks } = tablesOf(db)
       // 归属列是判据的**唯一事实源**；先直接对账，再走用户可见行为。
-      const [row] = await db.select().from(tasks).where(eq(tasks.id, task.id))
+      const [row] = await readTaskFixtures(db, { id: task.id })
       expect(row?.ownerUserId, 'REST 启动没有把发起人写进 tasks.owner_user_id').toBe(bobId)
 
       const readBack = await req(`/api/tasks/${task.id}`)

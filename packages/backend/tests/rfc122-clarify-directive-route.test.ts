@@ -10,8 +10,7 @@
 // persistence, non-asking-node → 422, invalid directive → 422, missing task → 404,
 // contract-registry registration.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -56,8 +55,7 @@ async function seedTask(
   taskId: string,
   lineage?: typeof providerTaskLineage,
 ): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf-${taskId}`,
     name: 'wf',
     definition: '{}',
@@ -65,7 +63,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     ownerUserId: '__system__',

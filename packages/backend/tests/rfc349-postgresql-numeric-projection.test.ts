@@ -78,7 +78,7 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
       'Fast page queries share page.ts and projection.ts numeric() / numericOrZero() decoders.',
   },
   // RFC-374：两处都不把聚合值交回 JS。
-  'modules/task-execution/infrastructure/nodeRunSeqBackfillStore.ts': {
+  'modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore.ts': {
     id:
       '追平的 `ROW_NUMBER() - COUNT(*) OVER ()` 只在 UPDATE … FROM 里给 seq 赋值（tx.run，无投影）；' +
       '分配表清理的 `MAX(seq)` 子查询只决定删哪些候选，调用点只数删除行数。' +

@@ -22,8 +22,15 @@
 //      pending 残留。收割后 resumeTask 可从 interrupted 恢复（完整恢复闭环见
 //      rfc097-pending-orphan-reap.test.ts）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type NodeRunFixtureSpec,
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -54,15 +61,14 @@ function buildHarness(db: PersistenceDb): Harness {
 async function seedTask(db: PersistenceDb, status: string): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -75,7 +81,7 @@ async function seedTask(db: PersistenceDb, status: string): Promise<string> {
     worktreePath: '/tmp/wt',
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
-    status: status as PersistenceTables['tasks']['$inferInsert']['status'],
+    status: status as TaskFixtureSpec['status'],
     inputs: '{}',
     startedAt: Date.now() - 60_000,
   })
@@ -86,11 +92,10 @@ async function seedRun(
   db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  status: PersistenceTables['nodeRuns']['$inferInsert']['status'],
+  status: NodeRunFixtureSpec['status'],
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -134,8 +139,7 @@ describeEachProvider(
       // as an orphan and flipped. After fix: expect(r.runs).toBe(0).
       expect(r.runs).toBe(1)
 
-      const { tasks } = tablesOf(h.db)
-      const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
       expect(t?.status).toBe('awaiting_human') // task untouched (status filter is task-side only)
       expect(t?.errorSummary).toBeNull()
 
@@ -163,8 +167,7 @@ describeEachProvider(
       expect(r.runs).toBe(1)
       expect(await runStatus(h.db, runId)).toBe('interrupted')
 
-      const { tasks } = tablesOf(h.db)
-      const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
       expect(t?.status).toBe('interrupted')
       expect(t?.errorSummary).toBe('daemon-restart')
       // interrupted ∈ resumeTask's recoverable set — the user-visible escape

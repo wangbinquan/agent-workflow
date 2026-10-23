@@ -14,8 +14,7 @@
 // a change that demands confirmation from EVERYONE pass silently, and that
 // change is a UX regression rather than a security improvement.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 
 import type { Hono } from 'hono'
@@ -78,8 +77,7 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
     password: 'pw12345678',
   })
   const ownedAgentId = 'rfc247-delete-owner-agent'
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ownedAgentId,
     name: 'RFC 247 delete owner agent',
     ownerUserId: user.id,

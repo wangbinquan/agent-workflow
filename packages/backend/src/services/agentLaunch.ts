@@ -4,12 +4,8 @@
 // plus an OPTIONAL clarify channel) that runs through the NORMAL runScope
 // engine — zero engine branches, unlike the workgroup host.
 //
-// The builtin `__agent_host__` workflow row is a lazily-seeded FK anchor
-// (fusion / workgroup precedent): its stored definition is an empty stub —
-// every agent task freezes its own synthesized snapshot at launch. Launch
-// enters at the SERVICE layer; `assertWorkflowLaunchable` would 403 the
-// builtin host via /api/tasks by design (RFC-104), which keeps the generic
-// endpoint unable to target it.
+// RFC-395: each launch freezes its synthesized definition. The host namespace
+// is projected only for compatibility and has no workflow catalog row.
 
 import {
   buildClarifyEdges,
@@ -20,9 +16,6 @@ import {
   type StartAgentTask,
 } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
-
-export const AGENT_HOST_WORKFLOW_ID = '00000000000000AGENTHOST00'
-export const AGENT_HOST_WORKFLOW_NAME = '__agent_host__'
 
 export const AGENT_HOST_INPUT_NODE_ID = '__agent_input__'
 export const AGENT_HOST_AGENT_NODE_ID = '__agent_main__'

@@ -6,8 +6,7 @@
 //   U1  per (task, nodeId, reviewIter, clarifyIter, shardKey) ≤ 1 row in
 //       {awaiting_review, awaiting_human}
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -47,10 +46,9 @@ async function buildHarness(
 
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes, edges: [] }
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -79,8 +77,7 @@ async function insertRun(
   },
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId,

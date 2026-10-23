@@ -41,10 +41,10 @@ const REQUIRED_COLUMNS = ['continuationSlotKey', 'lineageSlotPathJson'] as const
  * **这份账本的正确状态是「每一行都两列齐全」**——出现 `-` 就是那条静默分叉，
  * 去把那一列补上，不要把 `-` 登记进来了事。
  *
- * 键是 `file:line`，与 W7 的账本同形（那条账本里也记着「行号会因上方编辑而漂」的摩擦）。
+ * 键是文件和插入表达式；RFC-395 II-a A3 不再让无关的上方行数变化破坏 lineage 判据。
  */
 const NODE_RUN_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:102 continuationSlotKey+ lineageSlotPathJson+',
+  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:insertOne(tx, nodeRuns, values) continuationSlotKey+ lineageSlotPathJson+',
 ]
 
 function sourceFiles(dir: string): string[] {
@@ -135,11 +135,10 @@ export function nodeRunInsertSites(text: string, rel: string): string[] {
               : ts.isIdentifier(argument)
                 ? localConstKeys(argument.text, source)
                 : new Set<string>()
-        const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
         const columns = REQUIRED_COLUMNS.map(
           (column) => `${column}${keys.has(column) ? '+' : '-'}`,
         ).join(' ')
-        out.push(`${rel}:${line} ${columns}`)
+        out.push(`${rel}:${node.getText(source).replace(/\s+/g, ' ')} ${columns}`)
       }
     }
     ts.forEachChild(node, visit)
@@ -190,30 +189,32 @@ describe('RFC-359 W6 —— insert(nodeRuns) 的 lineage 两列完整性', () =>
         'insertOne(tx, nodeRuns, { id, continuationSlotKey, lineageSlotPathJson })',
         'p.ts',
       ),
-    ).toEqual(['p.ts:1 continuationSlotKey+ lineageSlotPathJson+'])
+    ).toEqual([
+      'p.ts:insertOne(tx, nodeRuns, { id, continuationSlotKey, lineageSlotPathJson }) continuationSlotKey+ lineageSlotPathJson+',
+    ])
     expect(nodeRunInsertSites('insertOne(tx, nodeRuns, { id })', 'p.ts')).toEqual([
-      'p.ts:1 continuationSlotKey- lineageSlotPathJson-',
+      'p.ts:insertOne(tx, nodeRuns, { id }) continuationSlotKey- lineageSlotPathJson-',
     ])
     const direct = `x.insert(nodeRuns).values({ id, continuationSlotKey, lineageSlotPathJson }).run()`
     expect(nodeRunInsertSites(direct, 'p.ts')).toEqual([
-      'p.ts:1 continuationSlotKey+ lineageSlotPathJson+',
+      'p.ts:x.insert(nodeRuns).values({ id, continuationSlotKey, lineageSlotPathJson }) continuationSlotKey+ lineageSlotPathJson+',
     ])
 
     const viaConst = `const values = { ...record, scopePath, continuationSlotKey, lineageSlotPathJson }\nx.insert(nodeRuns).values(values).run()`
     expect(nodeRunInsertSites(viaConst, 'p.ts')).toEqual([
-      'p.ts:2 continuationSlotKey+ lineageSlotPathJson+',
+      'p.ts:x.insert(nodeRuns).values(values) continuationSlotKey+ lineageSlotPathJson+',
     ])
 
     // 反面 fixture：只展开铸行记录、不显式写列 —— 那正是触发器年代的写法，必须判成缺列。
     const spreadOnly = `const values = { ...record, scopePath }\nx.insert(nodeRuns).values(values).run()`
     expect(nodeRunInsertSites(spreadOnly, 'p.ts')).toEqual([
-      'p.ts:2 continuationSlotKey- lineageSlotPathJson-',
+      'p.ts:x.insert(nodeRuns).values(values) continuationSlotKey- lineageSlotPathJson-',
     ])
 
     // 解不开的形状（函数返回值）同样记成缺列，而不是静默放行。
     const opaque = `x.insert(nodeRuns).values(makeValues()).run()`
     expect(nodeRunInsertSites(opaque, 'p.ts')).toEqual([
-      'p.ts:1 continuationSlotKey- lineageSlotPathJson-',
+      'p.ts:x.insert(nodeRuns).values(makeValues()) continuationSlotKey- lineageSlotPathJson-',
     ])
 
     // 别的表不进这本账。

@@ -24,7 +24,7 @@
 // ban — binary-build incident). The conflict resolver (which mints child runs
 // and calls runNode directly) is injected by the scheduler as a callback.
 
-import { isSingleRootRepository } from '@agent-workflow/shared'
+import { isolationCreateRequest, isolationMergeRequest } from './isolationEffectRequest'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 import {
   scopeForIsolatedRun,
@@ -89,7 +89,7 @@ export async function createIsoUnderLock(args: {
     repositories: args.canonRepos.map((repo) => ({
       repositoryRef: repo.repoPath,
       workspaceRef: repo.worktreePath,
-      mount: repo.worktreeDirName,
+      mount: repo.mountPath,
       baseBranch: repo.baseBranch,
     })),
   })
@@ -102,16 +102,8 @@ export async function createIsoUnderLock(args: {
     kind: 'isolation-create',
     stableActionOrdinal: 'isolation-create',
     candidateId: 'node-isolation-create',
-    request: {
-      v: 1,
-      // 基键。物理键可能在选键阶段换代，最终落在 succeed 的 `isoGeneration` 上。
-      isoKeyRunId: args.isoKeyRunId,
-      repos: args.canonRepos.map((repo) => ({
-        worktreeDirName: repo.worktreeDirName,
-        worktreePathDigest: sha256Hex(repo.worktreePath),
-      })),
-      forcedContainerPaths,
-    },
+    // 基键；选键阶段换代后的物理键仍落在 succeed 的 isoGeneration 上。
+    request: isolationCreateRequest(args.isoKeyRunId, args.canonRepos, forcedContainerPaths),
     resourceKeys: [
       `isolation:${args.taskId}:${args.isoKeyRunId}`,
       ...args.canonRepos.map((repo) => `workspace:${sha256Hex(repo.worktreePath)}`),
@@ -167,34 +159,20 @@ export async function persistIsoBase(
   handle: IsoHandle,
 ): Promise<void> {
   if (handle.passthrough) return // in-place run — leave iso columns NULL (golden-lock)
-  // The isolation view carries mountPath as worktreeDirName. One member at
-  // 'svc' still needs the per-repo columns; only the root mount uses scalars.
-  if (isSingleRootRepository(handle.repos.map((repo) => repo.worktreeDirName))) {
-    await binding.persistence.mergeStates.transition({
-      nodeRunId,
-      event: { kind: 'begin-isolation' },
-      extra: {
-        isoWorktreePath: handle.containerPath,
-        isoBaseSnapshot: handle.repos[0]?.baseSnapshot ?? null,
-        isoBaseSnapshotReposJson: null,
-        isoSubmodulesJson: submodulesJsonFor(handle.repos[0]),
-        isoSubmodulesReposJson: null,
-      },
-      ...contextInput(binding),
-    })
-    return
-  }
-  const map: Record<string, string> = {}
-  for (const r of handle.repos) map[r.worktreeDirName] = r.baseSnapshot
   await binding.persistence.mergeStates.transition({
     nodeRunId,
     event: { kind: 'begin-isolation' },
     extra: {
-      isoWorktreePath: handle.containerPath,
-      isoBaseSnapshot: null,
-      isoBaseSnapshotReposJson: JSON.stringify(map),
-      isoSubmodulesJson: null,
-      isoSubmodulesReposJson: submodulesReposJsonFor(handle),
+      runtime: {
+        isoWorktreePath: handle.containerPath,
+      },
+      checkpoint: {
+        checkpoints: handle.repos.map((repo) => ({
+          mountPath: repo.mountPath,
+          isolationBase: repo.baseSnapshot,
+          submodules: submodulesFor(repo),
+        })),
+      },
     },
     ...contextInput(binding),
   })
@@ -211,24 +189,12 @@ export async function persistIsoBase(
  * but no base (impl-gate A3-fix), and dropping it here would strand its
  * crash-replay on a poolless topology.
  */
-function submodulesJsonFor(repo: IsoRepo | undefined): string | null {
-  if (repo === undefined) return null
+function submodulesFor(
+  repo: IsoRepo,
+): { poolDirs: Record<string, string>; subBases: Record<string, string> } | undefined {
   if (Object.keys(repo.subBases).length === 0 && Object.keys(repo.poolDirs).length === 0)
-    return null
-  return JSON.stringify({ poolDirs: repo.poolDirs, subBases: repo.subBases })
-}
-
-/** Multi-repo counterpart, keyed by `worktreeDirName`; null when no repo has submodules. */
-function submodulesReposJsonFor(handle: IsoHandle): string | null {
-  const map: Record<
-    string,
-    { poolDirs: Record<string, string>; subBases: Record<string, string> }
-  > = {}
-  for (const r of handle.repos) {
-    if (Object.keys(r.subBases).length === 0 && Object.keys(r.poolDirs).length === 0) continue
-    map[r.worktreeDirName] = { poolDirs: r.poolDirs, subBases: r.subBases }
-  }
-  return Object.keys(map).length === 0 ? null : JSON.stringify(map)
+    return undefined
+  return { poolDirs: repo.poolDirs, subBases: repo.subBases }
 }
 
 /** RFC-130: persist the iso node_tree columns + merge_state on agent success (D15).
@@ -249,20 +215,25 @@ export async function persistIsoNodeTree(
   handle?: IsoHandle,
 ): Promise<void> {
   const mounts =
-    handle === undefined ? Object.keys(nodeTrees) : handle.repos.map((repo) => repo.worktreeDirName)
-  const singleRoot = isSingleRootRepository(mounts)
-  const topology =
-    handle === undefined
-      ? {}
-      : singleRoot
-        ? { isoSubmodulesJson: submodulesJsonFor(handle.repos[0]) }
-        : { isoSubmodulesReposJson: submodulesReposJsonFor(handle) }
+    handle === undefined ? Object.keys(nodeTrees) : handle.repos.map((repo) => repo.mountPath)
+  const checkpoints = mounts.map((mountPath) => {
+    const repo = handle?.repos.find((item) => item.mountPath === mountPath)
+    return {
+      mountPath,
+      nodeTree: nodeTrees[mountPath],
+      ...(repo === undefined ? {} : { submodules: submodulesFor(repo) }),
+    }
+  })
   await binding.persistence.mergeStates.transition({
     nodeRunId,
     event: { kind: 'mark-pending-merge' },
-    extra: singleRoot
-      ? { isoNodeTree: nodeTrees[''] ?? null, isoNodeTreeReposJson: null, ...topology }
-      : { isoNodeTree: null, isoNodeTreeReposJson: JSON.stringify(nodeTrees), ...topology },
+    extra: {
+      checkpoint: {
+        checkpoints,
+        checkpointMountPaths: mounts,
+        checkpointComponents: handle === undefined ? ['nodeTree'] : ['nodeTree', 'submodules'],
+      },
+    },
     ...contextInput(binding),
   })
 }
@@ -317,16 +288,7 @@ export async function mergeBackAndSettle(args: {
     kind: 'isolation-merge',
     stableActionOrdinal: 'isolation-merge',
     candidateId: `node-isolation-merge:${via}`,
-    request: {
-      v: 1,
-      nodeRunId,
-      via,
-      suppliedNodeTrees: args.nodeTrees !== undefined,
-      repos: handle.repos.map((repo) => ({
-        worktreeDirName: repo.worktreeDirName,
-        baseSnapshot: repo.baseSnapshot,
-      })),
-    },
+    request: isolationMergeRequest(nodeRunId, via, args.nodeTrees !== undefined, handle.repos),
     resourceKeys: [
       `isolation:${handle.taskId}:${handle.nodeRunId}`,
       ...handle.repos.map((repo) => `workspace:${sha256Hex(repo.canonWorktreePath)}`),
@@ -342,7 +304,7 @@ export async function mergeBackAndSettle(args: {
     const fresh = await binding.persistence.artifactPaths.forcedPaths(handle.taskId)
     const union = [...new Set([...fresh, ...(args.extraForcedContainerPaths ?? [])])]
     for (const r of handle.repos) {
-      r.forcedRepoRelPaths = repoRelForcedPaths(union, r.worktreeDirName)
+      r.forcedRepoRelPaths = repoRelForcedPaths(union, r.mountPath)
     }
   }
   let nodeTrees = args.nodeTrees
@@ -424,49 +386,18 @@ async function persistPendingSubResolves(
 ): Promise<void> {
   if (handle.passthrough) return
   if (!handle.repos.some((r) => r.pendingSubResolves.length > 0)) return
-  const row = await binding.persistence.nodeExecution.read(nodeRunId)
-  if (row === null) return
-
-  const withPending = (raw: string | null, repo: IsoRepo | undefined): string | null => {
-    if (repo === undefined) return raw
-    let base: Record<string, unknown> = { poolDirs: repo.poolDirs, subBases: repo.subBases }
-    if (raw !== null && raw !== '') {
-      try {
-        const parsed: unknown = JSON.parse(raw)
-        if (parsed !== null && typeof parsed === 'object') base = parsed as Record<string, unknown>
-      } catch {
-        /* keep the reconstructed shape */
-      }
-    }
-    return JSON.stringify({ ...base, pendingSubResolves: repo.pendingSubResolves })
-  }
-
-  if (isSingleRootRepository(handle.repos.map((repo) => repo.worktreeDirName))) {
-    await binding.persistence.nodeExecution.patch({
-      nodeRunId,
-      values: { isoSubmodulesJson: withPending(row.isoSubmodulesJson, handle.repos[0]) },
-      ...contextInput(binding),
-    })
-    return
-  }
-  let multi: Record<string, unknown> = {}
-  if (row.isoSubmodulesReposJson !== null && row.isoSubmodulesReposJson !== '') {
-    try {
-      const parsed: unknown = JSON.parse(row.isoSubmodulesReposJson)
-      if (parsed !== null && typeof parsed === 'object') multi = parsed as Record<string, unknown>
-    } catch {
-      /* rebuild below */
-    }
-  }
-  for (const r of handle.repos) {
-    const prev = multi[r.worktreeDirName]
-    const raw = prev === undefined ? null : JSON.stringify(prev)
-    const next = withPending(raw, r)
-    if (next !== null) multi[r.worktreeDirName] = JSON.parse(next) as unknown
-  }
   await binding.persistence.nodeExecution.patch({
     nodeRunId,
-    values: { isoSubmodulesReposJson: JSON.stringify(multi) },
+    values: {
+      checkpoint: {
+        pendingSubResolves: handle.repos.map((repo) => ({
+          mountPath: repo.mountPath,
+          poolDirs: repo.poolDirs,
+          subBases: repo.subBases,
+          pendingSubResolves: repo.pendingSubResolves,
+        })),
+      },
+    },
     ...contextInput(binding),
   })
 }

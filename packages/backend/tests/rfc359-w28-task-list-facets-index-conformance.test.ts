@@ -1,6 +1,7 @@
 // RFC-359 W28: the original full task page and facet SQL keeps its complete
 // ordered results when one additive index covers the facet read. Tiny plans
 // prove the access mechanism; hosted full HTTP runs retain the latency gate.
+import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
@@ -35,15 +36,15 @@ const OPTIONS = { catalogVisibility: 'public' } as const
 const VIEWS = ['all', 'active', 'attention', 'finished'] as const
 
 async function physicalRows(db: PersistenceDb) {
-  const { tasks, lifecycleAlerts } = tablesOf(db)
+  const { lifecycleAlerts } = tablesOf(db)
   return {
-    tasks: await db.select().from(tasks).orderBy(tasks.id),
+    tasks: await readTaskFixtures(db, undefined, { orderBy: [{ field: 'id', direction: 'asc' }] }),
     alerts: await db.select().from(lifecycleAlerts).orderBy(lifecycleAlerts.id),
   }
 }
 
 async function seed(db: PersistenceDb): Promise<void> {
-  const { users, workflows, tasks, lifecycleAlerts } = tablesOf(db)
+  const { users, lifecycleAlerts } = tablesOf(db)
   await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
@@ -53,7 +54,7 @@ async function seed(db: PersistenceDb): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'w28-facet-workflow',
     name: 'W28 facet workflow',
     definition: '{}',
@@ -71,7 +72,7 @@ async function seed(db: PersistenceDb): Promise<void> {
   ] as const
   for (let index = 0; index < 96; index++) {
     const id = `w28-facet-${String(index).padStart(3, '0')}`
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id,
       name: `fixture ${index}`,
       workflowId: 'w28-facet-workflow',
@@ -96,7 +97,6 @@ async function seed(db: PersistenceDb): Promise<void> {
       catalogVisibility: index % 11 === 0 ? 'internal' : 'public',
       sourceAgentName: index % 3 === 0 ? 'fixture source' : null,
       workgroupId: index % 7 === 0 ? 'fixture-workgroup' : null,
-      repoCount: 1,
     })
     if (index % 8 === 0) {
       await insertOne(db, lifecycleAlerts, {
@@ -342,11 +342,12 @@ describeEachProvider('RFC-359 W28 task list facet covering index', (harness) => 
       let changed: { observation: Awaited<ReturnType<typeof observe>>; physical: typeof before }
       await expect(
         harness.session.transaction(async (tx) => {
-          const { tasks, lifecycleAlerts } = tablesOf(tx)
-          await tx
-            .update(tasks)
-            .set({ status: 'done', name: 'changed inside transaction' })
-            .where(eq(tasks.id, 'w28-facet-001'))
+          const { lifecycleAlerts } = tablesOf(tx)
+          await patchTaskFixture(
+            tx,
+            { id: 'w28-facet-001' },
+            { status: 'done', name: 'changed inside transaction' },
+          )
           await tx
             .update(lifecycleAlerts)
             .set({ resolvedAt: null })

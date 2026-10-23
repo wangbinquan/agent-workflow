@@ -15,8 +15,7 @@
 //   - remove the incoming quick_check → corrupt-incoming test swaps in garbage → red.
 //   - invert computeRestoreDirection → downgrade test accepts a newer backup → red.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -69,8 +68,7 @@ function sqliteOf(db: DbClient): Database {
 async function seedWorkflows(dbPath: string, n: number): Promise<void> {
   const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
   for (let i = 0; i < n; i++) {
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: ulid(),
       name: `wf-${i}`,
       definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -123,9 +121,8 @@ describe('RFC-213 restore roundtrip (AC-1)', () => {
     // Backup the seeded state.
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     const res = await createBackup({ contract: buildLogicalSchemaContract(), db, appHome, now: 1 })
-    const { workflows } = tablesOf(db)
     // Mutate the LIVE db AFTER the backup: add a 3rd workflow.
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: ulid(),
       name: 'wf-extra',
       definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -182,8 +179,7 @@ describe('RFC-213 restore — crash-safe swap over a live WAL', () => {
     // 2) Add 5 more rows and FREEZE the on-disk db+wal+shm WHILE the frames are
     //    still only in the WAL (copy before close, which would checkpoint them).
     for (let i = 0; i < 5; i++) {
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: ulid(),
         name: `wf-wal-${i}`,
         definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -382,15 +378,15 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows, tasks } = tablesOf(db)
-    insertOne(db, workflows, {
+    // RFC-395 II-a: builders finish before the backup snapshots SQLite.
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
     })
-    const mkTask = (status: string): string => {
+    const mkTask = async (status: string): Promise<string> => {
       const id = ulid()
-      insertOne(db, tasks, {
+      await taskFixture(db, {
         id,
         name: 't',
         workflowId: wfId,
@@ -405,8 +401,8 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
       })
       return id
     }
-    const runningId = mkTask('running')
-    const doneId = mkTask('done')
+    const runningId = await mkTask('running')
+    const doneId = await mkTask('done')
     const backup = await createBackup({
       contract: buildLogicalSchemaContract(),
       db,

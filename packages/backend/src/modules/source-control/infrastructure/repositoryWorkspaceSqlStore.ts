@@ -1,3 +1,7 @@
+import {
+  taskRequestedSourceColumns,
+  taskRequestedSourceReferenceSql,
+} from '@/platform/persistence/taskRepositorySql'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, sql, type SQLWrapper } from 'drizzle-orm'
@@ -219,11 +223,8 @@ const explicitReference = (db: object) => {
 
 /** 被**遗留直挂**引用：任务自己带 `cached_repo_id`，且它一行 `task_repos` 都没有。 */
 const legacyReference = (db: object) => {
-  const { tasks, cachedRepos, taskRepos } = tablesOf(db)
-  return sql`exists (
-  select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
-    and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
-)`
+  const { cachedRepos } = tablesOf(db)
+  return taskRequestedSourceReferenceSql(db, cachedRepos.id)
 }
 
 /** Row-level predicate: 三条来源的并集。用在**分页 WHERE** 里，两个 planner 在那个位置
@@ -482,6 +483,7 @@ export class RepositoryWorkspaceSqlStore {
 
   async cachedRepoReferenceCount(id: string): Promise<number> {
     const persistenceDb = this.database
+    const requestedSource = taskRequestedSourceColumns(persistenceDb)
 
     const { taskRepos, tasks } = tablesOf(persistenceDb)
     const rows = await this.executor.all<{ count: number }>(
@@ -494,7 +496,7 @@ export class RepositoryWorkspaceSqlStore {
         UNION ALL
         SELECT ${tasks.id} AS task_id
         FROM ${tasks}
-        WHERE ${tasks.cachedRepoId} = ${id}
+        WHERE ${requestedSource.cachedRepoId} = ${id}
           AND NOT EXISTS (
             SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id}
           )
@@ -512,6 +514,7 @@ export class RepositoryWorkspaceSqlStore {
 
   async cachedRepoReferenceCounts(ids: readonly string[]): Promise<ReadonlyMap<string, number>> {
     const persistenceDb = this.database
+    const requestedSource = taskRequestedSourceColumns(persistenceDb)
 
     const counts = new Map<string, number>()
     if (ids.length === 0) return counts
@@ -537,11 +540,11 @@ export class RepositoryWorkspaceSqlStore {
       count: number
     }>(
       sql`
-      SELECT ${tasks.cachedRepoId} AS cached_repo_id, count(*) AS count
+      SELECT ${requestedSource.cachedRepoId} AS cached_repo_id, count(*) AS count
       FROM ${tasks}
-      WHERE ${tasks.cachedRepoId} IN (${idSet})
+      WHERE ${requestedSource.cachedRepoId} IN (${idSet})
         AND ${tasks.id} NOT IN (SELECT ${taskRepos.taskId} FROM ${taskRepos})
-      GROUP BY ${tasks.cachedRepoId}
+      GROUP BY ${requestedSource.cachedRepoId}
     `,
       { count: 'int' },
     )

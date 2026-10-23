@@ -1,5 +1,6 @@
 // RFC-359 W4-B4 —— 记忆蒸馏读存储：一份实现，两个 provider 共用。
 
+import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 
@@ -24,7 +25,10 @@ export async function listMemoryDistillJobs(db: PersistenceDb, status?: string) 
 }
 
 export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
-  constructor(private readonly db: PersistenceDb) {}
+  constructor(
+    private readonly db: PersistenceDb,
+    private readonly clarifyAnswers: ClarifyAnswerQueries,
+  ) {}
 
   async findJob(jobId: string) {
     const { memoryDistillJobs } = tablesOf(this.db)
@@ -67,16 +71,7 @@ export class DrizzleMemoryDistillReadStore implements MemoryDistillReadStore {
   }
 
   async listClarifySources(ids: readonly string[]) {
-    if (ids.length === 0) return []
-    const { clarifyRounds } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: clarifyRounds.id,
-        taskId: clarifyRounds.taskId,
-        questionsJson: clarifyRounds.questionsJson,
-      })
-      .from(clarifyRounds)
-      .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, [...ids])))
+    return this.clarifyAnswers.listSelfQuestions(ids)
   }
 
   async listReviewSources(ids: readonly string[]) {

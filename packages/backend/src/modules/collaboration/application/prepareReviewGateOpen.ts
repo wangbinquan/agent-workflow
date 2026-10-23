@@ -1,5 +1,6 @@
 // RFC-333 T6 — prepare the complete review round before TaskParkTx.
 
+import { legacyReviewBodyPath } from '@/platform/content/legacyReview'
 import { ulid } from 'ulid'
 import { sha256Hex } from '@/util/hash'
 import type { HumanGateArtifactStore, PlannedReviewArtifact } from './ports/humanGateArtifactStore'
@@ -82,8 +83,7 @@ function reviewBodyPath(input: {
   versionIndex: number
   itemIndex: number | null
 }): string {
-  const item = input.itemIndex === null ? '' : `/item_${input.itemIndex}`
-  return `runs/${input.taskId}/review/${input.reviewNodeId}/${input.sourcePortName}/round_${input.operationId}${item}/v${input.versionIndex}.md`
+  return legacyReviewBodyPath(input)
 }
 
 function assertInput(input: PrepareReviewGateOpenInput): void {

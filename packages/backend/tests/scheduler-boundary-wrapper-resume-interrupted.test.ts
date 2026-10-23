@@ -1,6 +1,11 @@
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // Regression: resuming a wrapper node from 'interrupted' (post daemon restart)
 // throws ConflictError -> runTask rejects -> task stuck status='running'.
@@ -31,7 +36,6 @@ import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -71,8 +75,7 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -92,15 +95,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -148,8 +150,7 @@ async function seedInterruptedWrapperRun(
 ): Promise<string> {
   const wrapperRunId = ulid()
   const now = Date.now()
-  const { nodeRuns } = tablesOf(h.db)
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: wrapperRunId,
     taskId,
     nodeId: wrapperNodeId,
@@ -222,8 +223,7 @@ function registerCases(provider: ProviderHarness) {
       threw = true
     })
 
-    const { tasks } = tablesOf(h.db)
-    const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(finalTask?.status).not.toBe('running')
     expect(threw).toBe(false)
   })
@@ -255,8 +255,7 @@ function registerCases(provider: ProviderHarness) {
       threw = true
     })
 
-    const { tasks } = tablesOf(h.db)
-    const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(finalTask?.status).not.toBe('running')
     expect(threw).toBe(false)
   })
@@ -311,8 +310,7 @@ function registerCases(provider: ProviderHarness) {
       threw = true
     })
 
-    const { tasks } = tablesOf(h.db)
-    const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(finalTask?.status).not.toBe('running')
     expect(threw).toBe(false)
   })

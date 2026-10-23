@@ -8,6 +8,7 @@
 // 现在只剩一份：provider 差异全部收进传进来的 `TaskListPage`（`taskListPage/database.ts`
 // 一份中立装配，RFC-359 起两个 provider 共用），这里连数据库客户端都拿不到。
 
+import { projectStoredTaskRepositorySummary } from './taskRepositorySurface'
 import type { TaskCatalogListItem, TaskOperationsListItem } from '@agent-workflow/shared'
 
 import type { TaskCatalogSource } from '@/modules/task-catalog/composition/required-ports'
@@ -38,6 +39,7 @@ function normalizeItem(
   sourceId: TaskExecutionCatalogSourceId,
   item: TaskOperationsListItem,
 ): TaskCatalogListItem {
+  const repository = projectStoredTaskRepositorySummary(item, 'stored')
   const subjectName =
     sourceId === 'agent'
       ? (item.sourceAgentName ?? item.sourceAgentId ?? '—')
@@ -55,7 +57,7 @@ function normalizeItem(
     sourceId,
     title: item.name,
     subject: { resourceId: subjectResourceId, label: text(subjectName) },
-    targetLabel: targetLabel(item),
+    targetLabel: targetLabel(repository),
     status: item.status,
     statusDetail: null,
     startedAt: item.startedAt,
@@ -68,7 +70,7 @@ function normalizeItem(
     errorSummary: item.errorSummary,
     failureCode: item.failureCode ?? null,
     childCount: item.childCount,
-    repositoryCount: item.repoCount,
+    repositoryCount: repository.repoCount,
     scheduledTaskId: item.scheduledTaskId ?? null,
     openAlertCount: item.openAlertCount ?? 0,
     hierarchy: {

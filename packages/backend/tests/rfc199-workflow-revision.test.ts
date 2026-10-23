@@ -3,10 +3,25 @@
 // two edits from one base cannot share a successor revision, retries reconcile
 // by canonical bytes, and legacy physical storage heals exactly once.
 
+import { buildAgentHostSnapshot } from '@/services/agentLaunch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import {
+  agentFixture,
+  patchTaskFixture,
+  patchWorkflowFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   serializeWorkflowDefinitionStorageV1,
+  WorkflowDefinitionSchema,
+  WORKFLOW_SCHEMA_VERSION,
   type SaveWorkflowReceipt,
   type WorkflowDefinition,
   type WorkflowDetail,
@@ -14,13 +29,10 @@ import {
   type WorkflowsWsMessage,
 } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { getTask } from '../src/services/task'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { AGENT_HOST_WORKFLOW_ID } from '../src/services/agentLaunch'
-import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import {
   createWorkflow,
   deleteWorkflow,
@@ -33,10 +45,6 @@ import {
 } from '../src/services/workflow'
 import { DomainError } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  ensureWorkgroupHostWorkflow,
-  WORKGROUP_HOST_WORKFLOW_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import {
   resetBroadcastersForTests,
   WORKFLOWS_CHANNEL,
@@ -117,12 +125,10 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
         definition: legacy,
       })
 
-      const { workflows } = tablesOf(db)
       const raw = (
-        await db
-          .select({ definition: workflows.definition })
-          .from(workflows)
-          .where(eq(workflows.id, workflow.id))
+        await readWorkflowFixtures(db, { id: workflow.id }).then((rows) =>
+          rows.map((row) => ({ definition: row.definition })),
+        )
       )[0]
       expect(raw?.definition).toBe(
         serializeWorkflowDefinitionStorageV1(migrateDefinitionToLatest(legacy)),
@@ -213,8 +219,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
         nodes: [],
         edges: [],
       }
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id,
         name: 'legacy-heal',
         description: '',
@@ -232,10 +237,9 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
       expect(healed.outcome).toBe('committed')
       expect(healed.revision.version).toBe(2)
       const raw = (
-        await db
-          .select({ definition: workflows.definition })
-          .from(workflows)
-          .where(eq(workflows.id, id))
+        await readWorkflowFixtures(db, { id }).then((rows) =>
+          rows.map((row) => ({ definition: row.definition })),
+        )
       )[0]
       expect(raw?.definition).toBe(
         serializeWorkflowDefinitionStorageV1(migrateDefinitionToLatest(legacy)),
@@ -285,17 +289,17 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
       { name: 'acl-fence', description: '', definition: EMPTY_DEFINITION },
       { ownerUserId: 'alice' },
     )
-    const { workflows } = tablesOf(db)
-    await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, workflow.id))
+    await patchWorkflowFixture(db, { id: workflow.id }, { visibility: 'private' })
 
     await expect(
       save(db, workflow, snapshot(workflow, { description: 'hidden' }), { principal: bob }),
     ).rejects.toMatchObject({ code: 'workflow-not-found', status: 404 })
 
-    await db
-      .update(workflows)
-      .set({ visibility: 'public', ownerUserId: 'bob' })
-      .where(eq(workflows.id, workflow.id))
+    await patchWorkflowFixture(
+      db,
+      { id: workflow.id },
+      { visibility: 'public', ownerUserId: 'bob' },
+    )
     await expect(
       save(db, workflow, snapshot(workflow, { description: 'stale-owner' }), {
         principal: alice,
@@ -304,7 +308,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
       // 前任 owner 对这份 public 工作流只剩只读 —— `resource-read-only`。
     ).rejects.toMatchObject({ code: 'resource-read-only', status: 403 })
 
-    await db.update(workflows).set({ builtin: true }).where(eq(workflows.id, workflow.id))
+    await patchWorkflowFixture(db, { id: workflow.id }, { builtin: true })
     await expect(
       save(db, workflow, snapshot(workflow, { description: 'system-write' }), {
         principal: SYSTEM,
@@ -344,8 +348,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
       { ownerUserId: 'alice' },
     )
     const secretAgentId = ulid()
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: secretAgentId,
       name: 'secret-agent',
       ownerUserId: 'carol',
@@ -388,14 +391,13 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     )
     const fence = () => ({ expectedVersion: 1, clientMutationId: ulid() })
 
-    const { workflows } = tablesOf(db)
-    await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, workflow.id))
+    await patchWorkflowFixture(db, { id: workflow.id }, { visibility: 'private' })
     await expect(deleteWorkflow(db, workflow.id, fence(), bob)).rejects.toMatchObject({
       code: 'workflow-not-found',
       status: 404,
     })
 
-    await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, workflow.id))
+    await patchWorkflowFixture(db, { id: workflow.id }, { visibility: 'public' })
     await expect(deleteWorkflow(db, workflow.id, fence(), bob)).rejects.toMatchObject({
       // 删除是**治理写**：RFC-324 的可编辑档也不覆盖它，只有 owner（与 bypass）能删。
       code: 'resource-govern-owner-only',
@@ -404,13 +406,13 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
 
     // Simulate an owner transfer after an earlier route/detail read: the old
     // owner remains visible but must fail the service's current-row owner gate.
-    await db.update(workflows).set({ ownerUserId: 'bob' }).where(eq(workflows.id, workflow.id))
+    await patchWorkflowFixture(db, { id: workflow.id }, { ownerUserId: 'bob' })
     await expect(deleteWorkflow(db, workflow.id, fence(), alice)).rejects.toMatchObject({
       code: 'resource-govern-owner-only',
       status: 403,
     })
 
-    await db.update(workflows).set({ builtin: true }).where(eq(workflows.id, workflow.id))
+    await patchWorkflowFixture(db, { id: workflow.id }, { builtin: true })
     await expect(deleteWorkflow(db, workflow.id, fence(), SYSTEM)).rejects.toMatchObject({
       code: 'builtin-readonly',
       status: 403,
@@ -422,7 +424,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     resetBroadcastersForTests()
     const db = harness.db
     const alice = actorPrincipal('alice')
-    const { users, tasks } = tablesOf(db)
+    const { users } = tablesOf(db)
     await insertOne(db, users, {
       id: 'carol',
       username: 'carol',
@@ -458,7 +460,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     ).rejects.toMatchObject({ code: 'resource-operation-stale', status: 409 })
     expect(await getWorkflow(db, workflow.id)).not.toBeNull()
 
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: ulid(),
       name: 'delete-blocker',
       workflowId: workflow.id,
@@ -494,7 +496,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     // RFC-285 B2 红→绿对：把引用翻成终态（不删行！）后删除成功——同时实证
     // tasks.workflow_id 软链化（0151）：带终态引用直删不再撞 FK，引用悬空由
     // 展示层容忍（E2）。
-    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.workflowId, workflow.id))
+    await patchTaskFixture(db, { workflowId: workflow.id }, { status: 'done' })
     const mutationId = ulid()
     await deleteWorkflow(
       db,
@@ -504,7 +506,7 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
     )
     expect(await getWorkflow(db, workflow.id)).toBeNull()
     // 软链实证：终态任务行存活、workflow_id 悬空指向已删 workflow。
-    const dangling = await db.select().from(tasks).where(eq(tasks.workflowId, workflow.id))
+    const dangling = await readTaskFixtures(db, { workflowId: workflow.id })
     expect(dangling.length).toBe(1)
     expect(dangling[0]!.status).toBe('done')
     // 实现门路 1 P3-1 补穿透：详情读面（getTask 即 GET /api/tasks/:id 的
@@ -525,25 +527,36 @@ describeEachProvider('RFC-199 workflow revision fencing', (harness) => {
   })
 })
 
-// RFC-359 AC-6 例外：单引擎。`composeAgentLaunchResourceOperations({ db: db })` 与它的 PG 孪生
-// **入参形状不同**——PG 那份还要 `agents` / `workflowValidation` 两个端口（SQLite 那份在内部自建），
-// 所以这条不是「换个 harness」能迁的，得先把那两个组合根的装配签名对齐。留在账本上。
+// RFC-395 II-a A2: canonical synthesized definitions no longer seed the catalog.
 describeEachProvider(
-  'RFC-199 —— 固定的 agent / workgroup 宿主种子走同一条 canonical latest 存储',
+  'RFC-199 —— agent / workgroup 合成定义采用最新 schema 并保持序列化幂等',
   (harness) => {
-    test('fixed agent/workgroup host seeds use the same canonical latest storage', async () => {
+    test('synthesized host definitions use the latest schema and serialize idempotently without catalog seeds', async () => {
       const db = harness.db
-      await composeAgentLaunchResourceOperations({ db }).ensureHostWorkflow()
-      await ensureWorkgroupHostWorkflow(db)
-
-      const { workflows } = tablesOf(db)
-      const rows = await db
-        .select({ id: workflows.id, definition: workflows.definition })
-        .from(workflows)
-      const byId = new Map(rows.map((row) => [row.id, row.definition]))
-      const expected = serializeWorkflowDefinitionStorageV1(EMPTY_DEFINITION)
-      expect(byId.get(AGENT_HOST_WORKFLOW_ID)).toBe(expected)
-      expect(byId.get(WORKGROUP_HOST_WORKFLOW_ID)).toBe(expected)
+      const definitions = [
+        buildAgentHostSnapshot({ id: 'agent', name: 'agent' }, false),
+        buildWorkgroupHostSnapshot({
+          workgroupId: 'group',
+          workgroupName: 'Group',
+          mode: 'free_collab',
+          members: [],
+          leaderMemberId: null,
+          instructions: '',
+          goal: '',
+          switches: { shareOutputs: true, directMessages: false, blackboard: false },
+          maxRounds: 3,
+          completionGate: false,
+        }),
+      ]
+      for (const definition of definitions) {
+        const parsed = WorkflowDefinitionSchema.parse(definition)
+        const canonical = serializeWorkflowDefinitionStorageV1(parsed)
+        expect(serializeWorkflowDefinitionStorageV1(JSON.parse(canonical))).toBe(canonical)
+        expect(JSON.parse(canonical).$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
+      }
+      const rows = await readWorkflowFixtures(db)
+      for (const host of Object.values(TASK_DEFINITION_HOSTS))
+        expect(rows.some((row) => row.id === host.id)).toBe(false)
     })
   },
 )

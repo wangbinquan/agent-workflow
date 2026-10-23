@@ -6,6 +6,12 @@
 // object, never copied; only work-volume files are uploaded. A directory rename
 // rewrites index rows only. Removing entries releases their parts; physical
 // unpin is deferred to maintenance behind the backup release horizon.
+import {
+  normalizeLegacyHostedArchive as normalized,
+  legacyHostedArchiveSource as sourceOf,
+  legacyHostedArchiveRoot,
+  isLegacyHostedArchiveTemporary,
+} from '@/platform/content/legacyHostedArchive'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { eq, or, sql } from 'drizzle-orm'
@@ -25,7 +31,7 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { TaskArchiveContentBinding } from '../../composition/taskArchiveMaintenance'
 
 export const HOSTED_ARCHIVE_OWNER = 'task-archive'
-const ROOT = 'cs-archive:tasks'
+const ROOT = legacyHostedArchiveRoot('tasks')
 
 const Part = z
   .object({
@@ -52,19 +58,6 @@ export interface HostedArchiveSources {
   snapshot(kind: 'runs' | 'logs', taskId: string): Promise<readonly HostedArchiveFile[]>
 }
 
-function normalized(reference: string): string {
-  const parts = reference.split('/')
-  if (
-    !['cs-archive:tasks', 'cs-archive:runs', 'cs-archive:logs'].includes(parts[0]!) ||
-    parts.some((part) => !part || part === '.' || part === '..' || /[\\\0\r\n]/.test(part))
-  )
-    throw new Error('hosted-archive-reference-invalid')
-  return reference
-}
-function sourceOf(reference: string): { kind: 'runs' | 'logs'; taskId: string } | null {
-  const match = /^cs-archive:(runs|logs)\/([^/]+)$/.exec(reference)
-  return match ? { kind: match[1] as 'runs' | 'logs', taskId: match[2]! } : null
-}
 function assertRelative(path: string): void {
   if (
     !path ||
@@ -268,7 +261,7 @@ export function createHostedTaskArchiveContent(input: {
       const rows = await rowsBelow(from, tx)
       if (rows.length === 0) throw new Error('hosted-archive-source-missing')
       if (
-        /^cs-archive:tasks\/\.tmp-[^/]+$/.test(from) &&
+        isLegacyHostedArchiveTemporary(from) &&
         !rows.some((row) => row.path === `${from}/manifest.json`)
       )
         throw new Error('hosted-archive-manifest-missing')
@@ -284,7 +277,11 @@ export function createHostedTaskArchiveContent(input: {
     })
   }
   return {
-    locations: { archiveDir: ROOT, runsDir: 'cs-archive:runs', logsDir: 'cs-archive:logs' },
+    locations: {
+      archiveDir: ROOT,
+      runsDir: legacyHostedArchiveRoot('runs'),
+      logsDir: legacyHostedArchiveRoot('logs'),
+    },
     content: {
       resolve: (reference, ...segments) => normalized([reference, ...segments].join('/')),
       exists,
@@ -295,7 +292,7 @@ export function createHostedTaskArchiveContent(input: {
       appendText: (reference, text) => saveFile(reference, text, true),
       writeText: (reference, text) => saveFile(reference, text, false),
       async restoreMovedDirectories(temporary, kind, root) {
-        if (root !== `cs-archive:${kind}`)
+        if (root !== legacyHostedArchiveRoot(kind))
           throw new Error('hosted-archive-restoration-root-mismatch')
         // Sources are never consumed by a move; discard the temporary links
         // only after confirming their corresponding source is still present.

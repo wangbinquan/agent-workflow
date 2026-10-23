@@ -128,12 +128,12 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
   })
 
   test('G2: room-table writes live in Resource Catalog infrastructure (routes are transport only)', () => {
-    // RFC-217 T4 终态：workgroupConfigJson 唯一 UPDATE 写点在 TaskExecution 的房间参与者
+    // RFC-217 T4 终态：workgroupConfigJson 唯一 UPDATE 写点在 TaskExecution 的 definition 参与者
     //（房间的 config PUT 通过它落盘）；routes/ 里任何房间表裸写（messages/assignments/
     // configJson）都是回归。RFC-359 W4-D19b 合一后 legacy 那份 `configActions.ts` 已随
     // 两份 provider 房间一起退役，写点从两处收敛成一处。
     const allow = new Set([
-      'packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts',
     ])
     const offenders: string[] = []
     for (const f of walkTs(SRC)) {
@@ -154,9 +154,18 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     expect(offenders).toEqual([])
     const puts =
       read(
-        'packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
+        'packages/backend/src/modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts',
       ).split('.set({ workgroupConfigJson').length - 1
     expect(puts).toBe(1)
+    const room = read(
+      'packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
+    )
+    expect(room).toMatch(
+      /createTaskDefinitionWriteParticipantInTx\(\s*tx,?\s*\)\.replaceWorkgroupRuntimeConfig\(/,
+    )
+    expect(room).toContain('expectedRevision: input.expectedConfigJson')
+    expect(room).toContain('nextConfig: input.nextConfigJson')
+    expect(room).not.toContain('.set({ workgroupConfigJson')
   })
 })
 
@@ -286,10 +295,10 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
 })
 
 describe('rfc217 G4 — the workgroup discriminator has ONE oracle', () => {
-  test('raw workgroupId null-checks are banned outside the shared oracle', () => {
-    // taskExecutionKind / isWorkgroupTask (packages/shared/src/schemas/task.ts)
-    // are the ONLY places allowed to read the raw discriminator; every other
-    // site (backend + frontend) goes through them (flag-audit kind-scatter).
+  test('raw workgroupId null-checks are banned outside the subject oracles', () => {
+    // RFC-395: backend decodeTaskSubject uses the ordered discriminator descriptor;
+    // the shared API helper keeps the same precedence, pinned by the agreement test.
+    // Consumers in backend and frontend must not recompute a raw-field kind.
     const roots = ['packages/backend/src', 'packages/frontend/src']
     const banned = [
       'workgroupId !== null',

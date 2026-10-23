@@ -1,6 +1,6 @@
 // RFC-385: reproduce former standalone wiring through real boot recovery on both providers,
 // then prove process generations release crash/shutdown owners for a real successor claim.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -42,9 +42,9 @@ describeEachProvider('RFC-385 process execution generation', (harness) => {
     const persistence = bundle.persistence
     const seeded = await seedBundleTask(harness, appHome)
     const runId = ulid()
-    const { nodeRuns, taskExecutionIntents } = tablesOf(harness.db)
+    const { taskExecutionIntents } = tablesOf(harness.db)
     // A dead process with no remaining native child: the real reaper takes its no-pid path.
-    await insertOne(harness.db, nodeRuns, {
+    await nodeRunFixture(harness.db, {
       id: runId,
       taskId: seeded.taskId,
       nodeId: 'worker',
@@ -75,7 +75,7 @@ describeEachProvider('RFC-385 process execution generation', (harness) => {
       persistence,
       owner,
       run: async () => {
-        return (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+        return (await readNodeRunFixtures(harness.db, { id: runId }))[0]!
       },
       intent: async () => {
         return (

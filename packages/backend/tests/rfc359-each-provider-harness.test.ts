@@ -4,11 +4,18 @@
 // 显式收窄、非法值直接抛；② harness 给每个用例的库是干净的、session 在两个引擎上语义一致。
 // 这条文件本身就是「新增功能天然要验证到两种数据库」的最小样板：同一段断言，两个引擎各跑一遍。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+// RFC-395 II-a: record one physical read per database, excluding fixture projection joins.
+import { readStoredTaskRows } from './helpers/model/storedRows'
+import {
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
-import { eq, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
@@ -37,8 +44,7 @@ describe('RFC-359 —— describeEachProvider 的引擎解析', () => {
 })
 
 async function seedWorkflow(db: PersistenceDb): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf_harness',
     name: 'harness',
     description: '',
@@ -66,50 +72,58 @@ function taskRow(id: string) {
 
 describeEachProvider('RFC-359 —— 双引擎 harness 自检', (harness) => {
   test('每个用例从干净库开始：写入只在本用例可见', async () => {
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
-    await seedWorkflow(harness.db)
-    await insertOne(harness.db, tasks, taskRow('t_visible'))
     expect(
-      (await harness.db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, 't_visible'))).map(
-        (row) => row.id,
-      ),
+      await readTaskFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+    ).toEqual([])
+    await seedWorkflow(harness.db)
+    await taskFixture(harness.db, taskRow('t_visible'))
+    expect(
+      (
+        await readTaskFixtures(harness.db, { id: 't_visible' }).then((rows) =>
+          rows.map((row) => ({ id: row.id })),
+        )
+      ).map((row) => row.id),
     ).toEqual(['t_visible'])
   })
 
   test('上一个用例的写入已被清掉（顺序无关：任何用例开头都应为空）', async () => {
-    const { tasks, workflows } = tablesOf(harness.db)
-    expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
-    expect(await harness.db.select({ id: workflows.id }).from(workflows)).toEqual([])
+    expect(
+      await readTaskFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+    ).toEqual([])
+    expect(
+      await readWorkflowFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+    ).toEqual([])
   })
 
   test('session.transaction 体内抛错 ⇒ 整笔回滚，跨事件循环 tick 仍成立（两个引擎同一断言）', async () => {
     await seedWorkflow(harness.db)
     await expect(
       harness.session.transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        await insertOne(tx, tasks, taskRow('t_rolled_back'))
+        await taskFixture(tx, taskRow('t_rolled_back'))
         await new Promise((resolve) => setTimeout(resolve, 2))
-        await insertOne(tx, tasks, taskRow('t_rolled_back_2'))
+        await taskFixture(tx, taskRow('t_rolled_back_2'))
         throw new Error('boom')
       }),
     ).rejects.toThrow('boom')
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
+    expect(
+      await readTaskFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+    ).toEqual([])
   })
 
   test('session.transaction 正常返回 ⇒ 提交', async () => {
     await seedWorkflow(harness.db)
     const inserted = await harness.session.transaction(async (tx) => {
-      const { tasks } = tablesOf(tx)
-      await insertOne(tx, tasks, taskRow('t_committed'))
-      return (await tx.select({ id: tasks.id }).from(tasks)).map((row) => row.id)
+      await taskFixture(tx, taskRow('t_committed'))
+      return (await readTaskFixtures(tx).then((rows) => rows.map((row) => ({ id: row.id })))).map(
+        (row) => row.id,
+      )
     })
     expect(inserted).toEqual(['t_committed'])
-    const { tasks } = tablesOf(harness.db)
-    expect((await harness.db.select({ id: tasks.id }).from(tasks)).map((row) => row.id)).toEqual([
-      't_committed',
-    ])
+    expect(
+      (await readTaskFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id })))).map(
+        (row) => row.id,
+      ),
+    ).toEqual(['t_committed'])
   })
 
   test('capabilities 是引擎事实，且 session.engine 与之同一份', () => {
@@ -137,11 +151,11 @@ describeEachProvider(
       expect(primary.session).not.toBe(secondary.session)
       expect(primary.capabilities).toEqual(secondary.capabilities)
       for (const database of [primary, secondary]) await seedWorkflow(database.db)
-      await insertOne(primary.db, tablesOf(primary.db).tasks, {
+      await taskFixture(primary.db, {
         ...taskRow('same-key'),
         name: 'primary',
       })
-      await insertOne(secondary.db, tablesOf(secondary.db).tasks, {
+      await taskFixture(secondary.db, {
         ...taskRow('same-key'),
         name: 'secondary',
       })
@@ -150,17 +164,15 @@ describeEachProvider(
       const secondaryRecording = secondary.recordStatements()
       try {
         expect(
-          await primary.db
-            .select({ name: tablesOf(primary.db).tasks.name })
-            .from(tablesOf(primary.db).tasks)
-            .where(eq(tablesOf(primary.db).tasks.name, 'primary')),
+          await readStoredTaskRows(primary.db, { name: 'primary' }).then((rows) =>
+            rows.map((row) => ({ name: row.name })),
+          ),
         ).toEqual([{ name: 'primary' }])
         expect(secondaryRecording.selects()).toEqual([])
         expect(
-          await secondary.db
-            .select({ name: tablesOf(secondary.db).tasks.name })
-            .from(tablesOf(secondary.db).tasks)
-            .where(eq(tablesOf(secondary.db).tasks.name, 'secondary')),
+          await readStoredTaskRows(secondary.db, { name: 'secondary' }).then((rows) =>
+            rows.map((row) => ({ name: row.name })),
+          ),
         ).toEqual([{ name: 'secondary' }])
         expect(primaryRecording.selects()).toHaveLength(1)
         expect(secondaryRecording.selects()).toHaveLength(1)
@@ -181,28 +193,20 @@ describeEachProvider(
         const committed = harness.database(1 - rollbackIndex)
         const id = `rollback-${rollbackIndex}`
         await committed.session.transaction(async (tx) => {
-          const { tasks } = tablesOf(tx)
-          await insertOne(tx, tasks, { ...taskRow(id), name: 'committed elsewhere' })
+          await taskFixture(tx, { ...taskRow(id), name: 'committed elsewhere' })
         })
         const error = new Error(`rollback database ${rollbackIndex}`)
         await expect(
           rolledBack.session.transaction(async (tx) => {
-            const { tasks } = tablesOf(tx)
-            await insertOne(tx, tasks, { ...taskRow(id), name: 'rolled back here' })
+            await taskFixture(tx, { ...taskRow(id), name: 'rolled back here' })
             throw error
           }),
         ).rejects.toBe(error)
+        expect(await readTaskFixtures(rolledBack.db, { id })).toEqual([])
         expect(
-          await rolledBack.db
-            .select()
-            .from(tablesOf(rolledBack.db).tasks)
-            .where(eq(tablesOf(rolledBack.db).tasks.id, id)),
-        ).toEqual([])
-        expect(
-          await committed.db
-            .select({ name: tablesOf(committed.db).tasks.name })
-            .from(tablesOf(committed.db).tasks)
-            .where(eq(tablesOf(committed.db).tasks.id, id)),
+          await readTaskFixtures(committed.db, { id }).then((rows) =>
+            rows.map((row) => ({ name: row.name })),
+          ),
         ).toEqual([{ name: 'committed elsewhere' }])
       }
     })
@@ -264,9 +268,9 @@ describeEachProvider(
       test(`每用例各自恢复迁移种子、清空业务写入（见证 ${round}）`, async () => {
         for (const index of [0, 1]) {
           const { db } = harness.database(index)
-          const { tasks, workflows, committedEventFamilyCutovers } = tablesOf(db)
-          expect(await db.select().from(tasks)).toEqual([])
-          expect(await db.select().from(workflows)).toEqual([])
+          const { committedEventFamilyCutovers } = tablesOf(db)
+          expect(await readTaskFixtures(db)).toEqual([])
+          expect(await readWorkflowFixtures(db)).toEqual([])
           const seeds = await db
             .select()
             .from(committedEventFamilyCutovers)
@@ -277,7 +281,7 @@ describeEachProvider(
           // 每次都污染两库；任意测试顺序下，后一个见证仍必须从原迁移快照开始。
           await db.delete(committedEventFamilyCutovers)
           await seedWorkflow(db)
-          await insertOne(db, tasks, taskRow('same-key'))
+          await taskFixture(db, taskRow('same-key'))
         }
       })
     }

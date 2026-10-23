@@ -31,6 +31,7 @@ import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation
 // 事务形状沿用两侧原有的最强档：`withTaskExecutionSerializable`（PG = SERIALIZABLE + 40001 重放；
 // SQLite = BEGIN IMMEDIATE，本就全库独占）。事务体只 await 数据库操作。
 
+import { writeTaskWorkspaceDirectoriesInTx } from './taskWorkspaceDirectoryParticipant'
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -103,9 +104,11 @@ async function applyCodeHostProjection(
     allowedFrom: ['running'],
     reason: projection.reason,
     extra: {
-      finishedAt: projection.finishedAt,
-      ...(projection.errorMessage === undefined ? {} : { errorMessage: projection.errorMessage }),
-      ...(projection.failureCode === undefined ? {} : { failureCode: projection.failureCode }),
+      identity: {
+        finishedAt: projection.finishedAt,
+        ...(projection.errorMessage === undefined ? {} : { errorMessage: projection.errorMessage }),
+        ...(projection.failureCode === undefined ? {} : { failureCode: projection.failureCode }),
+      },
     },
   })
 }
@@ -116,27 +119,28 @@ async function applyWorkspacePreparationProjection(
   projection: WorkspacePreparationSettlementProjection,
 ): Promise<void> {
   await acceptDurableRepositoryWorkspace(tx, projection.taskId)
-  const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
+  const { tasks, taskRepos } = tablesOf(tx)
   await tx.update(tasks).set(projection.task).where(eq(tasks.id, projection.taskId))
   if (projection.repositories.length > 0) {
     await tx.insert(taskRepos).values(projection.repositories.map((row) => ({ ...row })))
   }
-  if (projection.nodePaths.length > 0) {
-    await tx.insert(taskSpaceNodes).values(
-      projection.nodePaths.map((nodePath) => ({
-        taskId: projection.taskId,
-        nodePath,
-        schemaVersion: 1,
-      })),
-    )
-  }
+  await writeTaskWorkspaceDirectoriesInTx(
+    tx,
+    projection.taskId,
+    projection.repositories.map((repo) => repo.mountPath),
+    projection.nodePaths,
+  )
   await setNodeRunStatusTx({
     tx,
     nodeRunId: projection.prepNodeRunId,
     to: 'done',
     allowedFrom: ['running'],
     reason: 'repo-prep-done',
-    extra: { finishedAt: projection.finishedAt },
+    extra: {
+      identity: {
+        finishedAt: projection.finishedAt,
+      },
+    },
   })
 }
 

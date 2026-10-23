@@ -25,6 +25,7 @@
 // 第三条（in-place 改名：v1 契约是只能经 finalName / copy，SQLite 那台只挡了 agent 一类）
 // 方向相反、强侧是 PG，判据在 `intent-privileged-node-capability` 里按契约钉着，不重复。
 
+import { workflowFixture, type WorkflowFixtureSpec } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -151,8 +152,7 @@ async function applyDraft(sessionId: string, draft: { draftRevision: number; dra
 async function seedWorkflow(name: string, nodes: readonly unknown[]): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name,
     description: '',
@@ -163,7 +163,7 @@ async function seedWorkflow(name: string, nodes: readonly unknown[]): Promise<st
     builtin: false,
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['workflows']['$inferInsert'])
+  } as WorkflowFixtureSpec)
   return id
 }
 
@@ -241,7 +241,7 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
       createdAt: now,
       updatedAt: now,
     } as PersistenceTables['users']['$inferInsert'])
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: ulid(),
       name: 'w41-secret',
       description: '',
@@ -252,7 +252,7 @@ describeEachProvider('RFC-359 —— intent apply 的两条引擎分叉（同一
       builtin: false,
       createdAt: now,
       updatedAt: now,
-    } as PersistenceTables['workflows']['$inferInsert'])
+    } as WorkflowFixtureSpec)
 
     const sessionId = await seedSession()
     const draft = await installDraft(sessionId, {

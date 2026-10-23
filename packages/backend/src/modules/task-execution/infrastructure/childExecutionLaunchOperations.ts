@@ -1,3 +1,7 @@
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { definitionAnchorId, definitionHost, type TaskSubject } from '../domain/taskSubject'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
+import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
@@ -8,7 +12,7 @@ import {
   initialDwState,
   migrateWorkflowDefinitionToLatest,
   redactGitUrl,
-  type StartTask,
+  type TaskStartOptions,
   type TaskCatalogVisibility,
   type TaskLaunchOrigin,
   type WorkgroupRuntimeConfig,
@@ -50,14 +54,12 @@ import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
 
 // Wire-frozen task/workflow identities. TaskExecution repeats them here rather
 // than importing Resource Catalog provider-private infrastructure.
-const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
 const WG_LEADER_NODE_ID = '__wg_leader__'
 const WG_MEMBER_NODE_ID = '__wg_member__'
 const WG_CLARIFY_NODE_ID = '__wg_clarify__'
 
 export interface ChildWorkgroupLaunchResources {
   loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]>
-  ensureHostWorkflow(): Promise<void>
   readonly integrity: AgentLaunchResourceIntegrityParticipant
 }
 
@@ -77,7 +79,7 @@ export interface ChildExecutionLaunchDependencies {
 }
 
 interface ChildLaunchSubject {
-  readonly workflowId: string
+  readonly subject: Extract<TaskSubject, { kind: 'workflow' | 'workgroup' }>
   readonly workflowVersion: number
   readonly workflowSnapshotJson: string
   readonly workgroup: null | Readonly<{
@@ -119,52 +121,6 @@ interface ParentRunSnapshot {
   readonly operationGeneration: number
 }
 
-type LineageEntry = Readonly<{
-  stableNodeKey: string
-  frozenOccurrenceKey: string
-  workflowRevision: number | null
-}>
-
-function parseLineage(raw: string | null, executionLineageId: string): readonly LineageEntry[] {
-  if (raw !== null) {
-    try {
-      const value: unknown = JSON.parse(raw)
-      if (
-        Array.isArray(value) &&
-        value.length > 0 &&
-        value.every(
-          (entry) =>
-            typeof entry === 'object' &&
-            entry !== null &&
-            typeof Reflect.get(entry, 'stableNodeKey') === 'string' &&
-            typeof Reflect.get(entry, 'frozenOccurrenceKey') === 'string' &&
-            (Reflect.get(entry, 'workflowRevision') === null ||
-              typeof Reflect.get(entry, 'workflowRevision') === 'number'),
-        )
-      ) {
-        return value.map((entry) => {
-          const workflowRevision = Reflect.get(entry, 'workflowRevision')
-          return {
-            stableNodeKey: String(Reflect.get(entry, 'stableNodeKey')),
-            frozenOccurrenceKey: String(Reflect.get(entry, 'frozenOccurrenceKey')),
-            workflowRevision: typeof workflowRevision === 'number' ? workflowRevision : null,
-          }
-        })
-      }
-    } catch {
-      // Historical malformed paths fall back to the lineage root, matching the
-      // SQLite behavior while keeping the new child suffix deterministic.
-    }
-  }
-  return [
-    {
-      stableNodeKey: 'task-root',
-      frozenOccurrenceKey: executionLineageId,
-      workflowRevision: null,
-    },
-  ]
-}
-
 function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): WorkflowDefinition {
   const leader = config.members.find((member) => member.id === config.leaderMemberId)
   const firstAgent = config.members.find((member) => member.memberType === 'agent')
@@ -185,9 +141,11 @@ function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): WorkflowDef
   })
 }
 
-function prepareWorkflowSubject(
-  request: ChildWorkflowLaunchRequest,
-): Readonly<{ task: StartTask; subject: ChildLaunchSubject; collaborators: readonly string[] }> {
+function prepareWorkflowSubject(request: ChildWorkflowLaunchRequest): Readonly<{
+  task: TaskStartOptions
+  subject: ChildLaunchSubject
+  collaborators: readonly string[]
+}> {
   const task = request.payload
   if (task.workflowId !== request.workflowId) {
     // RFC-359 W8-A: one code for "the ref and the payload disagree" across every
@@ -227,7 +185,7 @@ function prepareWorkflowSubject(
   return {
     task,
     subject: {
-      workflowId: request.workflowId,
+      subject: { kind: 'workflow', sourceId: request.workflowId },
       workflowVersion: request.frozenWorkflowVersion,
       workflowSnapshotJson: request.frozenSnapshotJson,
       workgroup: null,
@@ -240,7 +198,11 @@ async function prepareWorkgroupSubject(
   dependencies: ChildExecutionLaunchDependencies,
   request: ChildWorkgroupLaunchRequest,
 ): Promise<
-  Readonly<{ task: StartTask; subject: ChildLaunchSubject; collaborators: readonly string[] }>
+  Readonly<{
+    task: TaskStartOptions
+    subject: ChildLaunchSubject
+    collaborators: readonly string[]
+  }>
 > {
   const group = FrozenWorkgroupGroupSchema.parse(request.frozenGroup.group)
   if (group.id !== request.frozenGroup.id || group.version !== request.frozenGroup.version) {
@@ -278,7 +240,6 @@ async function prepareWorkgroupSubject(
     })
   }
   await dependencies.workgroup.integrity.assertUsable({ rootAgentIds: agentIds })
-  await dependencies.workgroup.ensureHostWorkflow()
 
   const humanIds = config.members.flatMap((member) =>
     member.memberType === 'human' && typeof member.userId === 'string' && member.userId.length > 0
@@ -290,8 +251,7 @@ async function prepareWorkgroupSubject(
   const snapshot = dynamic
     ? WorkflowDefinitionSchema.parse(buildDynamicWorkflowGenerateSnapshot())
     : buildWorkgroupHostSnapshot(config)
-  const task: StartTask = {
-    workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+  const task: TaskStartOptions = {
     name: request.name,
     inputs: {},
     ...(collaborators.length === 0 ? {} : { collaboratorUserIds: collaborators }),
@@ -302,7 +262,7 @@ async function prepareWorkgroupSubject(
   return {
     task,
     subject: {
-      workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+      subject: { kind: 'workgroup', sourceId: group.id },
       workflowVersion: 1,
       workflowSnapshotJson: JSON.stringify(snapshot),
       workgroup: { id: group.id, config, dynamic },
@@ -360,7 +320,7 @@ async function launchPreparedChild(
   dependencies: ChildExecutionLaunchDependencies,
   request: ChildLaunchRequest,
   prepared: Readonly<{
-    task: StartTask
+    task: TaskStartOptions
     subject: ChildLaunchSubject
     collaborators: readonly string[]
   }>,
@@ -384,16 +344,8 @@ async function launchPreparedChild(
   if (primary === undefined) throw new Error('child-materialized-space-missing-primary-repo')
 
   const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
-    const {
-      tasks,
-      nodeRuns,
-      workflows,
-      taskRepos,
-      taskSpaceNodes,
-      taskCollaborators,
-      taskExecutionIntents,
-      workgroupTaskState,
-    } = tablesOf(tx)
+    const { tasks, nodeRuns, taskCollaborators, taskExecutionIntents, workgroupTaskState } =
+      tablesOf(tx)
     const parent = (
       await tx
         .select({
@@ -453,18 +405,24 @@ async function launchPreparedChild(
         `parent task '${parent.id}' has an incomplete Git identity snapshot`,
       )
     }
-    const anchor = (
-      await tx
-        .select({ id: workflows.id })
-        .from(workflows)
-        .where(eq(workflows.id, prepared.subject.workflowId))
-        .limit(1)
-    )[0]
-    if (anchor === undefined) {
-      throw new NotFoundError(
-        'workflow-not-found',
-        `workflow anchor '${prepared.subject.workflowId}' was not found`,
-      )
+    if (prepared.subject.subject.kind === 'workflow') {
+      if (definitionHost(prepared.subject.subject.sourceId) !== null) {
+        throw new NotFoundError(
+          'workflow-not-found',
+          `workflow '${prepared.subject.subject.sourceId}' not found`,
+        )
+      }
+      const anchor = (
+        await createWorkflowExecutionQueries(tx)
+          .summaries([prepared.subject.subject.sourceId])
+          .then((rows) => rows.map((row) => ({ id: row.id })))
+      )[0]
+      if (anchor === undefined) {
+        throw new NotFoundError(
+          'workflow-not-found',
+          `workflow anchor '${prepared.subject.subject.sourceId}' was not found`,
+        )
+      }
     }
 
     const members = await activeCollaborators(tx, parent.ownerUserId, prepared.collaborators)
@@ -477,20 +435,8 @@ async function launchPreparedChild(
             fence: parent.sourceTerminationFence,
             effectRevision: parent.sourceTerminationEffectRev,
           }
-    const executionLineageId = parent.executionLineageId ?? parent.id
     const continuationSlotKey =
       parentRun.continuationSlotKey ?? `legacy-call:${request.parentNodeRunId}`
-    const lineage = [
-      ...parseLineage(
-        parentRun.lineageSlotPathJson ?? parent.lineageSlotPathJson,
-        executionLineageId,
-      ),
-      {
-        stableNodeKey: 'child-task',
-        frozenOccurrenceKey: continuationSlotKey,
-        workflowRevision: prepared.subject.workflowVersion,
-      },
-    ] satisfies readonly LineageEntry[]
     const branch = space.branch === '' ? `agent-workflow/${taskId}` : space.branch
 
     await admitTransferredWorkspace(tx, {
@@ -500,101 +446,88 @@ async function launchPreparedChild(
       baseCommit: space.baseCommit,
       ownerRef: request.parentNodeRunId,
     })
-    await insertOne(tx, tasks, {
-      id: taskId,
-      name: prepared.task.name,
-      workflowId: prepared.subject.workflowId,
-      workflowSnapshot: prepared.subject.workflowSnapshotJson,
-      workflowVersion: prepared.subject.workflowVersion,
-      repoPath: primary.repoPath,
-      repoUrl: primary.repoUrl === null ? null : redactGitUrl(primary.repoUrl),
-      cachedRepoId: primary.cachedRepoId,
-      repoGroupId: parent.repoGroupId,
-      repoGroupName: parent.repoGroupName,
-      worktreePath: space.worktreePath,
-      baseBranch: primary.baseBranch,
-      branch,
-      baseCommit: primary.baseCommit,
-      status: 'pending',
-      inputs: JSON.stringify(prepared.task.inputs),
-      maxDurationMs: prepared.task.maxDurationMs ?? null,
-      maxTotalTokens: prepared.task.maxTotalTokens ?? null,
-      startedAt: occurredAt,
-      finishedAt: null,
-      errorSummary: null,
-      errorMessage: null,
-      gitUserName: parent.gitUserName,
-      gitUserEmail: parent.gitUserEmail,
-      workingBranch: null,
-      autoCommitPush: false,
-      repoCount: Math.max(1, space.repos.length),
-      ownerUserId: parent.ownerUserId,
-      launchOrigin: parent.launchOrigin,
-      catalogVisibility: parent.catalogVisibility,
-      // RFC-359 AC-1（plan §5hn 批次二 ⑤，**合一照出的缺陷**）：触发上下文取**请求上带来的
-      // 运行期那一份**，不是父行那一列。
-      //
-      // 两者不是同一个东西：父行存的是**落库时**的触发上下文，而调度器在运行期会把触发
-      // 定义解析出来的 `contract`（`namespace` / `definitionRef` / `availableFields`）补上去
-      //（`buildChildRuntime(state)` 交下来的就是补过的那一份）。照抄父行那一列，
-      // 子任务的触发上下文就**丢掉整个 `contract` 块**——子 agent 的 prompt 里
-      // `{{event_type}}` 这类字段随之展不开。
-      //
-      // 合并前这条只在 SQLite 那侧成立（`services/task.ts` 写的是 `deps.triggerContext`），
-      // **PostgreSQL 一直在抄父行**；`rfc243-call-workflow` 的「child task atomically inherits
-      // nested context」一合上来就红了。按强侧抬齐：父行没有触发上下文时两侧同为 null
-      //（`state.triggerContext` 本来就派生自父行），有则取补过 `contract` 的那一份。
-      triggerContextJson:
-        request.runtime.triggerContext === undefined
-          ? parent.triggerContextJson
-          : JSON.stringify(request.runtime.triggerContext),
-      sourceTerminationBinding: sourceTermination?.binding ?? null,
-      sourceTerminationLaunchRev: sourceTermination?.launchRevision ?? null,
-      sourceTerminationFence: sourceTermination?.fence ?? null,
-      sourceTerminationEffectRev: sourceTermination?.effectRevision ?? null,
-      workgroupId: prepared.subject.workgroup?.id ?? null,
-      workgroupConfigJson:
-        prepared.subject.workgroup === null
-          ? null
-          : JSON.stringify(prepared.subject.workgroup.config),
-      spaceKind: 'inherited',
-      parentTaskId: request.parentTaskId,
-      parentNodeRunId: request.parentNodeRunId,
-      invocationDepth: request.invocationDepth,
-      refClosureJson: 'refClosureJson' in request ? request.refClosureJson : null,
-      branchStartedAt: occurredAt,
-      rootTaskId: parent.rootTaskId ?? parent.id,
-      executionLineageId,
-      lineageSlotPathJson: JSON.stringify(lineage),
-    })
-    await tx.insert(taskRepos).values(
-      space.repos.map((repo) => ({
-        taskId,
-        repoIndex: repo.repoIndex,
-        repoPath: repo.repoPath,
-        repoUrl: repo.repoUrl === null ? null : redactGitUrl(repo.repoUrl),
-        cachedRepoId: repo.cachedRepoId,
-        baseBranch: repo.baseBranch,
-        branch: repo.branch,
+    const { executionLineageId, lineageSlotPathJson } = await createTaskCreationParticipantInTx(
+      tx,
+    ).create({
+      subject: prepared.subject.subject,
+      core: {
+        id: taskId,
+        name: prepared.task.name,
+        status: 'pending',
+        startedAt: occurredAt,
+        finishedAt: null,
+        errorSummary: null,
+        errorMessage: null,
+        ownerUserId: parent.ownerUserId,
+        catalogVisibility: parent.catalogVisibility,
+        parentTaskId: request.parentTaskId,
+        parentNodeRunId: request.parentNodeRunId,
+        invocationDepth: request.invocationDepth,
+        branchStartedAt: occurredAt,
+      },
+      definition: {
+        workflowSnapshot: prepared.subject.workflowSnapshotJson,
+        workflowVersion: prepared.subject.workflowVersion,
+        inputs: JSON.stringify(prepared.task.inputs),
+        maxDurationMs: prepared.task.maxDurationMs ?? null,
+        maxTotalTokens: prepared.task.maxTotalTokens ?? null,
+        workgroupConfigJson:
+          prepared.subject.workgroup === null
+            ? null
+            : JSON.stringify(prepared.subject.workgroup.config),
+        refClosureJson: 'refClosureJson' in request ? request.refClosureJson : null,
+      },
+      launchContext: {
+        // RFC-359 AC-1（plan §5hn 批次二 ⑤，**合一照出的缺陷**）：触发上下文取**请求上带来的
+        // 运行期那一份**，不是父行那一列。
+        //
+        // 两者不是同一个东西：父行存的是**落库时**的触发上下文，而调度器在运行期会把触发
+        // 定义解析出来的 `contract`（`namespace` / `definitionRef` / `availableFields`）补上去
+        //（`buildChildRuntime(state)` 交下来的就是补过的那一份）。照抄父行那一列，
+        // 子任务的触发上下文就**丢掉整个 `contract` 块**——子 agent 的 prompt 里
+        // `{{event_type}}` 这类字段随之展不开。
+        //
+        // 合并前这条只在 SQLite 那侧成立（`services/task.ts` 写的是 `deps.triggerContext`），
+        // **PostgreSQL 一直在抄父行**；`rfc243-call-workflow` 的「child task atomically inherits
+        // nested context」一合上来就红了。按强侧抬齐：父行没有触发上下文时两侧同为 null
+        //（`state.triggerContext` 本来就派生自父行），有则取补过 `contract` 的那一份。
+        triggerContextJson:
+          request.runtime.triggerContext === undefined
+            ? parent.triggerContextJson
+            : JSON.stringify(request.runtime.triggerContext),
+        sourceTerminationBinding: sourceTermination?.binding ?? null,
+        sourceTerminationLaunchRev: sourceTermination?.launchRevision ?? null,
+        sourceTerminationFence: sourceTermination?.fence ?? null,
+        sourceTerminationEffectRev: sourceTermination?.effectRevision ?? null,
+      },
+      workspace: {
+        repoPath: primary.repoPath,
+        repoUrl: primary.repoUrl === null ? null : redactGitUrl(primary.repoUrl),
+        cachedRepoId: primary.cachedRepoId,
+        repoGroupId: parent.repoGroupId,
+        repoGroupName: parent.repoGroupName,
+        worktreePath: space.worktreePath,
+        baseBranch: primary.baseBranch,
+        branch,
+        baseCommit: primary.baseCommit,
+        gitUserName: parent.gitUserName,
+        gitUserEmail: parent.gitUserEmail,
         workingBranch: null,
-        baseCommit: repo.baseCommit,
-        worktreePath: repo.worktreePath,
-        worktreeDirName: repo.worktreeDirName,
-        mountPath: repo.mountPath,
-        subdir: repo.subdir,
-        readonly: repo.readonly,
-        workspaceProfileVersion: repo.workspaceProfileVersion ?? null,
-        workspaceProfileDigest: repo.workspaceProfileDigest ?? null,
-        hasSubmodules: repo.hasSubmodules,
-        submoduleInitOk: repo.submoduleInitOk,
-        submoduleInitError: repo.submoduleInitError,
-      })),
-    )
-    if (space.nodePaths.length > 0) {
-      await tx
-        .insert(taskSpaceNodes)
-        .values(space.nodePaths.map((nodePath) => ({ taskId, nodePath, schemaVersion: 1 })))
-    }
+        autoCommitPush: false,
+        spaceKind: 'inherited',
+      },
+      launch: {
+        kind: 'child',
+        parent,
+        parentNodeRunId: request.parentNodeRunId,
+        continuationSlotKey: parentRun.continuationSlotKey,
+        parentRunLineageSlotPathJson: parentRun.lineageSlotPathJson,
+      },
+      repos: space.repos.map((repo) =>
+        decodeTaskRepositoryMount({ ...repo, workingBranch: null, readonlyDirtyCount: null }),
+      ),
+      nodePaths: space.nodePaths,
+    })
     if (members.length > 0) {
       if (parent.ownerUserId === null) {
         throw new ConflictError(
@@ -626,16 +559,19 @@ async function launchPreparedChild(
         JSON.stringify({
           kind: 'launch',
           taskId,
-          workflowId: prepared.subject.workflowId,
+          workflowId: definitionAnchorId(prepared.subject.subject),
           workflowVersion: prepared.subject.workflowVersion,
           continuationSlotKey,
           operationGeneration: parentRun.operationGeneration,
         }),
       ),
-      payloadJson: JSON.stringify({ v: 1, workflowId: prepared.subject.workflowId }),
+      payloadJson: JSON.stringify({
+        v: 1,
+        workflowId: definitionAnchorId(prepared.subject.subject),
+      }),
       executionLineageId,
       continuationSlotKey,
-      slotPathJson: JSON.stringify(lineage),
+      slotPathJson: lineageSlotPathJson,
       operationGeneration: parentRun.operationGeneration,
       expectedTaskRevision: 1,
       createdAt: occurredAt,

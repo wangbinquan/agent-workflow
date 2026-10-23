@@ -20,6 +20,7 @@
 // 端到端那一半由 `e2e/fusion-lifecycle.spec.ts` 用真实 agent 跑完整条链验证；
 // 这里留一条快的、不依赖运行时的判据，让「谁把这行删了」当场变红。
 
+import { readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -190,7 +191,7 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
       bodyMd: 'v1',
       frontmatterExtra: {},
     })
-    const { skills, fusions, tasks } = tablesOf(h.db)
+    const { skills, fusions } = tablesOf(h.db)
     const skillId = first(
       h.db.select({ id: skills.id }).from(skills).where(eq(skills.name, 'lint')),
     )!.id
@@ -210,12 +211,11 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
     )!.currentTaskId
     expect(taskId, '融合没有关联任务 ⇒ 下面的判据无从谈起').not.toBeNull()
 
-    const roster = first(
-      h.db
-        .select({ json: tasks.platformInputPathsJson, spaceKind: tasks.spaceKind })
-        .from(tasks)
-        .where(eq(tasks.id, taskId!)),
-    )!
+    const roster = (
+      await readTaskFixtures(h.db, { id: taskId! }).then((rows) =>
+        rows.map((row) => ({ json: row.platformInputPathsJson, spaceKind: row.spaceKind })),
+      )
+    )[0]!
     expect(roster.spaceKind, 'force-include 名册只对 internal 空间开放').toBe('internal')
     expect(
       roster.json === null ? [] : (JSON.parse(roster.json) as string[]),

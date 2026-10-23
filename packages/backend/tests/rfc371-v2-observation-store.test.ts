@@ -3,6 +3,7 @@
 // price version frozen by acceptance time, and every statistic aggregated on
 // demand over the visible scope (administrators: everything; others: the tasks
 // task-execution confirms plus their own task-less system calls).
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -67,8 +68,7 @@ async function seedTask(
     readonly finishedAt?: number
   },
 ) {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: input.id,
     name: `task ${input.id}`,
     workflowId: 'wf',
@@ -91,7 +91,7 @@ async function seedTask(
 }
 
 async function seedBase(db: PersistenceDb) {
-  const { users, workflows, taskCollaborators, nodeRuns } = tablesOf(db)
+  const { users, taskCollaborators } = tablesOf(db)
   for (const id of ['u-admin', 'u-member', 'u-other'])
     await insertOne(db, users, {
       id,
@@ -102,7 +102,7 @@ async function seedBase(db: PersistenceDb) {
       createdAt: T0,
       updatedAt: T0,
     })
-  await insertOne(db, workflows, { id: 'wf', name: 'wf', definition: '{}' })
+  await workflowFixture(db, { id: 'wf', name: 'wf', definition: '{}' })
   await seedTask(db, {
     id: 't-own',
     owner: 'u-member',
@@ -134,7 +134,7 @@ async function seedBase(db: PersistenceDb) {
     ['nr-own-1', 0],
     ['nr-own-2', 1],
   ] as const)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId: 't-own',
       nodeId: 'plan',

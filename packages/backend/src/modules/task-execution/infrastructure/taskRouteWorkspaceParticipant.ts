@@ -18,7 +18,7 @@ import {
   redactGitUrl,
   type GitCommitIdentity,
   type SpaceKind,
-  type StartTask,
+  type TaskStartOptions,
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
@@ -48,7 +48,7 @@ export interface TaskRouteWorkspaceDependencies {
 export interface TaskWorkspacePreparation {
   readonly taskId: string
   readonly authority?: RequestAuthority
-  readonly task: StartTask
+  readonly task: TaskStartOptions
   readonly gitCommitIdentity: GitCommitIdentity | null
   readonly sourceTerminationSignal?: AbortSignal
   /**
@@ -97,7 +97,7 @@ function repositoryProjection(
     workingBranch,
     baseCommit: repo.baseCommit,
     worktreePath: repo.worktreePath,
-    worktreeDirName: repo.worktreeDirName,
+    worktreeDirName: repo.mountPath,
     mountPath: repo.mountPath,
     subdir: repo.subdir,
     readonly: repo.readonly,

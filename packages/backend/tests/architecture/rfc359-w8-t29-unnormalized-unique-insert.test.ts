@@ -59,7 +59,8 @@
 //   ② **事务作用域** = 形参名为 `tx` / `transaction` 的函数体。与 W6-T28 账本同一条，理由也一样：
 //      它同时罩住 `session.transaction(async (tx) => …)` 这类回调与 `function fooTx(tx, …)` 这类
 //      接过句柄的助手，后者里恰恰躺着相当一部分债。
-//   ③ **插入** = 该作用域里的 `…insert(表)`，且链上**没有** `onConflictDo*`——带 upsert 的插入
+//   ③ **插入** = 该作用域里的 `…insert(表)` / `insertOne` / agent、workflow writer.insert，
+//      且链上**没有** `onConflictDo*`——带 upsert 的插入
 //      本来就把冲突当成正常分支处理，不会抛。
 //   ④ **同作用域先读同一张表** = 位置在插入**之前**的 `…select(…)…from(同一个表)`。这是「先查存在」
 //      这半句的机器表达，也是把「无脑 insert」（没有前置检查、冲突本来就是预期）排除掉的那一条。
@@ -214,6 +215,20 @@ function tableArgument(call: ts.CallExpression | undefined): string | null {
   return null
 }
 
+/** A writer move does not discharge the caller's read-then-insert ledger entry. */
+function insertedTable(call: ts.CallExpression): string | null {
+  const target = call.expression
+  if (ts.isPropertyAccessExpression(target) && target.name.text === 'insert') {
+    const receiver = target.expression
+    if (ts.isCallExpression(receiver) && ts.isIdentifier(receiver.expression)) {
+      if (receiver.expression.text === 'createAgentReferenceWriteParticipant') return 'agents'
+      if (receiver.expression.text === 'createWorkflowDefinitionWriteParticipant')
+        return 'workflows'
+    }
+  }
+  return tableArgument(call)
+}
+
 // ---------------------------------------------------------------------------
 // ① 带唯一约束的表
 // ---------------------------------------------------------------------------
@@ -319,7 +334,7 @@ export function unnormalizedUniqueInsertSites(
       }
       // ③ 插入：表带唯一约束、链上没有 onConflictDo*
       if (name === 'insert' || name === 'insertOne') {
-        const table = tableArgument(node)
+        const table = insertedTable(node)
         const scope = table === null ? null : enclosingScope(node)
         if (scope !== null && table !== null && uniqueTables.has(table)) {
           const chain = chainCalls(chainRoot(node))
@@ -525,12 +540,11 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // after comparing the stored row, never a second entity.
   'modules/integration/infrastructure/crewstation/eventInbox.ts: 2',
   'modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts: 2',
-  'modules/intent/infrastructure/intentApplyEngine.ts: 1',
   'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 7',
   'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts: 2',
   'modules/resource-catalog/infrastructure/workflowRepository.ts: 1',
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts: 1',
-  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts: 1',
+  // RFC-395 II-a A2: child insertion moved into the shared task creation participant.
   'modules/task-execution/infrastructure/effectQuiescence.ts: 1',
   // RFC-374：判据 ④ 的假阳性——前置读按主键取容器行，`seq` 来自 identity 分配，见上方注释。
   'modules/task-execution/infrastructure/nodeRunMintParticipant.ts: 1',
@@ -787,6 +801,60 @@ describe('RFC-359 W8-T29 —— 判据自证（负 fixture）', () => {
       ).map((site) => site.table),
     ).toEqual(['widgets'])
   })
+  test('writer calls retain the original same-table, same-scope read-before-insert debt', () => {
+    const tables = new Set(['agents', 'workflows'])
+    for (const [table, factory] of [
+      ['agents', 'createAgentReferenceWriteParticipant'],
+      ['workflows', 'createWorkflowDefinitionWriteParticipant'],
+    ] as const) {
+      const read = `const hit = await transaction.select().from(${table}).limit(1)`
+      const insert = `await ${factory}(transaction).insert({ id: 'candidate' })`
+      const wrap = (body: string) => `async function write(transaction: Tx) { ${body} }`
+      const source = wrap(`${read}; ${insert}`)
+      const sites = uniqueInsertDebtSites('writer.ts', source, tables)
+      expect(sites.map((site) => site.table)).toEqual([table])
+      expect(sites[0]?.opener).toBe('<caller>')
+      expect(sites[0]?.serializedBeforeRead).toBe(false)
+      expect(uniqueInsertDebtSites('writer-blind.ts', wrap(insert), tables)).toEqual([])
+      expect(
+        uniqueInsertDebtSites('writer-reversed.ts', wrap(`${insert}; ${read}`), tables),
+      ).toEqual([])
+      expect(
+        uniqueInsertDebtSites('writer-update.ts', source.replace('.insert(', '.update('), tables),
+      ).toEqual([])
+      expect(
+        uniqueInsertDebtSites(
+          'writer-unrelated.ts',
+          source.replace(factory, 'unrelatedWriter'),
+          tables,
+        ),
+      ).toEqual([])
+      expect(
+        uniqueInsertDebtSites(
+          'writer-wrong-table.ts',
+          source.replace(`from(${table})`, 'from(notes)'),
+          tables,
+        ),
+      ).toEqual([])
+      expect(
+        uniqueInsertDebtSites(
+          'writer-other-scope.ts',
+          wrap(`${read}; async function nested(transaction: Tx) { ${insert} }`),
+          tables,
+        ),
+      ).toEqual([])
+      expect(
+        uniqueInsertDebtSites(
+          'writer-normalized.ts',
+          `${source}
+function normalize(error) { return engine.classifyError(error) }`,
+          tables,
+        ),
+      ).toEqual([])
+      expect(uniqueInsertDebtSites('writer-not-unique.ts', source, new Set())).toEqual([])
+    }
+  })
+
   test('唯一约束表的识别：uniqueIndex 与复合 primaryKey 都算，普通 index 不算', () => {
     expect([...FIXTURE_TABLES].sort()).toEqual(['gadgets', 'widgets'])
     const plain = FIXTURE_SCHEMA[2]!
@@ -921,3 +989,6 @@ export async function createWidgetTx(tx: Tx, name: string) {
     )
   })
 })
+
+// 2026-10-22 RFC-395 II-a A6：上文 sessionApplyLock.ts 为历史依据；当前场景使用
+// platform/atomic-apply/keyedLock.ts 的同一串行算法，journal claim 则由 conflict insert 与 CAS 驱动。

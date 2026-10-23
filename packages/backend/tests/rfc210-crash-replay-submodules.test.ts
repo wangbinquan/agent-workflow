@@ -20,8 +20,8 @@ import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import { rebuildIsoHandle, type CanonRepo } from '@/services/nodeIsolation'
 
 const canonRepos: CanonRepo[] = [
-  { repoPath: '/r/a', worktreePath: '/wt/a', worktreeDirName: 'a', baseBranch: 'main' },
-  { repoPath: '/r/b', worktreePath: '/wt/b', worktreeDirName: 'b', baseBranch: 'main' },
+  { repoPath: '/r/a', worktreePath: '/wt/a', mountPath: 'a', baseBranch: 'main' },
+  { repoPath: '/r/b', worktreePath: '/wt/b', mountPath: 'b', baseBranch: 'main' },
 ]
 
 describe('RFC-210 crash replay carries submodule topology', () => {

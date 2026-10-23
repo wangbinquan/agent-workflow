@@ -2,7 +2,7 @@
 // attempt, existing transport retries remain live, and earlier ambiguity is
 // retained unless a later applied response resolves the logical operation.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -45,8 +45,7 @@ async function fixture(
   const slotPath: readonly LineageSlot[] = [
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ]
-  const { tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-rfc328-codehost',
@@ -62,7 +61,7 @@ async function fixture(
     executionLineageId: taskId,
     lineageSlotPathJson: canonicalJson(slotPath),
   })
-  await insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'code-host', status: 'running' })
+  await nodeRunFixture(db, { id: nodeRunId, taskId, nodeId: 'code-host', status: 'running' })
   const module = createTaskExecutionTestModule(`daemon-${taskId}`)
   const intent = await submitIntent(db, {
     intentId: `intent-${taskId}`,
@@ -435,7 +434,7 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     expect(h.observer.outcomeUnknown()).toBe(true)
     expect(await settleTerminal(h.observer, h.nodeRunId)).toBe(true)
 
-    const { taskExecutionEffects, taskExecutionLineageOperationRecords, nodeRuns } = tablesOf(h.db)
+    const { taskExecutionEffects, taskExecutionLineageOperationRecords } = tablesOf(h.db)
     const unresolved = (
       await h.db.select({ id: taskExecutionEffects.id }).from(taskExecutionEffects).limit(1)
     )[0]!
@@ -483,7 +482,7 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     const claim = await h.module.claim({ db: h.db, intentId: manualIntentId })
     h.module.claimGate.leave(claim.permit)
     const nextNodeRunId = `${h.taskId}-code-host-node-generation-1`
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: nextNodeRunId,
       taskId: h.taskId,
       nodeId: 'code-host',

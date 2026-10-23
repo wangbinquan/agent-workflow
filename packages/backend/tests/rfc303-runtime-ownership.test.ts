@@ -1,6 +1,6 @@
+import { nodeRunFixture, readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 // RFC-303 runtime ownership locks: a durable terminal fact must stop the exact
 // attached driver, wait for its finally/reap receipt, and reject forged effect
@@ -177,8 +177,8 @@ describe('RFC-303 source termination capability', () => {
       // later cancellation callback correctly lost the owner fence, so the row
       // stayed `running` forever even though the task and process were canceled.
       const db = harness.db
-      const { tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, tasks, {
+      const { nodeRuns } = tablesOf(db)
+      await taskFixture(db, {
         id: 'task-source-node-projection',
         executionLineageId: 'task-source-node-projection',
         lineageSlotPathJson:
@@ -197,7 +197,7 @@ describe('RFC-303 source termination capability', () => {
         sourceTerminationBinding: input.binding,
         sourceTerminationLaunchRev: 1,
       })
-      await db.insert(nodeRuns).values([
+      await nodeRunFixture(db, [
         {
           id: 'run-source-live',
           taskId: 'task-source-node-projection',
@@ -243,13 +243,10 @@ describe('RFC-303 source termination capability', () => {
       ])
       expect(
         (
-          await first(
-            db
-              .select({ status: tasks.status })
-              .from(tasks)
-              .where(eq(tasks.id, 'task-source-node-projection')),
+          await readTaskFixtures(db, { id: 'task-source-node-projection' }).then((rows) =>
+            rows.map((row) => ({ status: row.status })),
           )
-        )?.status,
+        )[0]?.status,
       ).toBe('canceled')
     })
   })

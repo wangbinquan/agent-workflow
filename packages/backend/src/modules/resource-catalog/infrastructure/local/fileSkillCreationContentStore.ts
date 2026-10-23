@@ -26,7 +26,7 @@ export function createFileSkillCreationContentStore(
       if (legacyProducer) {
         legacyProducer(plan.liveRef)
       } else if (content.kind === 'main') {
-        writeFileSync(join(plan.liveRef, 'SKILL.md'), content.content, 'utf-8')
+        writeFileSync(join(plan.liveRef, 'SKILL.md'), content.content)
       } else {
         writeFileSkillTree(plan.liveRef, content)
       }

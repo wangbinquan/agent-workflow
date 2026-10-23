@@ -1,8 +1,17 @@
 // RFC359 W26: preserve the original ordered listActive result and its single
 // transaction snapshot while an empty workgroup index can avoid the task scan.
 // The earlier W23 predicate/index probes changed nonempty order and were rejected.
+
+import { taskWorkgroupConfigSelection } from '@/modules/task-execution/public/operations'
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
@@ -15,6 +24,9 @@ import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/col
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import type { TaskExecutionTransaction } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import type { WorkgroupTaskRoomTaskSnapshot } from '@/modules/task-execution/public/commands'
+import { decodeTaskSubject } from '@/modules/task-execution/public/queries'
+import type { StoredTaskSubject } from '@/modules/task-execution/public/types'
+import { taskSubjectFixtureColumns } from './helpers/model/taskSubject'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createPostgresqlDatabaseRuntime,
@@ -25,7 +37,10 @@ import type { RecordedStatement } from './helpers/statementRecorder'
 
 // RFC-374: the participant's two node-run projections also carry `seq` (outside the probe).
 // RFC-395 I-b: one session table destructuring now serves the whole write transaction.
-const ORIGINAL_SOURCE_HASH = '84c7fba4e25fc7b0540902a335e71dd3a88542c19566a6450b65f023622a685b'
+// RFC-395 II-a A2: subject inputs and decoding are mirrored in the former-wiring oracle.
+// RFC-395 II-a rebaseline: verified the prior A2 source against d5aa2262; only A3 run-selection
+// projection, grouped identity writes and moving imports below the header differ.
+const ORIGINAL_SOURCE_HASH = '05b89c9683170ec48cc2b0e6fa2f12e419d4bb7837281b06d2e8953cfa37ef7d'
 const SOURCE_PATH = resolve(
   import.meta.dir,
   '../src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
@@ -65,9 +80,14 @@ function originalCompiledSql(value: string): string {
 }
 
 function taskSnapshot(
-  row: Omit<WorkgroupTaskRoomTaskSnapshot, 'status'> & { readonly status: string },
+  row: Omit<WorkgroupTaskRoomTaskSnapshot, 'status' | 'subject'> &
+    StoredTaskSubject & { readonly status: string },
 ): WorkgroupTaskRoomTaskSnapshot {
-  return Object.freeze({ ...row, status: row.status as TaskStatus })
+  return Object.freeze({
+    ...row,
+    subject: decodeTaskSubject(row),
+    status: row.status as TaskStatus,
+  })
 }
 
 const taskProjection = (db: object) => {
@@ -78,7 +98,8 @@ const taskProjection = (db: object) => {
     ownerUserId: tasks.ownerUserId,
     status: tasks.status,
     workgroupId: tasks.workgroupId,
-    workgroupConfigJson: tasks.workgroupConfigJson,
+    ...taskSubjectFixtureColumns(db),
+    workgroupConfig: taskWorkgroupConfigSelection(db),
     workflowSnapshot: tasks.workflowSnapshot,
     triggerContextJson: tasks.triggerContextJson,
   }
@@ -127,7 +148,7 @@ function ordinaryRows(): readonly FixtureRow[] {
 }
 
 async function seed(db: PersistenceDb, values: readonly FixtureRow[]): Promise<void> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'wg-index-user',
     username: 'wg-index-user',
@@ -138,7 +159,7 @@ async function seed(db: PersistenceDb, values: readonly FixtureRow[]): Promise<v
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wg-index-workflow',
     name: 'fixture',
     definition: '{}',
@@ -146,7 +167,7 @@ async function seed(db: PersistenceDb, values: readonly FixtureRow[]): Promise<v
     updatedAt: 1,
   })
   if (values.length === 0) return
-  const rows: PersistenceTables['tasks']['$inferInsert'][] = values.map((row, i) => ({
+  const rows: TaskFixtureSpec[] = values.map((row, i) => ({
     id: row.id,
     name: `name:${row.id}`,
     ownerUserId: 'wg-index-user',
@@ -168,7 +189,7 @@ async function seed(db: PersistenceDb, values: readonly FixtureRow[]): Promise<v
       { stableNodeKey: 'task-root', frozenOccurrenceKey: row.id, workflowRevision: null },
     ]),
   }))
-  await db.insert(tasks).values(rows)
+  await taskFixture(db, rows)
 }
 
 const factory = composeWorkgroupTaskRoomTaskParticipantFactory({
@@ -197,15 +218,14 @@ async function recorded(
 }
 
 async function compareInTransaction(harness: ProviderHarness, tx: TaskExecutionTransaction) {
-  const { tasks } = tablesOf(tx)
-  const before = await tx.select().from(tasks)
+  const before = await readTaskFixtures(tx)
   const original = await recorded(harness, () => originalListActive(tx))
   const actual = await recorded(harness, () => factory.inTransaction(tx).listActive())
   expect(actual.rows).toEqual(original.rows)
   expect(JSON.stringify(actual.rows)).toBe(JSON.stringify(original.rows))
   expect(Object.isFrozen(actual.rows)).toBe(true)
   expect(actual.rows.every(Object.isFrozen)).toBe(true)
-  const after = await tx.select().from(tasks)
+  const after = await readTaskFixtures(tx)
   expect(after).toEqual(before)
   expect(JSON.stringify(after)).toBe(JSON.stringify(before))
   expect(originalCompiledSql(actual.statement.sql)).toBe(original.statement.sql)
@@ -243,8 +263,7 @@ function poisonTaskScan(statement: RecordedStatement): string {
 
 describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
   test('an empty physical task table keeps the complete empty result', async () => {
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await readTaskFixtures(harness.db)).toEqual([])
     await harness.session.transaction(async (tx) => {
       const { actual } = await compareInTransaction(harness, tx)
       expect(actual.rows).toEqual([])
@@ -338,20 +357,18 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
 
   test('adding the first workgroup in a transaction is visible and rollback restores all rows', async () => {
     await seed(harness.db, ordinaryRows())
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks)
+    const before = await readTaskFixtures(harness.db)
     const rollback = new Error('rollback first workgroup')
     await expect(
       harness.session.transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        await tx.update(tasks).set({ workgroupId: '' }).where(eq(tasks.id, 'ordinary-37'))
+        await patchTaskFixture(tx, { id: 'ordinary-37' }, { workgroupId: '' })
         const { actual } = await compareInTransaction(harness, tx)
         expect(actual.rows).toHaveLength(1)
         expect(actual.rows[0]?.id).toBe('ordinary-37')
         throw rollback
       }),
     ).rejects.toBe(rollback)
-    expect(JSON.stringify(await harness.db.select().from(tasks))).toBe(JSON.stringify(before))
+    expect(JSON.stringify(await readTaskFixtures(harness.db))).toBe(JSON.stringify(before))
     await harness.session.transaction(async (tx) => {
       expect((await compareInTransaction(harness, tx)).actual.rows).toEqual([])
     })
@@ -359,8 +376,7 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
 
   test('deleting the last workgroup in a transaction is visible and rollback restores its JSON', async () => {
     await seed(harness.db, [...ordinaryRows(), observedValues[0]])
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks)
+    const before = await readTaskFixtures(harness.db)
     const rollback = new Error('rollback last workgroup deletion')
     await expect(
       harness.session.transaction(async (tx) => {
@@ -371,14 +387,14 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
         throw rollback
       }),
     ).rejects.toBe(rollback)
-    expect(JSON.stringify(await harness.db.select().from(tasks))).toBe(JSON.stringify(before))
+    expect(JSON.stringify(await readTaskFixtures(harness.db))).toBe(JSON.stringify(before))
     await harness.session.transaction(async (tx) => {
       expect((await compareInTransaction(harness, tx)).actual.rows).toHaveLength(1)
     })
   })
 })
 
-// RFC-395 I-b: the whole-source inverse now includes session table access; query/result comparisons remain.
+// RFC-395 II-a A2: the inverse retains the definition writer/config port wiring; query/result comparisons remain.
 test('the original complete participant is retained outside its listActive FROM expression', () => {
   const source = readFileSync(SOURCE_PATH, 'utf8')
   const docStart = source.indexOf(PROBE_DOC_START)

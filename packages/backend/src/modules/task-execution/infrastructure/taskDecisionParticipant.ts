@@ -35,7 +35,7 @@ import {
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { linkWorkspaceRollbackEffect } from './workspaceRollbackEffect'
-import { humanGateNodeProjectionMember } from '../domain/humanGateContinuation'
+import { humanGateNodeProjectionMember } from './humanGateProjection'
 
 function assertInput(input: AcceptHumanGateDecisionInput): void {
   if (

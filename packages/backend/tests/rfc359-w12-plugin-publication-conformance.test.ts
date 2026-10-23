@@ -33,7 +33,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { installPlugin, plannedGenerationDir } from '@/services/pluginInstaller'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
@@ -189,7 +189,7 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
         execution: createPostgresqlResourcePackageExecutionAdapter({
           box,
           provider,
-          atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db, box }),
+          atomicApply: createResourcePackageAtomicApplyOperations({ db, box }),
         }),
       })
     }

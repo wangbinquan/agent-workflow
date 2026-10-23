@@ -26,7 +26,7 @@
 // 黄金锁：不传 defer/questionIds 的整轮提交语义不变——轮 answered + 恰好一条 clarify-answer 续跑
 // （RFC-132 后由统一 autoDispatchClarifyRound 驱动 + resume；legacy immediate mint 已删）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createClarifyRound, resolveCrossNodeStopped } from '../src/services/clarify/service'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -142,8 +142,7 @@ async function seedTaskRow(
 ): Promise<string> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -151,7 +150,7 @@ async function seedTaskRow(
     version: 1,
     schemaVersion: (def as { $schema_version: number }).$schema_version,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     ownerUserId,
@@ -177,15 +176,14 @@ async function seedSelfRound(
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = await seedTaskRow(db, ownerUserId, SELF_DEF)
   const sourceRunId = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: '',
+    checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
   const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
     kind: 'self',
@@ -210,10 +208,16 @@ async function seedCrossRound(
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = await seedTaskRow(db, ownerUserId, CROSS_DEF, opts)
   const questionerRunId = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
-    { id: ulid(), taskId, nodeId: 'designer', status: 'done', iteration: 0, preSnapshot: 'stub' },
+    {
+      id: ulid(),
+      taskId,
+      nodeId: 'designer',
+      status: 'done',
+      iteration: 0,
+      checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
+    },
   ])
   const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
     kind: 'cross',
@@ -250,8 +254,9 @@ interface ListedQuestion {
 }
 
 async function nodeRunStatus(db: PersistenceDb, id: string): Promise<string | undefined> {
-  const { nodeRuns } = tablesOf(db)
-  const [r] = await db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, id))
+  const [r] = await readNodeRunFixtures(db, { id }).then((rows) =>
+    rows.map((row) => ({ status: row.status })),
+  )
   return r?.status
 }
 

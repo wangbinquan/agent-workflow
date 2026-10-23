@@ -15,3 +15,8 @@ export interface RepositoryOverviewQueries {
 }
 
 export { repoRelForcedPaths } from '../domain/forcedWorkspacePaths'
+
+export {
+  existingRepositoryIds,
+  repositoryExistsExpression,
+} from '../infrastructure/repositoryIdentityQueries'

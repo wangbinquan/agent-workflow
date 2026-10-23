@@ -1,3 +1,5 @@
+import type { ClarifyAnswerContent } from '@/modules/collaboration/public/types'
+import type { TaskWorkgroupConfig } from '@/modules/task-execution/public/types'
 import type { Memory, MemoryDistillJob, ResolvedDistillScope } from '@agent-workflow/shared'
 import type { DistillTaskFacts } from '@/modules/memory/domain/distillAdmission'
 import type {
@@ -10,7 +12,7 @@ import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 
 export interface MemoryDistillTaskScopeRecord {
   readonly workflowSnapshot: string
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
   readonly workflowId: string | null
   readonly cachedRepoId: string | null
   readonly cachedRepoExists: boolean
@@ -28,7 +30,7 @@ export interface MemoryDistillClarifyWorkRecord {
   readonly intermediaryNodeId: string
   readonly askingNodeRunId: string | null
   readonly questionsJson: string
-  readonly answersJson: string | null
+  readonly answers: ClarifyAnswerContent
 }
 
 export interface MemoryDistillReviewWorkRecord {

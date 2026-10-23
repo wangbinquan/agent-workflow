@@ -114,7 +114,7 @@ describe('RFC-130 §6.2③ — merge-tree conflict classifier', () => {
     expect(byPath['del.txt']).toBe('modify-delete')
     expect(byPath['f.txt']).toBe('content')
     expect(m.length).toBe(3)
-    expect(m.every((e) => e.worktreeDirName === 'repo')).toBe(true)
+    expect(m.every((e) => e.mountPath === 'repo')).toBe(true)
   })
 
   test('a clean merge (no CONFLICT lines) yields an empty manifest', () => {
@@ -125,9 +125,9 @@ describe('RFC-130 §6.2③ — merge-tree conflict classifier', () => {
 describe('RFC-130 §6.2② — merge-resolve prompt', () => {
   test('prompt enumerates every conflicted path + the output envelope', () => {
     const manifest: MergeConflictManifest = [
-      { worktreeDirName: 'repo', path: 'f.txt', type: 'content' },
-      { worktreeDirName: 'repo', path: 'del.txt', type: 'modify-delete' },
-      { worktreeDirName: 'repo', path: 'b.bin', type: 'binary' },
+      { mountPath: 'repo', path: 'f.txt', type: 'content' },
+      { mountPath: 'repo', path: 'del.txt', type: 'modify-delete' },
+      { mountPath: 'repo', path: 'b.bin', type: 'binary' },
     ]
     const p = buildMergeResolvePrompt({ manifest })
     expect(p).toContain('f.txt')
@@ -141,16 +141,16 @@ describe('RFC-130 §6.2② — merge-resolve prompt', () => {
 
 describe('RFC-130 §6.2③ — framework resolution verdict (D6, self-check not self-report)', () => {
   const manifest: MergeConflictManifest = [
-    { worktreeDirName: 'repo', path: 'f.txt', type: 'content' },
-    { worktreeDirName: 'repo', path: 'del.txt', type: 'modify-delete' },
-    { worktreeDirName: 'repo', path: 'b.bin', type: 'binary' },
+    { mountPath: 'repo', path: 'f.txt', type: 'content' },
+    { mountPath: 'repo', path: 'del.txt', type: 'modify-delete' },
+    { mountPath: 'repo', path: 'b.bin', type: 'binary' },
   ]
 
   test('all resolved: content marker-free + delete chosen + binary present → resolved', () => {
     const v = evaluateResolution(manifest, [
-      { worktreeDirName: 'repo', path: 'f.txt', present: true, content: 'line1\nMERGED\nline3\n' },
-      { worktreeDirName: 'repo', path: 'del.txt', present: false, content: null }, // deleted — valid
-      { worktreeDirName: 'repo', path: 'b.bin', present: true, content: null }, // one side chosen
+      { mountPath: 'repo', path: 'f.txt', present: true, content: 'line1\nMERGED\nline3\n' },
+      { mountPath: 'repo', path: 'del.txt', present: false, content: null }, // deleted — valid
+      { mountPath: 'repo', path: 'b.bin', present: true, content: null }, // one side chosen
     ])
     expect(v.resolved).toBe(true)
     expect(v.unresolved).toEqual([])
@@ -159,13 +159,13 @@ describe('RFC-130 §6.2③ — framework resolution verdict (D6, self-check not 
   test('content path with residual markers → unresolved', () => {
     const v = evaluateResolution(manifest, [
       {
-        worktreeDirName: 'repo',
+        mountPath: 'repo',
         path: 'f.txt',
         present: true,
         content: 'line1\n<<<<<<< ours\nA\n=======\nB\n>>>>>>> theirs\nline3\n',
       },
-      { worktreeDirName: 'repo', path: 'del.txt', present: false, content: null },
-      { worktreeDirName: 'repo', path: 'b.bin', present: true, content: null },
+      { mountPath: 'repo', path: 'del.txt', present: false, content: null },
+      { mountPath: 'repo', path: 'b.bin', present: true, content: null },
     ])
     expect(v.resolved).toBe(false)
     expect(v.unresolved.map((e) => e.path)).toEqual(['f.txt'])
@@ -174,8 +174,8 @@ describe('RFC-130 §6.2③ — framework resolution verdict (D6, self-check not 
   test('content path missing from observed state → fail-closed unresolved', () => {
     const v = evaluateResolution(manifest, [
       // f.txt omitted entirely
-      { worktreeDirName: 'repo', path: 'del.txt', present: false, content: null },
-      { worktreeDirName: 'repo', path: 'b.bin', present: true, content: null },
+      { mountPath: 'repo', path: 'del.txt', present: false, content: null },
+      { mountPath: 'repo', path: 'b.bin', present: true, content: null },
     ])
     expect(v.resolved).toBe(false)
     expect(v.unresolved.map((e) => e.path)).toEqual(['f.txt'])
@@ -183,10 +183,10 @@ describe('RFC-130 §6.2③ — framework resolution verdict (D6, self-check not 
 
   test('modify-delete kept WITH leftover markers → unresolved', () => {
     const v = evaluateResolution(
-      [{ worktreeDirName: 'repo', path: 'del.txt', type: 'modify-delete' }],
+      [{ mountPath: 'repo', path: 'del.txt', type: 'modify-delete' }],
       [
         {
-          worktreeDirName: 'repo',
+          mountPath: 'repo',
           path: 'del.txt',
           present: true,
           content: '<<<<<<< ours\n=======\nkeep\n>>>>>>> theirs\n',
@@ -198,8 +198,8 @@ describe('RFC-130 §6.2③ — framework resolution verdict (D6, self-check not 
 
   test('binary path absent (no side chosen) → unresolved', () => {
     const v = evaluateResolution(
-      [{ worktreeDirName: 'repo', path: 'b.bin', type: 'binary' }],
-      [{ worktreeDirName: 'repo', path: 'b.bin', present: false, content: null }],
+      [{ mountPath: 'repo', path: 'b.bin', type: 'binary' }],
+      [{ mountPath: 'repo', path: 'b.bin', present: false, content: null }],
     )
     expect(v.resolved).toBe(false)
   })

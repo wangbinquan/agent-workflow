@@ -38,7 +38,8 @@ import type {
   WorkflowDefinition,
   NodeKind,
 } from '@agent-workflow/shared'
-import { compareNodeRunMintOrder, TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
 
 import type {
   TaskLifecycleInvariantScope,
@@ -345,7 +346,7 @@ function checkT2(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   ]
 }
 
-function checkT3(ctx: TaskScanContext): LifecycleInvariantFinding[] {
+async function checkT3(ctx: TaskScanContext): Promise<LifecycleInvariantFinding[]> {
   // T3: done task ⟹ every output-kind node has a SETTLED node_run.
   //
   // RFC-306 widened "settled" from `done` to `done ∪ skipped`. A conditional
@@ -370,13 +371,16 @@ function checkT3(ctx: TaskScanContext): LifecycleInvariantFinding[] {
   // status set to `done ∪ skipped` without also pinning "freshest" would have
   // made that hole bigger, and design.md promises the opposite — that a latest
   // `failed` output node still reports.
-  const outputNodeIdSet = new Set(outputNodes)
-  const outputRuns = ctx.nodeRuns.filter((run) => outputNodeIdSet.has(run.nodeId))
-  const freshestByNode = new Map<string, { id: string; seq: number | null; status: string }>()
-  for (const r of outputRuns) {
-    if (r.parentNodeRunId !== null) continue // shard/child rows never settle a node
-    const cur = freshestByNode.get(r.nodeId)
-    if (cur === undefined || compareNodeRunMintOrder(r, cur) > 0) freshestByNode.set(r.nodeId, r)
+  const freshestByNode = new Map<string, { status: string }>()
+  const selection = createRunSelectionOracleSnapshot(
+    ctx.nodeRuns.map((row) => ({ ...row, taskId: ctx.taskId })),
+    { scope: { kind: 'rows' } },
+  )
+  for (const nodeId of outputNodes) {
+    const selected = (
+      await selection.familyHistory(ctx.taskId, { nodeId }, { topLevelOnly: true })
+    ).at(-1)
+    if (selected !== undefined) freshestByNode.set(nodeId, selected)
   }
   const missing = outputNodes.filter((n) => {
     const latest = freshestByNode.get(n)
@@ -639,7 +643,7 @@ export async function runLifecycleInvariants(
     findings.push(...checkC1(ctx))
     findings.push(...checkT1(ctx))
     findings.push(...checkT2(ctx))
-    findings.push(...checkT3(ctx))
+    findings.push(...(await checkT3(ctx)))
     findings.push(...checkU1(ctx))
     // RFC-126: CR-1 retired (no longer abandons cross rounds — see note above).
   }

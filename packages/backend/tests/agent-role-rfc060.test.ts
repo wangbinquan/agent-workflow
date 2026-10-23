@@ -14,7 +14,7 @@
 //     outputWrapperPortNames) coexist without trampling each other.
 //  8. RFC-194: explicit empty sidecar maps survive update as `{}` tombstones.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readAgentFixtures } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -38,8 +38,7 @@ function basePayload(name: string) {
 }
 
 async function readFmExtraRaw(db: PersistenceDb, name: string): Promise<Record<string, unknown>> {
-  const { agents } = tablesOf(db)
-  const rows = await db.select().from(agents)
+  const rows = await readAgentFixtures(db)
   const row = rows.find((r) => r.name === name)
   if (row === undefined) throw new Error(`no agent row '${name}'`)
   return JSON.parse(row.frontmatterExtra) as Record<string, unknown>

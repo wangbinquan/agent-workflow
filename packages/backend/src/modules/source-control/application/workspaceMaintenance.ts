@@ -1,3 +1,4 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import {
   isSingleRootRepository,
   isTerminalTaskStatus,
@@ -78,10 +79,6 @@ function isTerminal(task: WorkspaceTaskRecord): boolean {
 
 function emptyReceipt(): WorkspaceGcReceipt {
   return { scanned: 0, removed: 0, skipped: 0 }
-}
-
-function lacksMaterializedWorkspace(path: string): boolean {
-  return path.length === 0
 }
 
 /**
@@ -263,12 +260,12 @@ export function createWorkspaceMaintenanceCommand(input: {
         continue
       }
       if (
-        lacksMaterializedWorkspace(task.worktreePath) ||
+        isTaskWorkspaceUnbound(task.worktreePath) ||
         !(await filesystem.exists(task.worktreePath))
       ) {
         if (task.workspacePruningAt !== null) {
           await finishClaimedWorkspace(task.id, now)
-        } else if (!lacksMaterializedWorkspace(task.worktreePath)) {
+        } else if (!isTaskWorkspaceUnbound(task.worktreePath)) {
           await store.healMissingWorkspace(task.id, now, task)
         }
         skipped += 1

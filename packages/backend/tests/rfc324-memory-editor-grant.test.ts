@@ -11,7 +11,7 @@
 // 红→绿对：把 memory domain `scopeAuthorization.ts` 的管理判据从 `write | own` 收回 `own`，
 // 「write 档可管」立刻红。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -56,8 +56,8 @@ describeEachProvider('RFC-324 D9 —— 记忆管理权随资源写权分档', (
     editor = await mk('editor', 'user')
     manager = await mk('manager', 'manager')
 
-    const { agents, workflows, resourceGrants } = tablesOf(db)
-    await insertOne(db, agents, {
+    const { resourceGrants } = tablesOf(db)
+    await agentFixture(db, {
       id: agentId,
       name: `rfc324-agent-${agentId.slice(-6)}`,
       description: '',
@@ -67,7 +67,7 @@ describeEachProvider('RFC-324 D9 —— 记忆管理权随资源写权分档', (
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: `rfc324-wf-${workflowId.slice(-6)}`,
       description: '',

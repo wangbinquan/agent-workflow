@@ -2,12 +2,12 @@
 // 两个引擎各跑一遍：可见性阶梯（bypass ⇒ 全部；private 权限 ⇒ public + 自有 + 被授权；无 private 权限 ⇒ 仅 public）、
 // grant 读端口三法、概览计数、摘要查询的搜索（`instr(lower(…))` 两方言同一句）与 after 游标。
 
+import { patchAgentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
@@ -107,11 +107,7 @@ async function seedAgents(db: PersistenceDb, owner: string, tag: string) {
   const privateId = `a_${ulid()}`
   await seedOne(publicId, `${tag}-public`)
   await seedOne(privateId, `${tag}-private`)
-  const { agents } = tablesOf(db)
-  await db
-    .update(agents)
-    .set({ visibility: 'private', ownerUserId: owner })
-    .where(eq(agents.id, privateId))
+  await patchAgentFixture(db, { id: privateId }, { visibility: 'private', ownerUserId: owner })
   return { publicId, privateId }
 }
 

@@ -1,10 +1,9 @@
 // SQL AST reuse must keep every original prepare/all, decoder and statement
 // boundary. Proxy probes stop at the actual client boundary, without PG I/O.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from './helpers/model'
 import { expect, spyOn, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { Name, Param, Placeholder, SQL, StringChunk, eq } from 'drizzle-orm'
+import { Name, Param, Placeholder, SQL, StringChunk } from 'drizzle-orm'
 import { PgDialect } from 'drizzle-orm/pg-core'
 import { SQLiteDialect } from 'drizzle-orm/sqlite-core'
 import { SQLiteSession } from 'drizzle-orm/sqlite-core/session'
@@ -28,8 +27,7 @@ const actor = buildActor({
 const initial = { running: 1, awaiting: 2, done7d: 1, failed7d: 1 }
 
 async function seed(harness: ProviderHarness) {
-  const { workflows, tasks } = tablesOf(harness.db)
-  await insertOne(harness.db, workflows, { id: 'w25-wf', name: 'w25', definition: '{}' })
+  await workflowFixture(harness.db, { id: 'w25-wf', name: 'w25', definition: '{}' })
   const rows = [
     { id: 'w25-run', status: 'running' },
     { id: 'w25-child', status: 'running', parentTaskId: 'w25-run' },
@@ -41,7 +39,7 @@ async function seed(harness: ProviderHarness) {
     { id: 'w25-unfinished', status: 'failed', finishedAt: null },
   ] as const
   for (const row of rows) {
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       workflowId: 'w25-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -212,8 +210,7 @@ function observeCountCompilation() {
 describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => {
   test('retained owner preserves complete rows, late recording and fresh count bindings', async () => {
     await seed(harness)
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
     console.log(
       'RFC359_W25_OVERVIEW_ROWS ' +
         JSON.stringify({
@@ -265,23 +262,22 @@ describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => 
     } finally {
       reference.stop()
     }
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(before)
   })
 
   test('the original transaction-bound owner sees writes and rollback restores every row', async () => {
     await seed(harness)
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
     const rollback = new Error('w25-count-rollback')
     await expect(
       harness.session.transaction(async (tx) => {
         const owner = createTaskOverviewQuery(tx)
         expect(await owner.load({ actor, since: T0 })).toEqual(initial)
-        const { tasks } = tablesOf(tx)
-        await tx
-          .update(tasks)
-          .set({ status: 'done', finishedAt: T0 })
-          .where(eq(tasks.id, 'w25-run'))
+        await patchTaskFixture(tx, { id: 'w25-run' }, { status: 'done', finishedAt: T0 })
         expect(await owner.load({ actor, since: T0 })).toEqual({
           ...initial,
           running: 0,
@@ -296,7 +292,11 @@ describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => 
         throw rollback
       }),
     ).rejects.toBe(rollback)
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(before)
     expect(await createTaskOverviewQuery(harness.db).load({ actor, since: T0 })).toEqual(initial)
   })
 })

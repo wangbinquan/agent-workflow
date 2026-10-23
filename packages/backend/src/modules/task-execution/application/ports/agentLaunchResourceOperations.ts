@@ -40,7 +40,6 @@ export interface AgentLaunchWorkflowValidation {
 /** Provider-selected Resource Catalog seam used by single-agent task launch. */
 export interface AgentLaunchResourceOperations {
   loadVisibleAgent(actor: Actor, agentId: string): Promise<Agent | null>
-  ensureHostWorkflow(): Promise<void>
   validateHostWorkflow(
     definition: WorkflowDefinition,
     candidate?: AgentLaunchWorkflowValidationCandidate,

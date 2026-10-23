@@ -4,6 +4,7 @@
 import { Database } from 'bun:sqlite'
 import { existsSync } from 'node:fs'
 import { Paths } from '@/util/paths'
+import { isTaskDefinitionHostId } from '@agent-workflow/shared'
 import {
   RFC295_DOWNGRADE_AUDIT_TASK_STATUSES,
   auditRfc295Downgrade,
@@ -47,9 +48,11 @@ export function rfc295DowngradeAuditCommand(
   try {
     db = new Database(dbPath, { readonly: true })
     db.exec('PRAGMA busy_timeout = 5000;')
-    const workflows = db
-      .query('SELECT id, name, version, definition FROM workflows ORDER BY id')
-      .all() as Rfc295AuditWorkflowRow[]
+    const workflows = (
+      db
+        .query('SELECT id, name, version, definition FROM workflows ORDER BY id')
+        .all() as Rfc295AuditWorkflowRow[]
+    ).filter((workflow) => !isTaskDefinitionHostId(workflow.id))
     const statuses = RFC295_DOWNGRADE_AUDIT_TASK_STATUSES.map((status) => `'${status}'`).join(',')
     const tasks = db
       .query(

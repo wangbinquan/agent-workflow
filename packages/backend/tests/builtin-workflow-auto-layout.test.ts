@@ -5,10 +5,8 @@
 // gets the shared deterministic layout; ordinary user workflow geometry stays
 // byte-for-byte untouched.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first as firstRow } from '@/platform/persistence/queryHelpers'
+import { patchWorkflowFixture, readWorkflowFixtures } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import {
   DEFAULT_NODE_SIZE_BY_KIND,
   WorkflowDefinitionSchema,
@@ -27,7 +25,8 @@ import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
 import { layoutBuiltinWorkflowSnapshotJson, projectWorkflowSnapshotForRead } from '@/services/task'
-import { buildWorkgroupHostSnapshot } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 function withoutGeometry(definition: WorkflowDefinition): unknown {
@@ -189,8 +188,7 @@ describeEachProvider('built-in workflow automatic layout', (harness) => {
       ...TEST_FUSION_PARTICIPANTS,
     })
     await seedFusionResources(fusion)
-    const { workflows } = tablesOf(db)
-    const first = (await firstRow(db.select().from(workflows).where(eq(workflows.builtin, true))))!
+    const first = (await readWorkflowFixtures(db, { builtin: true }))[0]!
     const firstDefinition = WorkflowDefinitionSchema.parse(JSON.parse(first.definition))
     expectNoNodeOverlap(firstDefinition)
 
@@ -198,21 +196,18 @@ describeEachProvider('built-in workflow automatic layout', (harness) => {
       ...firstDefinition,
       nodes: firstDefinition.nodes.map((node) => ({ ...node, position: { x: 0, y: 0 } })),
     }
-    await db
-      .update(workflows)
-      .set({ definition: JSON.stringify(legacyDefinition) })
-      .where(eq(workflows.id, first.id))
+    await patchWorkflowFixture(
+      db,
+      { id: first.id },
+      { definition: JSON.stringify(legacyDefinition) },
+    )
 
     await seedFusionResources(fusion)
-    const repaired = (await firstRow(
-      db.select().from(workflows).where(eq(workflows.id, first.id)),
-    ))!
+    const repaired = (await readWorkflowFixtures(db, { id: first.id }))[0]!
     expect(repaired.version).toBe(first.version + 1)
     expectNoNodeOverlap(WorkflowDefinitionSchema.parse(JSON.parse(repaired.definition)))
 
     await seedFusionResources(fusion)
-    expect(
-      (await firstRow(db.select().from(workflows).where(eq(workflows.id, first.id))))!.version,
-    ).toBe(repaired.version)
+    expect((await readWorkflowFixtures(db, { id: first.id }))[0]!.version).toBe(repaired.version)
   })
 })

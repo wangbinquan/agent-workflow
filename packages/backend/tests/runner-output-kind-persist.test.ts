@@ -10,11 +10,14 @@
 // 持久列过 normalizeKindString 归一为 canonical 'path<md>'（读侧等价折叠、
 // 零行为差异；migration 0075 清洗了存量，写入点不再倒灌别名）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -62,15 +65,14 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
   const db = provider.db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -131,8 +133,7 @@ function registerCases(provider: ProviderHarness) {
       outputKinds: { report: 'markdown_file' },
     })
     const nodeRunId = ulid()
-    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: nodeRunId,
       taskId: h.taskId,
       nodeId: 'n1',
@@ -159,10 +160,7 @@ function registerCases(provider: ProviderHarness) {
 
     expect(result.status).toBe('done')
 
-    const rows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const rows = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     const report = rows.find((r) => r.portName === 'report')
     const note = rows.find((r) => r.portName === 'note')
     // File-path port: legacy alias 'markdown_file' declared in frontmatter is

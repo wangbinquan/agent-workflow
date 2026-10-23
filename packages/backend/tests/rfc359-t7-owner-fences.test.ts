@@ -8,7 +8,13 @@
 //   首次心跳后所有 effect 写入被拒；同仓公共 assertPostgresqlTaskOwnerTx 注释逐字写着「故意不做等值谓词」。
 // 这里在两个引擎上各验：环境上下文内不传 executionContext 的写入成功；心跳之后旧 token 仍能开 effect。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  readNodeRunFixtures,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -55,8 +61,7 @@ function continuation(taskId: string): CanonicalContinuationRequest {
 async function seedClaimedTask(db: PersistenceDb) {
   const taskId = `t7_${ulid()}`
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-t7',
     description: '',
@@ -64,7 +69,7 @@ async function seedClaimedTask(db: PersistenceDb) {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -81,7 +86,7 @@ async function seedClaimedTask(db: PersistenceDb) {
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const runId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -187,7 +192,11 @@ describeEachProvider('RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2�
       await seeded.persistence.nodeRuns.transition({
         nodeRunId: seeded.runId,
         event: { kind: 'mark-running' },
-        extra: { startedAt: Date.now() },
+        extra: {
+          identity: {
+            startedAt: Date.now(),
+          },
+        },
       })
       await seeded.persistence.nodeExecution.upsertOutputs({
         nodeRunId: seeded.runId,
@@ -195,17 +204,17 @@ describeEachProvider('RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2�
       })
       await seeded.persistence.nodeExecution.patch({
         nodeRunId: seeded.runId,
-        values: { envelopeNonce: 'nonce-under-ambient-context' },
+        values: {
+          config: {
+            promptText: 'prompt-under-ambient-context',
+          },
+        },
       })
     })
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, seeded.runId)))[0]!
+    const run = (await readNodeRunFixtures(db, { id: seeded.runId }))[0]!
     expect(run.status).toBe('running')
-    expect(run.envelopeNonce).toBe('nonce-under-ambient-context')
-    const outputs = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, seeded.runId))
+    expect(run.promptText).toBe('prompt-under-ambient-context')
+    const outputs = await readNodeRunOutputFixtures(db, { nodeRunId: seeded.runId })
     expect(outputs.map((row) => row.content)).toEqual(['written under the ambient owner context'])
     seeded.module.resetForTesting()
   })
@@ -218,11 +227,9 @@ describeEachProvider('RFC-359 T7 —— owner 围栏同一规则（P0-1 / P0-2�
       outputs: [{ portName: 'explicit', content: 'x' }],
       executionContext: seeded.context,
     })
-    const { nodeRunOutputs } = tablesOf(db)
-    const outputs = await db
-      .select({ portName: nodeRunOutputs.portName })
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, seeded.runId))
+    const outputs = await readNodeRunOutputFixtures(db, { nodeRunId: seeded.runId }).then((rows) =>
+      rows.map((row) => ({ portName: row.portName })),
+    )
     expect(outputs.map((row) => row.portName)).toEqual(['explicit'])
     seeded.module.resetForTesting()
   })

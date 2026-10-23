@@ -36,6 +36,12 @@ function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   // Monotonic id so isFresherNodeRun (pure id-order) picks the last-inserted row.
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -80,11 +86,11 @@ function diamondScenario() {
 }
 
 describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 pending-anchor bypass 放行', () => {
-  test('sibling 收尾后（inFlight 空），pending rerun 放行 ready，pendingAnchors 暴露行 id —— 不再 "scheduler stalled"', () => {
+  test('sibling 收尾后（inFlight 空），pending rerun 放行 ready，pendingAnchors 暴露行 id —— 不再 "scheduler stalled"', async () => {
     const { definition, scopeNodes, scopeIds, rows, upstreams, askerRerun } = diamondScenario()
     // asker 与 sib 本次调用都派发过；sib 已完成离开 inFlight，asker 第一跑也早已 settle。
     const dispatched = new Set(['asker', 'sib'])
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -113,9 +119,9 @@ describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 p
     expect(f.allSettled).toBe(false)
   })
 
-  test('对照：去重集为空（= 手动 resume 的新调用）时同样的行集 asker 正常 ready —— bypass 不改变新调用语义', () => {
+  test('对照：去重集为空（= 手动 resume 的新调用）时同样的行集 asker 正常 ready —— bypass 不改变新调用语义', async () => {
     const { definition, scopeNodes, scopeIds, rows, upstreams } = diamondScenario()
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -130,14 +136,14 @@ describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 p
     expect(f.allSettled).toBe(false)
   })
 
-  test('两 tick 时序（修复后）：sib 在飞时 rerun 即刻 ready（无需等 sibling）；anchor 记账后同一行不再二次放行（有界）', () => {
+  test('两 tick 时序（修复后）：sib 在飞时 rerun 即刻 ready（无需等 sibling）；anchor 记账后同一行不再二次放行（有界）', async () => {
     const { definition, scopeNodes, scopeIds, upstreams } = diamondScenario()
     // tick 1：sib 还在跑（inFlight），asker 第一跑 done 且用户刚答完题（pending rerun 已落库）。
     const askerDone = row('asker', 'done')
     const askerRerun = row('asker', 'pending')
     const rowsTick1 = [row('in', 'done'), askerDone, askerRerun, row('sib', 'running')]
     const dispatched = new Set(['asker', 'sib'])
-    const f1 = deriveFrontier(
+    const f1 = await deriveFrontier(
       rowsTick1,
       definition,
       scopeNodes,
@@ -160,7 +166,7 @@ describe('S-1 (RFC-092 fixed) — mid-run clarify answer 的 pending rerun 经 p
     // 同一行 id 已豁免过 ⇒ 不再放行、不入桶 —— 回到 stall 语义（有界退化，杜绝
     // busy-loop；design §1.3，深组合见 rfc092-leaked-pending-bounded.test.ts）。
     const rowsTick2 = [row('in', 'done'), askerDone, askerRerun, row('sib', 'done')]
-    const f2 = deriveFrontier(
+    const f2 = await deriveFrontier(
       rowsTick2,
       definition,
       scopeNodes,

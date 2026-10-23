@@ -4,6 +4,8 @@
 // RFC-395 I-b：方言函数由 EngineCapabilities 渲染；其余结构使用两个原生 builder 共用的 SQL（
 // `MATERIALIZED`、行值比较、递归 CTE 两方言同义 / 搜索两侧都已 `lower()`）。
 
+import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
+import { taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskSubjectSql'
 import {
   TASK_LIST_ACTIVE_STATUSES,
   TASK_LIST_ATTENTION_STATUSES,
@@ -39,7 +41,7 @@ export function baseCtes(db: TaskListPageDb, authorizedIds: SQL, nonView: SQL, v
         t.id,
         t.name,
         t.workflow_id,
-        w.name AS workflow_name,
+        ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
         t.repo_path,
         t.repo_url,
         t.cached_repo_id,
@@ -57,6 +59,7 @@ export function baseCtes(db: TaskListPageDb, authorizedIds: SQL, nonView: SQL, v
         ) AS open_alert_count,
         t.scheduled_task_id,
         t.launch_origin,
+        t.code_round_id,
         t.workgroup_id,
         ${workgroupNameExpression(db, 't')} AS workgroup_name,
         t.space_kind,
@@ -67,7 +70,6 @@ export function baseCtes(db: TaskListPageDb, authorizedIds: SQL, nonView: SQL, v
         t.owner_user_id
       FROM tasks t
       JOIN authorized_ids ai ON ai.id = t.id
-      LEFT JOIN workflows w ON w.id = t.workflow_id
     ),
     non_view_matches AS MATERIALIZED (
       SELECT b.* FROM base b WHERE ${nonView}
@@ -340,7 +342,7 @@ export function fastDefaultRootQuery(
       t.id,
       t.name,
       t.workflow_id,
-      w.name AS workflow_name,
+      ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
       t.repo_path,
       t.repo_url,
       t.cached_repo_id,
@@ -358,6 +360,7 @@ export function fastDefaultRootQuery(
       ) AS open_alert_count,
       t.scheduled_task_id,
       t.launch_origin,
+      t.code_round_id,
       t.workgroup_id,
       ${workgroupNameExpression(db, 't')} AS workgroup_name,
       t.space_kind,
@@ -387,7 +390,6 @@ export function fastDefaultRootQuery(
         SELECT COUNT(*) FROM walk
       ) AS matching_descendant_count
     FROM tasks t
-    LEFT JOIN workflows w ON w.id = t.workflow_id
     WHERE ${auth} AND ${scope} AND ${boundary}
       AND (
         t.parent_task_id IS NULL
@@ -627,7 +629,7 @@ export function fastFilteredRootQuery(
         t.id,
         t.name,
         t.workflow_id,
-        w.name AS workflow_name,
+        ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
         t.repo_path,
         t.repo_url,
         t.cached_repo_id,
@@ -645,6 +647,7 @@ export function fastFilteredRootQuery(
         ) AS open_alert_count,
         t.scheduled_task_id,
         t.launch_origin,
+        t.code_round_id,
         t.workgroup_id,
         ${workgroupNameExpression(db, 't')} AS workgroup_name,
         t.space_kind,
@@ -660,7 +663,6 @@ export function fastFilteredRootQuery(
       FROM page_roots pr
       JOIN tasks t ON t.id = pr.rid
       JOIN match_counts mc ON mc.rid = pr.rid
-      LEFT JOIN workflows w ON w.id = t.workflow_id
       LEFT JOIN child_counts cc ON cc.rid = pr.rid
     )
     SELECT

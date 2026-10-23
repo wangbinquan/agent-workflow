@@ -1,5 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { composeTestRoomContinuation } from './helpers/legacyTaskDrive'
 // RFC-370: resume and human-gate admission must await selected workspace reads.
 // Promise truthiness must never admit an absent workspace or skip a missing repo.
@@ -31,15 +30,14 @@ async function seed(db: PersistenceDb, preparing = false) {
   const workflowId = ulid(),
     taskId = ulid(),
     workspace = `workspace://${taskId}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'workspace presence',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'presence',
     workflowId,
@@ -53,7 +51,7 @@ async function seed(db: PersistenceDb, preparing = false) {
     startedAt: 1,
   })
   if (preparing)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: '__repo_prep__',

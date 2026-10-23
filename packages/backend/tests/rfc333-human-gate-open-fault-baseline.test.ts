@@ -4,7 +4,15 @@
 // rollback, retry, filesystem and committed-frame assertions share the same
 // public entry points; only trigger DDL and native fixture teardown differ.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
@@ -136,8 +144,7 @@ async function seedReview(
   reviewNode: WorkflowNode
 }> {
   const agentId = ulid()
-  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId,
     name: 'rfc333-review-source',
     description: '',
@@ -167,7 +174,7 @@ async function seedReview(
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc333-review-open-fault',
     description: '',
@@ -175,7 +182,7 @@ async function seedReview(
     version: 1,
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc333-review-open-fault',
     workflowId,
@@ -194,7 +201,7 @@ async function seedReview(
     ]),
   })
   const sourceRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'source',
@@ -204,7 +211,7 @@ async function seedReview(
     startedAt: Date.now() - 10,
     finishedAt: Date.now(),
   })
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId: sourceRunId,
     portName: 'cases',
     content: joinMarkdownDocs(REVIEW_DOCS),
@@ -230,8 +237,7 @@ async function seedClarify(db: PersistenceDb): Promise<{
     edges: [],
   }
   const workflowId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc333-clarify-open-fault',
     description: '',
@@ -240,7 +246,7 @@ async function seedClarify(db: PersistenceDb): Promise<{
     schemaVersion: 3,
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc333-clarify-open-fault',
     workflowId,
@@ -259,7 +265,7 @@ async function seedClarify(db: PersistenceDb): Promise<{
     ]),
   })
   const sourceRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'source',
@@ -317,20 +323,15 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       )
       expect(error.message).toContain('rfc333-second-doc')
 
-      const {
-        docVersions,
-        nodeRuns,
-        tasks,
-        collaborationGateOperations,
-        collaborationGateArtifacts,
-      } = tablesOf(db)
+      const { docVersions, nodeRuns, collaborationGateOperations, collaborationGateArtifacts } =
+        tablesOf(db)
       const docs = await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
       const reviewRuns = await db
         .select()
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'review'))
-      const task = (await first(db.select().from(tasks).where(eq(tasks.id, taskId))))!
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]!
       const allFiles = filesBelow(appHome)
       const canonicalFiles = allFiles.filter(
         (file) => file.startsWith('runs/') && !file.startsWith('runs/.human-gate-staging/'),
@@ -387,7 +388,7 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
           (row) => row.nodeId === 'review',
         ),
       ).toHaveLength(1)
-      expect(await first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'awaiting_review',
         lifecycleEventRevision: 2,
       })
@@ -469,22 +470,12 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
         }),
       )
       expect(error.message).toContain('rfc333-task-park')
-      const {
-        docVersions,
-        nodeRuns,
-        tasks,
-        collaborationGateOperations,
-        collaborationGateArtifacts,
-      } = tablesOf(db)
+      const { docVersions, collaborationGateOperations, collaborationGateArtifacts } = tablesOf(db)
       expect(await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))).toEqual([])
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-          (row) => row.nodeId === 'review',
-        ),
+        (await readNodeRunFixtures(db, { taskId })).filter((row) => row.nodeId === 'review'),
       ).toEqual([])
-      expect((await first(db.select().from(tasks).where(eq(tasks.id, taskId))))?.status).toBe(
-        'running',
-      )
+      expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('running')
       const operation = (await first(
         db
           .select()
@@ -580,15 +571,14 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       const error = await failureOf(() => createClarifyRound(request))
       expect(error.message).toContain('rfc333-clarify-round')
 
-      const { clarifyRounds, nodeRuns, tasks, taskQuestions, collaborationGateOperations } =
-        tablesOf(db)
+      const { clarifyRounds, nodeRuns, taskQuestions, collaborationGateOperations } = tablesOf(db)
       const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
       const clarifyRuns = await db
         .select()
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'clarify'))
-      const task = (await first(db.select().from(tasks).where(eq(tasks.id, taskId))))!
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]!
       const questions = await db
         .select()
         .from(taskQuestions)
@@ -629,7 +619,7 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       expect(
         await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
       ).toHaveLength(1)
-      expect(await first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'awaiting_human',
       })
       expect(

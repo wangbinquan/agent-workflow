@@ -9,6 +9,7 @@
 // real diff/manifest/incorporated⊆selected reconcile + the atomic apply
 // (skill version bump + memory fuse) + OCC).
 
+import { nodeRunFixture, patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { queryWrite, queryRows, first } from '@/platform/persistence/queryHelpers'
@@ -262,10 +263,12 @@ function skillIdOf(db: DbClient, name: string): string {
   return first(db.select({ id: skills.id }).from(skills).where(eq(skills.name, name)))!.id
 }
 
-function taskOriginOf(db: DbClient, taskId: string): string {
-  const { tasks } = tablesOf(db)
-  return first(db.select({ origin: tasks.launchOrigin }).from(tasks).where(eq(tasks.id, taskId)))!
-    .origin
+async function taskOriginOf(db: DbClient, taskId: string): Promise<string> {
+  return (
+    await readTaskFixtures(db, { id: taskId }).then((rows) =>
+      rows.map((row) => ({ origin: row.launchOrigin })),
+    )
+  )[0]!.origin
 }
 
 function fusionWorkRoots(appHome: string): string[] {
@@ -348,8 +351,8 @@ describe('createFusion preconditions', () => {
       ),
     ).rejects.toThrow(/injected seed failure/)
 
-    const { tasks, fusions } = tablesOf(h.db)
-    expect(queryRows(h.db.select().from(tasks))).toHaveLength(0)
+    const { fusions } = tablesOf(h.db)
+    expect(await readTaskFixtures(h.db)).toHaveLength(0)
     expect(queryRows(h.db.select().from(fusions))).toHaveLength(0)
     expect(fusionWorkRoots(h.appHome)).toEqual([])
   })
@@ -382,7 +385,7 @@ describe('launch → reconcile → approve', () => {
     )
     expect(fusion.status).toBe('running')
     expect(fusion.currentTaskId).not.toBeNull()
-    expect(taskOriginOf(h.db, fusion.currentTaskId!)).toBe('manual')
+    expect(await taskOriginOf(h.db, fusion.currentTaskId!)).toBe('manual')
 
     // Simulate the agent's final round: edit the skill files + write the result
     // manifest into the engine worktree, then force the task terminal.
@@ -401,13 +404,7 @@ describe('launch → reconcile → approve', () => {
         changelog: 'Integrated 2-space rule.',
       }),
     )
-    const { tasks } = tablesOf(h.db)
-    queryWrite(
-      h.db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(tasks.id, task!.id)),
-    )
+    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
 
     // Reconcile → awaiting_approval with the proposed diff + incorporated set.
     await reconcileFusion(h.deps, fusion.id)
@@ -450,7 +447,7 @@ describe('launch → reconcile → approve', () => {
       'api',
     )
     const task = await getTask(h.db, fusion.currentTaskId!)
-    expect(taskOriginOf(h.db, fusion.currentTaskId!)).toBe('api')
+    expect(await taskOriginOf(h.db, fusion.currentTaskId!)).toBe('api')
     const wt = task!.worktreePath
     writeFileSync(pjoin(wt, 'SKILL.md'), '---\nname: lint\ndescription: d\n---\nproposed')
     mkdirSync(pjoin(wt, PLATFORM_FUSION_DIR), { recursive: true })
@@ -458,13 +455,7 @@ describe('launch → reconcile → approve', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [mem], skipped: [], changelog: 'x' }),
     )
-    const { tasks } = tablesOf(h.db)
-    queryWrite(
-      h.db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(tasks.id, task!.id)),
-    )
+    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
     await reconcileFusion(h.deps, fusion.id)
 
     // A concurrent editor save bumps the skill (base was 1, now 2).
@@ -516,13 +507,7 @@ describe('launch → reconcile → approve', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memA], skipped: [], changelog: 'x' }),
     )
-    const { tasks } = tablesOf(h.db)
-    queryWrite(
-      h.db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(tasks.id, task!.id)),
-    )
+    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
     await reconcileFusion(h.deps, fusion.id)
     const f = await getFusion(h.deps, fusion.id)
     expect(f!.status).toBe('failed')
@@ -556,13 +541,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memId], skipped: [], changelog: 'x' }),
     )
-    const { tasks } = tablesOf(h.db)
-    queryWrite(
-      h.db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(tasks.id, task!.id)),
-    )
+    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
     await reconcileFusion(h.deps, fusion.id)
     return fusion
   }
@@ -660,8 +639,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     })
     const mem = approvedGlobalMemory(h.db, 'm')
     const fusion = await toAwaitingApproval('lint', mem)
-    const { tasks } = tablesOf(h.db)
-    const taskCountBefore = queryRows(h.db.select().from(tasks)).length
+    const taskCountBefore = (await readTaskFixtures(h.db)).length
     const deps: FusionDeps = {
       ...h.deps,
       beforeStartTaskHandoff: ({ phase }) => {
@@ -672,7 +650,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       /injected reject pre-handoff failure/,
     )
 
-    expect(queryRows(h.db.select().from(tasks))).toHaveLength(taskCountBefore)
+    expect(await readTaskFixtures(h.db)).toHaveLength(taskCountBefore)
     expect(existsSync(pjoin(h.appHome, 'fusions', fusion.id, 'iter2', 'work'))).toBe(false)
     expect((await getFusion(h.deps, fusion.id))!.status).toBe('failed')
   })
@@ -725,7 +703,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
     const fusion = await toAwaitingApproval('lint', mem)
     await rejectFusion(h.deps, fusion.id, 'redo', adminActor, 'api') // claims → running (iter 2)
     const rerun = await getFusion(h.deps, fusion.id)
-    expect(taskOriginOf(h.db, rerun!.currentTaskId!)).toBe('api')
+    expect(await taskOriginOf(h.db, rerun!.currentTaskId!)).toBe('api')
     // No longer awaiting_approval → a second reject can't create a duplicate task.
     await expect(rejectFusion(h.deps, fusion.id, 'again', adminActor, 'api')).rejects.toThrow(
       /awaiting/i,
@@ -1150,9 +1128,9 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     const taskId = fusion.currentTaskId!
     const reviewRunId = ulid()
     const docVersionId = ulid()
-    const { tasks, nodeRuns, docVersions, fusions } = tablesOf(h.db)
-    await h.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
-    await insertOne(h.db, nodeRuns, {
+    const { nodeRuns, docVersions, fusions } = tablesOf(h.db)
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'awaiting_review' })
+    await nodeRunFixture(h.db, {
       id: reviewRunId,
       taskId,
       nodeId: 'review-lock-gate',

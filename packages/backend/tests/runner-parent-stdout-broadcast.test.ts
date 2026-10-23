@@ -12,8 +12,7 @@
 // `node.status: done` are intentionally NOT asserted here — they're
 // implementation details that would over-constrain the test.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
@@ -57,8 +56,7 @@ function makeAgent(): Agent {
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: '{}',
@@ -66,7 +64,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId: wfId,
@@ -125,8 +123,7 @@ describeEachProvider('runner parent-stdout live broadcast', (harness) => {
 
   test('stdoutPump emits at least one node.status:running ping per parent event burst', async () => {
     const nodeRunId = ulid()
-    const { nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: nodeRunId,
       taskId: h.taskId,
       nodeId: 'n1',

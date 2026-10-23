@@ -8,6 +8,7 @@
 // routes, SQLite stores, scheduler, runtime drivers, managed child processes,
 // timeout/reap path and manual node retry are all production code.
 
+import { readTaskFixturesSql, fixtureSqlParameter } from './fixtures/model'
 import { expect, test } from '@playwright/test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -368,13 +369,17 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       })
       const provenance = querySqlite<DurableTaskProvenance>(
         join(daemon.home, 'db.sqlite'),
-        `SELECT launch_origin AS origin,
-                webhook_trigger_id AS legacyTriggerId,
-                webhook_fire_id AS legacyFireId,
-                event_subscription_id AS eventSubscriptionId,
-                event_delivery_id AS eventDeliveryId,
-                trigger_context_json AS triggerContextJson
-           FROM tasks WHERE id = ?`,
+        readTaskFixturesSql(
+          { id: fixtureSqlParameter },
+          {
+            origin: 'launchOrigin',
+            legacyTriggerId: 'webhookTriggerId',
+            legacyFireId: 'webhookFireId',
+            eventSubscriptionId: 'eventSubscriptionId',
+            eventDeliveryId: 'eventDeliveryId',
+            triggerContextJson: 'triggerContextJson',
+          },
+        ),
         [terminalTask.id],
       )
       expect(provenance).toHaveLength(1)

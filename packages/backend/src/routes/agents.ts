@@ -6,6 +6,8 @@
 // POST   /api/agents/:id/rename  — display-name change (refuses name collision)
 
 import {
+  agentReferenceIds,
+  agentSkillReferences,
   type AgentClosureSummary,
   AgentNameSchema,
   CreateAgentSchema,
@@ -301,8 +303,8 @@ export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): voi
   })
 
   // RFC-165 §4 — launch a SINGLE-AGENT task (POST /api/agents/:id/tasks).
-  // Service-layer entry (the builtin __agent_host__ workflow would 403
-  // assertWorkflowLaunchable via /api/tasks by design); permission-wise this
+  // Service-layer entry for an agent subject; POST /api/tasks starts catalog
+  // workflows. Permission-wise this
   // is a LAUNCH, gated by tasks:launch in server.ts (F15) — deliberately
   // exempt from the agents:write method gate. The schema only ever declared
   // modern space fields, so no raw-key gate is needed (workgroup precedent).
@@ -642,11 +644,11 @@ function toAgentClosureSummaries(
       name: a.name,
       ownerUserId: a.ownerUserId ?? null,
       description: a.description,
-      skills: a.skills.map(skillName),
+      skills: agentSkillReferences(a).map(skillName),
       skillCount: a.skills.length,
       dependsOnIds: a.dependsOn,
-      mcp: (a.mcp ?? []).map((id) => names.mcp.get(id) ?? id),
-      plugins: (a.plugins ?? []).map((id) => names.plugin.get(id) ?? id),
+      mcp: agentReferenceIds(a, 'mcp').map((id) => names.mcp.get(id) ?? id),
+      plugins: agentReferenceIds(a, 'plugin').map((id) => names.plugin.get(id) ?? id),
       masked: false,
       missing: false,
     })
@@ -657,7 +659,7 @@ function toAgentClosureSummaries(
   const missing = new Set<string>()
   for (const a of closure) {
     if (!isVisible(a.id)) continue
-    for (const depId of a.dependsOn) {
+    for (const depId of agentReferenceIds(a, 'agent')) {
       if (!closureIds.has(depId)) missing.add(depId)
     }
   }

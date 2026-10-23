@@ -5,9 +5,8 @@
 // reused by the scheduled-task scheduler. Locks the three outcomes so any future
 // drift in one of the three call sites is caught: missing/invisible → 404
 // workflow-not-found; built-in → 403; visible non-builtin → returns the row.
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchWorkflowFixture } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 
 import type { CreateWorkflow } from '@agent-workflow/shared'
 
@@ -30,8 +29,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 }
 
 async function makePrivate(db: PersistenceDb, id: string) {
-  const { workflows } = tablesOf(db)
-  await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, id))
+  await patchWorkflowFixture(db, { id }, { visibility: 'private' })
 }
 
 describeEachProvider(
@@ -87,8 +85,7 @@ describeEachProvider(
 
     test('public non-builtin → returns the workflow (with parsed .definition.inputs)', async () => {
       const wf = await createWorkflow(db, { name: 'pub', description: '', definition: DEF })
-      const { workflows } = tablesOf(db)
-      await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, wf.id))
+      await patchWorkflowFixture(db, { id: wf.id }, { visibility: 'public' })
       const got = await assertWorkflowLaunchable(db, actor('alice'), wf.id)
       expect(got.id).toBe(wf.id)
       expect(got.definition.inputs).toEqual([]) // multipart path reads .definition.inputs

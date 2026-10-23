@@ -1,3 +1,5 @@
+import { createWorkflowCallReferenceLookup } from './referenceLookup'
+import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   privilegedNodeLensFor,
@@ -127,7 +129,12 @@ async function loadReferenceRows(
           visibility: workflows.visibility,
         })
         .from(workflows)
-        .where(inArray(domain === 'id' ? workflows.id : workflows.name, selected))
+        .where(
+          workflowCatalogPredicate(
+            workflows.id,
+            inArray(domain === 'id' ? workflows.id : workflows.name, selected),
+          ),
+        )
     case 'workgroup':
       return transaction
         .select({
@@ -261,20 +268,7 @@ async function assertNotCalledByWorkflow(
   transaction: ResourceCatalogTransaction,
   current: Pick<Workflow, 'id' | 'name'>,
 ): Promise<void> {
-  const { workflows } = tablesOf(transaction)
-  const rows = await transaction
-    .select({ id: workflows.id, definition: workflows.definition })
-    .from(workflows)
-  const caller = rows.find((row) => {
-    if (row.id === current.id) return false
-    try {
-      const parsed: unknown = JSON.parse(row.definition)
-      if (typeof parsed !== 'object' || parsed === null) return false
-      return extractWorkflowWorkflowRefs(parsed as WorkflowDefinition).includes(current.name)
-    } catch {
-      return false
-    }
-  })
+  const caller = (await createWorkflowCallReferenceLookup(transaction).find(current))[0]
   if (caller !== undefined) {
     throw new ConflictError(
       'workflow-in-use',
@@ -318,7 +312,7 @@ export function createWorkflowPersistenceSemantics(input: {
       const occupied = await transaction
         .select({ name: workflows.name })
         .from(workflows)
-        .where(eq(workflows.ownerUserId, authority.user.id))
+        .where(workflowCatalogPredicate(workflows.id, eq(workflows.ownerUserId, authority.user.id)))
       return copyName(
         source.name,
         occupied.map((row) => row.name),

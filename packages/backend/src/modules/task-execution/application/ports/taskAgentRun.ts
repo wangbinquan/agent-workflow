@@ -182,7 +182,7 @@ export interface TaskAgentRunPolicy {
     /**
      * RFC-066: per-repo metadata for the multi-repo placeholders. Always
      * non-empty; single-repo tasks pass a length-1 array mirroring the
-     * legacy `repoPath` / `baseBranch` fields with `worktreeDirName = ''`
+     * legacy `repoPath` / `baseBranch` fields with `mountPath = ''`
      * so `{{__repo_names__}}` renders empty (byte-baseline). The runner
      * just forwards this to `renderUserPrompt`; the scheduler is the
      * source of truth.
@@ -190,7 +190,7 @@ export interface TaskAgentRunPolicy {
     repos?: Array<{
       repoPath: string
       worktreePath: string
-      worktreeDirName: string
+      mountPath: string
       baseBranch: string
     }>
   }

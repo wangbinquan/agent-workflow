@@ -1,5 +1,6 @@
 // RFC-232 — owner projection batching + scheduled-list mapper parity.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -144,8 +145,7 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
   test('keeps null and dangling owner ids stable while degrading identity to null', async () => {
     const db = harness.db
     const now = Date.now()
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'workflow-task-owner-fallbacks',
       name: 'Owner fallback workflow',
       description: '',
@@ -181,7 +181,7 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
     // provider 判别只出现在**夹具**里，被测判据本身两个引擎逐字相同。
     const enforcesOwnerForeignKey = harness.capabilities.provider === 'sqlite'
     if (enforcesOwnerForeignKey) await harness.executeFixtureDdl('PRAGMA foreign_keys = OFF')
-    await db.insert(tasks).values([
+    await taskFixture(db, [
       {
         ...baseTask,
         id: 'task-owner-null',

@@ -6,6 +6,13 @@
 // the visible 404/403/conflict split, losing a committed decision, or leaking
 // continuation/worker internals is not.
 
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -109,16 +116,15 @@ describeEachProviderHttpApplication(
         edges: [],
       }
       const workflowId = ulid()
-      const { workflows, tasks, taskCollaborators, nodeRuns, nodeRunOutputs, docVersions } =
-        tablesOf(db)
-      await insertOne(db, workflows, {
+      const { taskCollaborators, docVersions } = tablesOf(db)
+      await workflowFixture(db, {
         id: workflowId,
         name: 'rfc294-route-oracle',
         definition: JSON.stringify(definition),
       })
 
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'rfc294-route-oracle',
         workflowId,
@@ -150,7 +156,7 @@ describeEachProviderHttpApplication(
       ])
 
       const writerRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: writerRunId,
         taskId,
         nodeId: 'writer',
@@ -160,14 +166,14 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: writerRunId,
         portName: 'document',
         content: '# reviewed body',
       })
 
       const reviewRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: reviewRunId,
         taskId,
         nodeId: 'review',
@@ -197,7 +203,7 @@ describeEachProviderHttpApplication(
       // is rejected before the detail query, so we can delete it between two
       // probes and prove that hidden-vs-missing stays byte-identical.
       const probeRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: probeRunId,
         taskId,
         nodeId: 'review-probe',
@@ -225,7 +231,7 @@ describeEachProviderHttpApplication(
     }
 
     async function currentDecisionState() {
-      const { docVersions, nodeRuns, nodeRunOutputs } = tablesOf(fixture.db)
+      const { docVersions, nodeRuns } = tablesOf(fixture.db)
       // 中立面没有 bun:sqlite 的同步终结符：查询回数组，取第一行。
       // （这句刻意不写出那个方法名——守卫是按文本扫的，注释也算它的输入。）
       const doc = (
@@ -234,10 +240,9 @@ describeEachProviderHttpApplication(
       const run = (
         await fixture.db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.reviewRunId))
       )[0]
-      const outputs = await fixture.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, fixture.reviewRunId))
+      const outputs = await readNodeRunOutputFixtures(fixture.db, {
+        nodeRunId: fixture.reviewRunId,
+      })
       return { doc, run, outputs }
     }
 

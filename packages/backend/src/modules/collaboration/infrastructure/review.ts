@@ -1,6 +1,37 @@
+import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import {
+  taskGateOpenCondition,
+  taskGateVisibleCondition,
+} from '@/modules/task-execution/public/queries'
+
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
+
+import type {
+  TaskGateContext,
+  TaskGateDefinitionContext,
+} from '@/modules/task-execution/public/queries'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { legacyReviewBodyPath } from '@/platform/content/legacyReview'
+import { writeLegacyReviewBody } from './local/fileReviewArtifactContent'
+import {
+  createConsumedInputsParticipantInTx,
+  prepareConsumedInputs,
+} from '@/modules/task-execution/public/participants'
+import {
+  nodeRunStatusCondition,
+  createNodeRunQueries,
+  createRunSelectionOracleSnapshot,
+  createRunHistorySnapshot,
+  type NodeRunFactSnapshot,
+  type NodeRunCheckpointSnapshot,
+  type RunHistoryFacts,
+} from '@/modules/task-execution/public/queries'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/public/queries'
+import { createTaskSubjectQueries } from '@/modules/task-execution/public/queries'
+import type { TaskSubjectProjection } from '@/modules/task-execution/public/types'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
@@ -29,8 +60,7 @@ import { createFileReviewArtifactContent } from './local/fileReviewArtifactConte
 // `resumeTask` is invoked by REST decision handlers to re-enter the
 // scheduler after a decision lands.
 
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import {
   and,
   asc,
@@ -44,7 +74,6 @@ import {
   isNull,
   ne,
   notExists,
-  notInArray,
   or,
   sql,
 } from 'drizzle-orm'
@@ -107,7 +136,7 @@ import type {
   ReviewRoundSummary,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
-import { taskVisibilityCondition } from '@/db/query'
+
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
@@ -138,7 +167,6 @@ import {
 import { selectPortArtifactReader } from '@/modules/task-execution/public/participants'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import { chunkedAll } from '@/util/sqlChunk'
-import { pickFreshestRun, pickLatestRunInFrame } from '@/services/freshness'
 import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
 import { parseConsumedJson } from '@/services/freshness'
 import { assertNodeRunSourceTerminationAdmission } from '@/services/lifecycle'
@@ -191,7 +219,7 @@ import {
 } from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
-import { humanGateNodeProjectionMember } from '@/modules/task-execution/public/participants'
+import { reselectRunInTx } from '@/modules/task-execution/public/participants'
 
 const {
   canonicalHumanGateRequestHash,
@@ -466,8 +494,13 @@ export function docVersionRelativePath(
   // Undefined (single-document) keeps the legacy path byte-for-byte.
   itemIndex?: number,
 ): string {
-  const itemSeg = itemIndex !== undefined ? `/item_${itemIndex}` : ''
-  return `runs/${taskId}/review/${reviewNodeId}/${portName}${itemSeg}/v${versionIndex}.md`
+  return legacyReviewBodyPath({
+    taskId,
+    reviewNodeId,
+    sourcePortName: portName,
+    versionIndex,
+    itemIndex,
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -476,14 +509,14 @@ export function docVersionRelativePath(
 // independently of dispatchReviewNode's surrounding state machine.
 // ---------------------------------------------------------------------------
 
-export interface ReviewRunsPicked {
+export interface ReviewRunsPicked<R = NodeRunFactSnapshot> {
   /** Freshest top-level review row by isFresherNodeRun. Used as the reuse
    *  candidate the dispatcher transitions toward awaiting_review. */
-  reuse: PersistenceTables['nodeRuns']['$inferSelect'] | undefined
+  reuse: R | undefined
   /** Freshest top-level review row whose status is `done`. Used solely for
    *  the cci-alignment short-circuit; NOT the reuse target — the cascade-
    *  minted pending row is the dispatch target when alignment fails. */
-  latestDone: PersistenceTables['nodeRuns']['$inferSelect'] | undefined
+  latestDone: R | undefined
 }
 
 /**
@@ -495,14 +528,16 @@ export interface ReviewRunsPicked {
  * were retired in RFC-074) — same one the scheduler picks `latestPerNode`
  * with (comment fixed by RFC-094, audit S-26).
  */
-export function pickFreshestReviewRun(
-  reviewRuns: ReadonlyArray<PersistenceTables['nodeRuns']['$inferSelect']>,
-): ReviewRunsPicked {
-  // RFC-096: thin wrapper over the shared picker (freshness.ts) — kept as an
-  // exported named function because tests anchor on it.
+export async function pickFreshestReviewRun<R extends RunHistoryFacts>(
+  reviewRuns: readonly R[],
+): Promise<ReviewRunsPicked<R>> {
+  const taskId = reviewRuns[0]?.taskId ?? ''
+  const selection = createRunHistorySnapshot(taskId, reviewRuns)
+  const history = await selection.familyHistory(taskId, {}, { topLevelOnly: true })
+  const done = await selection.familyHistory(taskId, {}, { topLevelOnly: true, statusIn: ['done'] })
   return {
-    reuse: pickFreshestRun(reviewRuns, { topLevelOnly: true }),
-    latestDone: pickFreshestRun(reviewRuns, { topLevelOnly: true, statusIn: ['done'] }),
+    reuse: reviewRuns.find((row) => row.id === history.at(-1)?.id),
+    latestDone: reviewRuns.find((row) => row.id === done.at(-1)?.id),
   }
 }
 
@@ -519,19 +554,17 @@ export function pickFreshestReviewRun(
  */
 async function upstreamPortArchiveJson(
   db: PersistenceDb,
-  reviewRun: PersistenceTables['nodeRuns']['$inferSelect'],
+  reviewRun: NodeRunFactSnapshot,
   sourceNodeId: string,
   sourcePortName: string,
 ): Promise<string | null> {
   const upstreamRunId = parseConsumedJson(reviewRun.consumedUpstreamRunsJson)[sourceNodeId]
   if (upstreamRunId === undefined) return null
-  const { nodeRunOutputs } = tablesOf(db)
-  const rows = await db
-    .select({ archiveJson: nodeRunOutputs.archiveJson })
-    .from(nodeRunOutputs)
-    .where(
-      and(eq(nodeRunOutputs.nodeRunId, upstreamRunId), eq(nodeRunOutputs.portName, sourcePortName)),
-    )
+
+  const rows = await createNodeOutputQueries(db)
+    .readPort(upstreamRunId, sourcePortName)
+    .then((output) => (output === null ? [] : [output]))
+    .then((rows) => rows.map((row) => ({ archiveJson: row.archiveJson })))
   return rows[0]?.archiveJson ?? null
 }
 
@@ -614,19 +647,19 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // reached this module, so it depended on the ambient one alone.
   const executionContext = args.executionContext ?? currentTaskExecutionContext(taskId)
 
-  const { tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   // Re-read only after acquiring the coordinator. A cancel that linearized
   // first must make dispatch a zero-write loser; S1 repair legitimately calls
   // this while the task is already parked awaiting_review.
   const taskRow = (
-    await db
-      .select({
-        status: tasks.status,
-        lifecycleEventRevision: tasks.lifecycleEventRevision,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
+    await createTaskGateQueries(db)
+      .listContexts([taskId])
+      .then((rows) =>
+        rows.map((row) => ({
+          status: row.status,
+          lifecycleEventRevision: row.lifecycleEventRevision,
+        })),
+      )
   )[0]
   if (taskRow === undefined) {
     return {
@@ -684,10 +717,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // (clarifyIteration=0, retryIndex=M>0) that finished BEFORE the clarify
   // session opened, causing review to read a node_run that never emitted the
   // expected port.
-  const sourceRuns = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, sourceNodeId)))
+  const sourceRuns = await createNodeRunQueries(db).list({ taskId: taskId, nodeId: sourceNodeId })
   // RFC-354: the source is read in the frame the environment chain resolves it
   // to from the review node's own frame (a sibling in this generation and
   // round, or a value captured from an enclosing scope).
@@ -696,21 +726,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // must be checked for done-ness below — filtering would silently fall back
   // to an OLDER done row instead of failing loudly with review-upstream-not-done.
   const reviewFrame = { containerRunId, iteration }
-  const frameChain = await loadFrameChain(async (id) => {
-    return (
-      (
-        await db
-          .select({
-            id: nodeRuns.id,
-            nodeId: nodeRuns.nodeId,
-            containerRunId: nodeRuns.containerRunId,
-            iteration: nodeRuns.iteration,
-          })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, id))
-      )[0] ?? null
-    )
-  }, reviewFrame)
+  const frameChain = await loadFrameChain((id) => createNodeRunQueries(db).read(id), reviewFrame)
   const sourceFrame = resolveSourceFrame({
     sourceNodeId,
     targetNodeId: node.id,
@@ -718,7 +734,17 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     frame: reviewFrame,
     containerRowById: frameChain.lookup,
   })
-  const sourceRun = sourceFrame.ok ? pickLatestRunInFrame(sourceRuns, sourceFrame.frame) : undefined
+  const selectedSource = sourceFrame.ok
+    ? await createRunSelectionOracleSnapshot(sourceRuns, { scope: { kind: 'rows' } }).current(
+        taskId,
+        {
+          kind: 'node',
+          nodeId: sourceNodeId,
+          frame: sourceFrame.frame,
+        },
+      )
+    : null
+  const sourceRun = sourceRuns.find((run) => run.id === selectedSource?.id)
   if (sourceRun === undefined || sourceRun.status !== 'done') {
     return {
       kind: 'failed',
@@ -729,12 +755,9 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
 
   // Read port content. agent.outputKinds tells us if it's a markdown_file
   // (path) versus inline markdown.
-  const portRows = await db
-    .select()
-    .from(nodeRunOutputs)
-    .where(
-      and(eq(nodeRunOutputs.nodeRunId, sourceRun.id), eq(nodeRunOutputs.portName, sourcePortName)),
-    )
+  const portRows = await createNodeOutputQueries(db)
+    .readPort(sourceRun.id, sourcePortName)
+    .then((output) => (output === null ? [] : [output]))
   const portRow = portRows[0]
   if (portRow === undefined) {
     return {
@@ -803,16 +826,11 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   }
 
   // Find / create the review node_run row.
-  const reviewRuns = await db
-    .select()
-    .from(nodeRuns)
-    .where(
-      and(
-        eq(nodeRuns.taskId, taskId),
-        eq(nodeRuns.nodeId, node.id),
-        eq(nodeRuns.iteration, iteration),
-      ),
-    )
+  const reviewRuns = await createNodeRunQueries(db).list({
+    taskId: taskId,
+    nodeId: node.id,
+    iteration: iteration,
+  })
   // RFC-074 (T-B4 / T-B9 / T-B10): provenance replaces the RFC-052 "any done
   // short-circuits" + RFC-056 cci-alignment logic. A review row records the
   // exact sourceRun it was produced against in consumed_upstream_runs_json. The
@@ -821,18 +839,26 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // structurally gone). The branches here cover the cases that DO reach
   // dispatch: a live awaiting row (resume / awaiting-refresh §7), a prior
   // decision that still covers the source, or a (re-)open.
-  const { reuse, latestDone } = pickFreshestReviewRun(reviewRuns)
-  const consumedJson = JSON.stringify({ [sourceNodeId]: sourceRun.id })
+  const { reuse, latestDone } = await pickFreshestReviewRun(reviewRuns)
+  const consumedJson = prepareConsumedInputs({
+    record: { [sourceNodeId]: sourceRun.id },
+  }).consumedUpstreamRunsJson!
   // A review row "still covers" the current source iff it recorded consuming
   // this exact source run, OR carries no provenance at all (legacy / null =
   // fresh — migration hard-cut D4). Only a recorded DIFFERENT consumption is a
   // genuine stale signal (RFC-005 US-2: upstream re-ran after the decision).
-  const coversSource = (row: PersistenceTables['nodeRuns']['$inferSelect']): boolean => {
-    const c = parseConsumedJson(row.consumedUpstreamRunsJson)[sourceNodeId]
+  const coversSource = async (row: NodeRunFactSnapshot): Promise<boolean> => {
+    // HEAD looked up a plain object: inherited names also participate in this comparison.
+    const consumed = Object.fromEntries(
+      (
+        await createRunSelectionOracleSnapshot([row], { scope: { kind: 'rows' } }).consumed(row.id)
+      ).map((edge) => [edge.producerNodeId, edge.producerRunId]),
+    )
+    const c = consumed[sourceNodeId]
     return c === undefined || c === sourceRun.id
   }
 
-  if (latestDone !== undefined && coversSource(latestDone)) {
+  if (latestDone !== undefined && (await coversSource(latestDone))) {
     // A prior decision against this exact source remains decisive.
     return { kind: 'ok', summary: '', message: '' }
   }
@@ -862,7 +888,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
 
   const refreshAwaitingReview =
     reuse?.status === 'awaiting_review' &&
-    (!coversSource(reuse) ||
+    (!(await coversSource(reuse)) ||
       (args.reviewArtifacts !== undefined && pendingReuseDocVersions.length === 0))
   // RFC-333 T6: every new review-open and every source-refresh round is
   // prepared completely before one TaskParkTx makes the projection visible.
@@ -951,16 +977,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId, context: executionContext, now: decidedAt })
         if (refreshAwaitingReview) {
-          const { nodeRuns, docVersions, reviewComments } = tablesOf(tx)
-          const current = await firstRow(
-            tx
-              .select({
-                status: nodeRuns.status,
-                consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
-              })
-              .from(nodeRuns)
-              .where(eq(nodeRuns.id, reuse.id)),
-          )
+          const { docVersions, reviewComments } = tablesOf(tx)
+          const current = await createNodeRunQueries(tx).read(reuse.id)
           const expectedPendingIds = pendingReuseDocVersions.map((document) => document.id).sort()
           const currentPendingIds = (
             await tx
@@ -1001,61 +1019,64 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
               })
               .where(inArray(docVersions.id, currentPendingIds))
           }
-          await tx
-            .update(nodeRuns)
-            .set({ consumedUpstreamRunsJson: consumedJson })
-            .where(eq(nodeRuns.id, reuse.id))
+          await createConsumedInputsParticipantInTx().record(tx, reuse.id, {
+            legacyJson: consumedJson,
+          })
         } else if (reuse?.status === 'pending') {
           await transitionNodeRunStatusTx({
             tx,
             nodeRunId: reuse.id,
             event: { kind: 'park-review' },
             extra: {
-              startedAt: reuse.startedAt ?? decidedAt,
-              consumedUpstreamRunsJson: consumedJson,
+              identity: {
+                startedAt: reuse.startedAt ?? decidedAt,
+              },
+              inputs: {
+                consumedUpstreamRunsJson: consumedJson,
+              },
             },
           })
         } else {
           reviewNodeRunId = await createNodeRunMintParticipantInTx(tx).mint({
+            ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'review-park' }),
             taskId,
             nodeId: node.id,
             status: 'awaiting_review',
             cause: 'review-park',
             containerRunId,
             iteration,
-            overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
+            overrides: {
+              identity: {
+                reviewIteration,
+              },
+              inputs: {
+                consumedUpstreamRunsJson: consumedJson,
+              },
+            },
           })
         }
-        const { nodeRunOutputs, nodeRunEvents } = tablesOf(tx)
-        await tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: reviewNodeRunId,
-            portName: REVIEW_APPROVED_PORT_MULTI,
-            content: '',
-            kind: acceptedKind,
-            archiveJson: null,
-          })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content: '', kind: acceptedKind, archiveJson: null },
-          })
-        await tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: reviewNodeRunId,
-            portName: REVIEW_APPROVAL_META_PORT,
-            content: meta,
-          })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content: meta },
-          })
+        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+        await taskHumanGate.writeReviewOutput({
+          nodeRunId: reviewNodeRunId,
+          portName: REVIEW_APPROVED_PORT_MULTI,
+          content: '',
+          kind: acceptedKind,
+          archiveJson: null,
+        })
+        await taskHumanGate.writeReviewOutput({
+          nodeRunId: reviewNodeRunId,
+          portName: REVIEW_APPROVAL_META_PORT,
+          content: meta,
+        })
         await transitionNodeRunStatusTx({
           tx,
           nodeRunId: reviewNodeRunId,
           event: { kind: 'approve-review' },
-          extra: { finishedAt: decidedAt },
+          extra: {
+            identity: {
+              finishedAt: decidedAt,
+            },
+          },
         })
         if (refreshAwaitingReview && taskRow.status === 'awaiting_review') {
           await transitionHumanGateTask(tx, {
@@ -1065,10 +1086,9 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
             now: decidedAt,
           })
         }
-        await insertOne(tx, nodeRunEvents, {
+        await taskHumanGate.appendTextEvent({
           nodeRunId: reviewNodeRunId,
           ts: decidedAt,
-          kind: 'text',
           payload: `[rfc202/review-auto-approved] ${JSON.stringify({
             rfc: 'RFC-202',
             reason: 'empty-list',
@@ -1190,13 +1210,15 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         tx,
         nodeRunId: reviewNodeRunId,
         event: { kind: 'park-review' },
-        extra: { startedAt: reuse.startedAt ?? Date.now() },
+        extra: {
+          identity: {
+            startedAt: reuse.startedAt ?? Date.now(),
+          },
+        },
       })
-      const { nodeRuns } = tablesOf(tx)
-      await tx
-        .update(nodeRuns)
-        .set({ consumedUpstreamRunsJson: consumedJson })
-        .where(eq(nodeRuns.id, reviewNodeRunId))
+      await createConsumedInputsParticipantInTx().record(tx, reviewNodeRunId, {
+        legacyJson: consumedJson,
+      })
     })
   } else {
     // No prior review row, OR the freshest is a terminal decision against an
@@ -1205,13 +1227,21 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // reviewIteration — same review round, re-evaluated on the new content.
     reviewIteration = reuse?.reviewIteration ?? 0
     reviewNodeRunId = await new DrizzleNodeRunLifecyclePersistence(db).mint({
+      ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'review-park' }),
       taskId,
       nodeId: node.id,
       status: 'awaiting_review',
       cause: 'review-park',
       containerRunId,
       iteration,
-      overrides: { reviewIteration, consumedUpstreamRunsJson: consumedJson },
+      overrides: {
+        identity: {
+          reviewIteration,
+        },
+        inputs: {
+          consumedUpstreamRunsJson: consumedJson,
+        },
+      },
       ...(executionContext === undefined ? {} : { executionContext }),
     })
   }
@@ -1341,44 +1371,35 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       })
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId, context: executionContext })
-        const { nodeRunOutputs, nodeRunEvents } = tablesOf(tx)
-        await tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: reviewNodeRunId,
-            portName: REVIEW_APPROVED_PORT_MULTI,
-            content: '',
-            kind: acceptedKind,
-            archiveJson: null,
-          })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content: '', kind: acceptedKind, archiveJson: null },
-          })
-        await tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: reviewNodeRunId,
-            portName: REVIEW_APPROVAL_META_PORT,
-            content: meta,
-          })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content: meta },
-          })
+        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+        await taskHumanGate.writeReviewOutput({
+          nodeRunId: reviewNodeRunId,
+          portName: REVIEW_APPROVED_PORT_MULTI,
+          content: '',
+          kind: acceptedKind,
+          archiveJson: null,
+        })
+        await taskHumanGate.writeReviewOutput({
+          nodeRunId: reviewNodeRunId,
+          portName: REVIEW_APPROVAL_META_PORT,
+          content: meta,
+        })
         await transitionNodeRunStatusTx({
           tx,
           nodeRunId: reviewNodeRunId,
           event: { kind: 'approve-review' },
-          extra: { finishedAt: decidedAt },
+          extra: {
+            identity: {
+              finishedAt: decidedAt,
+            },
+          },
         })
         // Persistent, user-visible audit record (node drawer "events" tab) —
         // the dispatch summary string is discarded by runScope and node_runs
         // has no summary column, so this event is the durable trace.
-        await insertOne(tx, nodeRunEvents, {
+        await taskHumanGate.appendTextEvent({
           nodeRunId: reviewNodeRunId,
           ts: decidedAt,
-          kind: 'text',
           payload: `[rfc202/review-auto-approved] ${JSON.stringify({
             rfc: 'RFC-202',
             reason: 'empty-list',
@@ -1504,9 +1525,7 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
     nextVersion,
     args.itemIndex,
   )
-  const absPath = join(args.appHome, bodyPath)
-  mkdirSync(dirname(absPath), { recursive: true })
-  writeFileSync(absPath, args.body, 'utf8')
+  writeLegacyReviewBody(args.appHome, bodyPath, args.body)
 
   const id = ulid()
   const now = Date.now()
@@ -1600,19 +1619,17 @@ async function loadPriorRound(
     reviewArtifacts?: ReviewArtifactSelection
   },
 ): Promise<{ members: PriorRoundMember[]; nextGeneration: number }> {
-  const { nodeRuns, docVersions } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   // Review node_runs at this workflow iteration (spans reruns + US-2 fresh run).
   const runIds = (
-    await db
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, args.taskId),
-          eq(nodeRuns.nodeId, args.reviewNodeId),
-          eq(nodeRuns.iteration, args.iteration),
-        ),
-      )
+    await createNodeRunQueries(db).listFields(
+      {
+        taskId: args.taskId,
+        nodeId: args.reviewNodeId,
+        iteration: args.iteration,
+      },
+      ['id'],
+    )
   ).map((r) => r.id)
   if (runIds.length === 0) return { members: [], nextGeneration: 1 }
   const rows = (
@@ -1764,12 +1781,9 @@ function parseReviewNodeMeta(
  */
 function assembleReviewSummary(
   dv: PersistenceTables['docVersions']['$inferSelect'],
-  run: Pick<
-    PersistenceTables['nodeRuns']['$inferSelect'],
-    'status' | 'reviewIteration' | 'shardKey'
-  >,
-  task: Pick<PersistenceTables['tasks']['$inferSelect'], 'id' | 'name' | 'workflowId' | 'status'>,
-  wf: Pick<PersistenceTables['workflows']['$inferSelect'], 'name'>,
+  run: Pick<NodeRunFactSnapshot, 'status' | 'reviewIteration' | 'shardKey'>,
+  task: Pick<TaskGateContext, 'id' | 'name' | 'workflowId' | 'status'>,
+  subject: TaskSubjectProjection & { workflowName: string },
   nodeMeta: { title: string; description: string } | undefined,
 ): ReviewSummary {
   const awaitingReview = run.status === 'awaiting_review' && dv.decision === 'pending'
@@ -1779,8 +1793,8 @@ function assembleReviewSummary(
     taskId: dv.taskId,
     // RFC-037: required taskName from tasks.name.
     taskName: task.name,
-    workflowId: task.workflowId,
-    workflowName: wf.name,
+    workflowId: subject.workflowId,
+    workflowName: subject.workflowName,
     reviewNodeId: dv.reviewNodeId,
     title: titleTrimmed !== '' ? nodeMeta!.title : dv.reviewNodeId,
     description: nodeMeta?.description ?? '',
@@ -1801,7 +1815,7 @@ export async function listReviewSummaries(
   db: PersistenceDb,
   filter: ListReviewSummariesFilter = {},
 ): Promise<ReviewSummary[]> {
-  // Join doc_versions ↔ nodeRuns ↔ tasks ↔ workflows. We do it manually with
+  // Join doc_versions ↔ nodeRuns ↔ tasks，主体名由 task-execution 投影. We do it manually with
   // separate selects to keep things composable across drizzle limitations on
   // SQLite multi-join.
   //
@@ -1812,7 +1826,7 @@ export async function listReviewSummaries(
   // the pending rows via SQL predicate (bounded set), filter, and apply the
   // limit at the very end; historical queries keep the original shape.
   const isPendingQuery = filter.status === 'pending'
-  const { docVersions, nodeRuns, tasks, workflows } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   const dvRows = isPendingQuery
     ? await db
         .select()
@@ -1834,40 +1848,28 @@ export async function listReviewSummaries(
   // workflow_snapshot, every *_json) and filtered in JS; on the 15s inbox
   // badge poll that materialized three whole tables per open tab (audit L1-1).
   const nodeRunIds = Array.from(new Set(dvRows.map((r) => r.reviewNodeRunId)))
-  const nodeRunRows = await chunkedAll(nodeRunIds, (ids) => {
-    return db
-      .select({
-        id: nodeRuns.id,
-        status: nodeRuns.status,
-        reviewIteration: nodeRuns.reviewIteration,
-        shardKey: nodeRuns.shardKey,
-      })
-      .from(nodeRuns)
-      .where(inArray(nodeRuns.id, ids))
-  })
+  const nodeRunRows = await chunkedAll(nodeRunIds, async (ids) => [
+    ...(await createNodeRunQueries(db).listDispatchFacts({ runIds: ids })),
+  ])
   const runById = new Map(nodeRunRows.map((r) => [r.id, r]))
   const taskIds = Array.from(new Set(dvRows.map((r) => r.taskId)))
   const taskRows = await chunkedAll(taskIds, (ids) => {
-    return db
-      .select({
-        id: tasks.id,
-        name: tasks.name,
-        workflowId: tasks.workflowId,
-        status: tasks.status,
-        workflowSnapshot: tasks.workflowSnapshot,
-      })
-      .from(tasks)
-      .where(inArray(tasks.id, ids))
+    return createTaskGateQueries(db)
+      .listDefinitionContexts(ids)
+      .then((rows) =>
+        rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          workflowId: row.workflowId,
+          status: row.status,
+          workflowSnapshot: row.workflowSnapshot,
+        })),
+      )
   })
   const taskById = new Map(taskRows.map((r) => [r.id, r]))
-  const workflowIds = Array.from(new Set(taskRows.map((t) => t.workflowId)))
-  const wfRows = await chunkedAll(workflowIds, (ids) => {
-    return db
-      .select({ id: workflows.id, name: workflows.name })
-      .from(workflows)
-      .where(inArray(workflows.id, ids))
-  })
-  const wfById = new Map(wfRows.map((r) => [r.id, r]))
+  const subjects = await createTaskSubjectQueries(db).taskSubjectProjection(
+    taskRows.map((task) => task.id),
+  )
 
   // Parse each task's workflowSnapshot once to extract the per-review-node
   // human-readable title/description set in the workflow editor. Falls back
@@ -1896,8 +1898,8 @@ export async function listReviewSummaries(
     if (run === undefined) continue
     const task = taskById.get(dv.taskId)
     if (task === undefined) continue
-    const wf = wfById.get(task.workflowId)
-    if (wf === undefined) continue
+    const subject = subjects.get(task.id)
+    if (subject === undefined || subject.workflowName === null) continue
     const awaitingReview = run.status === 'awaiting_review' && dv.decision === 'pending'
     // RFC-202 T6: dead tasks' rounds leave the pending inbox. done/canceled
     // are hard-sealed by the terminal sweep; failed/interrupted are revivable
@@ -1912,35 +1914,44 @@ export async function listReviewSummaries(
       if (filter.status === 'iterated' && dv.decision !== 'iterated') continue
     }
     if (filter.taskId !== undefined && filter.taskId !== task.id) continue
-    if (filter.workflowId !== undefined && filter.workflowId !== task.workflowId) continue
+    if (filter.workflowId !== undefined && filter.workflowId !== subject.workflowId) continue
     const nodeMeta = reviewNodeMetaByTask.get(task.id)?.get(dv.reviewNodeId)
-    out.push(assembleReviewSummary(dv, run, task, wf, nodeMeta))
+    out.push(
+      assembleReviewSummary(
+        dv,
+        run,
+        task,
+        { ...subject, workflowName: subject.workflowName },
+        nodeMeta,
+      ),
+    )
   }
   // RFC-202 T6: pending pagination happens AFTER filtering (see above).
   return isPendingQuery && filter.unbounded !== true ? out.slice(0, filter.limit ?? 100) : out
 }
 
 /**
- * RFC-311 — badge count as ONE indexed SQL statement. Mirrors the pending
+ * RFC-311 — badge predicates and RFC-395 subject projection stay in one SQL statement. Mirrors the pending
  * branch of `listReviewSummaries` predicate-for-predicate:
  *   dv.decision='pending'                       (partial idx_doc_versions_pending_created)
  *   latest pending version per (run, port)      (NOT EXISTS newer pending sibling)
  *   run exists ∧ status='awaiting_review'       (awaitingReview requirement)
  *   task exists ∧ status ∉ TERMINAL             (RFC-202 T6 zombie filter)
- *   workflow exists                             (assemble skips orphan workflows)
+ *   task subject projects a name               (deleted authored workflow stays hidden)
  * plus route-level per-actor visibility (task visibility or a review-node
  * assignment) applied before counting. The oracle test (rfc311-badge-counts)
  * locks this count to the list+filter pipeline's length.
  */
 export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Promise<number> {
-  const { docVersions, reviewNodeReviewers, nodeRuns, tasks, workflows } = tablesOf(db)
+  const { docVersions, reviewNodeReviewers } = tablesOf(db)
   // RFC-359 AC-11 —— 这条端点原本打**三次串行往返**：①主 join 捞出全部待审行，
   // ②`visibleTaskIds(...)` 按 taskId 列表查可见性，③`chunkedAll` 查指派表；再在 JS 里
   // 归并去重计数。三段在 SQLite 上几乎免费（进程内、每条 ~0μs），在 PostgreSQL 上每段
   // 都是一次真实往返——实测该端点 SQLite P95 1.80ms / PG 7.33ms，差值 +5.5ms ≈ 3 × RTT，
   // 且**不随行数放大**，即代价来自往返次数而非查询本身。
   //
-  // 这里把三段折成**一条**语句：可见性与指派都下推成谓词，计数交给 SQL。
+  // RFC-395 II-a: subject naming joins the existing predicates through the owner port;
+  // preserve HEAD's one SQL count and exclude deleted authored workflows.
   // 判据逐字不变（RFC-340：徽标数 = 任务可见 ∪ 节点被指派）：
   //   · 可见性 = `canReadAllTasks ? 恒真 : (owner 是我 OR 我在 task_collaborators 里)`
   //     —— 与 `taskAuthorization.visibleIds` 同一判据；原实现按 500 分块只是为了绕开
@@ -1973,7 +1984,7 @@ export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Pro
       or(
         // 可见性判据取自共享持久化词汇 `db/taskVisibility`——与 `taskAuthorization.visibleIds`
         // 同一份代码，这里只是把它下推进本条语句（AC-11：省掉「先捞列表再问一次」的那次往返）。
-        taskVisibilityCondition(db, {
+        taskGateVisibleCondition(db, docVersions.taskId, {
           userId: actor.user.id,
           canReadAllTasks: actor.permissions.has('tasks:read:all'),
         }),
@@ -1992,21 +2003,14 @@ export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Pro
       )!,
     )
   }
+  conditions.push(nodeRunStatusCondition(db, docVersions.reviewNodeRunId, 'awaiting_review'))
+  conditions.push(taskGateOpenCondition(db, docVersions.taskId, false, true))
   const counted = await db
     // RFC-349：必须走 drizzle 的 `count()`（= ``sql`count(*)`.mapWith(Number)``）。
     // 裸 `sql<number>\`count(*)\`` 在 PostgreSQL 上没有 mapper——`count(*)` 是 int8，
     // 驱动按规范原样交回**字符串**，于是同一段代码在两个引擎上类型不同。
     .select({ total: count() })
     .from(docVersions)
-    .innerJoin(
-      nodeRuns,
-      and(eq(nodeRuns.id, docVersions.reviewNodeRunId), eq(nodeRuns.status, 'awaiting_review')),
-    )
-    .innerJoin(
-      tasks,
-      and(eq(tasks.id, docVersions.taskId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
-    )
-    .innerJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(and(...conditions))
   return counted[0]?.total ?? 0
 }
@@ -2017,7 +2021,7 @@ export async function getReviewDetail(
   nodeRunId: string,
   reader?: CommittedReviewArtifactReader,
 ): Promise<Omit<ReviewDetail, 'capabilities'>> {
-  const { docVersions, nodeRuns, tasks, workflows } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   const allRows = await db
     .select()
     .from(docVersions)
@@ -2030,27 +2034,22 @@ export async function getReviewDetail(
   // newest-500 window silently 404'd any review whose doc_versions aged out of
   // it. Latest-per-port row (max versionIndex) drives the summary, matching the
   // list's `latestPerRun` selection.
-  const summaryRunRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
+  const summaryRunRows = await createNodeRunQueries(db).list({ runIds: [nodeRunId], limit: 1 })
   const summaryRun = summaryRunRows[0]
   if (summaryRun === undefined) {
     throw new NotFoundError('review-not-found', `node run ${nodeRunId} not found`)
   }
-  const summaryTaskRows = await db
-    .select()
-    .from(tasks)
-    .where(eq(tasks.id, summaryRun.taskId))
-    .limit(1)
+  const summaryTaskRows = await createTaskGateQueries(db).listDefinitionContexts([
+    summaryRun.taskId,
+  ])
   const summaryTask = summaryTaskRows[0]
   if (summaryTask === undefined) {
     throw new NotFoundError('review-not-found', `task ${summaryRun.taskId} not found`)
   }
-  const summaryWfRows = await db
-    .select()
-    .from(workflows)
-    .where(eq(workflows.id, summaryTask.workflowId))
-    .limit(1)
-  const summaryWf = summaryWfRows[0]
-  if (summaryWf === undefined) {
+  const subject = (await createTaskSubjectQueries(db).taskSubjectProjection([summaryTask.id])).get(
+    summaryTask.id,
+  )
+  if (subject === undefined || subject.workflowName === null) {
     throw new NotFoundError('review-not-found', `workflow ${summaryTask.workflowId} not found`)
   }
   const summaryDv = allRows.slice().sort((a, b) => b.versionIndex - a.versionIndex)[0]!
@@ -2061,7 +2060,7 @@ export async function getReviewDetail(
     summaryDv,
     summaryRun,
     summaryTask,
-    summaryWf,
+    { ...subject, workflowName: subject.workflowName },
     summaryNodeMeta,
   )
   // RFC-079: multi-document mode (any member carries item_index). Build the
@@ -2102,7 +2101,7 @@ export async function getReviewDetail(
   const comments = await commentsForDocVersion(db, dv)
 
   // Reach for the review node's per-node rerunnable configs.
-  const taskRows = await db.select().from(tasks).where(eq(tasks.id, summary.taskId)).limit(1)
+  const taskRows = await createTaskGateQueries(db).listDefinitionContexts([summary.taskId])
   const taskRow = taskRows[0]
   let rerunnableOnReject: string[] = []
   let rerunnableOnIterate: string[] = []
@@ -2493,14 +2492,15 @@ export interface AddReviewCommentArgs {
 async function assertReviewRoundWritable(
   db: PersistenceDb,
   nodeRunId: string,
-): Promise<PersistenceTables['nodeRuns']['$inferSelect']> {
-  const { nodeRuns, tasks } = tablesOf(db)
-  const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1))[0]
+): Promise<NodeRunFactSnapshot> {
+  const run = (await createNodeRunQueries(db).list({ runIds: [nodeRunId], limit: 1 }))[0]
   if (run === undefined) {
     throw new NotFoundError('review-not-found', `review run ${nodeRunId} not found`)
   }
   const task = (
-    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, run.taskId)).limit(1)
+    await createTaskGateQueries(db)
+      .listContexts([run.taskId])
+      .then((rows) => rows.map((row) => ({ status: row.status })))
   )[0]
   if (task === undefined) {
     throw new NotFoundError('task-not-found', `task ${run.taskId} not found`)
@@ -3078,7 +3078,7 @@ interface PreparedOutput {
 
 interface PreparedRerunUpstream {
   nodeId: string
-  latest: PersistenceTables['nodeRuns']['$inferSelect']
+  latest: NodeRunCheckpointSnapshot
   nextRetry: number
   /** Preallocated so the decision manifest and the committed projection are exact. */
   rerunNodeRunId: string
@@ -3087,6 +3087,7 @@ interface PreparedRerunUpstream {
 }
 
 interface PreparedSibling {
+  run: NodeRunFactSnapshot
   runId: string
   reviewIteration: number
   pendingDocVersionIds: string[]
@@ -3340,13 +3341,13 @@ async function submitReviewDecisionUnlocked(
 ): Promise<SubmitReviewDecisionResult> {
   const { db } = args
 
-  const { nodeRuns, tasks, docVersions, collaborationGateOperations } = tablesOf(db)
+  const { docVersions, collaborationGateOperations } = tablesOf(db)
   // ── prepare A: rows + admission ────────────────────────────────────────────
-  const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, args.nodeRunId)).limit(1))[0]
+  const run = (await createNodeRunQueries(db).list({ runIds: [args.nodeRunId], limit: 1 }))[0]
   if (run === undefined) {
     throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
   }
-  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, run.taskId)).limit(1))[0]
+  const taskRow = (await createTaskGateQueries(db).listDefinitionContexts([run.taskId]))[0]
   if (taskRow === undefined) {
     throw new NotFoundError('task-not-found', `task ${run.taskId} not found`)
   }
@@ -3539,9 +3540,7 @@ async function submitReviewDecisionUnlocked(
   if (rerun !== null && rerun.rollbackFlag && rerun.rollbackTarget !== null) {
     const candidates = rerun.upstreams.map((up) => ({
       sourceNodeRunId: up.latest.id,
-      targets: planNodeRunRollbackTargets(rerun!.rollbackTarget!, up.latest, {
-        resetOnEmptySnapshot: false,
-      }),
+      targets: planNodeRunRollbackTargets(rerun!.rollbackTarget!, up.latest.rollback),
     }))
     if (candidates.some((candidate) => candidate.targets.length > 0)) {
       workspaceRollbackPlan = await humanGateComposition.prepareWorkspaceRollbackPlan({
@@ -3603,33 +3602,26 @@ async function submitReviewDecisionUnlocked(
   const nextIter =
     policy.bumpsIteration && !returnDecision ? run.reviewIteration + 1 : run.reviewIteration
   const committed = await databaseSessionFor(db).transaction(async (tx) => {
-    const { tasks, nodeRuns, docVersions, reviewComments, nodeRunOutputs } = tablesOf(tx)
+    const { docVersions, reviewComments } = tablesOf(tx)
+    const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
     // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发决定 / 取消靠任务聚合根行锁串行
     // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。
-    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, run.taskId)
+    await taskHumanGate.lockTask(run.taskId)
     // 0. Re-check at the commit point: a concurrent cancel / decision / member
     //    removal that slipped past the lock-free prepare loses here.
     const liveRun = (
-      await tx
-        .select({
-          status: nodeRuns.status,
-          reviewIteration: nodeRuns.reviewIteration,
-          taskId: nodeRuns.taskId,
-        })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, args.nodeRunId))
-        .limit(1)
+      await createNodeRunQueries(tx).listDispatchFacts({ runIds: [args.nodeRunId] })
     )[0]
     const liveTask = (
-      await tx
-        .select({
-          status: tasks.status,
-          ownerUserId: tasks.ownerUserId,
-          sourceTerminationFence: tasks.sourceTerminationFence,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, run.taskId))
-        .limit(1)
+      await createTaskGateQueries(tx)
+        .listContexts([run.taskId])
+        .then((rows) =>
+          rows.map((row) => ({
+            status: row.status,
+            ownerUserId: row.ownerUserId,
+            sourceTerminationFence: row.sourceTerminationFence,
+          })),
+        )
     )[0]
     if (liveRun === undefined || liveTask === undefined) {
       throw new NotFoundError('review-not-found', `review run ${args.nodeRunId} not found`)
@@ -3849,26 +3841,24 @@ async function submitReviewDecisionUnlocked(
       //     downstream bindings + the task-detail Outputs tab can resolve them.
       //     Upsert (RFC-052): defense-in-depth against a re-entered approve.
       for (const out of outputs) {
-        await tx
-          .insert(nodeRunOutputs)
-          .values({
-            nodeRunId: args.nodeRunId,
-            portName: out.portName,
-            content: out.content,
-            kind: out.kind,
-            archiveJson: out.archiveJson,
-          })
-          .onConflictDoUpdate({
-            target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-            set: { content: out.content, kind: out.kind, archiveJson: out.archiveJson },
-          })
+        await taskHumanGate.writeReviewOutput({
+          nodeRunId: args.nodeRunId,
+          portName: out.portName,
+          content: out.content,
+          kind: out.kind,
+          archiveJson: out.archiveJson,
+        })
       }
       // RFC-053: approve-review enforces awaiting_review → done at the helper.
       await transitionNodeRunStatusTx({
         tx,
         nodeRunId: args.nodeRunId,
         event: { kind: returnDecision ? 'return-review-decision' : policy.lifecycleEvent },
-        extra: { finishedAt: decidedAt },
+        extra: {
+          identity: {
+            finishedAt: decidedAt,
+          },
+        },
       })
     } else if (rerun !== null) {
       // 4b. reject / iterate — retire the superseded upstream rows, mint their
@@ -3890,10 +3880,14 @@ async function submitReviewDecisionUnlocked(
           allowTerminal: true,
           reason: supersedeMarker,
           extra: {
-            finishedAt: up.latest.finishedAt ?? Date.now(),
-            errorMessage: `${supersedeMarker}: Replaced by retry_index ${up.nextRetry} due to review ${rerun.rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
-            supersededByReview: rerun.rerunPolicy.supersededByReview,
-            rolledBack: up.rolledBack,
+            identity: {
+              finishedAt: up.latest.finishedAt ?? Date.now(),
+              errorMessage: `${supersedeMarker}: Replaced by retry_index ${up.nextRetry} due to review ${rerun.rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
+            },
+            result: {
+              supersededByReview: rerun.rerunPolicy.supersededByReview,
+              rolledBack: up.rolledBack,
+            },
           },
         })
         // RFC-011: a fresh node_run row at retry_index+1 keeps the old row's
@@ -3903,6 +3897,7 @@ async function submitReviewDecisionUnlocked(
         // (RFC-074 PR-C: no clarifyIteration inherit, see
         // review-iterate-inherits-clarify-iteration.test.ts).
         await createNodeRunMintParticipantInTx(tx).mint({
+          ...deriveNodeRunRole({ nodeId: up.nodeId, rerunCause: rerun.rerunPolicy.mintCause }),
           id: up.rerunNodeRunId,
           taskId: dv.taskId,
           nodeId: up.nodeId,
@@ -3912,7 +3907,15 @@ async function submitReviewDecisionUnlocked(
           // RFC-354: the rerun stays in the frame of the row it replaces.
           containerRunId: up.latest.containerRunId,
           iteration: up.latest.iteration,
-          overrides: { parentNodeRunId: null, preSnapshot: up.latest.preSnapshot, startedAt: null },
+          overrides: {
+            identity: {
+              parentNodeRunId: null,
+              startedAt: null,
+            },
+            checkpoint: {
+              checkpoints: up.latest.checkpointInheritance,
+            },
+          },
         })
       }
       // Sibling cascade (RFC-005 A2 reject: always; RFC-014 iterate: only when the
@@ -3936,8 +3939,13 @@ async function submitReviewDecisionUnlocked(
           allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
           allowTerminal: true,
           reason: 'review-sibling-cascade',
-          extra: { reviewIteration: sibling.reviewIteration + 1 },
+          extra: {
+            identity: {
+              reviewIteration: sibling.reviewIteration + 1,
+            },
+          },
         })
+        await reselectRunInTx(tx, sibling.run, 'review-sibling-cascade')
       }
       // Bump this review's reviewIteration + status=pending so the scheduler
       // re-runs it (RFC-053: iterate-review / reject-review enforce
@@ -3946,22 +3954,19 @@ async function submitReviewDecisionUnlocked(
         tx,
         nodeRunId: args.nodeRunId,
         event: { kind: policy.lifecycleEvent },
-        extra: { reviewIteration: nextIter },
+        extra: {
+          identity: {
+            reviewIteration: nextIter,
+          },
+        },
       })
+      await reselectRunInTx(tx, run, policy.lifecycleEvent)
     }
 
     const lineageIds = [...sourceNodeRunIds, ...rerunNodeRunIds]
     const projectionRows =
-      lineageIds.length === 0
-        ? []
-        : await tx
-            .select()
-            .from(nodeRuns)
-            .where(inArray(nodeRuns.id, lineageIds))
-            .limit(lineageIds.length)
-    const expectedNodeProjection = humanGateNodeProjectionFence(
-      projectionRows.map(humanGateNodeProjectionMember),
-    )
+      lineageIds.length === 0 ? [] : await createNodeRunQueries(tx).humanGateProjection(lineageIds)
+    const expectedNodeProjection = humanGateNodeProjectionFence(projectionRows)
     const accepted = await acceptHumanGateDecisionTx(tx, {
       taskId: taskRow.id,
       gate: { kind: 'review', ref: gateRef },
@@ -4122,7 +4127,7 @@ async function submitReviewDecisionUnlocked(
  */
 async function planSingleDocApprove(
   db: PersistenceDb,
-  run: PersistenceTables['nodeRuns']['$inferSelect'],
+  run: NodeRunFactSnapshot,
   dv: DocVersion,
   readBody: (d: DocVersion) => string,
   decidedAt: number,
@@ -4169,7 +4174,7 @@ async function planSingleDocApprove(
  */
 async function planMultiDocApprove(
   db: PersistenceDb,
-  run: PersistenceTables['nodeRuns']['$inferSelect'],
+  run: NodeRunFactSnapshot,
   effectiveDvs: DocVersion[],
   readBody: (d: DocVersion) => string,
   decidedAt: number,
@@ -4231,9 +4236,7 @@ async function planMultiDocApprove(
  * (`workflow-snapshot-corrupt`, `review-node-missing-from-snapshot`) now happens
  * here, ahead of the external phase and the transaction.
  */
-function readReviewWorkflowSnapshot(
-  taskRow: PersistenceTables['tasks']['$inferSelect'],
-): WorkflowDefinition {
+function readReviewWorkflowSnapshot(taskRow: TaskGateDefinitionContext): WorkflowDefinition {
   try {
     return migrateWorkflowDefinitionToLatest(
       JSON.parse(taskRow.workflowSnapshot) as WorkflowDefinition,
@@ -4248,8 +4251,8 @@ function readReviewWorkflowSnapshot(
 
 async function planRerun(
   args: SubmitReviewDecisionArgs,
-  run: PersistenceTables['nodeRuns']['$inferSelect'],
-  taskRow: PersistenceTables['tasks']['$inferSelect'],
+  run: NodeRunFactSnapshot,
+  taskRow: TaskGateDefinitionContext,
   dv: DocVersion,
 ): Promise<PreparedRerun> {
   const { db } = args
@@ -4278,23 +4281,20 @@ async function planRerun(
 
   const upstreams: PreparedRerunUpstream[] = []
   for (const nodeId of rerunSet) {
-    const { nodeRuns } = tablesOf(db)
-    const upRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(
-        and(
-          eq(nodeRuns.taskId, dv.taskId),
-          eq(nodeRuns.nodeId, nodeId),
-          eq(nodeRuns.iteration, run.iteration),
-        ),
-      )
+    const upRuns = await createNodeRunQueries(db).listWithCheckpoints({
+      taskId: dv.taskId,
+      nodeId: nodeId,
+      iteration: run.iteration,
+    })
     // Pick the freshest top-level upstream row with the same comparator the
     // scheduler / dispatchReviewNode use (clarifyIteration → retryIndex → ulid);
     // a plain desc(retryIndex) sort shadows the clarify-rerun row (locked by
     // review-iterate-inherits-clarify-iteration.test.ts). RFC-096: intentionally
     // no status filter — supersede must cancel live rows AND the typical done row.
-    const latest = pickFreshestRun(upRuns, { topLevelOnly: true })
+    const history = await createRunSelectionOracleSnapshot(upRuns, {
+      scope: { kind: 'rows' },
+    }).familyHistory(dv.taskId, { nodeId, iteration: run.iteration }, { topLevelOnly: true })
+    const latest = upRuns.find((row) => row.id === history.at(-1)?.id)
     if (latest === undefined) continue
     // RFC-284 T21：latest 单行口径 = 单元素集特例，收编 nextRetryIndex。
     upstreams.push({
@@ -4306,8 +4306,7 @@ async function planRerun(
     })
   }
   const needsRollback =
-    rollbackFlag &&
-    upstreams.some((u) => u.latest.preSnapshot !== null || u.latest.preSnapshotReposJson !== null)
+    rollbackFlag && upstreams.some((u) => hasTaskRollbackCheckpoint(u.latest.rollback))
   const rollbackTarget = needsRollback ? await loadRollbackTarget(db, taskRow.id) : null
 
   let cascadeReason: 'rejected' | 'iterated' | null = null
@@ -4328,17 +4327,12 @@ async function planRerun(
       if (n.id === dv.reviewNodeId) continue
       const inputSource = reviewInputSource(definition, n.id)
       if (inputSource === null || inputSource.nodeId !== dv.sourceNodeId) continue
-      const { nodeRuns, docVersions } = tablesOf(db)
-      const siblingRuns = await db
-        .select()
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, dv.taskId),
-            eq(nodeRuns.nodeId, n.id),
-            eq(nodeRuns.iteration, run.iteration),
-          ),
-        )
+      const { docVersions } = tablesOf(db)
+      const siblingRuns = await createNodeRunQueries(db).list({
+        taskId: dv.taskId,
+        nodeId: n.id,
+        iteration: run.iteration,
+      })
       for (const s of siblingRuns) {
         if (s.parentNodeRunId !== null) continue
         const pending = await db
@@ -4346,6 +4340,7 @@ async function planRerun(
           .from(docVersions)
           .where(and(eq(docVersions.reviewNodeRunId, s.id), eq(docVersions.decision, 'pending')))
         siblings.push({
+          run: s,
           runId: s.id,
           reviewIteration: s.reviewIteration,
           pendingDocVersionIds: pending.map((p) => p.id),
@@ -4627,7 +4622,7 @@ export async function buildReviewPromptContext(
   taskId: string,
   iteration: number,
 ): Promise<ReviewPromptContext | undefined> {
-  const { docVersions, tasks } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   // Find the most recently USER-decided doc_version where sourceNodeId =
   // upstreamNodeId. SQLite orders NULL first in DESC, so:
   //   - pending rows must be filtered explicitly (otherwise their NULL
@@ -4664,7 +4659,7 @@ export async function buildReviewPromptContext(
   // while the prompt is rendered for its upstream agent. Resolve it from the
   // frozen task snapshot so a mid-run workflow edit cannot change an already
   // launched task. Reject/approve/pending paths intentionally never receive it.
-  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  const taskRow = (await createTaskGateQueries(db).listDefinitionContexts([taskId]))[0]
   if (taskRow === undefined) return context
   try {
     const parsed = WorkflowDefinitionSchema.parse(JSON.parse(taskRow.workflowSnapshot))
@@ -4715,8 +4710,8 @@ export async function buildSiblingOutputsBlock(
 ): Promise<string | undefined> {
   const { db, appHome, taskId, upstreamNodeId, targetPortName } = args
 
-  const { tasks, agents, docVersions } = tablesOf(db)
-  const taskRow = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  const { agents, docVersions } = tablesOf(db)
+  const taskRow = (await createTaskGateQueries(db).listDefinitionContexts([taskId]))[0]
   if (taskRow === undefined) return undefined
   let definition: WorkflowDefinition
   try {

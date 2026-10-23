@@ -60,7 +60,7 @@ async function makeConflict(): Promise<{
   const merge = await mergeTreeInMemory(canon, { base, ours, theirs })
   expect(merge.conflicts).toContain('f.txt')
   const conflict: MergeBackConflict = {
-    worktreeDirName: '',
+    mountPath: '',
     paths: merge.conflicts,
     mergedTree: merge.mergedTree,
     rawConflictOutput: merge.rawConflictOutput,
@@ -191,7 +191,7 @@ describe('RFC-130 §6.2 — resolveConflictWithAgent (mock agent)', () => {
           repoPath: canon,
           canonWorktreePath: canon,
           isoWorktreePath: join(container, 'node'),
-          worktreeDirName: '',
+          mountPath: '',
           baseBranch: 'main',
           baseSnapshot: conflict.base,
           taskBaseHead: conflict.taskBaseHead,

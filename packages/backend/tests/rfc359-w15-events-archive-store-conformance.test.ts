@@ -1,7 +1,7 @@
 // RFC-359 AC1: the two established archive owners must retain their actual
 // numeric rows, state watermarks and inclusive/exclusive deletion boundaries.
 // The original events-archive suite separately exercises all four DB/FS faults.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -30,15 +30,15 @@ function originalConstructor(db: PersistenceDb) {
 }
 
 async function seed(db: PersistenceDb): Promise<void> {
-  const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { nodeRunEvents } = tablesOf(db)
+  await workflowFixture(db, {
     id: 'archive-wf',
     name: 'archive-wf',
     definition: '{}',
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: 'archive-task',
     name: 'archive-task',
     workflowId: 'archive-wf',
@@ -51,7 +51,8 @@ async function seed(db: PersistenceDb): Promise<void> {
     inputs: '{}',
     startedAt: NOW,
   })
-  await db.insert(nodeRuns).values(
+  await nodeRunFixture(
+    db,
     ['archive-a', 'archive-b', 'archive-empty'].map((id) => ({
       id,
       taskId: 'archive-task',

@@ -17,6 +17,7 @@
 //   const mcps    = await loadMcpsByIds(query, ids)
 //   await runNode({ ..., dependents: closure, mcps })
 
+import { agentReferenceIds } from '@agent-workflow/shared'
 import type { Agent, Mcp } from '@agent-workflow/shared'
 import { runtimeIdRef, runtimeRefKey } from '@/services/ref/runtimeRef'
 
@@ -39,7 +40,7 @@ export function collectMcpIdsFromClosure(closure: readonly Agent[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
   for (const agent of closure) {
-    for (const id of agent.mcp ?? []) {
+    for (const id of agentReferenceIds(agent, 'mcp')) {
       const key = runtimeRefKey(runtimeIdRef('mcp', id))
       if (seen.has(key)) continue
       seen.add(key)

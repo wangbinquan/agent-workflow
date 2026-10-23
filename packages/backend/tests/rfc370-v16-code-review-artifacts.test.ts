@@ -12,8 +12,7 @@
 //     narratives, so a regeneration never collides with an earlier one;
 //   - the hosted owner sweep releases the artifacts of deleted tasks only,
 //     against real task rows on both database providers.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -198,14 +197,13 @@ describe('RFC-370 §10 V16 hosted code-review artifacts', () => {
 })
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf-${taskId}`,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: `wf-${taskId}`,
@@ -218,7 +216,6 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     inputs: '{}',
     startedAt: 1,
     baseCommit: 'base',
-    repoCount: 1,
     // PostgreSQL 的迁移不带 SQLite 的 lineage 触发器，两侧都显式写 lineage。
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([

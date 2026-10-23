@@ -25,7 +25,7 @@
 // 只断言「都被拒绝 / 都为空」的用例，一个「永远什么都不写」的实现也能满足。所以每条拒绝类判据
 // 旁边都钉一条「正常路径确实落了行、且落成什么样」。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
@@ -93,8 +93,7 @@ interface Fixture {
 
 async function seed(db: PersistenceDb): Promise<Fixture> {
   const taskId = `w10_${ulid()}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-w10',
     description: '',
@@ -102,7 +101,7 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -122,7 +121,7 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
   // 给直写者装了补齐触发器，PostgreSQL 没有（schema 面的差异，不在本对之内）。
   const runId = ulid()
   const slotPathJson = encodeLineageSlotPath(rootPath(taskId))
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -438,12 +437,10 @@ describeEachProvider('RFC-359 W10 —— 效应观察者双引擎对拍', (harne
           failureCode: null,
         },
       ])
-      const { nodeRuns } = tablesOf(fixture.db)
       // spawn 回执投影到 node_run 上：用户在任务详情里看到的 pid 就是这一列。
-      const runRows = await fixture.db
-        .select({ pid: nodeRuns.pid })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, fixture.runId))
+      const runRows = await readNodeRunFixtures(fixture.db, { id: fixture.runId }).then((rows) =>
+        rows.map((row) => ({ pid: row.pid })),
+      )
       expect(Number(runRows[0]?.pid)).toBe(4242)
       fixture.reset()
     },

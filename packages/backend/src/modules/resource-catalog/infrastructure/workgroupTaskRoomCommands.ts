@@ -662,7 +662,7 @@ export function createWorkgroupTaskRoomCommands(
         const at = now()
         const replaced = await participant.replaceConfig({
           taskId: input.taskId,
-          expectedConfigJson: loaded.task.workgroupConfigJson ?? '',
+          expectedConfigJson: loaded.task.workgroupConfig?.runtime.revision ?? '',
           nextConfigJson: JSON.stringify(nextConfig),
           newCollaborators: humanIds.map((userId) => ({
             userId,

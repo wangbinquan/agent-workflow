@@ -2,8 +2,7 @@
 // In-memory SQLite; CRUD round-trips and references checks only — full
 // topology/port validation lands in P-2-01.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchWorkflowFixture, taskFixture } from './helpers/model'
 import type {
   DeleteWorkflow,
   UpdateWorkflow,
@@ -12,7 +11,6 @@ import type {
   WorkflowDraftSnapshot,
 } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import {
@@ -169,8 +167,7 @@ describe('workflow service', () => {
         definition: sampleDefinition(),
       })
       const taskId = ulid()
-      const { tasks } = tablesOf(db)
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         name: 'fixture-task',
 
         id: taskId,
@@ -203,8 +200,7 @@ describe('workflow service', () => {
         definition: sampleDefinition(),
       })
       const taskId = ulid()
-      const { tasks } = tablesOf(db)
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         name: 'fixture-task',
 
         id: taskId,
@@ -429,14 +425,10 @@ describeEachProviderHttpApplication(
         }),
       })
       const created = (await post.json()) as WorkflowDetail
-      const { workflows } = tablesOf(hdb)
       // Simulate a row written before the slug rule existed. The current save
       // service correctly refuses to mint a new invalid name, so this fixture
       // must bypass it just like a historical migration state would.
-      await hdb
-        .update(workflows)
-        .set({ name: 'Legacy Name With Spaces' })
-        .where(eq(workflows.id, created.id))
+      await patchWorkflowFixture(hdb, { id: created.id }, { name: 'Legacy Name With Spaces' })
       const legacy = await getWorkflow(hdb, created.id)
       if (legacy === null) throw new Error('legacy workflow disappeared')
 

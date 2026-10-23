@@ -53,4 +53,5 @@ export {
 // 想用 domain / application 的函数请直接 import 定义模块。
 export { createCommittedHumanInputQueries } from './infrastructure/committedHumanInputQueries'
 
+export { createClarifyAnswerQueries } from './infrastructure/clarifyAnswerQueries'
 export { schemaContribution } from './composition/schema'

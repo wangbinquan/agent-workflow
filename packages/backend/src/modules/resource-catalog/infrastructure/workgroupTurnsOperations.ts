@@ -3,7 +3,6 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import {
   DwStateSchema,
-  WorkgroupRuntimeConfigSchema,
   perCardInputDescriptionBudget,
   renderAgentCapabilityCard,
   type WorkgroupMessage,
@@ -146,14 +145,9 @@ async function loadSnapshot(
   taskId: string,
 ): Promise<WorkgroupTurnsSnapshot | null> {
   const hostSnapshot = await hostLedger.load(taskId)
-  if (
-    hostSnapshot?.workgroupConfigJson === null ||
-    hostSnapshot?.workgroupConfigJson === undefined
-  ) {
-    return null
-  }
-  const config = WorkgroupRuntimeConfigSchema.safeParse(parseJson(hostSnapshot.workgroupConfigJson))
-  if (!config.success) return null
+  if (hostSnapshot === null) return null
+  const config = hostSnapshot.workgroupConfig?.runtime.config
+  if (config == null) return null
   const {
     workgroupTaskState,
     workgroupAssignments,
@@ -188,7 +182,7 @@ async function loadSnapshot(
   ])
   const agentIds = [
     ...new Set(
-      config.data.members.flatMap((member) =>
+      config.members.flatMap((member) =>
         member.memberType === 'agent' &&
         typeof member.agentId === 'string' &&
         member.agentId.length > 0
@@ -207,15 +201,13 @@ async function loadSnapshot(
       return [agent.id, agent]
     }),
   )
-  const agentMemberCount = config.data.members.filter(
-    (member) => member.memberType === 'agent',
-  ).length
+  const agentMemberCount = config.members.filter((member) => member.memberType === 'agent').length
   const inputDescriptionBudget = perCardInputDescriptionBudget(
     ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET,
     agentMemberCount,
     ROSTER_CARD_INPUT_DESCRIPTION_MAX,
   )
-  const memberAgents = config.data.members.flatMap((member) => {
+  const memberAgents = config.members.flatMap((member) => {
     if (
       member.memberType !== 'agent' ||
       typeof member.agentId !== 'string' ||
@@ -243,7 +235,7 @@ async function loadSnapshot(
       : DwStateSchema.safeParse(parseJson(stateRow.dwStateJson))
   return {
     taskId,
-    config: config.data,
+    config,
     state: {
       gateStatus: stateRow?.gateStatus ?? 'idle',
       gateSummary: stateRow?.gateSummary ?? null,

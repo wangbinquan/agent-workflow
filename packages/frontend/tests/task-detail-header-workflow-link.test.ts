@@ -72,7 +72,9 @@ describe('task detail header — subject jump link', () => {
     // routes both through the same component.
     expect(AFTER_HEADER).toContain('<TaskSubjectLink task={tk} taskId={tk.id} />')
     expect(AFTER_HEADER).toContain("t('tasks.metaWorkflow')")
-    // ULID parenthetical is workflow-only now.
-    expect(AFTER_HEADER).toContain("subjectKind === 'workflow' && tk.workflowName !== null")
+    // The digital-employee host was classified as workflow in HEAD; its parenthetical stays visible.
+    expect(AFTER_HEADER).toMatch(
+      /\(subjectKind === 'workflow' \|\| subjectKind === 'digital-employee'\)\s*&&\s*tk\.workflowName !== null/,
+    )
   })
 })

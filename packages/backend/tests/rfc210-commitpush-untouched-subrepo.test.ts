@@ -18,8 +18,7 @@
 // **fast-forward 到 upstream tip** 然后发布出去，pin 就此销毁，而没有任何人要求
 // 过 bump 子仓。这正是 gitSubmoduleRemote 默认关闭要避免的漂移。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -104,9 +103,8 @@ async function fixture(subPushable: boolean): Promise<{ parent: string; sub: str
  * the raw `INSERT INTO …` text only parsed against the bun:sqlite dialect.
  */
 async function seedTask(db: PersistenceDb, repo: string): Promise<void> {
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'wf', name: 'f', definition: '{}' })
+  await taskFixture(db, {
     id: 't1',
     name: 'cp',
     workflowId: 'wf',
@@ -127,7 +125,7 @@ async function seedTask(db: PersistenceDb, repo: string): Promise<void> {
       { stableNodeKey: 'task-root', frozenOccurrenceKey: 't1', workflowRevision: null },
     ]),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'parent-run',
     taskId: 't1',
     nodeId: 'writer',

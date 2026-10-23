@@ -10,6 +10,7 @@
 // 自己的旗舰用例）、合成的 agent 新行必须字段齐全（否则 validator 在无保护解引用上抛）、
 // loose 定义必须先过 canonical schema（否则整轮崩）、同批新建的资源必须注入（否则假阳性）。
 
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -866,8 +867,7 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
         },
         { ownerUserId: OWNER, actor },
       )
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: ulid(),
         name: 'downstream-pipeline',
         description: '',

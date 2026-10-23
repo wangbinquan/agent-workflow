@@ -13,6 +13,8 @@
 // the commit row). git is never asked to force-push. A push that can't be
 // honored never loses the agent's work — the local commit always lands first.
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { repositoryPublicationOrdinal } from '@/modules/task-execution/public/queries'
 import type {
   CommitPushMeta,
   CommitPushOutcome,
@@ -189,18 +191,24 @@ export async function runCommitPush(
   // triggering agent run, so it never enters deriveFrontier's in-flight set.
   // The provider-selected lifecycle adapter enforces that invariant.
   const nodeRunId = await deps.nodeRuns.mint({
+    ...deriveNodeRunRole({ nodeId: nodeId, rerunCause: 'commit-push' }),
     taskId: params.taskId,
     nodeId,
     status: 'running',
     cause: 'commit-push',
-    overrides: { parentNodeRunId: params.parentNodeRunId, startedAt },
+    overrides: {
+      identity: {
+        parentNodeRunId: params.parentNodeRunId,
+        startedAt,
+      },
+    },
   })
   const repositoryEffect = createLocalEffectAttemptObserver({
     persistence: deps.effects,
     taskId: params.taskId,
     nodeRunId,
     kind: 'repository',
-    stableActionOrdinal: `repository-publication:${params.agentNodeId}:${params.repoSlug ?? ''}`,
+    stableActionOrdinal: repositoryPublicationOrdinal(params.agentNodeId, params.repoSlug ?? ''),
     candidateId: 'commit-and-push',
     request: {
       v: 1,
@@ -285,7 +293,11 @@ export async function runCommitPush(
     const finishedAt = Date.now()
     const patched = await deps.nodeExecution.patch({
       nodeRunId,
-      values: { commitPushJson: JSON.stringify(meta) },
+      values: {
+        result: {
+          commitPushJson: JSON.stringify(meta),
+        },
+      },
       now: finishedAt,
     })
     if (!patched) throw new Error(`commit-push node run '${nodeRunId}' disappeared`)
@@ -294,8 +306,12 @@ export async function runCommitPush(
       to: status,
       allowedFrom: ['running'],
       extra: {
-        finishedAt,
-        ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
+        identity: {
+          finishedAt,
+        },
+        runtime: {
+          ...(sessionId !== null ? { opencodeSessionId: sessionId } : {}),
+        },
       },
       reason: 'commit-push-finished',
     })

@@ -1,6 +1,6 @@
 // P-5-01: events archival background task + endpoint fallback.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -38,15 +38,15 @@ async function seedTaskWithNodeRun(
   const workflowId = ulid()
   const taskId = ulid()
   const nodeRunId = ulid()
-  const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  const { nodeRunEvents } = tablesOf(h.db)
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -60,7 +60,7 @@ async function seedTaskWithNodeRun(
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: nodeRunId,
     taskId,
     nodeId: 'n1',

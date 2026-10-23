@@ -2,6 +2,7 @@
 // expression. The DB group separately drives complete selected Intent apply
 // compositions; the exposure alone is not an owner or PostgreSQL execution.
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -29,7 +30,6 @@ import {
   composeIntentApplyOperations,
   type ApplyIntentFaults,
 } from '@/modules/intent/composition/apply'
-import {} from '@/modules/resource-catalog/composition/intentApply'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { workgroupMemberPersistenceValues } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
@@ -410,9 +410,9 @@ describeEachProvider('RFC359 real Intent Workgroup member writes', (harness) => 
   let appHome: string
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-w26-member-values-'))
-    const { users, agents } = tablesOf(harness.db)
+    const { users } = tablesOf(harness.db)
     await insertOne(harness.db, users, { ...actor.user, createdAt: T0, updatedAt: T0 })
-    await harness.db.insert(agents).values([
+    await agentFixture(harness.db, [
       createAgentPersistenceValues({
         id: A,
         agent: CreateAgentSchema.parse({ name: 'current-agent-a' }),

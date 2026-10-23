@@ -6,6 +6,7 @@
 // commitSkillZip:  applies a decision map and writes accepted candidates to
 //                  ~/.agent-workflow/skills/{id}/files/.
 
+import { skillTextBytes } from '../../application/skills/textView'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { Unzip, UnzipInflate, unzipSync, type UnzipFileInfo } from 'fflate'
 import { eq, inArray } from 'drizzle-orm'
@@ -650,7 +651,7 @@ export async function commitSkillZipBuffer(
           {
             kind: 'files',
             files: candidate.files.map((file) => ({ path: file.relPath, content: file.bytes })),
-            mainContent: candidateMainContent(candidate, targetName),
+            mainContent: skillTextBytes(candidateMainContent(candidate, targetName)),
           },
         )
         outcome.created.push(created)
@@ -673,7 +674,7 @@ export async function commitSkillZipBuffer(
           {
             kind: 'replace-files',
             files: candidate.files.map((file) => ({ path: file.relPath, content: file.bytes })),
-            mainContent: candidateMainContent(candidate, targetName),
+            mainContent: skillTextBytes(candidateMainContent(candidate, targetName)),
           },
           {
             source: 'editor',

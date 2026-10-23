@@ -13,6 +13,7 @@
 //     ws/registry 对上游 aclBypassShortCircuit 的正确性依赖就此消除）。
 // T11 §2.5 skill 唯一性：ownerScopedNameWhere 三态（占用/他人同名不占用/
 //     NULL-owner 域隔离）+ isOwnerNameUniqueViolation 对新旧两代错误文案的识别。
+import { type AgentFixtureSpec, agentFixture } from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
@@ -20,12 +21,14 @@ import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb } from '../src/db/client'
 import { dbTxSync } from '../src/db/txSync'
-import { findAgentsReferencingIdInJsonColumn } from '../src/modules/resource-catalog/infrastructure/legacy/resourceRefs'
-import { listResourceGrantUserIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import {
-  findAgentsUsingManagedSkill,
-  matchesManagedSkillReference,
-} from '../src/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
+  createAgentMcpReferenceLookup,
+  createAgentPluginReferenceLookup,
+  createAgentSkillReferenceLookup,
+  createAgentDependencyReferenceLookup,
+} from '../src/modules/resource-catalog/infrastructure/referenceLookup'
+import { listResourceGrantUserIds } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
+import { findAgentsUsingManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
 import { findAgentsDependingOn } from '../src/services/agentDeps'
 import { isOwnerNameUniqueViolation } from '../src/services/ownerScopedName'
 import {
@@ -39,9 +42,7 @@ import { isSkillNameOccupiedForOwner } from '../src/modules/resource-catalog/inf
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 
-function agentRow(
-  overrides: Partial<PersistenceTables['agents']['$inferInsert']>,
-): PersistenceTables['agents']['$inferInsert'] {
+function agentRow(overrides: Partial<AgentFixtureSpec>): AgentFixtureSpec {
   return {
     id: ulid(),
     name: `a-${ulid().slice(-8)}`,
@@ -53,19 +54,21 @@ function agentRow(
     createdAt: 0,
     updatedAt: 0,
     ...overrides,
-  } as PersistenceTables['agents']['$inferInsert']
+  }
 }
 
 function findArrayReferences(
   db: ReturnType<typeof createInMemoryDb>,
-  column: Parameters<typeof findAgentsReferencingIdInJsonColumn>[1]['column'],
+  kind: 'mcp' | 'plugin' | 'agent',
   id: string,
 ) {
-  return findAgentsReferencingIdInJsonColumn(db, {
-    column,
-    id,
-    matches: (parsed, expectedId) => Array.isArray(parsed) && parsed.includes(expectedId),
-  })
+  const lookup =
+    kind === 'mcp'
+      ? createAgentMcpReferenceLookup(db)
+      : kind === 'plugin'
+        ? createAgentPluginReferenceLookup(db)
+        : createAgentDependencyReferenceLookup(db)
+  return lookup.find(id)
 }
 
 describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
@@ -77,10 +80,9 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
     const corrupt = agentRow({ name: 'corrupt', mcp: '"M1"广告[', plugins: '{"P1"广告' })
     // LIKE 命中（子串 "P1" 在场）但形状不是数组 → matcher 拒
     const shapeMiss = agentRow({ name: 'shape', plugins: '{"x":"P1"}' })
-    const { agents } = tablesOf(db)
-    await db.insert(agents).values([hit, miss, corrupt, shapeMiss])
+    await agentFixture(db, [hit, miss, corrupt, shapeMiss])
 
-    const mcpRefs = await findArrayReferences(db, agents.mcp, 'M1')
+    const mcpRefs = await findArrayReferences(db, 'mcp', 'M1')
     expect(mcpRefs.map((r) => r.name)).toEqual(['hit'])
     // 统一行形状（RFC-284 T9：ReferencingAgentRow 单点）
     expect(mcpRefs[0]).toEqual({
@@ -90,7 +92,7 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
       visibility: 'public',
     })
 
-    const pluginRefs = await findArrayReferences(db, agents.plugins, 'P1')
+    const pluginRefs = await findArrayReferences(db, 'plugin', 'P1')
     expect(pluginRefs.map((r) => r.name)).toEqual(['hit'])
   })
 
@@ -109,20 +111,8 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
       name: 'proj',
       skills: '[{"kind":"project","skillId":"S1"}]',
     })
-    const { agents } = tablesOf(db)
-    await db.insert(agents).values([hit, likeTrap, projectKind])
-    const refs = await findAgentsUsingManagedSkill(
-      {
-        find: (skillId) => {
-          return findAgentsReferencingIdInJsonColumn(db, {
-            column: agents.skills,
-            id: skillId,
-            matches: matchesManagedSkillReference,
-          })
-        },
-      },
-      'S1',
-    )
+    await agentFixture(db, [hit, likeTrap, projectKind])
+    const refs = await findAgentsUsingManagedSkill(createAgentSkillReferenceLookup(db), 'S1')
     expect(refs.map((r) => r.name)).toEqual(['hit'])
   })
 
@@ -131,18 +121,15 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
     const hit = agentRow({ name: 'hit', dependsOn: '["A1","A2"]' })
     // "A1x" 含子串 A1 但整串不等 → 不误报（LIKE `%"A1"%` 也不命中该行，属双保险）
     const near = agentRow({ name: 'near', dependsOn: '["A1x"]' })
-    const { agents } = tablesOf(db)
-    await db.insert(agents).values([hit, near])
+    await agentFixture(db, [hit, near])
     expect(
       await findAgentsDependingOn(
         {
           findDependents: async (agentId) => {
-            return (await findArrayReferences(db, agents.dependsOn, agentId)).map(
-              ({ id, name }) => ({
-                id,
-                name,
-              }),
-            )
+            return (await findArrayReferences(db, 'agent', agentId)).map(({ id, name }) => ({
+              id,
+              name,
+            }))
           },
         },
         'A1',
@@ -157,29 +144,32 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
     ]) {
       expect(SRC(f)).not.toContain('like(agents.')
     }
-    for (const [f, column, collector] of [
+    for (const [f, _column, collector] of [
       // RFC-359 W4-D16：Mcp 仓库只剩一份中立实现。
       [
         'modules/resource-catalog/infrastructure/mcpRepository.ts',
         'mcp',
-        'collectMcpAgentReferences',
+        'createAgentMcpReferenceLookup',
       ],
       [
         'modules/resource-catalog/infrastructure/pluginRepository.ts',
         'plugins',
-        'collectPluginAgentReferences',
+        'createAgentPluginReferenceLookup',
       ],
     ] as const) {
       const source = SRC(f)
-      expect(source).toContain(`like(agents.${column},`)
+      expect(source).not.toContain('like(agents.')
       expect(source).toContain(`${collector}(`)
     }
     expect(SRC('services/resourceRefs.ts')).toContain(
       "export * from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'",
     )
-    expect(SRC('modules/resource-catalog/infrastructure/legacy/resourceRefs.ts')).toContain(
-      'export async function findAgentsReferencingIdInJsonColumn',
+    expect(SRC('modules/resource-catalog/infrastructure/legacy/resourceRefs.ts')).not.toContain(
+      'findAgentsReferencingIdInJsonColumn',
     )
+    const adapter = SRC('modules/resource-catalog/infrastructure/referenceLookup.ts')
+    expect(adapter).toContain('like(agents[kind],')
+    expect(adapter).toContain('matchesStoredAgentReference(row.raw, id,')
     expect(existsSync(resolve(import.meta.dir, '..', 'src', 'services/mcp.ts'))).toBe(false)
     expect(existsSync(resolve(import.meta.dir, '..', 'src', 'services/plugin.ts'))).toBe(false)
   })

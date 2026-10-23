@@ -2,6 +2,14 @@
 // 运行时会话捕获（appendEvents 受围栏）、人工门 continuation pre-drive（inspect / releaseClarifyForRetry
 // 按 token 精确围栏）、merge_state 迁移（读 + CAS 写同一事务）、TaskEngine drive 快照 + 工作区 profile 更新。
 
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -35,8 +43,7 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -44,7 +51,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -96,11 +103,10 @@ async function seedClaimedOwner(
 async function seedRun(
   db: PersistenceDb,
   taskId: string,
-  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  over: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n',
@@ -294,14 +300,16 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— merge_state 迁移', (harness)
       await persistence.transition({
         nodeRunId: runId,
         event: { kind: 'begin-isolation' },
-        extra: { isoWorktreePath: '/tmp/iso' },
+        extra: {
+          runtime: {
+            isoWorktreePath: '/tmp/iso',
+          },
+        },
       }),
     ).toEqual({ from: null, to: 'isolating' })
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select({ mergeState: nodeRuns.mergeState, iso: nodeRuns.isoWorktreePath })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, runId))
+    const rows = await readNodeRunFixtures(db, { id: runId }).then((rows) =>
+      rows.map((row) => ({ mergeState: row.mergeState, iso: row.isoWorktreePath })),
+    )
     expect(rows[0]).toEqual({ mergeState: 'isolating', iso: '/tmp/iso' })
     // 非法迁移（isolating 上 mark-merged）/ 不存在的 run：tryTransition 折成 false，transition 抛错。
     expect(
@@ -332,12 +340,11 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— TaskEngine drive 持久化', (
   test('load 拼任务 / 仓库 / 协作者快照；findStatus；updateWorkspaceProfile 受围栏且缺行 ⇒ false', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const { taskRepos } = tablesOf(db)
-    await insertOne(db, taskRepos, {
+    await taskRepoFixture(db, {
       taskId,
       repoIndex: 0,
       repoPath: '/tmp/repo',
-      worktreeDirName: 'repo',
+      mountPath: 'repo',
       worktreePath: `/tmp/worktree/${taskId}/repo`,
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
@@ -345,7 +352,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— TaskEngine drive 持久化', (
     const persistence = new DrizzleTaskEngineApplicationPersistence(db)
     const snapshot = await persistence.load(taskId)
     expect(snapshot?.task.id).toBe(taskId)
-    expect(snapshot?.repositories.map((repo) => repo.repoIndex)).toEqual([0])
+    expect(snapshot?.repositories.map((repo) => repo.ordinal)).toEqual([0])
     expect(snapshot?.collaborators).toEqual([])
     expect(await persistence.load('missing')).toBeNull()
     expect(await persistence.findStatus(taskId)).toBe('running')

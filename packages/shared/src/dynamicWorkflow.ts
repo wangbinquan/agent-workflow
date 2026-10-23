@@ -38,7 +38,7 @@ import {
   type WorkflowDefinition,
   type WorkflowEdge,
 } from './schemas/workflow'
-import { WorkgroupModeSchema, type WorkgroupMode } from './schemas/workgroup'
+import type { WorkgroupMode } from './schemas/workgroup'
 
 /**
  * The lifecycle phases of a dynamic_workflow workgroup task (stored in the
@@ -109,43 +109,6 @@ export function deriveWorkgroupDispatch(
 ): WorkgroupDispatch {
   if (mode !== 'dynamic_workflow') return 'turn-engine'
   return dwPhase === 'executing' ? 'dw-execute' : 'dw-generate'
-}
-
-/**
- * Extract the workgroup mode from a task's raw `workgroup_config_json`.
- * Returns null for a missing / unparsable config or an unknown mode — callers
- * treat that as "not a recognizable workgroup config" and fall back to their
- * conservative default. Pure, zod-validated, never throws.
- */
-export function workgroupModeOf(configJson: string | null | undefined): WorkgroupMode | null {
-  if (configJson == null) return null
-  let raw: unknown
-  try {
-    raw = JSON.parse(configJson)
-  } catch {
-    return null
-  }
-  if (typeof raw !== 'object' || raw === null) return null
-  const mode = WorkgroupModeSchema.safeParse((raw as Record<string, unknown>).mode)
-  return mode.success ? mode.data : null
-}
-
-/**
- * True when a task row belongs to a TURN-ENGINE workgroup (leader_worker /
- * free_collab) — the modes whose recovery is RFC-164 engine re-entry, not
- * generic resume/retry/repair (those guards refuse them). dynamic_workflow
- * tasks are runScope-backed state machines and ARE generically recoverable
- * (RFC-167: generating re-enters the generate pass idempotently,
- * awaiting_confirm re-parks, executing resumes the real DAG). A corrupt or
- * unknown config counts as turn-engine — fail-closed toward refusing generic
- * recovery.
- */
-export function isTurnEngineWorkgroupTask(row: {
-  workgroupId?: string | null
-  workgroupConfigJson?: string | null
-}): boolean {
-  if (row.workgroupId == null || row.workgroupId === '') return false
-  return workgroupModeOf(row.workgroupConfigJson ?? null) !== 'dynamic_workflow'
 }
 
 /** One declared input on a generated node: local `port` fed by an upstream port. */

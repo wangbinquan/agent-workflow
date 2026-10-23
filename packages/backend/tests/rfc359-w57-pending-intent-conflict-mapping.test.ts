@@ -32,6 +32,7 @@
 //   ② 映射本身——真错误经 `pendingIntentInsertConflict` 出来必须是
 //      `TaskExecutionError('task-continuation-conflict')`。
 //   ③ **没有名字的那一档**（`''`）同样被映射；不是唯一冲突的错误原样抛。这两条正是这次修的洞。
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -49,7 +50,7 @@ const NOW = 1_788_278_400_000
 const TASK_ID = 'task-pending-intent'
 
 async function seed(db: PersistenceDb): Promise<void> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'owner',
     username: 'owner',
@@ -58,12 +59,12 @@ async function seed(db: PersistenceDb): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: TASK_ID,
     name: TASK_ID,
     workflowId: 'wf',

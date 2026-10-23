@@ -20,6 +20,7 @@
 //    resolveRoomPauseReason 输出——读方门槛：仅任务当前停在 awaiting_human 时
 //    非 null，陈值永不外泄（列因此无需清理）。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -39,8 +40,8 @@ import { readonlyPermission as isReadonlyAgentPermission } from '@/modules/resou
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
 import { loadWorkgroupTaskState, setPauseReason } from '../src/services/workgroup/state'
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
-function deriveWake(input: WakeInput) {
-  const { snapshot, inflight } = wakeSnapshotOf(input)
+async function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = await wakeSnapshotOf(input)
   return deriveWakeSet(snapshot, inflight)
 }
 
@@ -170,9 +171,9 @@ describe('isReadonlyAgentPermission — 只有显式 edit+write 双 deny 才算�
 // ---------------------------------------------------------------------------
 
 describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', () => {
-  test('只读成员不参与新认领：open 卡全部配给可写成员', () => {
+  test('只读成员不参与新认领：open 卡全部配给可写成员', async () => {
     const cards = [asg(), asg(), asg(), asg()]
-    const w = deriveWake(input({ assignments: cards, readonlyMemberIds: new Set(['m-a']) }))
+    const w = await deriveWake(input({ assignments: cards, readonlyMemberIds: new Set(['m-a']) }))
     const got = claims(w.items)
     expect(got.length).toBeGreaterThan(0)
     expect(got.every((c) => c.memberId !== 'm-a')).toBe(true)
@@ -180,20 +181,20 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
     expect(got.flatMap((c) => c.assignmentIds).length).toBe(4)
   })
 
-  test('全员只读 ⇒ 回退不过滤（绝不 fc-deadlock）——行为与缺省逐字一致', () => {
+  test('全员只读 ⇒ 回退不过滤（绝不 fc-deadlock）——行为与缺省逐字一致', async () => {
     const cards = [asg(), asg()]
     const all = new Set(['m-a', 'm-b', 'm-c'])
-    const filtered = deriveWake(input({ assignments: cards, readonlyMemberIds: all }))
-    const baseline = deriveWake(input({ assignments: cards }))
+    const filtered = await deriveWake(input({ assignments: cards, readonlyMemberIds: all }))
+    const baseline = await deriveWake(input({ assignments: cards }))
     expect(claims(filtered.items)).toEqual(claims(baseline.items))
     expect(claims(filtered.items).length).toBeGreaterThan(0)
   })
 
-  test('可写成员只是忙 ⇒ 不回退：open 卡滞留，零盲派（…QGENNV 盲派循环回归）', () => {
+  test('可写成员只是忙 ⇒ 不回退：open 卡滞留，零盲派（…QGENNV 盲派循环回归）', async () => {
     // 2026-07-22 实测形态：coder/tester（可写）整程在批里，wake 时唯一空闲的
     // 是只读成员——旧实现按「idle 集过滤后为空」回退不过滤，写活被反复盲派。
     const cards = [asg(), asg(), asg()]
-    const w = deriveWake(
+    const w = await deriveWake(
       input({
         assignments: cards,
         readonlyMemberIds: new Set(['m-a']),
@@ -208,9 +209,9 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
     expect(claims(w.items)).toEqual([])
   })
 
-  test('roster 全只读 + 部分忙 ⇒ 仍回退给空闲只读成员（deadlock 防线不受 roster 判定影响）', () => {
+  test('roster 全只读 + 部分忙 ⇒ 仍回退给空闲只读成员（deadlock 防线不受 roster 判定影响）', async () => {
     const cards = [asg(), asg()]
-    const w = deriveWake(
+    const w = await deriveWake(
       input({
         assignments: cards,
         readonlyMemberIds: new Set(['m-a', 'm-b', 'm-c']),
@@ -228,26 +229,26 @@ describe('fc 新认领跳过只读成员（2026-07-21 ROLE-MISROUTE 回归）', 
     expect(got[0]?.assignmentIds.length).toBe(2)
   })
 
-  test('恢复批（dispatched 集结）不过滤：只读 assignee 的既派卡照常恢复', () => {
+  test('恢复批（dispatched 集结）不过滤：只读 assignee 的既派卡照常恢复', async () => {
     const card = asg({ status: 'dispatched', assigneeMemberId: 'm-a' })
-    const w = deriveWake(input({ assignments: [card], readonlyMemberIds: new Set(['m-a']) }))
+    const w = await deriveWake(input({ assignments: [card], readonlyMemberIds: new Set(['m-a']) }))
     const got = claims(w.items)
     expect(got.length).toBe(1)
     expect(got[0]?.memberId).toBe('m-a')
     expect(got[0]?.assignmentIds).toEqual([card.id])
   })
 
-  test('fc_initial 首轮拆解不过滤：只读成员照常参与', () => {
-    const w = deriveWake(
+  test('fc_initial 首轮拆解不过滤：只读成员照常参与', async () => {
+    const w = await deriveWake(
       input({ budgetUsed: 0, readonlyMemberIds: new Set(['m-a', 'm-b', 'm-c']) }),
     )
     const inits = w.items.filter((i) => i.kind === 'fc-initial')
     expect(inits.length).toBe(3)
   })
 
-  test('字段缺省 ⇒ 旧行为逐字不变（roster 序均分含全部成员）', () => {
+  test('字段缺省 ⇒ 旧行为逐字不变（roster 序均分含全部成员）', async () => {
     const cards = [asg(), asg(), asg()]
-    const w = deriveWake(input({ assignments: cards }))
+    const w = await deriveWake(input({ assignments: cards }))
     const members = claims(w.items).map((c) => c.memberId)
     expect(members).toEqual(['m-a', 'm-b', 'm-c'])
   })
@@ -282,10 +283,10 @@ describeEachProvider('setPauseReason — 状态表单列更新（DB 级）', (ha
   test('写入/幂等覆盖 pause_reason；gate 列无损；无行时为空操作', async () => {
     const db = harness.db
     const wfId = ulid()
-    const { workflows, tasks, workgroupTaskState } = tablesOf(db)
-    await insertOne(db, workflows, { id: wfId, name: 'wf-pause', definition: '{}' })
+    const { workgroupTaskState } = tablesOf(db)
+    await workflowFixture(db, { id: wfId, name: 'wf-pause', definition: '{}' })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'pause-slot-task',
       workflowId: wfId,

@@ -2,6 +2,7 @@
 // digital-employee 参与者）合一，两个引擎各跑一遍：写事务里加载已授权快照、私有资源对外人 404、CAS 认领、
 // 成功 / 失败记账与自动停用、ACL 原子替换与修订冲突、数字员工快照（归档 / 外人 → 404）。
 
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -63,8 +64,8 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
     const db = harness.db
     const owner = await seedUser(db, 'u_d1_owner')
     const stranger = await seedUser(db, 'u_d1_stranger')
-    const { workflows, scheduledTasks } = tablesOf(db)
-    await db.insert(workflows).values([
+    const { scheduledTasks } = tablesOf(db)
+    await workflowFixture(db, [
       {
         id: 'wf-pub',
         name: 'public',
@@ -289,9 +290,8 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
       db,
       composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
     )
-    const { agents, employeeTypePackages, employeeDefinitions, employeeDefinitionRevisions } =
-      tablesOf(db)
-    await insertOne(db, agents, {
+    const { employeeTypePackages, employeeDefinitions, employeeDefinitionRevisions } = tablesOf(db)
+    await agentFixture(db, {
       id: 'agent-d1',
       name: 'agent-d1',
       description: 'private agent',

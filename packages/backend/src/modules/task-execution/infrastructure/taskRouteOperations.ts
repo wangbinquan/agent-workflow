@@ -9,12 +9,40 @@
 //   · `sqliteTaskRouteOperations.ts`     —— SQLite 绑定
 // 本文件只放实现，不放任何一侧的装配。
 //
+import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
+import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import type { TaskWorkgroupLaunchConfig } from '../domain/taskWorkgroupConfig'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { taskWorkgroupLaunchSelection, taskWorkgroupConfigFromRow } from './taskWorkgroupConfig'
+import { createTaskDefinitionWriteParticipantInTx } from './taskDefinitionWriteParticipant'
+import { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
+import {
+  decodeTaskRollbackCheckpoints,
+  decodeTaskCheckpointInheritance,
+} from './taskCheckpointCodec'
+import { taskCheckpointMountPaths } from './taskCheckpointPersistence'
+import { builtinWorkflowSyncPreview } from '../domain/workflowSyncPreview'
+import {
+  decodeTaskSubject,
+  isTurnEngineTaskSubject,
+  definitionHost,
+  projectTaskSubject,
+  taskDefinitionOrigin,
+  taskSubjectWorkflowVersion,
+} from '../domain/taskSubject'
+import { taskSubjectSqlColumns, taskWorkflowNameSql } from './taskSubjectSql'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
+import {
+  projectStoredTaskRepositorySurface,
+  projectStoredTaskRepositorySummary,
+} from './taskRepositorySurface'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { TaskArchivedEventsReader } from '../public/types'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import {
   isSingleRootRepository,
-  compareNodeRunMintOrder,
   CommitPushMetaSchema,
   NodeRunSchema,
   NodeRunEventsResponseSchema,
@@ -30,15 +58,10 @@ import {
   isTerminalNodeRunStatus,
   isWrapperKind,
   migrateWorkflowDefinitionToLatest,
-  isTurnEngineWorkgroupTask,
-  isWorkgroupTask,
-  mountDepth,
   nodeKindParticipatesInRetryCascade,
   parseTriggerContextJson,
-  redactGitUrl,
   rejectRetiredStartTaskKeys,
   selectCurrentReviewRound,
-  taskExecutionKind,
   taskListOriginMatches,
   webhookTaskSourceLinkOf,
   type NodeRun,
@@ -47,7 +70,6 @@ import {
   type TaskDiff,
   type TaskListItem,
   type TaskMembers,
-  type TaskRepo,
   type TaskStatus,
   type TaskSummary,
   type WorkflowDefinition,
@@ -80,7 +102,6 @@ import type { OwnerIdentityQueries } from '@/modules/identity-access/public/oper
 import type { FrozenTaskExecutionResourceSnapshot } from '@/modules/resource-catalog/public/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
-import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   defaultTaskListRowRef,
   taskListOwnershipScopeCondition,
@@ -122,7 +143,7 @@ import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services
 import { join } from 'node:path'
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
-import { pickFreshestRun } from '@/services/freshness'
+import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
 import { canonicalRepoKeysWire } from '@/services/repoLabels'
@@ -250,71 +271,6 @@ function parseStringRecord(raw: string): Record<string, string> {
   return out
 }
 
-function frozenWorkgroupField(raw: string | null, key: 'workgroupName' | 'goal'): string | null {
-  const value = parseJson(raw, null)
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
-  const selected = Reflect.get(value, key)
-  return typeof selected === 'string' && selected.length > 0 ? selected : null
-}
-
-function minimalNodePaths(mountPaths: readonly string[]): readonly string[] {
-  const paths = new Map<string, string>([['', '']])
-  for (const mountPath of mountPaths) {
-    let current = ''
-    for (const segment of mountPath.split('/').filter(Boolean)) {
-      current = current === '' ? segment : `${current}/${segment}`
-      paths.set(current.toLowerCase(), current)
-    }
-  }
-  return [...paths.values()].sort(
-    (left, right) => mountDepth(left) - mountDepth(right) || left.localeCompare(right),
-  )
-}
-
-function repoProjection(row: PersistenceTables['taskRepos']['$inferSelect']): TaskRepo {
-  return {
-    repoIndex: row.repoIndex,
-    repoPath: row.repoPath,
-    repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl),
-    cachedRepoId: row.cachedRepoId ?? null,
-    baseBranch: row.baseBranch,
-    branch: row.branch,
-    workingBranch: row.workingBranch ?? null,
-    baseCommit: row.baseCommit ?? null,
-    worktreePath: row.worktreePath,
-    worktreeDirName: row.worktreeDirName,
-    mountPath: row.mountPath,
-    subdir: row.subdir,
-    readonly: row.readonly,
-    readonlyDirtyCount: row.readonlyDirtyCount ?? null,
-    hasSubmodules: row.hasSubmodules ?? null,
-    submoduleInitOk: row.submoduleInitOk ?? null,
-    submoduleInitError: row.submoduleInitError ?? null,
-  }
-}
-
-function fallbackRepo(row: TaskRow): TaskRepo {
-  return {
-    repoIndex: 0,
-    repoPath: row.repoPath,
-    repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl),
-    cachedRepoId: row.cachedRepoId ?? null,
-    baseBranch: row.baseBranch,
-    branch: row.branch,
-    workingBranch: row.workingBranch ?? null,
-    baseCommit: row.baseCommit ?? null,
-    worktreePath: row.worktreePath,
-    worktreeDirName: '',
-    mountPath: '',
-    subdir: '',
-    readonly: false,
-    readonlyDirtyCount: null,
-    hasSubmodules: null,
-    submoduleInitOk: null,
-    submoduleInitError: null,
-  }
-}
-
 async function failedCode(
   db: PersistenceDb,
   task: Pick<TaskRow, 'id' | 'status' | 'failedNodeId'>,
@@ -324,14 +280,23 @@ async function failedCode(
   const rows = await db
     .select({
       id: nodeRuns.id,
+      taskId: nodeRuns.taskId,
+      nodeId: nodeRuns.nodeId,
       seq: nodeRuns.seq,
       parentNodeRunId: nodeRuns.parentNodeRunId,
+      status: nodeRuns.status,
       failureCode: nodeRuns.failureCode,
     })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, task.failedNodeId)))
-    .orderBy(engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
-  return rows.find((row) => row.parentNodeRunId === null)?.failureCode ?? null
+  const selected = (
+    await createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).familyHistory(
+      task.id,
+      { nodeId: task.failedNodeId },
+      { topLevelOnly: true },
+    )
+  ).at(-1)
+  return rows.find((row) => row.id === selected?.id)?.failureCode ?? null
 }
 
 /**
@@ -348,18 +313,19 @@ async function workflowIdentities(
   db: PersistenceDb,
   workflowIds: readonly string[],
 ): Promise<ReadonlyMap<string, Readonly<{ name: string; builtin: boolean; version: number }>>> {
-  const wanted = [...new Set(workflowIds)]
+  const wanted = [...new Set(workflowIds)].filter((id) => definitionHost(id) === null)
   if (wanted.length === 0) return new Map()
-  const { workflows } = tablesOf(db)
-  const rows = await db
-    .select({
-      id: workflows.id,
-      name: workflows.name,
-      builtin: workflows.builtin,
-      version: workflows.version,
-    })
-    .from(workflows)
-    .where(inArray(workflows.id, wanted))
+
+  const rows = await createWorkflowExecutionQueries(db)
+    .summaries(wanted)
+    .then((rows) =>
+      rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        builtin: row.builtin,
+        version: row.version,
+      })),
+    )
   return new Map(
     rows.map((row) => [
       row.id,
@@ -398,43 +364,43 @@ async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
       .from(taskSpaceNodes)
       .where(eq(taskSpaceNodes.taskId, row.id)),
     failedCode(db, row),
-    workflowIdentities(db, [row.workflowId]),
+    workflowIdentities(db, decodeTaskSubject(row).kind === 'workflow' ? [row.workflowId] : []),
   ])
   const identity = identities.get(row.workflowId)
-  const repos = repoRows.length > 0 ? repoRows.map(repoProjection) : [fallbackRepo(row)]
-  const nodePaths =
-    nodeRows.length > 0
-      ? nodeRows
-          .map((node) => node.path)
-          .sort((left, right) => mountDepth(left) - mountDepth(right) || left.localeCompare(right))
-      : minimalNodePaths(repos.map((repo) => repo.mountPath))
+  const repository = projectStoredTaskRepositorySurface(
+    row,
+    repoRows.map(decodeTaskRepositoryMount),
+    nodeRows.map((node) => node.path),
+  )
   const trigger = parseTriggerContextJson(row.triggerContextJson)
   const sourceLink = trigger.kind === 'ok' ? webhookTaskSourceLinkOf(trigger.value) : null
   return TaskSchema.parse({
     id: row.id,
     name: row.name,
-    workflowId: row.workflowId,
-    workflowName: identity?.name ?? null,
+    ...projectTaskSubject(decodeTaskSubject(row), identity?.name ?? null),
     workflowSnapshot: projectWorkflowSnapshotForRead(
       parseJson(row.workflowSnapshot, null),
-      identity?.builtin === true,
+      taskDefinitionOrigin(decodeTaskSubject(row), identity?.builtin === true) === 'platform',
     ),
-    workflowVersion: row.workflowVersion ?? null,
-    repoPath: row.repoPath,
-    repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl),
-    cachedRepoId: row.cachedRepoId ?? null,
-    worktreePath: row.worktreePath,
+    workflowVersion: taskSubjectWorkflowVersion(
+      decodeTaskSubject(row),
+      row.workflowVersion ?? null,
+    ),
+    repoPath: repository.repoPath,
+    repoUrl: repository.repoUrl,
+    cachedRepoId: repository.cachedRepoId,
+    worktreePath: repository.worktreePath,
     workspaceState:
       row.workspacePrunedAt !== null
         ? 'pruned'
         : row.workspacePruningAt !== null
           ? 'pruning'
           : 'available',
-    baseBranch: row.baseBranch,
-    branch: row.branch,
-    workingBranch: row.workingBranch ?? null,
+    baseBranch: repository.baseBranch,
+    branch: repository.branch,
+    workingBranch: repository.workingBranch,
     autoCommitPush: row.autoCommitPush,
-    baseCommit: row.baseCommit,
+    baseCommit: repository.baseCommit,
     status: row.status,
     inputs: parseStringRecord(row.inputs),
     maxDurationMs: row.maxDurationMs,
@@ -450,15 +416,15 @@ async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
     schemaVersion: row.schemaVersion,
     gitUserName: row.gitUserName ?? null,
     gitUserEmail: row.gitUserEmail ?? null,
-    repoCount: row.repoCount,
-    repos,
-    spaceNodes: nodePaths.map((path) => ({ path, origins: [] })),
-    repoGroupId: row.repoGroupId ?? null,
-    repoGroupName: row.repoGroupName ?? null,
+    repoCount: repository.repoCount,
+    repos: repository.repos,
+    spaceNodes: repository.spaceNodes,
+    repoGroupId: repository.repoGroupId,
+    repoGroupName: repository.repoGroupName,
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
-    workgroupName: frozenWorkgroupField(row.workgroupConfigJson, 'workgroupName'),
-    goal: frozenWorkgroupField(row.workgroupConfigJson, 'goal'),
+    workgroupName: taskWorkgroupConfigFromRow(row).launch.workgroupName,
+    goal: taskWorkgroupConfigFromRow(row).launch.goal,
     sourceAgentId: row.sourceAgentId ?? null,
     spaceKind: row.spaceKind,
     parentTaskId: row.parentTaskId ?? null,
@@ -499,24 +465,25 @@ function summaryProjection(
   failureCode: string | null | undefined,
   workflowName: string | null,
 ): TaskSummary {
+  const repository = projectStoredTaskRepositorySummary(row)
   return TaskSummarySchema.parse({
     id: row.id,
     name: row.name,
     workflowId: row.workflowId,
     workflowName,
-    repoPath: row.repoPath,
-    repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl),
-    cachedRepoId: row.cachedRepoId ?? null,
+    repoPath: repository.repoPath,
+    repoUrl: repository.repoUrl,
+    cachedRepoId: repository.cachedRepoId,
     status: row.status,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
     errorSummary: row.errorSummary,
     ...(failureCode === undefined ? {} : { failureCode }),
-    repoCount: row.repoCount,
+    repoCount: repository.repoCount,
     openAlertCount,
     scheduledTaskId: row.scheduledTaskId ?? null,
     workgroupId: row.workgroupId ?? null,
-    workgroupName: frozenWorkgroupField(row.workgroupConfigJson, 'workgroupName'),
+    workgroupName: row.workgroupLaunch?.workgroupName ?? null,
     spaceKind: row.spaceKind,
     parentTaskId: row.parentTaskId ?? null,
     invocationDepth: row.invocationDepth ?? 0,
@@ -574,7 +541,7 @@ const TASK_LIST_COLUMNS = (db: object) => {
     repoCount: tasks.repoCount,
     scheduledTaskId: tasks.scheduledTaskId,
     workgroupId: tasks.workgroupId,
-    workgroupConfigJson: tasks.workgroupConfigJson,
+    workgroupLaunch: taskWorkgroupLaunchSelection(db),
     spaceKind: tasks.spaceKind,
     parentTaskId: tasks.parentTaskId,
     invocationDepth: tasks.invocationDepth,
@@ -587,15 +554,18 @@ const TASK_LIST_COLUMNS = (db: object) => {
 }
 
 type TaskListRow = {
-  [K in keyof ReturnType<typeof TASK_LIST_COLUMNS>]: PersistenceTables['tasks']['$inferSelect'][K]
-} & { workflowName: string | null }
+  [K in Exclude<
+    keyof ReturnType<typeof TASK_LIST_COLUMNS>,
+    'workgroupLaunch'
+  >]: PersistenceTables['tasks']['$inferSelect'][K]
+} & { workflowName: string | null; workgroupLaunch: TaskWorkgroupLaunchConfig | null }
 
 async function listRows(
   db: PersistenceDb,
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListRow[]> {
   const predicates: SQL<unknown>[] = []
-  const { tasks, workflows } = tablesOf(db)
+  const { tasks } = tablesOf(db)
   if (filters.status !== undefined) predicates.push(eq(tasks.status, filters.status))
   if (filters.workflowId !== undefined) predicates.push(eq(tasks.workflowId, filters.workflowId))
   if (filters.repoPath !== undefined) predicates.push(eq(tasks.repoPath, filters.repoPath))
@@ -616,9 +586,14 @@ async function listRows(
   // 工作流名与行**同一次查询**取回（此前 PostgreSQL 侧是行一次、名字再一次批量）。
   // 列表上界 10k、首页每 10s 轮一次，少一次往返在 PG 上是实打实的；SQLite 侧本来就是这么写的。
   return await db
-    .select({ ...TASK_LIST_COLUMNS(db), workflowName: workflows.name })
+    .select({
+      ...TASK_LIST_COLUMNS(db),
+      workflowName: taskWorkflowNameSql(
+        taskSubjectSqlColumns('tasks'),
+        workflowNameExpression(db, tasks.workflowId),
+      ),
+    })
     .from(tasks)
-    .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
     .where(predicates.length === 0 ? undefined : and(...predicates))
     .orderBy(desc(tasks.startedAt))
     .limit(filters.limit ?? 100)
@@ -940,11 +915,7 @@ export async function taskNodeRunsProjection(
       .where(eq(nodeRuns.taskId, taskId))
       // 还没开始的 run（started_at IS NULL）要排在最前：两个引擎的默认落位正好相反，
       // NULL 掉到队尾会让时间线把「还没开始」排在「已完成」后面。渲染权在能力矩阵。
-      .orderBy(
-        engineOf(dependencies.db).ascNullsFirst(nodeRuns.startedAt),
-        engineOf(dependencies.db).ascNullsFirst(nodeRuns.seq),
-        asc(nodeRuns.id),
-      ),
+      .orderBy(...runHistoryOrder(dependencies.db, nodeRuns, 'api-timeline')),
     dependencies.db
       .select({
         reviewNodeRunId: docVersions.reviewNodeRunId,
@@ -1360,10 +1331,12 @@ async function syncRunSummary(db: PersistenceDb, taskId: string) {
     else existing.push(run)
   }
   const freshestDone = new Map<string, NodeRunRow>()
-  for (const [nodeId, rows] of byNode) {
-    const row = rows
-      .filter((run) => run.parentNodeRunId === null && run.status === 'done')
-      .sort((left, right) => compareNodeRunMintOrder(right, left))[0]
+  const selection = createRunSelectionOracleSnapshot(runs, { scope: { kind: 'rows' } })
+  for (const nodeId of byNode.keys()) {
+    const selected = (
+      await selection.familyHistory(taskId, { nodeId }, { topLevelOnly: true, statusIn: ['done'] })
+    ).at(-1)
+    const row = runs.find((run) => run.id === selected?.id)
     if (row !== undefined) freshestDone.set(nodeId, row)
   }
   const outputRows =
@@ -1440,17 +1413,19 @@ export async function assertManualExecutionAllowedProjection(
 ): Promise<void> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) return
-  const kind = taskExecutionKind(task)
+  const kind = decodeTaskSubject(task).kind
   if (kind === 'agent' || kind === 'code-round') return
   if (
-    isWorkgroupTask(task) &&
-    !isTurnEngineWorkgroupTask({
-      workgroupId: task.workgroupId,
-      workgroupConfigJson: (await requireTaskRow(dependencies.db, taskId)).workgroupConfigJson,
-    })
+    kind === 'workgroup' &&
+    !isTurnEngineTaskSubject(
+      decodeTaskSubject(task),
+      taskWorkgroupConfigFromRow(await requireTaskRow(dependencies.db, taskId)).launch.mode,
+    )
   ) {
     return
   }
+  // 合成定义沿用宿主存在时的只读错误；不再读取 catalog 占位行。
+  if (kind !== 'workflow') assertNotBuiltin('workflow', { builtin: true })
   // 判据缺口账本 01a —— 内置工作流不可被手动执行（403 `builtin-readonly`）。
   const candidate = await builtinCandidateWorkflow(dependencies.db, task.workflowId)
   if (candidate !== null) assertNotBuiltin('workflow', candidate)
@@ -1509,14 +1484,16 @@ export async function taskWorkflowSyncPreviewProjection(
 ): Promise<WorkflowSyncPreview> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  const subject = decodeTaskSubject(task)
   // 非工作流任务（agent / workgroup / code-round）没有可同步的工作流定义。
-  if (taskExecutionKind(task) !== 'workflow') {
+  if (subject.kind !== 'workflow' && subject.kind !== 'digital-employee') {
     return notSyncableWorkflowPreview(task, 'workflow-deleted')
   }
   await dependencies.activity.awaitReleasedSettled(taskId)
   if (dependencies.activity.isActive(taskId)) {
     return notSyncableWorkflowPreview(task, 'task-active')
   }
+  if (subject.kind === 'digital-employee') return builtinWorkflowSyncPreview(task, 1)
   const workflow = await getWorkflow(dependencies.db, task.workflowId)
   if (workflow === null) return notSyncableWorkflowPreview(task, 'workflow-deleted')
   if (!(await canViewResource(dependencies.db, actor, 'workflow', workflow))) {
@@ -1612,8 +1589,9 @@ async function assertRollbackBaselinesPresent(
 ): Promise<void> {
   // 没记过任何快照的行在 resume 口径下本来就是「什么都不动」，连 git 都不会跑到——
   // 提前滤掉，别为最常见的那条路径多发一次 rollback-target 查询。
-  const candidates = input.runs.filter(
-    (run) => (run.preSnapshot ?? '') !== '' || run.preSnapshotReposJson !== null,
+  const checkpointMounts = await taskCheckpointMountPaths(dependencies.db, input.taskId)
+  const candidates = input.runs.filter((run) =>
+    hasTaskRollbackCheckpoint(decodeTaskRollbackCheckpoints(run, checkpointMounts), false),
   )
   if (candidates.length === 0) return
   const target = await loadRollbackTargetFrom(
@@ -1624,8 +1602,11 @@ async function assertRollbackBaselinesPresent(
   for (const run of candidates) {
     const outcome = await rollbackNodeRunWorktrees(
       target,
-      run,
-      { resetOnEmptySnapshot: false, checkOnly: true },
+      decodeTaskRollbackCheckpoints(
+        run,
+        target.repos.map((repo) => repo.mountPath),
+      ),
+      { checkOnly: true },
       log,
     )
     const detail = snapshotMissingDetail(outcome)
@@ -1689,8 +1670,11 @@ async function rollbackRunsForContinuation(
   for (const run of input.runs) {
     const outcome = await rollbackNodeRunWorktrees(
       target,
-      run,
-      { resetOnEmptySnapshot: false },
+      decodeTaskRollbackCheckpoints(
+        run,
+        target.repos.map((repo) => repo.mountPath),
+      ),
+      {},
       log,
     )
     const detail = snapshotMissingDetail(outcome)
@@ -1737,7 +1721,9 @@ export async function assertTaskWorkflowSyncable(
 ): Promise<Readonly<{ task: Task; workflow: WorkflowCatalogDetail }>> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  if (taskExecutionKind(task) !== 'workflow') {
+  if (decodeTaskSubject(task).kind === 'digital-employee')
+    assertNotBuiltin('workflow', { builtin: true })
+  if (decodeTaskSubject(task).kind !== 'workflow') {
     throw new ValidationError(
       'task-host-sync-unsupported',
       'agent/workgroup host tasks run a synthesized snapshot — there is no workflow to sync from',
@@ -1752,7 +1738,7 @@ export async function assertTaskWorkflowSyncable(
   if (!allowedFromForTaskEvent({ kind: 'sync-workflow' }).includes(task.status)) {
     throw new ConflictError('task-not-syncable', `task '${taskId}' is ${task.status}; cannot sync`)
   }
-  if (task.worktreePath.length === 0 || task.workspaceState === 'pruned') {
+  if (isTaskWorkspaceUnbound(task.worktreePath) || task.workspaceState === 'pruned') {
     throw new ConflictError('worktree-missing', `task '${taskId}' has no live worktree`)
   }
   if (workflow === null) {
@@ -1864,12 +1850,12 @@ export async function syncWorkflow(
   const frozenWrapperNodeIds = new Set(
     frozenDefinition.nodes.filter((node) => isWrapperKind(node.kind)).map((node) => node.id),
   )
-  const { nodeRuns, workflows } = tablesOf(dependencies.db)
+  const { nodeRuns } = tablesOf(dependencies.db)
   const syncRuns = await dependencies.db
     .select()
     .from(nodeRuns)
     .where(eq(nodeRuns.taskId, input.taskId))
-  const syncRollbackRuns = selectSyncRollbackTargets(syncRuns, ['canceled'], (nodeId) =>
+  const syncRollbackRuns = await selectSyncRollbackTargets(syncRuns, ['canceled'], (nodeId) =>
     frozenWrapperNodeIds.has(nodeId),
   )
   // 跨行 all-or-nothing 预检(零副作用)先于准入 CAS:任一行的基线已被 gc prune 时,任务
@@ -1884,11 +1870,9 @@ export async function syncWorkflow(
   // RFC-109 F5 TOCTOU 复检:上面的校验 / diff 全是本地读,并发的 workflow PUT 可能在这个
   // 窗口里把版本推走。紧挨着准入 CAS 再断言一次,保证写进任务的永远是用户确认过的那一版。
   const liveVersion = (
-    await dependencies.db
-      .select({ version: workflows.version })
-      .from(workflows)
-      .where(eq(workflows.id, row.workflowId))
-      .limit(1)
+    await createWorkflowExecutionQueries(dependencies.db)
+      .summaries([row.workflowId])
+      .then((rows) => rows.map((row) => ({ version: row.version })))
   )[0]
   if (liveVersion?.version !== input.expectedVersion) {
     throw new ConflictError(
@@ -1899,28 +1883,16 @@ export async function syncWorkflow(
 
   const now = dependencies.now?.() ?? Date.now()
   const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
-    const { tasks } = tablesOf(tx)
-    const changed = await tx
-      .update(tasks)
-      .set({
-        status: 'interrupted',
-        workflowSnapshot: JSON.stringify(workflow.definition),
-        workflowVersion: workflow.version,
-        refClosureJson: closureJson,
-        finishedAt: now,
-        lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 1`,
-      })
-      .where(
-        and(
-          eq(tasks.id, input.taskId),
-          eq(tasks.status, row.status),
-          eq(tasks.lifecycleEventRevision, row.lifecycleEventRevision),
-          isNull(tasks.workspacePrunedAt),
-        ),
-      )
-      .returning({ revision: tasks.lifecycleEventRevision })
-    const changedRow = changed[0]
-    if (changedRow === undefined) {
+    const revision = await createTaskDefinitionWriteParticipantInTx(tx).syncWorkflow({
+      taskId: input.taskId,
+      expectedStatus: row.status,
+      expectedLifecycleRevision: row.lifecycleEventRevision,
+      snapshot: JSON.stringify(workflow.definition),
+      sourceRevision: workflow.version,
+      resourceClosure: closureJson,
+      occurredAt: now,
+    })
+    if (revision === null) {
       throw new ConflictError(
         'task-not-syncable',
         `task '${input.taskId}' changed during workflow sync`,
@@ -1928,7 +1900,7 @@ export async function syncWorkflow(
     }
     return await appendTaskLifecycleTransitionCommittedEvent(tx, {
       taskId: input.taskId,
-      lifecycleRevision: changedRow.revision,
+      lifecycleRevision: revision,
       previousStatus: row.status as TaskStatus,
       status: 'interrupted',
       errorSummary: row.errorSummary,
@@ -2010,23 +1982,21 @@ function retryNodeIds(
  * 帧内无行时回落到全行集（与 SQLite 的 `retryNode` 逐字同形）：下游节点可能住在外层作用域、
  * 或住在某个嵌套 wrapper 里由该 wrapper 自己的占位行重开，那时按老口径取最新顶层行即可。
  */
-function inheritanceSourceInFrame(
+async function inheritanceSourceInFrame(
   rows: readonly NodeRunRow[],
   nodeId: string,
   frame: Readonly<{ containerRunId: string | null; iteration: number }>,
-): NodeRunRow | undefined {
+): Promise<NodeRunRow | undefined> {
   const existing = rows.filter((row) => row.nodeId === nodeId)
   const sameFrame = existing.filter(
     (row) => row.containerRunId === frame.containerRunId && row.iteration === frame.iteration,
   )
-  // RFC-359 AC-1（第 9 刀）：走**共用**的取新器，不留本地副本。
-  // 这里原本是一个本地 `freshestTopLevel`（filter 顶层 + id 序倒排取首），与
-  // `pickFreshestRun(rows, { topLevelOnly: true })` 逐值相同——而「同一个取新语义有第二份
-  // 写法」正是 RFC-096 audit S-13 收敛掉的那类分叉，`scheduler-audit-s13-*` 的 G3 就钉在
-  // 这一句上（它此前钉的是退役那份实现里的同一句）。
-  return pickFreshestRun(sameFrame.length > 0 ? sameFrame : existing, {
-    topLevelOnly: true,
-  })
+  const candidates = sameFrame.length > 0 ? sameFrame : existing
+  const selection = createRunSelectionOracleSnapshot(candidates, { scope: { kind: 'rows' } })
+  const selected = (
+    await selection.familyHistory(candidates[0]?.taskId ?? '', { nodeId }, { topLevelOnly: true })
+  ).at(-1)
+  return candidates.find((row) => row.id === selected?.id)
 }
 
 /**
@@ -2136,8 +2106,18 @@ export async function retryNodeProjection(
           `only ${RETRYABLE_PREP_STATUSES.join(' / ')} preparation can be retried`,
       )
     }
-    const newer = runs.filter(
-      (row) => row.nodeId === '__repo_prep__' && row.retryIndex > target.retryIndex,
+    // RFC-395 II-a: runs contains every row of this task, including synthetic attempts.
+    const newer = await createRunSelectionOracleSnapshot(runs, {
+      scope: { kind: 'task' },
+    }).slotHistory(
+      input.taskId,
+      {
+        kind: 'synthetic',
+        owner: { kind: 'task', id: input.taskId },
+        syntheticKind: 'repo-prep',
+        discriminator: '__repo_prep__',
+      },
+      { attemptIndexGreaterThan: target.retryIndex },
     )
     if (newer.length > 0) {
       throw new ConflictError(
@@ -2146,7 +2126,7 @@ export async function retryNodeProjection(
           `(${newer.length} newer attempt(s) exist); retry the latest one instead`,
       )
     }
-    if (task.worktreePath !== '') {
+    if (!isTaskWorkspaceUnbound(task.worktreePath)) {
       throw new ConflictError(
         'repo-prep-already-complete',
         `task '${input.taskId}' already has a worktree at '${task.worktreePath}'; ` +
@@ -2331,7 +2311,7 @@ export async function retryNodeProjection(
       const selected =
         nodeId === target.nodeId
           ? target
-          : inheritanceSourceInFrame(runs, nodeId, {
+          : await inheritanceSourceInFrame(runs, nodeId, {
               containerRunId: target.containerRunId,
               iteration: target.iteration,
             })
@@ -2349,6 +2329,10 @@ export async function retryNodeProjection(
       }
       const nodeRows = runs.filter((row) => row.nodeId === nodeId)
       const nodeRunId = await mint.mint({
+        ...deriveNodeRunRole({
+          nodeId: nodeId,
+          rerunCause: nodeId === target.nodeId ? 'retry-node' : 'retry-node-cascade',
+        }),
         taskId: input.taskId,
         nodeId,
         status: 'failed',
@@ -2363,17 +2347,19 @@ export async function retryNodeProjection(
                 shardKey: selected.shardKey,
                 parentNodeRunId: selected.parentNodeRunId,
                 containerRunId: selected.containerRunId,
-                preSnapshot: selected.preSnapshot,
+                checkpointInheritance: decodeTaskCheckpointInheritance(selected),
                 continuationSlotKey: selected.continuationSlotKey,
                 lineageSlotPathJson: selected.lineageSlotPathJson,
                 operationGeneration: selected.operationGeneration,
               },
         overrides: {
-          finishedAt: now,
-          errorMessage: 'queued for retry',
-          ...(nodeId === target.nodeId && target.status === 'skipped'
-            ? { forceActivated: true }
-            : {}),
+          identity: {
+            finishedAt: now,
+            errorMessage: 'queued for retry',
+            ...(nodeId === target.nodeId && target.status === 'skipped'
+              ? { forceActivated: true }
+              : {}),
+          },
         },
       })
       nodeChanges.push({

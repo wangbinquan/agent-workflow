@@ -16,14 +16,20 @@
 //     done+merged candidate exists; with ≥2 merged generations it falls back to
 //     superimposition (== pre-T14, never destructive).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -154,8 +160,19 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
     expect(src).toContain('workspaceRecord(iso).scope.undoShard')
     expect(native).toContain('undoShard: (input) =>')
     expect(native).toContain('undoPriorShardDeltaInIso(')
-    expect(src).toContain('doneMergedCandidates')
-    expect(src).toMatch(/doneMergedCandidates\.length === 1/)
+    const oracle = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/runSelection/oracle/shards.ts',
+      ),
+      'utf8',
+    )
+    expect(src).toContain('selected.singleMergedCandidate')
+    expect(oracle).toContain("row.status === 'done' && row.mergeState === 'merged'")
+    expect(oracle).toMatch(/singleMergedCandidate: merged\.length === 1 \?/)
+    expect(src.indexOf('selected.singleMergedCandidate')).toBeLessThan(
+      src.indexOf('workspaceRecord(iso).scope.undoShard('),
+    )
     // The shard's runNode dispatch must come AFTER the undo call (pre-agent undo).
     const undoIdx = src.indexOf('workspaceRecord(iso).scope.undoShard(')
     const runIdxAfterUndo = src.indexOf('const result = await runNode(', undoIdx)
@@ -252,8 +269,7 @@ async function seedGen1(
   db: DbClient,
   canon: string,
 ): Promise<{ taskId: string; wrapperRunId: string; doneShardId: string }> {
-  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulidMono(),
     name: 'worker',
     description: 'test',
@@ -273,14 +289,14 @@ async function seedGen1(
   const def = await canonicalizeWorkflowAgentIds(db, fanoutDef())
   const workflowId = ulidMono()
   const taskId = ulidMono()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't14-e2e',
     workflowId,
@@ -294,7 +310,7 @@ async function seedGen1(
     startedAt: Date.now(),
   })
   const wrapperRunId = ulidMono()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: wrapperRunId,
     taskId,
     nodeId: 'fan',
@@ -306,7 +322,7 @@ async function seedGen1(
     startedAt: Date.now(),
   })
   const doneShardId = ulidMono()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: doneShardId,
     taskId,
     nodeId: 'inner',
@@ -316,13 +332,12 @@ async function seedGen1(
     parentNodeRunId: wrapperRunId,
     shardKey: '0',
     shardValueHash: sha256Hex('alpha'),
-    isoBaseSnapshot,
-    isoNodeTree,
     mergeState: 'merged',
     startedAt: Date.now(),
     finishedAt: Date.now(),
+    checkpoints: [{ mountPath: '', isolationBase: isoBaseSnapshot, nodeTree: isoNodeTree }],
   })
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId: doneShardId,
     portName: 'result',
     content: 'alpha',
@@ -342,11 +357,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const canon = await initCanon(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedGen1(db, canon)
-    const { tasks } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({ inputs: JSON.stringify({ docs: 'alpha-NEW' }) })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { inputs: JSON.stringify({ docs: 'alpha-NEW' }) })
 
     const shim = valueFileShim(appHome)
     await runTask({
@@ -357,7 +368,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       maxConcurrentNodes: 4,
     })
 
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // Replacement: the prior value file is gone; the new one is present.
     expect(existsSync(join(canon, 'f_alpha.txt'))).toBe(false)
@@ -373,11 +384,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const canon = await initCanon(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId } = await seedGen1(db, canon)
-    const { tasks } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({ inputs: JSON.stringify({ docs: 'alpha-FAIL' }) })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { inputs: JSON.stringify({ docs: 'alpha-FAIL' }) })
 
     const shim = valueFileShim(appHome)
     await runTask({
@@ -388,7 +395,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       maxConcurrentNodes: 4,
     })
 
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(t?.status).not.toBe('done')
     // Canon was NEVER touched (undo runs only in the iso) — the prior delta survives.
     expect(readFileSync(join(canon, 'f_alpha.txt'), 'utf8')).toBe('alpha\n')
@@ -401,9 +408,8 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const canon = await initCanon(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, wrapperRunId } = await seedGen1(db, canon)
-    const { nodeRuns, tasks } = tablesOf(db)
     // A prior replacement attempt that FAILED before merge → non-done freshest row.
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulidMono(),
       taskId,
       nodeId: 'inner',
@@ -416,10 +422,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await db
-      .update(tasks)
-      .set({ inputs: JSON.stringify({ docs: 'alpha-NEW' }) })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { inputs: JSON.stringify({ docs: 'alpha-NEW' }) })
 
     const shim = valueFileShim(appHome)
     await runTask({
@@ -430,7 +433,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       maxConcurrentNodes: 4,
     })
 
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     expect(existsSync(join(canon, 'f_alpha.txt'))).toBe(false)
     expect(existsSync(join(canon, 'f_alpha_NEW.txt'))).toBe(true)
@@ -447,8 +450,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const gen2Base = await snapshotFullState(canon)
     writeFileSync(join(canon, 'f_beta.txt'), 'beta\n')
     const gen2Node = await snapshotFullState(canon)
-    const { nodeRuns, tasks } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulidMono(),
       taskId,
       nodeId: 'inner',
@@ -458,16 +460,12 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       parentNodeRunId: wrapperRunId,
       shardKey: '0',
       shardValueHash: sha256Hex('beta'),
-      isoBaseSnapshot: gen2Base,
-      isoNodeTree: gen2Node,
       mergeState: 'merged',
       startedAt: Date.now(),
       finishedAt: Date.now(),
+      checkpoints: [{ mountPath: '', isolationBase: gen2Base, nodeTree: gen2Node }],
     })
-    await db
-      .update(tasks)
-      .set({ inputs: JSON.stringify({ docs: 'gamma' }) })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { inputs: JSON.stringify({ docs: 'gamma' }) })
 
     const shim = valueFileShim(appHome)
     await runTask({
@@ -478,7 +476,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
       maxConcurrentNodes: 4,
     })
 
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // Fall back to superimposition (== pre-T14): the new file is added; prior files
     // remain (NOT resurrected/rewritten). Safe — never destructive.

@@ -8,7 +8,9 @@
 // (it also encodes the row's own round, so even a same-generation re-mint at
 // another iteration would go stale).
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { describe, expect, test } from 'bun:test'
+import type { NodeRunMintInput } from '../src/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { buildNodeRunMintRecord } from '../src/modules/task-execution/application/buildNodeRunMintRecord'
 
 const inherited = {
@@ -17,11 +19,12 @@ const inherited = {
   parentNodeRunId: null,
   containerRunId: 'GEN-1',
   scopePath: 'oloop:0/iloop:0',
-  preSnapshot: null,
+  checkpointInheritance: [],
 }
 
-function mint(over: Record<string, unknown>) {
+function mint(over: Partial<NodeRunMintInput>) {
   return buildNodeRunMintRecord({
+    ...deriveNodeRunRole({ nodeId: over.nodeId ?? 'worker', rerunCause: over.cause ?? 'initial' }),
     taskId: 'T',
     nodeId: 'worker',
     status: 'pending',

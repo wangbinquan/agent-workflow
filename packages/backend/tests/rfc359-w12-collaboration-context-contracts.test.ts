@@ -1,3 +1,4 @@
+import { readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
@@ -61,9 +62,11 @@ import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresql
 import type { DaemonTaskExecutionModules } from '@/bootstrap/daemonModules/taskExecution'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function composeCapabilities(db: PersistenceDb, appHome: string) {
   const memory = composeMemoryOperationsFor({
+    clarifyAnswers: createClarifyAnswerQueries(db),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
@@ -515,10 +518,8 @@ describeEachProvider('RFC-359 W12 collaboration context capabilities', (harness)
       actorUserId: 'u1',
       now: 1_700_000_000_000,
     })
-    const { tasks, taskQuestions, collaborationGateOperations } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-      'awaiting_human',
-    )
+    const { taskQuestions, collaborationGateOperations } = tablesOf(db)
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('awaiting_human')
     expect(
       (await db.select().from(taskQuestions).where(eq(taskQuestions.id, created.questionId)))[0],
     ).toMatchObject({

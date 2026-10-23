@@ -2,6 +2,8 @@
 // 此前 SQLite 侧只是 `platform/persistence/sqlite/taskLifecycle.ts` 同步内核的薄壳，PG 侧是整份实现；现在端口两侧都走
 // 统一写事务 + owner 围栏（PG READ COMMITTED：CAS 与围栏都是行级条件 UPDATE）。同步内核暂留给尚未迁移的 legacy 直接调用方。
 
+import { taskWorkspaceRootMatchesSql } from './taskRepositorySql'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import type { TaskStatus } from '@agent-workflow/shared'
@@ -151,7 +153,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
         )
       }
       if (
-        snapshot.worktreePath !== '' &&
+        !isTaskWorkspaceUnbound(snapshot.worktreePath) &&
         !(await this.workspacePresence.exists(snapshot.worktreePath))
       ) {
         const changed = await withTaskExecutionWrite(this.db, async (tx) => {
@@ -164,7 +166,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
               and(
                 eq(tasks.id, input.taskId),
                 eq(tasks.status, snapshot.status),
-                eq(tasks.worktreePath, snapshot.worktreePath),
+                taskWorkspaceRootMatchesSql(tasks.worktreePath, snapshot.worktreePath),
                 eq(tasks.lifecycleEventRevision, snapshot.lifecycleEventRevision),
                 isNull(tasks.deletedAt),
                 isNull(tasks.sourceTerminationFence),

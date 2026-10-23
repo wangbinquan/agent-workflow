@@ -8,9 +8,9 @@
 //   3. Cycle / missing-dep mapping to NodeStepResult 'failed' (does not throw
 //      — scheduler's normal failure path expects a structured result)
 
+import { patchAgentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Logger } from '@/util/log'
 import { ulid } from 'ulid'
@@ -116,8 +116,7 @@ describeEachProvider('RFC-022 scheduler.prepareNodeRunInjection', (harness) => {
     // Inject a dangling reference via raw UPDATE (createAgent guard would
     // otherwise refuse). This is the exact scenario the runtime guard exists
     // to catch — when external SQL editing or a race breaks the closure.
-    const { sql } = await import('drizzle-orm')
-    await rawExec(db, sql`UPDATE agents SET depends_on = '["ghost"]' WHERE name = 'top'`)
+    await patchAgentFixture(db, { name: 'top' }, { dependsOn: '["ghost"]' })
     const root = await getAgent(db, 'top')
     if (root === null) throw new Error('seed missing')
 
@@ -140,8 +139,7 @@ describeEachProvider('RFC-022 scheduler.prepareNodeRunInjection', (harness) => {
     const idA = (await getAgent(db, 'a'))!.id
     const idB = (await getAgent(db, 'b'))!.id
     const idC = (await getAgent(db, 'c'))!.id
-    const { sql } = await import('drizzle-orm')
-    await rawExec(db, sql`UPDATE agents SET depends_on = ${JSON.stringify([idA])} WHERE name = 'c'`)
+    await patchAgentFixture(db, { name: 'c' }, { dependsOn: JSON.stringify([idA]) })
     const root = await getAgent(db, 'a')
     if (root === null) throw new Error('seed missing')
 

@@ -19,13 +19,19 @@
 // 子进程完成之前就走完自己的 getTask + 状态门/CAS——要么 fast-path 读到 pending 409，
 // 要么 CAS affected=0 ConcurrentTaskTransition 409，两条路映射同一 code。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -125,8 +131,7 @@ async function buildHarness(): Promise<Harness> {
 
   const db = createInMemoryDb(MIGRATIONS)
   const workerId = ulid()
-  const { agents, workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: workerId,
     name: 'worker',
     description: 'test',
@@ -149,12 +154,12 @@ async function buildHarness(): Promise<Harness> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf-rfc097-mutex',
     definition: JSON.stringify(definition),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc097-mutex-task',
     workflowId,
@@ -172,17 +177,17 @@ async function buildHarness(): Promise<Harness> {
     failedNodeId: 'work',
   })
   const failedRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: failedRunId,
     taskId,
     nodeId: 'work',
     status: 'failed',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: stashSha,
     startedAt: Date.now() - 60_000,
     finishedAt: Date.now() - 30_000,
     errorMessage: 'boom',
+    checkpoints: [{ mountPath: '', preSnapshot: stashSha }],
   })
   return {
     db,
@@ -245,8 +250,7 @@ async function waitForTerminalTask(
   taskId: string,
 ): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
-    const { tasks } = tablesOf(db)
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
   }
@@ -283,10 +287,9 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
     const final = await waitForTerminalTask(h.db, h.taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
-    const { nodeRuns } = tablesOf(h.db)
     // node_runs 无双份新行：seed failed(retryIndex 0) + 调度器恰一份新行，
     // retryIndex 不重复——若两个调度器都被 kick，这里会出现重复 retryIndex / 第三行。
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId: h.taskId })
     const workRows = rows.filter((r) => r.nodeId === 'work')
     expect(workRows).toHaveLength(2)
     expect(workRows.map((r) => r.retryIndex).sort()).toEqual([0, 1])
@@ -317,10 +320,9 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
     const final = await waitForTerminalTask(h.db, h.taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
-    const { nodeRuns } = tablesOf(h.db)
     // 占位行 oracle：retry 赢者恰铸 1 行 errorMessage='queued for retry'；
     // 输者在 CAS 处出局（回滚与铸行都在 CAS 之后），不得多铸。
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId: h.taskId })
     const placeholders = rows.filter((r) => r.errorMessage === 'queued for retry')
     expect(placeholders).toHaveLength(1)
     // retryIndex 全局不重复（双调度器的另一种污染形态）。

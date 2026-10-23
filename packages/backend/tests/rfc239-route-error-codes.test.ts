@@ -4,8 +4,7 @@
 // (the service-level codes are asserted in task-file-content.test.ts /
 // change-narrative.test.ts by behavior).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -23,13 +22,12 @@ afterEach(() => {
 async function seedTask(db: PersistenceDb, lineage?: typeof providerTaskLineage): Promise<string> {
   const taskId = `01RC${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,

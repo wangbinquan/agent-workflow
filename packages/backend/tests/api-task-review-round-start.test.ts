@@ -8,6 +8,7 @@
 // current pending doc_version's created_at, keep its raw startedAt untouched,
 // and sort AFTER the reviewed agent run — not at the misleading early position.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
@@ -19,8 +20,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -29,7 +29,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string 
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
@@ -59,8 +59,7 @@ async function seedRun(
   opts: { id?: string; nodeId: string; status?: RunStatus; startedAt: number; finishedAt?: number },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId,

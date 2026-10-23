@@ -75,7 +75,7 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   // │     `POST /api/resource-packages/commit` 的双引擎对拍——两侧 compose 方式已在 `main.ts:224-260`
   // │     写全（SQLite 走 `composeSqliteResourcePackageProvider` +
   // │     `createSqliteResourcePackageExecutionAdapter`；PG 走 `composePostgresqlResourcePackage
-  // │     Provider` + `createPostgresqlResourcePackageAtomicApplyOperations`），fork 点只在
+  // │     Provider` + `createResourcePackageAtomicApplyOperations`），fork 点只在
   // │     `services/resourcePackage/executionAdapter.ts` 的 `apply`，上游 parse/preview/closure/
   // │     secretInputs/export 全是共用的中立代码。
   // │
@@ -118,7 +118,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
   'modules/resource-catalog/infrastructure/sqliteAclReadRepository.ts',
   'modules/resource-catalog/infrastructure/sqliteResourceGrantRepository.ts',
-  'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts',
   'modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator.ts',
   'modules/system-operations/infrastructure/postgresqlAdminRestoreCoordinator.ts',
   'modules/system-operations/infrastructure/postgresqlPendingRestore.ts',

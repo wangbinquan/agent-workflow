@@ -7,6 +7,7 @@
 // (next_run_at / last_* / consecutive_failures) — a manual test-run never
 // advances the clock nor auto-disables. Works on a disabled schedule (manual
 // override). Route gate = same owner/admin visibility as the other routes.
+import { patchWorkflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -90,10 +91,9 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
     })
     bobId = bob.id
     const wf = await createWorkflow(db, { name: 'wf', description: '', definition: DEF })
-    const { workflows } = tablesOf(db)
     // This suite specifically exercises later access revocation. Preserve that
     // premise explicitly now that ordinary creates default to private.
-    await db.update(workflows).set({ visibility: 'public' }).where(eq(workflows.id, wf.id))
+    await patchWorkflowFixture(db, { id: wf.id }, { visibility: 'public' })
     wfId = wf.id
   })
 
@@ -161,9 +161,8 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
 
   test('surfaces launch failure (workflow access revoked) + leaves row unchanged', async () => {
     const id = await makeSchedule(true)
-    const { workflows } = tablesOf(db)
     // Revoke: make the workflow private (owned by system, not bob) → gate fails.
-    await db.update(workflows).set({ visibility: 'private' }).where(eq(workflows.id, wfId))
+    await patchWorkflowFixture(db, { id: wfId }, { visibility: 'private' })
     const before = await getScheduledTask(db, id)
     const { build } = stubLaunch()
     await expect(runScheduleNow(db, id, build, identityAccess)).rejects.toThrow()
@@ -174,11 +173,7 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
 
   test('RFC-292: run-now rechecks the live workflow and never dispatches without webhook context', async () => {
     const id = await makeSchedule(true)
-    const { workflows } = tablesOf(db)
-    await db
-      .update(workflows)
-      .set({ definition: JSON.stringify(TRIGGER_DEF) })
-      .where(eq(workflows.id, wfId))
+    await patchWorkflowFixture(db, { id: wfId }, { definition: JSON.stringify(TRIGGER_DEF) })
     const { build, captured } = stubLaunch()
     await expect(runScheduleNow(db, id, build, identityAccess)).rejects.toMatchObject({
       code: 'trigger-context-missing',

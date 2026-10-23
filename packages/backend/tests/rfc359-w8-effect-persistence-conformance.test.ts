@@ -25,7 +25,17 @@
 //
 // 合一后这份文件不再对拍「两个类」，它对拍的是**同一份实现在两个引擎上的同一行为**。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readStoredTaskRepoFixtures } from './helpers/model/taskRepo'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readTaskRepoFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -88,8 +98,7 @@ interface Fixture {
 
 async function seed(db: PersistenceDb): Promise<Fixture> {
   const taskId = `w8_${ulid()}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-w8',
     description: '',
@@ -97,7 +106,7 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -118,7 +127,7 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
   // `continuationSlotKey` / `lineageSlotPathJson` 由生产工厂显式写入；直插行必须自带它们
   // ——SQLite 的迁移 0210 给直写者装了补齐触发器，PostgreSQL 没有（schema 面的差异，不在本对之内）。
   const slotPathJson = encodeLineageSlotPath(rootPath(taskId))
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     {
       id: runId,
       taskId,
@@ -540,14 +549,11 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
         outputs: [{ portName: 'pr_url', content: 'https://example.invalid/pr/12' }],
       },
     })
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.runId)))[0]!
     expect(run.status).toBe('done')
     expect(run.finishedAt).toBe(finishedAt)
-    const outputs = await db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, fixture.runId))
+    const outputs = await readNodeRunOutputFixtures(db, { nodeRunId: fixture.runId })
     expect(outputs.map((row) => [row.portName, row.content])).toEqual([
       ['pr_url', 'https://example.invalid/pr/12'],
     ])
@@ -557,11 +563,12 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
   test('settleCodeHostNode：已终态的 node_run 拒绝被覆写，整笔回滚（gap 03）', async () => {
     const db = harness.db
     const fixture = await seed(db)
-    const { nodeRuns, nodeRunOutputs, taskExecutionEffects } = tablesOf(db)
-    await db
-      .update(nodeRuns)
-      .set({ status: 'failed', errorMessage: 'earlier terminal' })
-      .where(eq(nodeRuns.id, fixture.runId))
+    const { nodeRuns, taskExecutionEffects } = tablesOf(db)
+    await patchNodeRunFixture(
+      db,
+      { id: fixture.runId },
+      { status: 'failed', errorMessage: 'earlier terminal' },
+    )
     const prepared = await fixture.effects.prepareAndAcquire(preparation(fixture))
     const refused = await errorOf(() =>
       fixture.effects.settleCodeHostNode({
@@ -591,9 +598,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
     expect(run.status).toBe('failed')
     expect(run.errorMessage).toBe('earlier terminal')
     // 整笔回滚：既没有落输出，effect 也没有结算。
-    expect(
-      await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, fixture.runId)),
-    ).toHaveLength(0)
+    expect(await readNodeRunOutputFixtures(db, { nodeRunId: fixture.runId })).toHaveLength(0)
     const effect = (
       await db
         .select()
@@ -695,13 +700,15 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
         nodePaths: ['w8-node'],
       },
     })
-    const { tasks, taskRepos, taskSpaceNodes, nodeRuns } = tablesOf(db)
-    const task = (await db.select().from(tasks).where(eq(tasks.id, fixture.taskId)))[0]!
+    const { taskSpaceNodes, nodeRuns } = tablesOf(db)
+    const task = (await readTaskFixtures(db, { id: fixture.taskId }))[0]!
     expect(task.worktreePath).toBe('/tmp/wt/w8')
     expect(task.baseCommit).toBe('deadbeef')
-    const repos = await db.select().from(taskRepos).where(eq(taskRepos.taskId, fixture.taskId))
+    const repos = await readTaskRepoFixtures(db, { taskId: fixture.taskId })
     expect(repos).toHaveLength(1)
-    expect(repos[0]!.worktreeDirName).toBe('w8')
+    // RFC-395 II-a: the old assertion protects the stored alias, not the mount path.
+    expect(repos[0]!.mountPath).toBe('')
+    expect((await readStoredTaskRepoFixtures(db, fixture.taskId))[0]!.worktreeDirName).toBe('w8')
     const spaces = await db
       .select()
       .from(taskSpaceNodes)
@@ -716,8 +723,8 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
   test('settleWorkspacePreparation：prep node_run 已终态时整笔回滚', async () => {
     const db = harness.db
     const fixture = await seed(db)
-    const { nodeRuns, tasks, taskSpaceNodes } = tablesOf(db)
-    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, fixture.prepRunId))
+    const { taskSpaceNodes } = tablesOf(db)
+    await patchNodeRunFixture(db, { id: fixture.prepRunId }, { status: 'failed' })
     const prepared = await fixture.effects.prepareAndAcquire(preparation(fixture))
     const refused = await errorOf(() =>
       fixture.effects.settleWorkspacePreparation({
@@ -749,7 +756,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       }),
     )
     expect(codeOf(refused)).toBe('illegal-node-run-transition')
-    const task = (await db.select().from(tasks).where(eq(tasks.id, fixture.taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: fixture.taskId }))[0]!
     expect(task.worktreePath).toBe('/tmp/worktree')
     expect(
       await db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, fixture.taskId)),
@@ -771,7 +778,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       launchNonce: 'nonce-w8',
       runtimeParamsJson: JSON.stringify({ model: 'w8' }),
     })
-    const { taskExecutionEffectAttempts, nodeRuns } = tablesOf(db)
+    const { taskExecutionEffectAttempts } = tablesOf(db)
     const attempt = (
       await db
         .select()
@@ -785,7 +792,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       spawnBinaryPath: '/usr/local/bin/opencode',
       launchNonce: 'nonce-w8',
     })
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.runId)))[0]!
+    const run = (await readNodeRunFixtures(db, { id: fixture.runId }))[0]!
     expect(run.pid).toBe(4242)
     expect(run.spawnBinaryPath).toBe('/usr/local/bin/opencode')
     expect(run.spawnLaunchNonce).toBe('nonce-w8')
@@ -845,11 +852,12 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
   test('settleGateRollback：completed 结算并按成功集合改写来源 node_run', async () => {
     const db = harness.db
     const fixture = await seed(db)
-    const { nodeRuns, taskExecutionEffects } = tablesOf(db)
-    await db
-      .update(nodeRuns)
-      .set({ status: 'failed', errorMessage: 'superseded-by-review-rejected: earlier' })
-      .where(eq(nodeRuns.id, fixture.runId))
+    const { taskExecutionEffects } = tablesOf(db)
+    await patchNodeRunFixture(
+      db,
+      { id: fixture.runId },
+      { status: 'failed', errorMessage: 'superseded-by-review-rejected: earlier' },
+    )
     const prepared = await fixture.effects.prepareAndAcquire(
       preparation(fixture, { kind: 'workspace-rollback' }),
     )
@@ -868,7 +876,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
         successfulSourceNodeRunIds: [fixture.runId],
       },
     })
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.runId)))[0]!
+    const run = (await readNodeRunFixtures(db, { id: fixture.runId }))[0]!
     expect(run.rolledBack).toBe(true)
     expect(run.errorMessage).toBe('superseded-by-review-rejected-rollback: earlier')
     const effect = (
@@ -896,7 +904,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       sourceNodeRunIds: [fixture.runId],
       outcome: { kind: 'threw', error: 'boom' },
     })
-    const { taskExecutionEffectAttempts, nodeRuns } = tablesOf(db)
+    const { taskExecutionEffectAttempts } = tablesOf(db)
     const attempt = (
       await db
         .select()
@@ -905,7 +913,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
     )[0]!
     expect(attempt.state).toBe('recovery-required')
     expect(attempt.failureCode).toBe('human-gate-workspace-rollback-threw')
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.runId)))[0]!
+    const run = (await readNodeRunFixtures(db, { id: fixture.runId }))[0]!
     expect(run.rolledBack ?? false).toBe(false)
     fixture.reset()
   })
@@ -934,7 +942,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
       }),
     )
     expect(codeOf(refused)).toBe('task-continuation-stale')
-    const { taskExecutionEffects, nodeRuns } = tablesOf(db)
+    const { taskExecutionEffects } = tablesOf(db)
     const effect = (
       await db
         .select()
@@ -942,7 +950,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
         .where(eq(taskExecutionEffects.id, prepared.effectId))
     )[0]!
     expect(effect.state).toBe('open')
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.runId)))[0]!
+    const run = (await readNodeRunFixtures(db, { id: fixture.runId }))[0]!
     expect(run.rolledBack ?? false).toBe(false)
     fixture.reset()
   })

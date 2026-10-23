@@ -20,8 +20,7 @@
 // pair that used to bite: a done row WITH a port value plus a younger pending
 // row WITHOUT outputs in the same frame.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
@@ -33,14 +32,13 @@ const TOP_FRAME = { containerRunId: null, iteration: 0 }
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf-rfc096-portread',
     definition: JSON.stringify({ $schema_version: 6, inputs: [], nodes: [], edges: [] }),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't-rfc096-portread',
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
@@ -70,8 +68,7 @@ async function seedDonePlusYoungerPending(
   content: string,
 ): Promise<{ doneId: string; pendingId: string }> {
   const doneId = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: doneId,
     taskId,
     nodeId,
@@ -81,9 +78,9 @@ async function seedDonePlusYoungerPending(
     startedAt: Date.now() - 100,
     finishedAt: Date.now() - 50,
   })
-  await insertOne(db, nodeRunOutputs, { nodeRunId: doneId, portName, content })
+  await nodeRunOutputFixture(db, { nodeRunId: doneId, portName, content })
   const pendingId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: pendingId,
     taskId,
     nodeId,
@@ -123,8 +120,7 @@ describeEachProvider(
     test('no done row at all reads as an empty value, never as the pending row', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: 'src',
@@ -148,8 +144,7 @@ describeEachProvider(
       const db = harness.db
       const taskId = await seedTask(db)
       const generationId = ulid()
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: generationId,
         taskId,
         nodeId: 'loop',
@@ -160,7 +155,7 @@ describeEachProvider(
         finishedAt: Date.now() - 200,
       })
       const insideId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: insideId,
         taskId,
         nodeId: 'src',
@@ -171,7 +166,7 @@ describeEachProvider(
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: insideId,
         portName: 'signal',
         content: 'round-1',

@@ -5,6 +5,7 @@
 // plan. The two Agents below run through TaskEngine as a real child process;
 // only their model output is deterministic system-mock data.
 
+import { readNodeRunOutputFixtures, readTaskFixtures, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
@@ -347,8 +348,8 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       taskIds.push(taskId)
 
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
-      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
-      expect(first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
+      const { nodeRuns, docVersions } = tablesOf(db)
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'awaiting_review',
         catalogVisibility: 'internal',
       })
@@ -438,7 +439,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         ),
       ).toHaveLength(2)
 
-      const waitingReview = first(db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRun.id)))
+      const waitingReview = (await readNodeRunFixtures(db, { id: reviewRun.id }))[0]
       expect(waitingReview).toMatchObject({ status: 'awaiting_review', reviewIteration: 1 })
       await addReviewComment({
         db,
@@ -491,7 +492,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
             ),
         ),
       ).toHaveLength(3)
-      expect(first(db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRun.id)))).toMatchObject({
+      expect((await readNodeRunFixtures(db, { id: reviewRun.id }))[0]).toMatchObject({
         status: 'awaiting_review',
         reviewIteration: 2,
       })
@@ -504,7 +505,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       })
       await wakeHumanGateContinuation(approved.taskId, approved.continuationRef, startDeps)
 
-      expect(first(db.select().from(tasks).where(eq(tasks.id, taskId)))).toMatchObject({
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'done',
         catalogVisibility: 'internal',
       })
@@ -518,14 +519,9 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       ).not.toContain(taskId)
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('approved')
       expect(
-        queryRows(
-          db
-            .select()
-            .from(nodeRuns)
-            .where(
-              and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
-            ),
-        ),
+        await readNodeRunFixtures(db, {
+          $and: [{ taskId }, { nodeId: DIGITAL_EMPLOYEE_AGENT_NODE_ID }],
+        }),
       ).toEqual([expect.objectContaining({ status: 'done' })])
       const implementationPrompt = readFileSync(processMock.implementationPromptPath, 'utf8')
       expect(implementationPrompt).toContain('Exact approved marker: REVIEWED-V3')
@@ -540,17 +536,9 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         'iterated',
         'approved',
       ])
-      const approvedOutput = first(
-        db
-          .select()
-          .from(nodeRunOutputs)
-          .where(
-            and(
-              eq(nodeRunOutputs.nodeRunId, reviewRun.id),
-              eq(nodeRunOutputs.portName, 'approved_doc'),
-            ),
-          ),
-      )
+      const approvedOutput = (
+        await readNodeRunOutputFixtures(db, { nodeRunId: reviewRun.id, portName: 'approved_doc' })
+      )[0]
       expect(approvedOutput).toMatchObject({
         content: `${requirementDirectory}/review/implementation-plan.md`,
         kind: 'path<md>',
@@ -558,7 +546,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         existsSync(
           join(
-            first(db.select().from(tasks).where(eq(tasks.id, taskId)))!.worktreePath!,
+            (await readTaskFixtures(db, { id: taskId }))[0]!.worktreePath!,
             `${requirementDirectory}/review/implementation-plan.md`,
           ),
         ),

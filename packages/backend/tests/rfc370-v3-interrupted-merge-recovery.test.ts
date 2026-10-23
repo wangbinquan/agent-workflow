@@ -15,11 +15,18 @@
 // body's interrupted run into the wrapper's own worktree before driving the
 // body, without re-running the run; the wrapper's `git_diff` lists the run's
 // file and the wrapper's own merge carries it to the task worktree.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -64,8 +71,7 @@ function registerCases(provider: ProviderHarness) {
   test('a revived git wrapper completes its body run into the wrapper worktree, then merges it', async () => {
     const { db } = provider
     const agentId = ulid()
-    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, agents, { id: agentId, name: 'a', outputs: JSON.stringify(['summary']) })
+    await agentFixture(db, { id: agentId, name: 'a', outputs: JSON.stringify(['summary']) })
     const definition = {
       $schema_version: 3,
       inputs: [],
@@ -77,12 +83,12 @@ function registerCases(provider: ProviderHarness) {
     } as WorkflowDefinition
     const workflowId = ulid()
     const taskId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'interrupted-merge',
       workflowId,
@@ -106,7 +112,7 @@ function registerCases(provider: ProviderHarness) {
     const wrapperRunId = ulid()
     const runId = ulid()
     const canon: CanonRepo[] = [
-      { repoPath: worktreePath, worktreePath, worktreeDirName: '', baseBranch: 'main' },
+      { repoPath: worktreePath, worktreePath, mountPath: '', baseBranch: 'main' },
     ]
     const wrapperIso = await createNodeIso({
       appHome,
@@ -123,7 +129,7 @@ function registerCases(provider: ProviderHarness) {
       canonRepos: [{ ...canon[0]!, worktreePath: wrapperWorktree }],
     })
     writeFileSync(join(runIso.repos[0]!.isoWorktreePath, 'produced.txt'), 'by the body run\n')
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: wrapperRunId,
       taskId,
       nodeId: 'gw',
@@ -131,7 +137,6 @@ function registerCases(provider: ProviderHarness) {
       retryIndex: 0,
       status: 'interrupted',
       mergeState: 'isolating',
-      isoBaseSnapshot: wrapperIso.repos[0]!.baseSnapshot,
       isoWorktreePath: wrapperIso.containerPath,
       wrapperProgressJson: JSON.stringify({
         kind: 'git',
@@ -142,8 +147,9 @@ function registerCases(provider: ProviderHarness) {
         phase: 'inner-running',
       }),
       startedAt: Date.now(),
+      checkpoints: [{ mountPath: '', isolationBase: wrapperIso.repos[0]!.baseSnapshot }],
     })
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runId,
       taskId,
       nodeId: 'A',
@@ -152,12 +158,12 @@ function registerCases(provider: ProviderHarness) {
       retryIndex: 0,
       status: 'done',
       mergeState: 'isolating',
-      isoBaseSnapshot: runIso.repos[0]!.baseSnapshot,
       isoWorktreePath: runIso.containerPath,
       startedAt: Date.now(),
       finishedAt: Date.now(),
+      checkpoints: [{ mountPath: '', isolationBase: runIso.repos[0]!.baseSnapshot }],
     })
-    await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'summary', content: 'ok' })
+    await nodeRunOutputFixture(db, { nodeRunId: runId, portName: 'summary', content: 'ok' })
 
     await execution!.runTask({
       taskId,
@@ -166,31 +172,25 @@ function registerCases(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect({ status: task.status, error: task.errorMessage }).toEqual({
       status: 'done',
       error: null,
     })
     // The body run was completed, not re-run.
-    const bodyRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'A')))
+    const bodyRuns = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId: 'A' }] })
     expect(bodyRuns.map((row) => ({ id: row.id, mergeState: row.mergeState }))).toEqual([
       { id: runId, mergeState: 'merged' },
     ])
-    expect(bodyRuns[0]!.isoNodeTree).not.toBeNull()
+    expect(
+      bodyRuns[0]!.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.nodeTree ?? null,
+    ).not.toBeNull()
     // It reached the wrapper first: the wrapper's diff lists it…
     const gitDiff = (
-      await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(eq(nodeRunOutputs.nodeRunId, wrapperRunId), eq(nodeRunOutputs.portName, 'git_diff')),
-        )
+      await readNodeRunOutputFixtures(db, { nodeRunId: wrapperRunId, portName: 'git_diff' })
     )[0]
     expect(gitDiff?.content).toBe('produced.txt')
-    const wrapper = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, wrapperRunId)))[0]!
+    const wrapper = (await readNodeRunFixtures(db, { id: wrapperRunId }))[0]!
     expect({ status: wrapper.status, mergeState: wrapper.mergeState }).toEqual({
       status: 'done',
       mergeState: 'merged',

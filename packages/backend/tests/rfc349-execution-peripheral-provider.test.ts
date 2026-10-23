@@ -1,11 +1,10 @@
 // RFC-349 — execution-peripheral services consume closed provider operations;
 // only infrastructure adapters may own database mechanics.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readWorkflowFixtures } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 
 import { buildActor } from '@/auth/actor'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
@@ -66,7 +65,7 @@ describe('RFC-349 execution-peripheral provider boundary', () => {
 // 丢掉的只有那条 SQL 文本断言——净赚：真 PG 上跑通是对「投影带 schema 限定名」强得多的证明
 // （写错当场报错，而假池照单全收）。同 §5gd 对 `rfc349-websocket-provider` 的处置。
 describeEachProvider('RFC-349 execution-peripheral adapters（双引擎真库）', (harness) => {
-  test('agent-launch 与 dynamic-workflow 适配器在真库上读写、且 ensureHostWorkflow 幂等', async () => {
+  test('agent-launch 与 dynamic-workflow 适配器在真库上读写、且不播种宿主', async () => {
     const db = harness.db
     const visibleRequests: Array<{ readonly actorId: string; readonly agentId: string }> = []
     const actor = buildActor({
@@ -95,18 +94,12 @@ describeEachProvider('RFC-349 execution-peripheral adapters（双引擎真库）
     })
     const dynamicWorkflow = composeDynamicWorkflowPersistence(db)
 
-    // 调两次：第二次不得重复插入，也不得抛。
-    await agentLaunch.ensureHostWorkflow()
-    await agentLaunch.ensureHostWorkflow()
+    expect(agentLaunch).not.toHaveProperty('ensureHostWorkflow')
 
-    const { workflows } = tablesOf(db)
-    const hosts = await db
-      .select({ id: workflows.id, name: workflows.name, builtin: workflows.builtin })
-      .from(workflows)
-      .where(eq(workflows.id, '00000000000000AGENTHOST00'))
-    expect(hosts).toEqual([
-      { id: '00000000000000AGENTHOST00', name: '__agent_host__', builtin: true },
-    ])
+    const hosts = await readWorkflowFixtures(db, { id: '00000000000000AGENTHOST00' }).then((rows) =>
+      rows.map((row) => ({ id: row.id, name: row.name, builtin: row.builtin })),
+    )
+    expect(hosts).toEqual([])
 
     await expect(agentLaunch.loadVisibleAgent(actor, 'agent-1')).resolves.toBeNull()
     expect(visibleRequests).toEqual([{ actorId: 'owner-1', agentId: 'agent-1' }])

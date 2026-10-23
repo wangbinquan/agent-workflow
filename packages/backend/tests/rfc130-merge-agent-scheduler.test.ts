@@ -17,11 +17,15 @@
 // content per MERGE_SHOULD_FAIL). This is the only test that exercises the real
 // runNode dispatch of the merge agent through the scheduler.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -103,8 +107,7 @@ process.exit(0)
 
 async function seedWriter(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -134,15 +137,14 @@ function twoWriterDef(w1Id: string, w2Id: string): WorkflowDefinition {
 async function seedTask(h: Harness, def: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'mas',
     workflowId,
@@ -198,10 +200,9 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
         maxConcurrentNodes: 4,
       }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     // Both writers reached done and ended 'merged' (one clean, one via merge agent).
     for (const name of ['w1', 'w2']) {
       const r = runs.find((x) => x.nodeId === name && x.parentNodeRunId === null)
@@ -229,10 +230,9 @@ describe('RFC-130 §6.2 — merge agent scheduler wiring (real conflict, real di
         maxConcurrentNodes: 4,
       }),
     )
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('awaiting_human')
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     // Exactly one writer conflicted and could not be resolved → conflict-human.
     const conflicted = runs.filter(
       (r) => r.parentNodeRunId === null && r.mergeState === 'conflict-human',

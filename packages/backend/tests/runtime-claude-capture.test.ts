@@ -4,7 +4,7 @@
 // visibility (parity with opencode's RFC-027 SQLite walk). Failure writes a
 // `subagent_capture_failed` marker (graceful).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
@@ -29,15 +29,14 @@ const capturePersistence = (db: PersistenceDb) => createRuntimeSessionCapturePer
 async function seed(db: PersistenceDb): Promise<{ db: PersistenceDb; nodeRunId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: 0,
     updatedAt: 0,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -51,7 +50,7 @@ async function seed(db: PersistenceDb): Promise<{ db: PersistenceDb; nodeRunId: 
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'n1', status: 'running' })
+  await nodeRunFixture(db, { id: nodeRunId, taskId, nodeId: 'n1', status: 'running' })
   return { db, nodeRunId }
 }
 

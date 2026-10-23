@@ -13,7 +13,12 @@
 // (scheduler-envelope-followup-branch.test.ts) 据此前缀 + 本测试断言的 sessionId/agentText
 // 触发同会话重试——两条测试合起来闭环「producer 失败 → 重试」。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -67,15 +72,14 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -99,8 +103,7 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n1',
@@ -172,15 +175,12 @@ describeEachProvider('runner malformed-port guard', (harness) => {
     expect(result.exitCode).toBe(0)
     expect(result.sessionId).toBeDefined()
 
-    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
     expect(row.status).toBe('failed')
     // The malformed port must NOT have been persisted as a blank row — a ghost
     // empty row is exactly what made the downstream review node silently no-op.
-    const outputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     expect(outputs).toHaveLength(0)
   })
 
@@ -210,11 +210,7 @@ describeEachProvider('runner malformed-port guard', (harness) => {
     )
 
     expect(result.status).toBe('done')
-    const { nodeRunOutputs } = tablesOf(h.db)
-    const outputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     expect(outputs).toHaveLength(1)
     expect(outputs[0]!.portName).toBe('doc')
     expect(outputs[0]!.content).toBe('report.md')

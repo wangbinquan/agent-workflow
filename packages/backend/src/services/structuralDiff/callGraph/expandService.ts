@@ -69,7 +69,7 @@ export async function worktreeExpandCtx(
 /**
  * RFC-089 P4 — split a (possibly repo-label-prefixed) call-chain ref into its
  * repo dir + the in-repo ref. In a multi-repo task the graph's refs are
- * `${worktreeDirName}/${filePath}#${qn}` (mergeStructuralDiffs prefixes them);
+ * `${mountPath}/${filePath}#${qn}` (mergeStructuralDiffs prefixes them);
  * call expansion must run in THAT repo's worktree against the UN-prefixed ref.
  * Longest matching `${dir}/` prefix wins; no match → `{ dir: null, innerRef }`.
  * Pure (exported for tests).
@@ -118,7 +118,7 @@ export async function getCallTargets(
   }
 
   // Single-repo: expand against the task worktree with the ref as-is. Multi-repo
-  // (RFC-089 P4): the ref is `${worktreeDirName}/…`, so pick that repo's worktree
+  // (RFC-089 P4): the ref is `${mountPath}/…`, so pick that repo's worktree
   // and strip the prefix before expanding, then re-prefix the results so the
   // chain keeps resolving within the same repo on the next click.
   let worktreePath = workspace.worktreePath
@@ -126,7 +126,7 @@ export async function getCallTargets(
   let label: string | null = null
   if (workspace.repos.length > 1) {
     const split = splitRepoRef(
-      workspace.repos.map((repo) => repo.worktreeDirName),
+      workspace.repos.map((repo) => repo.mountPath),
       methodRef,
     )
     if (split.dir === null) {
@@ -135,7 +135,7 @@ export async function getCallTargets(
         `call-chain ref '${methodRef}' does not match any repo in task '${taskId}'`,
       )
     }
-    const repo = workspace.repos.find((candidate) => candidate.worktreeDirName === split.dir)!
+    const repo = workspace.repos.find((candidate) => candidate.mountPath === split.dir)!
     worktreePath = repo.worktreePath
     innerRef = split.innerRef
     label = split.dir

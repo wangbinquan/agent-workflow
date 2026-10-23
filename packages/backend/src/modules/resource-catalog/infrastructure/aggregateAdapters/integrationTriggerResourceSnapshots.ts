@@ -5,6 +5,7 @@
 // integration owners. RFC-359 W4-D1：一份实现，两个 provider 共用——每一次 ACL 与内容读取都绑定到
 // Integration owner 交来的那一个事务句柄与那一对已准入的 authority。
 
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
@@ -95,7 +96,7 @@ export function createIntegrationTriggerResourceSnapshotReader(
         await input.transaction
           .select()
           .from(workflows)
-          .where(eq(workflows.id, request.workflowId))
+          .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, request.workflowId)))
           .limit(1)
       )[0]
       if (row === undefined || !(await canView(input.transaction, actor, 'workflow', row))) {

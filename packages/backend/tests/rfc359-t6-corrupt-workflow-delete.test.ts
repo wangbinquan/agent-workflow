@@ -5,6 +5,12 @@
 // 坏 JSON ⇒ 422 workflow-definition-corrupt，PG 上没有任何 API 路径能移除它。删除路径现在两侧都只用
 // 原始行的 ACL 身份与版本；PG 同时补齐 SQLite 一直有的两道删除守卫（非终态任务引用 / 定时任务引用）。
 
+import {
+  patchTaskFixture,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -36,8 +42,7 @@ async function seedOwner(db: PersistenceDb): Promise<void> {
 async function seedCorruptWorkflow(db: PersistenceDb): Promise<{ id: string; name: string }> {
   const id = `wf_${ulid()}`
   const name = `broken-${id.slice(-6)}`
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name,
     description: '',
@@ -61,9 +66,9 @@ function deletion(name: string, expectedVersion = 1) {
 }
 
 async function workflowExists(db: PersistenceDb, id: string): Promise<boolean> {
-  const { workflows } = tablesOf(db)
   return (
-    (await db.select({ id: workflows.id }).from(workflows).where(eq(workflows.id, id))).length > 0
+    (await readWorkflowFixtures(db, { id }).then((rows) => rows.map((row) => ({ id: row.id }))))
+      .length > 0
   )
 }
 
@@ -97,8 +102,7 @@ describeEachProvider('RFC-359 T6 —— 定义损坏的工作流可删（P0-6）
     await seedOwner(db)
     const { id, name } = await seedCorruptWorkflow(db)
     const taskId = `t6_${ulid()}`
-    const { tasks } = tablesOf(db)
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: taskId,
       workflowId: id,
@@ -116,7 +120,7 @@ describeEachProvider('RFC-359 T6 —— 定义损坏的工作流可删（P0-6）
       catalog.operations.delete.invoke(workflowAuthorityFor(OWNER), { id, ...deletion(name) }),
     ).rejects.toMatchObject({ code: 'workflow-in-use', details: { referenceCount: 1 } })
     // 终态引用不挡删除。
-    await db.update(tasks).set({ status: 'done', finishedAt: 2 }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'done', finishedAt: 2 })
     await catalog.operations.delete.invoke(workflowAuthorityFor(OWNER), { id, ...deletion(name) })
     expect(await workflowExists(db, id)).toBe(false)
   })

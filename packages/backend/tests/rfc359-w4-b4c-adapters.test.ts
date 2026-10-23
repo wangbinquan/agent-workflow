@@ -1,6 +1,7 @@
 // RFC-359 W4-B4 批 c —— identity-access / memory 两对合一，两个引擎各跑一遍：OIDC provider 仓库（写路径走统一原语的
 // serializable，slug 撞库经引擎能力矩阵归类）与记忆蒸馏工作存储（含会话捕获 sink 合一）。
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -14,6 +15,7 @@ import { DrizzleOidcProviderRepository } from '@/modules/identity-access/infrast
 import type { InsertOidcProviderRecord } from '@/modules/identity-access/application/ports/oidcProviderPersistence'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -199,7 +201,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
     // RFC-367: the store's auxiliary-record seam is now a SINK FACTORY (live
     // event writer) instead of a post-run capture callback.
     const captured: string[] = []
-    const store = new DrizzleMemoryDistillWorkStore(db, (input) => {
+    const store = new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db), (input) => {
       captured.push(input.distillJobId)
       return {
         append: async () => {},
@@ -255,8 +257,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
 
     await store.savePrompt(job1, '# prompt', '["m1"]')
     await store.saveSpawnResult(job1, { sessionId: 'ses-1', exitCode: 0, stderrExcerpt: null })
-    const { memoryDistillJobs, memories, workflows, cachedRepos, tasks, nodeRuns, taskFeedback } =
-      tablesOf(db)
+    const { memoryDistillJobs, memories, cachedRepos, taskFeedback } = tablesOf(db)
     const job = (await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job1)))[0]
     expect(job).toMatchObject({
       userPromptMd: '# prompt',
@@ -304,7 +305,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
 
     const owner = await seedUser(db)
     const workflowId = `wf_${ulid()}`
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: workflowId,
       description: '',
@@ -323,7 +324,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
       createdAt: 1,
     })
     const taskId = `t_${ulid()}`
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: taskId,
       workflowId,
@@ -340,7 +341,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
     })
     expect(await store.findTaskScope(taskId)).toEqual({
       workflowSnapshot: SNAPSHOT,
-      workgroupConfigJson: null,
+      workgroupConfig: null,
       workflowId,
       cachedRepoId: repoId,
       cachedRepoExists: true,
@@ -351,7 +352,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
     })
     expect(await store.findTaskScope('missing')).toBeNull()
     const runId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runId,
       taskId,
       nodeId: 'n',

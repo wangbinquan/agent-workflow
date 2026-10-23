@@ -13,8 +13,7 @@
 // C5 regression lock (RFC-014 §4): if anyone removes the column or downgrades
 // the default to false, the "syncOutputsOnIterate default true" case breaks.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { type AgentFixtureSpec, agentFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test, beforeEach } from 'bun:test'
 import { createAgent, updateAgent } from '../src/services/agent'
@@ -93,7 +92,7 @@ describeEachProvider('agent.syncOutputsOnIterate (RFC-014 T0)', (harness) => {
     // migration-backfill contract.
     const id = ulid()
     // Intentionally omit syncOutputsOnIterate to exercise the column DEFAULT.
-    const row: PersistenceTables['agents']['$inferInsert'] = {
+    const row: AgentFixtureSpec = {
       id,
       name: 'legacy',
       outputs: '["a"]',
@@ -103,9 +102,8 @@ describeEachProvider('agent.syncOutputsOnIterate (RFC-014 T0)', (harness) => {
       bodyMd: '',
       createdAt: 0,
       updatedAt: 0,
-    } as PersistenceTables['agents']['$inferInsert']
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, row)
+    }
+    await agentFixture(db, row)
     const got = await getAgent(db, 'legacy')
     expect(got?.syncOutputsOnIterate).toBe(true)
   })

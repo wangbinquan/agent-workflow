@@ -1,3 +1,4 @@
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskBundleInput } from './helpers/daemonTaskExecutionBundle'
@@ -68,7 +69,7 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
     const ownerUserId = ulid(),
       workflowId = ulid(),
       taskId = ulid()
-    const { users, workflows } = tablesOf(harness.db)
+    const { users } = tablesOf(harness.db)
     await insertOne(harness.db, users, {
       id: ownerUserId,
       username: ownerUserId,
@@ -80,7 +81,7 @@ describeEachProvider('RFC-363 transferred workspace admission', (harness) => {
       createdAt: 1,
       updatedAt: 1,
     })
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: workflowId,
       name: workflowId,
       definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),

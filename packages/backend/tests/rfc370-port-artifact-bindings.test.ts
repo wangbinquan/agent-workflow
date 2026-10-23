@@ -1,4 +1,12 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
@@ -34,10 +42,9 @@ async function fixture(db: PersistenceDb) {
     await seedTask(db, taskId)
     const worktreePath = join(root, 'wt')
     mkdirSync(worktreePath)
-    const { tasks, nodeRuns } = tablesOf(db)
-    await db.update(tasks).set({ status: 'running', worktreePath }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'running', worktreePath })
     const nodeRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: nodeRunId,
       taskId,
       nodeId: DESIGNER,
@@ -150,10 +157,8 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
         }),
       ])
       expect(settled).toBe(false)
-      const { nodeRunOutputs, nodeRuns } = tablesOf(db)
-      expect(
-        await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, h.nodeRunId)),
-      ).toEqual([])
+      const { nodeRuns } = tablesOf(db)
+      expect(await readNodeRunOutputFixtures(db, { nodeRunId: h.nodeRunId })).toEqual([])
       expect(
         (await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId))))?.status,
       ).toBe('running')
@@ -167,10 +172,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
         portFilePaths: ['report.md'],
         tokenUsage: { input: 100, output: 10, cacheRead: 20 },
       })
-      const rows = await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.nodeRunId))
+      const rows = await readNodeRunOutputFixtures(db, { nodeRunId: h.nodeRunId })
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({ portName: 'report', content: 'report.md', kind: 'path<md>' })
       expect(parseArchiveJson(rows[0]!.archiveJson)!.items[0]).toMatchObject({
@@ -182,9 +184,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       expect(content.calls.indexOf('copy-ack')).toBeLessThan(
         content.calls.indexOf('link:report.md'),
       )
-      expect(
-        (await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId))))?.tokInput,
-      ).toBe(100)
+      expect((await readNodeRunFixtures(db, { id: h.nodeRunId }))[0]?.tokInput).toBe(100)
     } finally {
       ack.resolve(undefined)
       await pending
@@ -239,13 +239,8 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
           })
           expect(result.failureCode).toBeUndefined()
           expect(result.errorMessage).not.toContain('runtime-spawn-failed')
-          const { nodeRunOutputs, nodeRuns } = tablesOf(db)
-          expect(
-            await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, h.nodeRunId)),
-          ).toEqual([])
-          expect(
-            await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId))),
-          ).toMatchObject({
+          expect(await readNodeRunOutputFixtures(db, { nodeRunId: h.nodeRunId })).toEqual([])
+          expect((await readNodeRunFixtures(db, { id: h.nodeRunId }))[0]).toMatchObject({
             status: 'failed',
             exitCode: 0,
             failureCode: null,
@@ -286,17 +281,14 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
     })
     const reviewNode = definition.nodes.find((node) => node.id === 'review')
     if (reviewNode === undefined) throw new Error('fixture review node missing')
-    const { tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({ workflowSnapshot: JSON.stringify(definition) })
-      .where(eq(tasks.id, h.taskId))
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, h.nodeRunId))
+    const { nodeRuns, docVersions } = tablesOf(db)
+    await patchTaskFixture(db, { id: h.taskId }, { workflowSnapshot: JSON.stringify(definition) })
+    await patchNodeRunFixture(db, { id: h.nodeRunId }, { status: 'done' })
     const archiveJson = JSON.stringify({
       v: 1,
       items: [{ path: 'repo/report.md', file: 'object:review-source', size: 28, truncated: false }],
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: h.nodeRunId,
       portName: 'report',
       content: 'report.md',
@@ -349,14 +341,9 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
         [],
       )
       expect(
-        await db
-          .select()
-          .from(nodeRuns)
-          .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'review'))),
+        await readNodeRunFixtures(db, { $and: [{ taskId: h.taskId }, { nodeId: 'review' }] }),
       ).toEqual([])
-      expect((await first(db.select().from(tasks).where(eq(tasks.id, h.taskId))))?.status).toBe(
-        'running',
-      )
+      expect((await readTaskFixtures(db, { id: h.taskId }))[0]?.status).toBe('running')
       ack.resolve(undefined)
       expect((await pending).kind).toBe('awaiting_review')
       const docs = await db.select().from(docVersions).where(eq(docVersions.taskId, h.taskId))
@@ -402,8 +389,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
         ],
       })
     content.archives.set('object:download', bytes)
-    const { nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: h.nodeRunId,
       portName: 'report',
       content: 'report.md',

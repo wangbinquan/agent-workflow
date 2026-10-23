@@ -23,7 +23,12 @@
 // Run locally:
 //   RUN_CHAOS=1 bun test packages/backend/tests/integration-chaos/
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from '../helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -56,8 +61,7 @@ async function seedRunningTask(db: DbClient, worktreePath: string): Promise<Seed
     edges: [],
     outputs: [],
   })
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'chaos-wf',
     definition: def,
@@ -65,7 +69,7 @@ async function seedRunningTask(db: DbClient, worktreePath: string): Promise<Seed
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'chaos-task',
     workflowId: wfId,
@@ -78,7 +82,7 @@ async function seedRunningTask(db: DbClient, worktreePath: string): Promise<Seed
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: `nr_${ulid()}`,
     taskId,
     nodeId: 'agent_1',
@@ -148,8 +152,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
 
     // 1. Open + write some data.
     const db1 = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const { workflows } = tablesOf(db1)
-    await insertOne(db1, workflows, {
+    await workflowFixture(db1, {
       id: 'pre-truncate-wf',
       name: 'pre',
       definition: '{}',
@@ -183,12 +186,8 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
       openErr = err
     }
     if (reopened !== null) {
-      const { workflows } = tablesOf(reopened)
       // If open succeeded, the pre-truncate row MUST still be readable.
-      const rows = await reopened
-        .select()
-        .from(workflows)
-        .where(eq(workflows.id, 'pre-truncate-wf'))
+      const rows = await readWorkflowFixtures(reopened, { id: 'pre-truncate-wf' })
       expect(rows.length).toBe(1)
     } else {
       // If open failed, that's the "fail loudly" path — acceptable.

@@ -65,12 +65,17 @@ const BADGE_KEY = {
 
 export function TaskSubjectLink({ task, taskId, badge = false }: TaskSubjectLinkProps) {
   const { t } = useTranslation()
-  const kind = taskExecutionKind(task)
+  const subjectKind = taskExecutionKind(task)
+  // RFC-395: the digital-employee host keeps its displayed name and workflow badge.
+  const kind = subjectKind === 'digital-employee' ? 'workflow' : subjectKind
   const isWorkgroup = kind === 'workgroup'
   const linkClass = badge ? 'data-table__link task-workflow-cell__name' : 'data-table__link'
 
   let subject: ReactElement
-  if (kind === 'workflow') {
+  if (subjectKind === 'digital-employee') {
+    const name = task.workflowName ?? task.workflowId
+    subject = <span title={name}>{name}</span>
+  } else if (kind === 'workflow') {
     // Plain workflow task: the FK anchor IS the real subject, so the historical
     // /workflows/$id link stands. No frozen-id indirection to do — workflowId is
     // the resource's own id. Deleted workflow row → fall back to the raw ULID.

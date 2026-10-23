@@ -21,6 +21,7 @@
 // 覆盖验收条款：AC-5（技能带整棵文件树）/ AC-9（builtin 不入 resources，只入 builtins 声明）/ AC-19（工作组人类席位逐个显式映射，无按 username 自动绑定）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -112,7 +113,7 @@ async function seedSource(
   )
 
   const mcpId = ulid()
-  const { mcps, agents, workgroups, workgroupMembers } = tablesOf(db)
+  const { mcps, workgroups, workgroupMembers } = tablesOf(db)
   await insertOne(db, mcps, {
     id: mcpId,
     name: 'gh',
@@ -131,7 +132,7 @@ async function seedSource(
   } as never)
 
   const agentId = ulid()
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId,
     name: 'auditor',
     description: '',
@@ -570,8 +571,7 @@ describeEachProvider(
         // 完全看不到 manifest —— 所以这条用例必须**单独**造出 dangling ref。
         const src = await makeInstance()
         try {
-          const { workflows } = tablesOf(src.db)
-          await insertOne(src.db, workflows, {
+          await workflowFixture(src.db, {
             id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
             name: 'caller',
             description: '',
@@ -615,8 +615,7 @@ describeEachProvider(
       // `builtin=false` 的同名副本，而真正的 built-in 仍在那儿 —— 两个同名资源共存，
       // 正好撞上运行时「执行闭包内不得同名」那条约束。
       const seedBuiltin = async (db: PersistenceDb): Promise<void> => {
-        const { agents } = tablesOf(db)
-        await insertOne(db, agents, {
+        await agentFixture(db, {
           id: 'BUILTIN_AGENT',
           name: '__skill_merger__',
           description: '',
@@ -639,8 +638,7 @@ describeEachProvider(
       test('导出：built-in 不入 ops / resources，只入 manifest.builtins，引用改写成 builtin:', async () => {
         const src = await makeInstance()
         await seedBuiltin(src.db)
-        const { workflows } = tablesOf(src.db)
-        await insertOne(src.db, workflows, {
+        await workflowFixture(src.db, {
           id: 'WF',
           name: 'mine',
           description: '',
@@ -691,8 +689,7 @@ describeEachProvider(
       test('导入：绑到对端自己 seed 的 built-in，不新建副本', async () => {
         const src = await makeInstance()
         await seedBuiltin(src.db)
-        const { workflows } = tablesOf(src.db)
-        await insertOne(src.db, workflows, {
+        await workflowFixture(src.db, {
           id: 'WF',
           name: 'mine',
           description: '',
@@ -715,9 +712,8 @@ describeEachProvider(
             { appHome: src.appHome },
           )
           const dst = await makeInstance()
-          const { agents, workflows } = tablesOf(dst.db)
           // 对端有它**自己的** built-in，id 与源库完全不同。
-          await insertOne(dst.db, agents, {
+          await agentFixture(dst.db, {
             id: 'DST_BUILTIN',
             name: '__skill_merger__',
             description: '',
@@ -735,6 +731,7 @@ describeEachProvider(
             createdAt: 1,
             updatedAt: 1,
           } as never)
+          const { agents, workflows } = tablesOf(dst.db)
           try {
             const parsed = await parseResourcePackage(pkg.zip)
             const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {
@@ -802,7 +799,7 @@ describeEachProvider(
         const dst = await makeInstance()
         try {
           const srcBuiltin = ulid()
-          await insertOne(src.db, tablesOf(src.db).agents, {
+          await agentFixture(src.db, {
             id: srcBuiltin,
             name: 'aw-skill-merger',
             description: '',
@@ -821,7 +818,7 @@ describeEachProvider(
             updatedAt: 1,
           } as never)
           const wfId = ulid()
-          await insertOne(src.db, tablesOf(src.db).workflows, {
+          await workflowFixture(src.db, {
             id: wfId,
             name: 'uses-builtin',
             description: '',
@@ -853,7 +850,7 @@ describeEachProvider(
           // 目标实例的同名 built-in 是**另一个 id**。
           const dstBuiltin = ulid()
           expect(dstBuiltin).not.toBe(srcBuiltin)
-          await insertOne(dst.db, tablesOf(dst.db).agents, {
+          await agentFixture(dst.db, {
             id: dstBuiltin,
             name: 'aw-skill-merger',
             description: '',
@@ -919,8 +916,7 @@ describeEachProvider(
         appHome: string
       }): Promise<Uint8Array> => {
         const builtinId = ulid()
-        const { agents, workflows } = tablesOf(src.db)
-        await insertOne(src.db, agents, {
+        await agentFixture(src.db, {
           id: builtinId,
           name: 'aw-skill-merger',
           description: '',
@@ -939,7 +935,7 @@ describeEachProvider(
           updatedAt: 1,
         } as never)
         const wfId = ulid()
-        await insertOne(src.db, workflows, {
+        await workflowFixture(src.db, {
           id: wfId,
           name: 'needs-builtin',
           description: '',
@@ -989,8 +985,7 @@ describeEachProvider(
         const src = await makeInstance()
         const dst = await makeInstance()
         try {
-          const { agents } = tablesOf(dst.db)
-          await insertOne(dst.db, agents, {
+          await agentFixture(dst.db, {
             id: ulid(),
             name: 'aw-skill-merger', // 同名
             description: '',
@@ -1028,8 +1023,7 @@ describeEachProvider(
         const src = await makeInstance()
         const dst = await makeInstance()
         try {
-          const { agents } = tablesOf(dst.db)
-          await insertOne(dst.db, agents, {
+          await agentFixture(dst.db, {
             id: ulid(),
             name: 'aw-skill-merger',
             description: '',
@@ -1081,7 +1075,7 @@ describeEachProvider(
         try {
           const srcAgent = ulid()
           const { agents } = tablesOf(src.db)
-          await insertOne(src.db, agents, {
+          await agentFixture(src.db, {
             id: srcAgent,
             name: 'aw-skill-merger',
             description: '',
@@ -1100,7 +1094,7 @@ describeEachProvider(
             updatedAt: 1,
           } as never)
           const srcWf = ulid()
-          await insertOne(src.db, tablesOf(src.db).workflows, {
+          await workflowFixture(src.db, {
             id: srcWf,
             name: 'aw-skill-fusion',
             description: '',
@@ -1219,8 +1213,7 @@ describeEachProvider(
         const dst = await makeInstance() // 目标实例**没有**任何 built-in
         try {
           const srcWf = ulid()
-          const { workflows } = tablesOf(src.db)
-          await insertOne(src.db, workflows, {
+          await workflowFixture(src.db, {
             id: srcWf,
             name: 'aw-skill-fusion',
             description: '',
@@ -1329,8 +1322,7 @@ describeEachProvider(
           for (let i = 0; i < count; i += 1) {
             const id = ulid()
             ids.push(id)
-            const { agents } = tablesOf(src.db)
-            await insertOne(src.db, agents, {
+            await agentFixture(src.db, {
               id,
               name: `aw-builtin-${i}`,
               description: '',
@@ -1350,8 +1342,7 @@ describeEachProvider(
             } as never)
           }
           const wfId = ulid()
-          const { workflows } = tablesOf(src.db)
-          await insertOne(src.db, workflows, {
+          await workflowFixture(src.db, {
             id: wfId,
             name: `uses-${count}`,
             description: '',

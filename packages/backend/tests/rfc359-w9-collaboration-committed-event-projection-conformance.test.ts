@@ -20,6 +20,7 @@
 //     SQLite 上排最后，PG 默认排最前，于是 `rerunNodeRunId` **指向一个还没下发的条目的重跑**。
 // 两条都只在真库上才分得出来，纸面读代码看不出，所以先补对拍再谈合一。
 
+import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -118,8 +119,7 @@ function definition(): WorkflowDefinition {
 async function seedTask(db: PersistenceDb, name = 'rfc359 w9 projection'): Promise<string> {
   const taskId = `t_${ulid()}`
   const snapshot = JSON.stringify(definition())
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: `rfc359-w9-${taskId}`,
     description: '',
@@ -127,7 +127,7 @@ async function seedTask(db: PersistenceDb, name = 'rfc359 w9 projection'): Promi
     version: 1,
     schemaVersion: 6,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name,
     workflowId: `wf_${taskId}`,
@@ -149,8 +149,7 @@ async function seedTask(db: PersistenceDb, name = 'rfc359 w9 projection'): Promi
 
 async function seedRun(db: PersistenceDb, taskId: string, nodeId: string): Promise<string> {
   const id = `nr_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
+  await nodeRunFixture(db, { id, taskId, nodeId, status: 'done', retryIndex: 0, iteration: 0 })
   return id
 }
 
@@ -203,8 +202,7 @@ interface RoundInput {
 
 async function seedRound(db: PersistenceDb, input: RoundInput): Promise<string> {
   const id = `cr_${ulid()}`
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id,
     taskId: input.taskId,
     kind: input.kind,
@@ -215,11 +213,11 @@ async function seedRound(db: PersistenceDb, input: RoundInput): Promise<string> 
     intermediaryNodeRunId: input.intermediaryNodeRunId,
     targetConsumerNodeId: input.kind === 'cross' ? DESIGNER : null,
     iteration: 3,
-    questionsJson: input.questionsJson ?? '[]',
-    answersJson: input.answersJson ?? null,
+    questions: input.questionsJson ?? '[]',
+    answers: input.answersJson ?? null,
     directive: input.directive ?? null,
     status: input.status ?? 'awaiting_human',
-    truncationWarningsJson: input.truncationWarningsJson ?? null,
+    truncationWarnings: input.truncationWarningsJson ?? null,
     createdAt: 1_000,
     answeredAt: input.status === 'answered' ? 2_000 : null,
     answeredBy: input.status === 'answered' ? 'u-answerer' : null,

@@ -1,5 +1,6 @@
 // RFC-333 — collaboration's offered, transaction-bound gate-open contract.
 
+import type { NodeRunRole, NodeRunSyntheticKind } from '@/modules/task-execution/public/types'
 import type { HumanGateIdentity } from '../../domain/gateReceipt'
 import type { PreparedHumanGateRef } from '../../domain/humanGateOperation'
 import type { CollaborationPostCommitEventRef } from '../../domain/postCommitEventRef'
@@ -11,6 +12,8 @@ import type { RerunCause } from '@agent-workflow/shared'
  * provider-specific implementation; collaboration never receives a DB handle.
  */
 export interface HumanGateNodeRunMintInput {
+  readonly role: NodeRunRole
+  readonly syntheticKind: NodeRunSyntheticKind | null
   readonly id: string
   readonly taskId: string
   readonly nodeId: string
@@ -20,11 +23,13 @@ export interface HumanGateNodeRunMintInput {
   readonly containerRunId?: string | null
   readonly iteration: number
   readonly overrides?: Readonly<{
-    reviewIteration?: number
-    consumedUpstreamRunsJson?: string | null
-    parentNodeRunId?: string | null
-    shardKey?: string | null
-    startedAt?: number | null
+    identity?: Readonly<{
+      reviewIteration?: number
+      parentNodeRunId?: string | null
+      shardKey?: string | null
+      startedAt?: number | null
+    }>
+    inputs?: Readonly<{ consumedUpstreamRunsJson?: string | null }>
   }>
 }
 
@@ -42,8 +47,8 @@ export interface HumanGateNodeRunLifecycleParticipantInTx {
     readonly to: 'awaiting_review' | 'awaiting_human'
     readonly allowedFrom: readonly ('pending' | 'running')[]
     readonly extra?: Readonly<{
-      startedAt?: number | null
-      consumedUpstreamRunsJson?: string | null
+      identity?: Readonly<{ startedAt?: number | null }>
+      inputs?: Readonly<{ consumedUpstreamRunsJson?: string | null }>
     }>
     readonly reason?: string
   }): Promise<{ readonly from: string; readonly to: string }>

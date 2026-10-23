@@ -14,8 +14,7 @@
 // ——否则 rename + recreate 会让节点被 stale id 静默重绑（这正是前端解析器原来
 // 写死 name 优先想防的那件事，决策 28 用守卫保住它、同时修掉它的代价）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -47,8 +46,7 @@ const seed = async (
   name: string,
   definition: WorkflowDefinition,
 ): Promise<void> => {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, { id, name, definition: JSON.stringify(definition) })
+  await workflowFixture(db, { id, name, definition: JSON.stringify(definition) })
 }
 
 /** 单入 `inputKey` / 单出 `portName` 的子工作流。两个同名行的**入端口名不同**是

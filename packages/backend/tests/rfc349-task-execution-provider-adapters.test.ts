@@ -2,9 +2,8 @@
 // ownership contract.  This oracle locks the SQLite behavior and proves the
 // PostgreSQL implementation fences the same exact owner tuple and lease epoch.
 
+import { taskFixture, taskRepoFixture } from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
@@ -103,8 +102,8 @@ function postgresqlFixture(responses: Response[]) {
 describe('RFC-349 task-execution provider adapters', () => {
   test('SQLite aggregate admits, claims, and heartbeats through Promise ports', async () => {
     const db = createInMemoryDb(MIGRATIONS)
-    const { tasks, taskRepos } = tablesOf(db)
-    insertOne(db, tasks, {
+    // RFC-395 II-a: the aggregate must observe committed fixture writes.
+    await taskFixture(db, {
       id: 'task-1',
       name: 'task-1',
       workflowId: 'workflow-1',
@@ -126,7 +125,7 @@ describe('RFC-349 task-execution provider adapters', () => {
         },
       ]),
     })
-    insertOne(db, taskRepos, {
+    await taskRepoFixture(db, {
       taskId: 'task-1',
       repoIndex: 0,
       repoPath: '/tmp/repo',
@@ -137,7 +136,8 @@ describe('RFC-349 task-execution provider adapters', () => {
     const persistence = createTaskExecutionPersistence(db)
     await expect(persistence.drive.load('task-1')).resolves.toMatchObject({
       task: { id: 'task-1', status: 'pending' },
-      repositories: [{ repoIndex: 0, workspaceProfileVersion: null }],
+      // RFC-395 II-a: reads expose ordinal; the workspace-profile command retains repoIndex.
+      repositories: [{ ordinal: 0, workspaceProfileVersion: null }],
     })
     await expect(
       persistence.drive.updateWorkspaceProfile({

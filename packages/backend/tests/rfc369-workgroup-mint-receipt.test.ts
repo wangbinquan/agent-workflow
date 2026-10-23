@@ -2,7 +2,7 @@
 // repeatedly reported 40001 on the post-insert nonce read. Keep the real dual
 // provider mint/receipt/rollback contract and prevent that unnecessary predicate
 // read from returning; RFC-185 retains its three-member execution assertions.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -19,9 +19,8 @@ import { describeEachProvider } from './helpers/eachProvider'
 async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid(),
     workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'mint-receipt', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: workflowId, name: 'mint-receipt', definition: '{}' })
+  await taskFixture(db, {
     id: taskId,
     name: 'same-member fan-out',
     workflowId,

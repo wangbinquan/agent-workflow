@@ -20,6 +20,7 @@
 // 一份引擎中立的纯函数（`helpers/taskForestBackfill.ts`）用于种数据，**同时**在 SQLite
 // 那一侧保留「迁移 SQL 的结果与复算逐行相等」的对拍——那条锁没丢，只是换了个地方钉。
 
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
@@ -51,7 +52,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seedBase(db: Db): Promise<void> {
   const now = 1_788_278_400_000
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await db.insert(users).values(
     ['admin', 'alice', 'bob'].map((id) => ({
       id,
@@ -62,7 +63,7 @@ async function seedBase(db: Db): Promise<void> {
       updatedAt: now,
     })),
   )
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -103,8 +104,7 @@ async function insertForest(db: Db, rows: SeedTask[]): Promise<void> {
     rootTaskId: backfill.rootTaskId.get(r.id) ?? r.id,
   }))
   for (let offset = 0; offset < values.length; offset += 100) {
-    const { tasks } = tablesOf(db)
-    await db.insert(tasks).values(values.slice(offset, offset + 100))
+    await taskFixture(db, values.slice(offset, offset + 100))
   }
 }
 
@@ -242,8 +242,8 @@ describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline
     const forest = buildForest(60)
     // 故意种错的 branch_started_at，只有迁移自己的回填能把它算对。
     for (let offset = 0; offset < forest.length; offset += 100) {
-      const { tasks } = tablesOf(db)
-      await db.insert(tasks).values(
+      await taskFixture(
+        db,
         forest.slice(offset, offset + 100).map((r) => ({
           id: r.id,
           name: r.id,
@@ -272,8 +272,9 @@ describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline
     const expected = computeForestBackfill(
       forest.map((r) => ({ id: r.id, startedAt: r.startedAt, parentTaskId: r.parent ?? null })),
     )
-    const { tasks } = tablesOf(db)
-    const got = await db.select({ id: tasks.id, bsa: tasks.branchStartedAt }).from(tasks)
+    const got = await readTaskFixtures(db).then((rows) =>
+      rows.map((row) => ({ id: row.id, bsa: row.branchStartedAt })),
+    )
     expect(got.length).toBe(forest.length)
     for (const row of got)
       expect([row.id, row.bsa]).toEqual([row.id, expected.branchStartedAt.get(row.id)!])

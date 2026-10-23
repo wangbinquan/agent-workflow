@@ -5,8 +5,7 @@
 // → 记 heartbeat-kill 事件；disabled → no-op；隔离 → 跳；kill 非 'killed' → 跳）；
 // ② findStalledRunningChildren 真查询（running+pid+静默 → 命中；近期/非 running/无 pid → 排除）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { bindDescribeEachProviderLifecycle } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
@@ -35,9 +34,8 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
   const taskId = ulid()
   const def = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: wfId, name: 'w', definition: JSON.stringify(def) })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: wfId, name: 'w', definition: JSON.stringify(def) })
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -141,8 +139,7 @@ describeEachProvider('RFC-108 T20 — findStalledRunningChildren query', (harnes
     opts: { status: string; pid: number | null; startedAt: number | null },
   ): Promise<string> {
     const id = ulid()
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId,
       nodeId: 'n1',

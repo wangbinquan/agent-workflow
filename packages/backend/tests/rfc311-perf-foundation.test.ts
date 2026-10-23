@@ -19,6 +19,7 @@
 // 全量的索引对账（SQLite 的具名索引 PG 必须一条不少）在
 // `rfc359-w6-t26-postgresql-plan-audit.test.ts`；这里锁的是 0180 这一批的逐条存在性。
 
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
@@ -238,7 +239,7 @@ describe('migration 0180 — RFC-311 index batch', () => {
   test('backfill statements in 0180 aggregate branch_started_at over each subtree', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = 1_788_278_400_000
-    const { users, workflows, tasks } = tablesOf(db)
+    const { users } = tablesOf(db)
     await insertOne(db, users, {
       id: 'u1',
       username: 'u1',
@@ -247,7 +248,7 @@ describe('migration 0180 — RFC-311 index batch', () => {
       createdAt: now,
       updatedAt: now,
     })
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'wf1',
       name: 'wf',
       definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -273,9 +274,12 @@ describe('migration 0180 — RFC-311 index batch', () => {
       // Deliberately wrong so only the migration's own backfill can fix it.
       branchStartedAt: 0,
     })
-    await db
-      .insert(tasks)
-      .values([row('r1', 100), row('c1', 200, 'r1'), row('c2', 300, 'c1'), row('r2', 500)])
+    await taskFixture(db, [
+      row('r1', 100),
+      row('c1', 200, 'r1'),
+      row('c2', 300, 'c1'),
+      row('r2', 500),
+    ])
 
     // Execute the exact backfill statements from the shipped migration file, so
     // this test breaks if someone edits 0180 into a different semantic.
@@ -291,9 +295,9 @@ describe('migration 0180 — RFC-311 index batch', () => {
     expect(statements.length).toBe(3)
     for (const statement of statements) rawExec(db, sql.raw(statement))
 
-    const got = await db
-      .select({ id: tasks.id, branchStartedAt: tasks.branchStartedAt })
-      .from(tasks)
+    const got = await readTaskFixtures(db).then((rows) =>
+      rows.map((row) => ({ id: row.id, branchStartedAt: row.branchStartedAt })),
+    )
     const byId = new Map(got.map((r) => [r.id, r.branchStartedAt]))
     expect(byId.get('r1')).toBe(300)
     expect(byId.get('c1')).toBe(300)

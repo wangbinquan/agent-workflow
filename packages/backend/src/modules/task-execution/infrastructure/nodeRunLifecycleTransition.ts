@@ -23,8 +23,10 @@ import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,
-  type NodeRunStatusUpdateExtra,
 } from '@/platform/persistence/nodeRunLifecycleCore'
+import type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
+import { nodeRunLifecycleWriteColumns } from './nodeRunWriteProtocol'
+export { nodeRunLifecycleWriteColumns } from './nodeRunWriteProtocol'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
 export interface SetNodeRunStatusTxInput {
@@ -101,7 +103,7 @@ export async function setNodeRunStatusTx(
   // rfc053-allow-direct-status-write -- RFC-359：两引擎共用的事务内 CAS（setNodeRunStatusTx）
   const updated = await args.tx
     .update(nodeRuns)
-    .set({ status: args.to, ...(args.extra ?? {}) })
+    .set({ status: args.to, ...nodeRunLifecycleWriteColumns(args.extra) })
     .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
     .returning({ id: nodeRuns.id })
   if (updated.length === 0) {
@@ -126,7 +128,7 @@ export async function transitionNodeRunStatusTx(
   // rfc053-allow-direct-status-write -- RFC-359：两引擎共用的事务内 CAS（transitionNodeRunStatusTx）
   const updated = await args.tx
     .update(nodeRuns)
-    .set({ status: to, ...(args.extra ?? {}) })
+    .set({ status: to, ...nodeRunLifecycleWriteColumns(args.extra) })
     .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
     .returning({ id: nodeRuns.id })
   if (updated.length === 0) {

@@ -10,7 +10,13 @@
 // Plus the absent / explicit `retries` field tests for the new default = 3.
 // Maps to design.md §5.2 cases 9-12 + §5.4 cases.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -63,8 +69,7 @@ async function seedAgent(
   outputs: string[] = ['design'],
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'rfc-042',
@@ -82,15 +87,14 @@ async function seedAgent(
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -191,8 +195,8 @@ function registerCases(provider: ProviderHarness) {
           sessionRestartBudget: 0,
         }),
     )
-    const { tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRunEvents } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     const argvs = readArgvLog(h.argvLog)
     expect(argvs.length).toBe(2)
@@ -201,7 +205,7 @@ function registerCases(provider: ProviderHarness) {
     expect(idx).toBeGreaterThanOrEqual(0)
     expect(argvs[1]![idx + 1]).toBe('opc_rfc042_resume')
     // The audit event row is present on the SECOND row.
-    const runRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runRows = await readNodeRunFixtures(h.db, { taskId })
     const secondRow = runRows.find((r) => r.retryIndex === 1)
     expect(secondRow).toBeTruthy()
     const events = await h.db
@@ -249,8 +253,7 @@ function registerCases(provider: ProviderHarness) {
     for (const a of argvs) {
       expect(a).not.toContain('--session')
     }
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
   })
 
@@ -286,8 +289,7 @@ function registerCases(provider: ProviderHarness) {
     )
     const argvs = readArgvLog(h.argvLog)
     expect(argvs.length).toBe(1)
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
   })
 
@@ -330,8 +332,7 @@ function registerCases(provider: ProviderHarness) {
       expect(idx).toBeGreaterThanOrEqual(0)
       expect(argvs[i]![idx + 1]).toBe('opc_rfc042_exhaust')
     }
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('envelope')
   })

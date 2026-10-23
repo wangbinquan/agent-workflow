@@ -35,10 +35,11 @@ import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaborat
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { appHome } from '../src/util/paths'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function createMemoryDistillTestContext(db: PersistenceDb) {
   return {
-    store: new DrizzleMemoryDistillWorkStore(db),
+    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,

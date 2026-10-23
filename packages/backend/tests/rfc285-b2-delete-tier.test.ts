@@ -10,6 +10,7 @@
 //     plan.md T5 实施记录）+ 披露聚合 count（沿 workflow.ts task-ACL 论证，
 //     不泄他人任务 id/status）。
 
+import { patchTaskFixture, readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -58,8 +59,7 @@ async function seedTaskRef(
   status: 'running' | 'done' | 'awaiting_human',
 ): Promise<string> {
   const id = ulid()
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: `ref-${status}`,
     workflowId: 'wf-any', // 0151 后软链——无需真实 workflow 行
@@ -112,10 +112,10 @@ describeEachProvider('RFC-285 B2 — workgroup 删除中档（E3 收紧）', (ha
       { expectedVersion: 1, clientMutationId: ulid() },
       { kind: 'actor', actor: actorOf(owner) },
     )
-    const { workgroups, tasks } = tablesOf(db)
+    const { workgroups } = tablesOf(db)
     const wgRows = await db.select().from(workgroups)
     expect(wgRows.length).toBe(0)
-    const taskRow = (await db.select().from(tasks)).find((t) => t.id === taskId)
+    const taskRow = (await readTaskFixtures(db)).find((t) => t.id === taskId)
     expect(taskRow?.workgroupId).toBe(wgId) // 悬空软链保留（展示层容忍）
   })
 
@@ -132,9 +132,8 @@ describeEachProvider('RFC-285 B2 — workgroup 删除中档（E3 收紧）', (ha
         { kind: 'actor', actor: actorOf(owner) },
       ),
     ).rejects.toMatchObject({ code: 'workgroup-in-use' })
-    const { eq } = await import('drizzle-orm')
-    const { tasks, workgroups } = tablesOf(db)
-    await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
+    const { workgroups } = tablesOf(db)
+    await patchTaskFixture(db, { id: taskId }, { status: 'canceled' })
     await deleteWorkgroup(
       db,
       wgId,

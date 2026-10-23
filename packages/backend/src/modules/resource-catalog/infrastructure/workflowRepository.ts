@@ -1,3 +1,5 @@
+import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'
+import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   WorkflowDraftSnapshotSchema,
@@ -127,19 +129,33 @@ export function createWorkflowRepository(input: {
 
   async function get(id: string) {
     const { workflows } = tablesOf(input.db)
-    const row = (await input.db.select().from(workflows).where(eq(workflows.id, id)).limit(1))[0]
+    const row = (
+      await input.db
+        .select()
+        .from(workflows)
+        .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+        .limit(1)
+    )[0]
     return row === undefined ? null : workflowDetailOf(workflowFromPersistenceRow(row))
   }
 
   const repository: WorkflowRepository = {
     async list() {
       const { workflows } = tablesOf(input.db)
-      return (await input.db.select().from(workflows)).map(workflowFromPersistenceRow)
+      return (
+        await input.db.select().from(workflows).where(workflowCatalogPredicate(workflows.id))
+      ).map(workflowFromPersistenceRow)
     },
     get,
     async getAclIdentity(id) {
       const { workflows } = tablesOf(input.db)
-      const row = (await input.db.select().from(workflows).where(eq(workflows.id, id)).limit(1))[0]
+      const row = (
+        await input.db
+          .select()
+          .from(workflows)
+          .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+          .limit(1)
+      )[0]
       return row === undefined ? null : aclIdentity(row)
     },
     async create(authority, submitted) {
@@ -153,8 +169,7 @@ export function createWorkflowRepository(input: {
       })
       const created = await runResourceCatalogTransaction(input.db, async (transaction) => {
         await input.semantics.assertCreateInTransaction(transaction, authority, canonical)
-        const { workflows } = tablesOf(transaction)
-        const row = (await transaction.insert(workflows).values(values).returning())[0]
+        const row = (await createWorkflowDefinitionWriteParticipant(transaction).insert(values))[0]
         if (row === undefined) throw new Error('workflow insert returned no row')
         return workflowFromPersistenceRow(row)
       })
@@ -165,7 +180,11 @@ export function createWorkflowRepository(input: {
       const created = await runResourceCatalogTransaction(input.db, async (transaction) => {
         const { workflows } = tablesOf(transaction)
         const sourceRow = (
-          await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+          await transaction
+            .select()
+            .from(workflows)
+            .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+            .limit(1)
         )[0]
         if (sourceRow === undefined) throw notFound(id)
         const source = workflowFromPersistenceRow(sourceRow)
@@ -191,7 +210,7 @@ export function createWorkflowRepository(input: {
           ownerUserId: authority.user.id,
           now: now(),
         })
-        const row = (await transaction.insert(workflows).values(values).returning())[0]
+        const row = (await createWorkflowDefinitionWriteParticipant(transaction).insert(values))[0]
         if (row === undefined) throw new Error('workflow copy insert returned no row')
         return workflowFromPersistenceRow(row)
       })
@@ -211,7 +230,11 @@ export function createWorkflowRepository(input: {
         async (transaction): Promise<{ receipt: SaveWorkflowReceipt; committed: boolean }> => {
           const { workflows } = tablesOf(transaction)
           const row = (
-            await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+            await transaction
+              .select()
+              .from(workflows)
+              .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+              .limit(1)
           )[0]
           if (row === undefined) throw notFound(id)
           const current = workflowFromPersistenceRow(row)
@@ -250,17 +273,17 @@ export function createWorkflowRepository(input: {
               committed: false,
             }
           }
-          const changed = await transaction
-            .update(workflows)
-            .set({
+          const changed = await createWorkflowDefinitionWriteParticipant(transaction).update({
+            id,
+            expectedVersion: submitted.expectedVersion,
+            set: {
               name: candidate.name,
               description: candidate.description,
               definition,
               version: current.version + 1,
               updatedAt: now(),
-            })
-            .where(and(eq(workflows.id, id), eq(workflows.version, submitted.expectedVersion)))
-            .returning()
+            },
+          })
           if (changed[0] === undefined) throw stale(id, current)
           const committed = workflowFromPersistenceRow(changed[0])
           return {
@@ -282,7 +305,11 @@ export function createWorkflowRepository(input: {
       const deletedVersion = await runResourceCatalogTransaction(input.db, async (transaction) => {
         const { workflows, resourceGrants } = tablesOf(transaction)
         const row = (
-          await transaction.select().from(workflows).where(eq(workflows.id, id)).limit(1)
+          await transaction
+            .select()
+            .from(workflows)
+            .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
+            .limit(1)
         )[0]
         if (row === undefined) throw notFound(id)
         // RFC-359 W1-T6（P0-6）：删除路径不解析 definition——定义损坏的工作流必须能删（与 SQLite

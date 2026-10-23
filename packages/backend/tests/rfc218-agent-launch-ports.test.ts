@@ -23,6 +23,7 @@
 //   B7  scheduled save gate (design P2-2): ported agent + description payload
 //       / upload-port agent → 422 at save; text-port payload saves.
 
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -42,7 +43,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/services/agent'
 import {
   AGENT_HOST_AGENT_NODE_ID,
-  AGENT_HOST_WORKFLOW_ID,
   buildAgentHostSnapshot,
   validateAgentLaunchShape,
 } from '../src/services/agentLaunch'
@@ -369,7 +369,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
       ported.id,
       body,
     )
-    expect(task.workflowId).toBe(AGENT_HOST_WORKFLOW_ID)
+    expect(task.workflowId).toBe(TASK_DEFINITION_HOSTS.agent.id)
     expect(task.sourceAgentName).toBe('ported')
     // Values ride ports verbatim — a literal {{...}} is data, not a template.
     expect(task.inputs.report).toBe('weekly {{report}} literal')

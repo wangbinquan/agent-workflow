@@ -10,6 +10,17 @@
 // emits, close the run, and return kind:'ok' so the scheduler continues.
 // If any of these go red, the P0 wedge is back.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -48,8 +59,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
     reviewNode: WorkflowNode
   }> {
     const caseGenId = ulid()
-    const { agents, workflows, tasks } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -79,7 +89,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       edges: [],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -87,7 +97,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       version: 1,
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'empty-review',
       workflowId,
@@ -100,26 +110,24 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       inputs: '{}',
       startedAt: Date.now(),
     })
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
     return { taskId, task, definition, reviewNode }
   }
 
   /** Upstream done run whose `cases` port is an EMPTY list. */
   async function seedEmptySrc(taskId: string, srcId: string): Promise<void> {
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: srcId,
       taskId,
       nodeId: 'src',
       status: 'done',
       retryIndex: 0,
       iteration: 0,
-      preSnapshot: null,
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await insertOne(db, nodeRunOutputs, { nodeRunId: srcId, portName: 'cases', content: '' })
+    await nodeRunOutputFixture(db, { nodeRunId: srcId, portName: 'cases', content: '' })
   }
 
   async function reviewRun(taskId: string): Promise<PersistenceTables['nodeRuns']['$inferSelect']> {
@@ -133,8 +141,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
   async function outputsOf(
     runId: string,
   ): Promise<Map<string, { content: string; kind: string | null }>> {
-    const { nodeRunOutputs } = tablesOf(db)
-    const rows = await db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, runId))
+    const rows = await readNodeRunOutputFixtures(db, { nodeRunId: runId })
     return new Map(rows.map((r) => [r.portName, { content: r.content, kind: r.kind ?? null }]))
   }
 
@@ -199,8 +206,8 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
 
   test('a stale visible review refreshed to an empty list retires the old round and releases the task atomically', async () => {
     const { taskId, task, definition, reviewNode } = await seed('list<path<md>>')
-    const { nodeRuns, nodeRunOutputs, tasks, docVersions } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { docVersions } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: '01A_OLD',
       taskId,
       nodeId: 'src',
@@ -210,15 +217,15 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: '01A_OLD',
       portName: 'cases',
       content: 'old.md',
     })
     await seedEmptySrc(taskId, '01B_NEW')
-    await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'awaiting_review' })
     const reviewRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -226,7 +233,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       retryIndex: 0,
       iteration: 0,
       reviewIteration: 0,
-      consumedUpstreamRunsJson: JSON.stringify({ src: '01A_OLD' }),
+      consumedEdges: [{ producerNodeId: 'src', producerRunId: '01A_OLD' }],
       startedAt: Date.now(),
     })
     const oldVersionId = ulid()
@@ -257,19 +264,17 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       iteration: 0,
     })
     expect(result.kind).toBe('ok')
-    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]).toMatchObject(
-      {
-        status: 'done',
-        consumedUpstreamRunsJson: JSON.stringify({ src: '01B_NEW' }),
-      },
-    )
+    expect((await readNodeRunFixtures(db, { id: reviewRunId }))[0]).toMatchObject({
+      status: 'done',
+      consumedEdges: [{ producerNodeId: 'src', producerRunId: '01B_NEW', producerShardKey: null }],
+    })
     expect(
       (await db.select().from(docVersions).where(eq(docVersions.id, oldVersionId)))[0],
     ).toMatchObject({ decision: 'superseded', decisionReason: 'upstream-refreshed' })
     expect(await db.select().from(docVersions).where(eq(docVersions.decision, 'pending'))).toEqual(
       [],
     )
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.status).toBe('pending')
+    expect((await readTaskFixtures(db, { id: taskId }))[0]!.status).toBe('pending')
   })
 
   test('wedged legacy row heals: existing awaiting_review round with zero doc_versions auto-approves on re-dispatch', async () => {
@@ -278,7 +283,7 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
     // Simulate a pre-RFC-202 wedged row: parked awaiting_review, no doc_versions.
     const wedgedId = ulid()
     const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: wedgedId,
       taskId,
       nodeId: 'rev_1',
@@ -286,7 +291,6 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       retryIndex: 0,
       iteration: 0,
       reviewIteration: 0,
-      preSnapshot: null,
       startedAt: Date.now(),
     })
     const result = await dispatchReviewNode({

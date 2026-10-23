@@ -45,8 +45,9 @@ import {
   WRAPPER_NODE_KINDS,
 } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { buildFreshestSettledPerNode, isFresherNodeRun, isNodeRunFresh } from './freshness'
+import { buildFreshestSettledPerNode, isNodeRunFresh } from './freshness'
 import {
+  createRunSelectionOracleSnapshot,
   containerMemberRunsInRound,
   readWrapperRevivalIteration,
 } from '@/modules/task-execution/public/queries'
@@ -204,11 +205,11 @@ export interface WrapperRevivalEvidence {
  * blind spot the pending-row evidence has always had. Recorded in
  * design/RFC-098 §B3 as accepted; not fixed here.
  */
-export function wrapperRevivalEvidence(
+export async function wrapperRevivalEvidence(
   wrapperRow: NodeRunRow,
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
-): WrapperRevivalEvidence | null {
+): Promise<WrapperRevivalEvidence | null> {
   // RFC-354 — the scan window is the wrapper generation's MEMBERSHIP in the
   // round it is parked on (every row whose frame chain reaches this generation
   // row through a direct member of that round, at any depth). Evidence born
@@ -226,7 +227,7 @@ export function wrapperRevivalEvidence(
   // A done review row is evidence only while it is the FRESH settled row of
   // its node inside its own frame; the map is built lazily per frame.
   const freshestByFrame = new Map<string, Map<string, NodeRunRow>>()
-  let best: NodeRunRow | undefined
+  const candidates: NodeRunRow[] = []
   for (const r of members) {
     if (!inner.has(r.nodeId)) continue
     let qualifies = false
@@ -237,14 +238,20 @@ export function wrapperRevivalEvidence(
       const key = `${frame.containerRunId ?? ''}#${frame.iteration}`
       let freshest = freshestByFrame.get(key)
       if (freshest === undefined) {
-        freshest = buildFreshestSettledPerNode(rows, inner, frame)
+        freshest = await buildFreshestSettledPerNode(rows, inner, frame)
         freshestByFrame.set(key, freshest)
       }
-      qualifies = isNodeRunFresh(r, freshest)
+      qualifies = await isNodeRunFresh(r, freshest)
     }
     if (!qualifies) continue
-    if (isFresherNodeRun(r, best)) best = r
+    candidates.push(r)
   }
+  const best = (
+    await createRunSelectionOracleSnapshot(
+      candidates.map((row) => ({ ...row, taskId: '' })),
+      { scope: { kind: 'rows' } },
+    ).familyHistory('', {})
+  ).at(-1)
   return best === undefined ? null : { rowId: best.id, nodeId: best.nodeId }
 }
 
@@ -253,12 +260,12 @@ export function wrapperRevivalEvidence(
  * for the predicate consumers (isDispatchable below,
  * dispatch-frontier-fanout-fresh.test.ts imports it directly).
  */
-export function wrapperHasFreshInnerWork(
+export async function wrapperHasFreshInnerWork(
   wrapperRow: NodeRunRow,
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
-): boolean {
-  return wrapperRevivalEvidence(wrapperRow, rows, definition) !== null
+): Promise<boolean> {
+  return (await wrapperRevivalEvidence(wrapperRow, rows, definition)) !== null
 }
 
 /**
@@ -289,13 +296,13 @@ export function wrapperHasFreshInnerWork(
  * scheduler's per-invocation `dispatchedThisInvocation` set (N3) + runOneNode
  * minting a `pending` row on dispatch. This gate only decides eligibility.
  */
-export function isDispatchable(
+export async function isDispatchable(
   row: NodeRunRow | undefined,
   kind: NodeKind,
   freshestSettledPerUpstream: Map<string, NodeRunRow>,
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
-): boolean {
+): Promise<boolean> {
   if (row === undefined) return true
   // RFC-095: exhaustive switch over the FULL NodeRunStatus universe — adding a
   // new status fails compilation here instead of silently falling into the
@@ -304,7 +311,7 @@ export function isDispatchable(
     case 'pending':
       return true
     case 'done':
-      return !isNodeRunFresh(row, freshestSettledPerUpstream)
+      return !(await isNodeRunFresh(row, freshestSettledPerUpstream))
     case 'failed':
     case 'interrupted':
       return true
@@ -333,7 +340,7 @@ export function isDispatchable(
       // model performed via recomputeFreshnessAndDemote; combination-scenarios
       // S8/S11/S12 lock this). `dispatchedThisInvocation` (N3) still bounds it to
       // one re-dispatch per invocation, so no busy-loop.
-      return !isNodeRunFresh(row, freshestSettledPerUpstream)
+      return !(await isNodeRunFresh(row, freshestSettledPerUpstream))
     }
     case 'exhausted':
       // loop-max true terminal (RFC-076 HIGH-2) — never re-dispatched.
@@ -357,7 +364,7 @@ export function isDispatchable(
       // (scheduler.ts branch-skip mint). Without provenance `isNodeRunFresh`
       // treats the row as never-fresh and the frontier re-dispatches it on every
       // single tick — a busy loop that looks like "the branch keeps flapping".
-      return !isNodeRunFresh(row, freshestSettledPerUpstream)
+      return !(await isNodeRunFresh(row, freshestSettledPerUpstream))
     default: {
       const _exhaustive: never = row.status
       return _exhaustive

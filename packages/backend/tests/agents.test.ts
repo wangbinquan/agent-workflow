@@ -1,9 +1,7 @@
 // Service + HTTP coverage for Agents CRUD (P-1-08).
 // In-memory SQLite via createInMemoryDb — no daemon spawn needed.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec } from '@/platform/persistence/queryHelpers'
+import { patchAgentFixture, workflowFixture } from './helpers/model'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -309,9 +307,8 @@ describeEachProvider('agent service provider referenced-delete', (harness) => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    const { workflows } = tablesOf(db)
     // Insert a workflow whose node references the canonical agent id.
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: ulid(),
       name: 'wf1',
       definition: JSON.stringify({
@@ -372,8 +369,7 @@ describeEachProvider('agent service provider referenced-delete', (harness) => {
       frontmatterExtra: {},
       bodyMd: '',
     })
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: ulid(),
       name: 'wf',
       definition: JSON.stringify({ nodes: [{ agentId: created.id, agentName: 'a' }] }),
@@ -466,11 +462,7 @@ describeEachProvider('agent service provider referenced-delete', (harness) => {
 
     // Legacy row whose depends_on JSON is malformed → exposed as [] (defensive
     // parser). Simulate by raw UPDATE.
-    const { sql } = await import('drizzle-orm')
-    await rawExec(
-      db,
-      sql`UPDATE agents SET depends_on = '{not-an-array}' WHERE name = 'orchestrator'`,
-    )
+    await patchAgentFixture(db, { name: 'orchestrator' }, { dependsOn: '{not-an-array}' })
     const reread = await getAgent(db, 'orchestrator')
     expect(reread?.dependsOn).toEqual([])
   })

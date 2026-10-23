@@ -79,11 +79,7 @@ async function restoreStrictClarifyTransition(): Promise<void> {
   const target = sourcePath('modules/collaboration/infrastructure/clarify/seal.ts')
   const original = await import(target)
   const current = `      if (flipNow) {
-        // rfc053-allow-direct-status-write -- atomic clarify-node close on full seal (mirrors resume-clarify)
-        await tx
-          .update(nodeRuns)
-          .set({ status: 'done', finishedAt: ts })
-          .where(and(eq(nodeRuns.id, args.originNodeRunId), eq(nodeRuns.status, 'awaiting_human')))
+        await taskHumanGate.completeClarifyRun(args.originNodeRunId, ts)
       }`
   const source = readFileSync(target, 'utf8')
   if (source.split(current).length !== 2) throw new Error('P0-5 mutation site drifted')
@@ -102,7 +98,7 @@ async function restoreStrictClarifyTransition(): Promise<void> {
           nodeRunId: args.originNodeRunId,
           to: 'done',
           allowedFrom: ['awaiting_human'],
-          extra: { finishedAt: ts },
+          extra: { identity: { finishedAt: ts } },
           reason: 'clarify-deferred-answer',
         })
       }`,

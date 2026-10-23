@@ -1,7 +1,15 @@
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readClarifyRoundFixtures,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first, queryRows } from '@/platform/persistence/queryHelpers'
+import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
@@ -89,14 +97,13 @@ describe('RFC-349 collaboration runtime mechanics', () => {
   async function seedTask(db: PersistenceDb, config: unknown): Promise<string> {
     const taskId = ulid()
     const workflowId = ulid()
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: `rfc349-collaboration-${taskId}`,
       definition: '{}',
       builtin: true,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify([
@@ -130,16 +137,17 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       const runtime = createCollaborationRuntimeMechanics(db)
 
       await expect(runtime.isTaskClarifySuppressed({ taskId })).resolves.toBe(true)
-      const { tasks, clarifyRounds } = tablesOf(db)
-      await db
-        .update(tasks)
-        .set({
+      const { clarifyRounds } = tablesOf(db)
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        {
           workgroupConfigJson: JSON.stringify({
             members: [{ memberType: 'agent' }, { memberType: 'human' }],
             clarifyBudget: 2,
           }),
-        })
-        .where(eq(tasks.id, taskId))
+        },
+      )
       await expect(
         runtime.isTaskClarifySuppressed({ taskId, nodeId: '__wg_leader__', shardKey: null }),
       ).resolves.toBe(false)
@@ -157,7 +165,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         intermediaryNodeRunId: runId,
         loopIter: 0,
         iteration: 0,
-        questionsJson: '[]',
+        questions: '[]',
         status: 'awaiting_human',
         createdAt: Date.now(),
       })
@@ -190,8 +198,8 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         intermediaryNodeRunId: runId,
         loopIter: 0,
         iteration: 0,
-        questionsJson: '[]',
-        answersJson: '[]',
+        questions: '[]',
+        answers: '[]',
         status: 'answered',
         createdAt: 1,
         answeredAt: 2,
@@ -219,12 +227,9 @@ describe('RFC-349 collaboration runtime mechanics', () => {
           occurredAt: 3,
         }),
       ).resolves.toBe(true)
-      const { clarifyRounds } = tablesOf(db)
-      expect(
-        await first(db.select().from(clarifyRounds).where(eq(clarifyRounds.id, roundId))),
-      ).toMatchObject({
+      expect((await readClarifyRoundFixtures(db, { id: roundId }))[0]).toMatchObject({
         status: 'awaiting_human',
-        answersJson: null,
+        answers: null,
         answeredAt: null,
       })
 
@@ -269,8 +274,8 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       const taskId = await seedTask(db, { members: [{ memberType: 'agent' }] })
       const nodeRunId = ulid()
       const docVersionId = ulid()
-      const { nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { docVersions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: nodeRunId,
         taskId,
         nodeId: 'review',
@@ -305,10 +310,9 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         hasApprovedDocOutput: true,
         hasApprovalMetaOutput: true,
       })
-      const outputs = await db
-        .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+      const outputs = await readNodeRunOutputFixtures(db, { nodeRunId }).then((rows) =>
+        rows.map((row) => ({ portName: row.portName, content: row.content })),
+      )
       expect(
         Object.fromEntries(outputs.map(({ portName, content }) => [portName, content])),
       ).toEqual({
@@ -466,7 +470,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         askingShardKey: 'asg:a',
         intermediaryNodeId: '__wg_clarify__',
         intermediaryNodeRunId: 'park-run-a',
-        questionsJson: '[]',
+        questions: '[]',
         status: 'awaiting_human',
       })
       await insertClarifyRoundRaw(db, {
@@ -478,7 +482,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         askingShardKey: 'batch:a,b',
         intermediaryNodeId: '__wg_clarify__',
         intermediaryNodeRunId: 'park-run-b',
-        questionsJson: '[]',
+        questions: '[]',
         status: 'awaiting_human',
       })
       await insertClarifyRoundRaw(db, {
@@ -490,11 +494,11 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         askingShardKey: 'asg:old',
         intermediaryNodeId: '__wg_clarify__',
         intermediaryNodeRunId: 'park-run-old',
-        questionsJson: '[]',
-        answersJson: '[]',
+        questions: '[]',
+        answers: '[]',
         status: 'answered',
       })
-      const { taskNodeClarifyDirectives, clarifyRounds } = tablesOf(db)
+      const { taskNodeClarifyDirectives } = tablesOf(db)
       await db.insert(taskNodeClarifyDirectives).values([
         {
           taskId,
@@ -561,8 +565,8 @@ describe('RFC-349 collaboration runtime mechanics', () => {
           },
         ],
       })
-      const states = queryRows(
-        db.select({ id: clarifyRounds.id, status: clarifyRounds.status }).from(clarifyRounds),
+      const states = await readClarifyRoundFixtures(db).then((rows) =>
+        rows.map((row) => ({ id: row.id, status: row.status })),
       )
       expect(Object.fromEntries(states.map((round) => [round.id, round.status]))).toEqual({
         'round-answered': 'answered',

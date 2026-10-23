@@ -4,18 +4,10 @@ import type {
   MergeStateTransitionEvent,
 } from '@agent-workflow/shared'
 
+import type { NodeRunMergeWrite } from './nodeRunWrites'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
-export interface MergeStateProjectionPatch {
-  readonly isoWorktreePath?: string | null
-  readonly isoBaseSnapshot?: string | null
-  readonly isoBaseSnapshotReposJson?: string | null
-  readonly isoNodeTree?: string | null
-  readonly isoNodeTreeReposJson?: string | null
-  readonly isoSubmodulesJson?: string | null
-  readonly isoSubmodulesReposJson?: string | null
-  readonly wrapperProgressJson?: string | null
-}
+export type MergeStateProjectionPatch = NodeRunMergeWrite
 
 export interface MergeStateLifecyclePersistence {
   transition(input: {

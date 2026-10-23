@@ -3,6 +3,7 @@
 // Returns currently-open lifecycle_alerts for a task in detected_at ASC
 // order. Empty when no alerts. 401 without bearer.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -25,13 +26,12 @@ async function seedTask(
 ): Promise<string> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,

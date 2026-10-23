@@ -4,6 +4,8 @@
 // reject the complete dependsOn closure, while actor-safe status distinguishes
 // a visible name, a hidden existing row, and a genuinely missing row.
 
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { patchAgentFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -22,7 +24,6 @@ import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
 import { createWorkflow, getWorkflow } from '../src/services/workflow'
-import { WORKGROUP_HOST_WORKFLOW_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
@@ -99,13 +100,13 @@ describe('RFC-228 Agent resource integrity', () => {
 
   test('a broken dependent Agent prevents saving a new root Agent', async () => {
     const child = await createAgent(db, agentInput('child'))
-    const { agents } = tablesOf(db)
-    await db
-      .update(agents)
-      .set({
+    await patchAgentFixture(
+      db,
+      { id: child.id },
+      {
         skills: JSON.stringify([{ kind: 'managed', skillId: 'missing-in-child' }]),
-      })
-      .where(eq(agents.id, child.id))
+      },
+    )
 
     await expect(
       createAgent(db, agentInput('parent', { dependsOn: [child.id] })),
@@ -262,6 +263,6 @@ describe('RFC-228 Agent resource integrity', () => {
       code: 'agent-resources-invalid',
       details: { issues: [{ code: 'mcp-not-found', refKind: 'mcp' }] },
     })
-    expect(await getWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID)).toBeNull()
+    expect(await getWorkflow(db, TASK_DEFINITION_HOSTS.workgroup.id)).toBeNull()
   })
 })

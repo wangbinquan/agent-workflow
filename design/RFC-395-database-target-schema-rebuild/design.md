@@ -188,6 +188,8 @@ selected-run 变更由现有操作 owner 同事务提交。槽位种类为 `node
 
 运行时不能因顶层 `running` 与 parent 语义混淆而拒绝合法角色。mint 检查改为角色与容器不变量；现有禁止非法 top-level 的保护意图由新正向 / 反例测试保留。
 
+> 2026-10-23（II-a 交付）：K1 / K3 / K6（稳定 role 与 canonical slot）推迟到 II-b，规则表见 plan §6.11；II-a 的 oracle 不推导标签，生产选择与 HEAD 相同。聚合行重放判据「记录的已消费 shard 集合 == 当前 shard 选择」与今天「聚合行比所有参与 shard 新」并非无条件等价（反例见 plan §6.11），II-b 物化前须由用户裁决。
+
 ### 5.3 旧 `node_runs` 62 列去向
 
 | 目标 | 源字段 |

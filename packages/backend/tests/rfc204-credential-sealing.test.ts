@@ -13,6 +13,13 @@
 //     it must never re-clone; otherwise an unreachable remote could block an
 //     upgrade for a whole clone timeout.
 
+import {
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  readTaskRepoFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -69,8 +76,7 @@ async function seedTask(db: PersistenceDb, repoUrl: string | null): Promise<stri
   const wfId = ulid()
   const taskId = ulid()
   const now = Date.now()
-  const { workflows, tasks, taskRepos } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: '{}',
@@ -79,7 +85,7 @@ async function seedTask(db: PersistenceDb, repoUrl: string | null): Promise<stri
     updatedAt: now,
   })
 
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -94,14 +100,13 @@ async function seedTask(db: PersistenceDb, repoUrl: string | null): Promise<stri
     startedAt: now,
   })
 
-  await insertOne(db, taskRepos, {
+  await taskRepoFixture(db, {
     taskId,
     repoIndex: 0,
     repoPath: '/tmp/wt',
     repoUrl,
     branch: `agent-workflow/${taskId}`,
     worktreePath: '/tmp/wt',
-    worktreeDirName: '',
   })
 
   return taskId
@@ -133,11 +138,11 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
     await seedTask(db, CRED_URL)
     await ensureSealed(db, box)
 
-    const { cachedRepos, tasks, taskRepos } = tablesOf(db)
+    const { cachedRepos } = tablesOf(db)
     const dump = JSON.stringify([
       await db.select().from(cachedRepos),
-      await db.select().from(tasks),
-      await db.select().from(taskRepos),
+      await readTaskFixtures(db),
+      await readTaskRepoFixtures(db),
     ])
     expect(dump).not.toContain(TOKEN)
   })
@@ -157,14 +162,13 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
   test('links task rows to their mirror by hash', async () => {
     await seedRepo(db, 'cr-1', CRED_URL)
     const taskId = await seedTask(db, CRED_URL)
-    const { tasks, taskRepos } = tablesOf(db)
     // precondition: unlinked
-    expect((await db.select().from(tasks))[0]?.cachedRepoId).toBeNull()
+    expect((await readTaskFixtures(db))[0]?.cachedRepoId).toBeNull()
 
     await ensureSealed(db, box)
 
-    expect((await db.select().from(tasks)).find((t) => t.id === taskId)?.cachedRepoId).toBe('cr-1')
-    expect((await db.select().from(taskRepos))[0]?.cachedRepoId).toBe('cr-1')
+    expect((await readTaskFixtures(db)).find((t) => t.id === taskId)?.cachedRepoId).toBe('cr-1')
+    expect((await readTaskRepoFixtures(db))[0]?.cachedRepoId).toBe('cr-1')
   })
 
   test('ORDER: a query-form row is linked before its column is re-redacted', async () => {
@@ -177,10 +181,9 @@ describeEachProvider('RFC-204 T7 — credential sealing gate', async (harness) =
 
     await ensureSealed(db, box)
 
-    const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks))[0]?.cachedRepoId).toBe('cr-q')
+    expect((await readTaskFixtures(db))[0]?.cachedRepoId).toBe('cr-q')
     // and the token is gone from the task column afterwards
-    const dump = JSON.stringify(await db.select().from(tasks))
+    const dump = JSON.stringify(await readTaskFixtures(db))
     expect(dump).not.toContain(TOKEN)
   })
 

@@ -19,6 +19,7 @@
 // 唯一一个**真的**按 provider 分叉过的（工具连接目录：一份写成同步 `.get()`、一份 `await`）
 // 已按 RFC-359 AC-1 / plan §5ft 合一——见文件下半部那段注释。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -597,13 +598,12 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
     expect(await policy(row, 'done')).toEqual({ prune: false })
 
     const workflowId = `wf_${ulid()}`
-    const { workflows, tasks } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: workflowId,
       name: `wf-${workflowId.slice(-6).toLowerCase()}`,
       definition: JSON.stringify({ $schema_version: 2, nodes: [], edges: [] }),
     })
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       id: row.taskId,
       name: 'webhook task',
       workflowId,

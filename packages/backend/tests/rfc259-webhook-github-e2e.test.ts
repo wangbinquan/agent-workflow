@@ -4,6 +4,7 @@
 // createWebhookDispatcher），只在 launch 处注入 fake（落真 tasks 行）。
 // 锁「HTTP 入站（HMAC 验签 + 事件头判别）→ 真 dispatcher → 任务归属列」
 // 这条 GitHub 形态的接线，含同 PR 二发 supersede。
+import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createHmac } from 'node:crypto'
@@ -59,8 +60,8 @@ async function seedFixture(providerHarness: ProviderHarness) {
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  const { workflows, webhookEndpoints, webhookTriggers, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { webhookEndpoints, webhookTriggers } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'fix-wf',
     description: '',
@@ -99,7 +100,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     launch: async (actor, rendered, invoker) => {
       if (invoker.type !== 'event') throw new Error('bad invoker')
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: (renderedLaunchPayload(rendered) as never as { name: string }).name,
         workflowId,
@@ -121,7 +122,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
     },
     cancel: async (taskId) => {
       canceled.push(taskId)
-      await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status: 'canceled' })
     },
   })
   const eventCenter = await composeEventCenter({
@@ -203,19 +204,13 @@ describeEachProvider('RFC-259 · GitHub webhook 全链路（双引擎）', (harn
         error: null,
       })
       expect(fire.streamKey).toBe('acme/api|mr:42') // PR number 维度（fork 空数组时才落 branch）
-      const { webhookDeliveries, tasks, webhookTriggerFires } = tablesOf(h.db)
+      const { webhookDeliveries, webhookTriggerFires } = tablesOf(h.db)
       const delivery = (
         await h.db.select().from(webhookDeliveries).where(eq(webhookDeliveries.id, deliveryId))
       )[0]
       expect(delivery?.status).toBe('matched')
       expect(delivery?.gitlabEventHeader).toBe('workflow_run') // D8：provider 原始事件头
-      const task = (
-        await h.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, fire.taskId ?? ''))
-          .limit(1)
-      )[0]
+      const task = (await readTaskFixtures(h.db, { id: fire.taskId ?? '' }, { limit: 1 }))[0]
       expect(task?.launchOrigin).toBe('event')
       expect(task?.eventSubscriptionId).toBeTruthy()
       expect(task?.eventDeliveryId).toBe(fire.id)
@@ -243,7 +238,7 @@ describeEachProvider('RFC-259 · GitHub webhook 全链路（双引擎）', (harn
         error: null,
       })
       expect(h.canceled).toEqual([task?.id ?? '(missing)'])
-      const running = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
+      const running = await readTaskFixtures(h.db, { status: 'running' })
       expect(running.length).toBe(1) // 每流至多一活任务
     })
   })

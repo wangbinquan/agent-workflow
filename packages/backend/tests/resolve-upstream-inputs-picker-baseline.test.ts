@@ -16,8 +16,7 @@
 // the same observable values. Every case also asserts the recorded `consumed`
 // provenance map — the new return field driving read-time freshness.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -34,8 +33,7 @@ const nodePersistence = (db: PersistenceDb) => new DrizzleNodeExecutionPersisten
 async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'pick',
     description: '',
@@ -43,7 +41,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -81,8 +79,7 @@ async function seedRunWithOutput(
   },
   outputs: Record<string, string>,
 ): Promise<string> {
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: fields.id,
     taskId,
     nodeId,
@@ -92,7 +89,7 @@ async function seedRunWithOutput(
     parentNodeRunId: fields.parentNodeRunId ?? null,
   })
   for (const [portName, content] of Object.entries(outputs)) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: fields.id, portName, content })
+    await nodeRunOutputFixture(db, { nodeRunId: fields.id, portName, content })
   }
   return fields.id
 }

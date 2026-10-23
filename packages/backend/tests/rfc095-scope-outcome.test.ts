@@ -56,6 +56,12 @@ function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   // row (same pattern as derive-frontier.test.ts).
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -289,9 +295,12 @@ function buckets(f: Frontier, nodeId: string): Bucket[] {
  * which is the harness that routes non-park statuses into `blocked` instead of
  * `ready` (the diagnostic branches only fire behind the dedup/anchor gates).
  */
-function frontierFor(latest: Row, opts: { dedup?: ReadonlySet<string> } = {}): Frontier {
+async function frontierFor(
+  latest: Row,
+  opts: { dedup?: ReadonlySet<string> } = {},
+): Promise<Frontier> {
   const { definition, scopeNodes, scopeIds } = def([{ id: 'n', kind: 'agent-single' }])
-  return deriveFrontier(
+  return await deriveFrontier(
     [latest],
     definition,
     scopeNodes,
@@ -340,12 +349,12 @@ const BLOCKED_REASON_PREFIX: Partial<Record<NodeRunStatus, string>> = {
 
 describe('RFC-095 — NodeRunStatus universe → exactly one frontier bucket', () => {
   for (const status of NODE_RUN_STATUS) {
-    test(`${status} → exactly [${EXPECTED_BUCKET[status]}]`, () => {
+    test(`${status} → exactly [${EXPECTED_BUCKET[status]}]`, async () => {
       // Runtime half of the double insurance: a NEW NodeRunStatus value that
       // nobody registered in EXPECTED_BUCKET must turn this red.
       expect(EXPECTED_BUCKET[status]).toBeDefined()
       const r = row('n', status)
-      const f = frontierFor(r)
+      const f = await frontierFor(r)
       expect(buckets(f, 'n')).toEqual([EXPECTED_BUCKET[status]])
       const prefix = BLOCKED_REASON_PREFIX[status]
       if (prefix !== undefined) {
@@ -362,14 +371,14 @@ describe('RFC-095 — NodeRunStatus universe → exactly one frontier bucket', (
     })
   }
 
-  test('control — canceled NOT in dedup → ready (revival dispatch, audit S-22)', () => {
-    const f = frontierFor(row('n', 'canceled'), { dedup: NONE })
+  test('control — canceled NOT in dedup → ready (revival dispatch, audit S-22)', async () => {
+    const f = await frontierFor(row('n', 'canceled'), { dedup: NONE })
     expect(buckets(f, 'n')).toEqual(['ready'])
   })
 
-  test('control — superseded canceled row, dedup empty → blocked(review-superseded), NOT ready', () => {
+  test('control — superseded canceled row, dedup empty → blocked(review-superseded), NOT ready', async () => {
     const marked = row('n', 'canceled', { supersededByReview: 'iterated' })
-    const f = frontierFor(marked, { dedup: NONE })
+    const f = await frontierFor(marked, { dedup: NONE })
     expect(buckets(f, 'n')).toEqual(['blocked'])
     const b = f.blocked.find((x) => x.nodeId === 'n')
     expect(b?.status).toBe('canceled')
@@ -381,7 +390,7 @@ describe('RFC-095 — NodeRunStatus universe → exactly one frontier bucket', (
 // a stale done / consumed anchor / open session) — covers the remaining
 // blocked reason values from design §2.2.
 describe('RFC-095 — blocked diagnostic branches beyond the single-row universe', () => {
-  test('stale done in invocation dedup → blocked(stale-done-in-invocation-dedup)', () => {
+  test('stale done in invocation dedup → blocked(stale-done-in-invocation-dedup)', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'up', kind: 'agent-single' },
       { id: 'a', kind: 'agent-single' },
@@ -391,7 +400,7 @@ describe('RFC-095 — blocked diagnostic branches beyond the single-row universe
       consumedUpstreamRunsJson: JSON.stringify({ up: upOld.id }),
     })
     const upNew = row('up', 'done') // upstream advanced → aDone is stale
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       [upOld, aDone, upNew],
       definition,
       scopeNodes,
@@ -408,10 +417,10 @@ describe('RFC-095 — blocked diagnostic branches beyond the single-row universe
     expect(b?.reason.startsWith('stale-done-in-invocation-dedup')).toBe(true)
   })
 
-  test('consumed pending anchor (row id already released) → blocked(pending-anchor-consumed)', () => {
+  test('consumed pending anchor (row id already released) → blocked(pending-anchor-consumed)', async () => {
     const { definition, scopeNodes, scopeIds } = def([{ id: 'n', kind: 'agent-single' }])
     const p = row('n', 'pending')
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       [p],
       definition,
       scopeNodes,
@@ -431,14 +440,14 @@ describe('RFC-095 — blocked diagnostic branches beyond the single-row universe
     expect(b?.reason.startsWith('pending-anchor-consumed')).toBe(true)
   })
 
-  test('pending rerun while its asking clarify session is still open → blocked(open-clarify-window)', () => {
+  test('pending rerun while its asking clarify session is still open → blocked(open-clarify-window)', async () => {
     // The legacy quick channel minted the rerun BEFORE flipping the session;
     // the guard stays generic: a pending row must NOT release while its asking
     // clarify session is still open (RFC-092 / audit S-1).
     const { definition, scopeNodes, scopeIds } = def([{ id: 'n', kind: 'agent-single' }])
     const asking = row('n', 'done')
     const rerun = row('n', 'pending') // later id → latest
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       [asking, rerun],
       definition,
       scopeNodes,
@@ -456,9 +465,9 @@ describe('RFC-095 — blocked diagnostic branches beyond the single-row universe
     expect(b?.reason.startsWith('open-clarify-window')).toBe(true)
   })
 
-  test('absent row, dispatched this invocation, no row written → blocked(absent, in-invocation-dedup)', () => {
+  test('absent row, dispatched this invocation, no row written → blocked(absent, in-invocation-dedup)', async () => {
     const { definition, scopeNodes, scopeIds } = def([{ id: 'n', kind: 'agent-single' }])
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       [],
       definition,
       scopeNodes,
@@ -475,9 +484,9 @@ describe('RFC-095 — blocked diagnostic branches beyond the single-row universe
     expect(b?.reason.startsWith('in-invocation-dedup')).toBe(true)
   })
 
-  test('clarify node with open session + dedup → blocked(absent, open-clarify-window)', () => {
+  test('clarify node with open session + dedup → blocked(absent, open-clarify-window)', async () => {
     const { definition, scopeNodes, scopeIds } = def([{ id: 'c', kind: 'clarify' }])
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       [],
       definition,
       scopeNodes,
@@ -504,18 +513,18 @@ describe('RFC-095 — supersede window (isDispatchable / isReviewSupersededRow)'
   const { definition } = def([{ id: 'n', kind: 'agent-single' }])
   const NO_FRESH = new Map<string, Row>()
 
-  test('canceled WITHOUT marker → dispatchable (revival; flips the pre-RFC-095 lock)', () => {
-    expect(isDispatchable(row('n', 'canceled'), 'agent-single', NO_FRESH, [], definition)).toBe(
-      true,
-    )
+  test('canceled WITHOUT marker → dispatchable (revival; flips the pre-RFC-095 lock)', async () => {
+    expect(
+      await isDispatchable(row('n', 'canceled'), 'agent-single', NO_FRESH, [], definition),
+    ).toBe(true)
   })
 
-  test('canceled runner-abort row ("aborted by signal") → dispatchable (the revival target)', () => {
+  test('canceled runner-abort row ("aborted by signal") → dispatchable (the revival target)', async () => {
     const aborted = row('n', 'canceled', { errorMessage: 'aborted by signal' })
-    expect(isDispatchable(aborted, 'agent-single', NO_FRESH, [], definition)).toBe(true)
+    expect(await isDispatchable(aborted, 'agent-single', NO_FRESH, [], definition)).toBe(true)
   })
 
-  test('canceled WITH superseded_by_review → NOT dispatchable (parked in the supersede→mint window)', () => {
+  test('canceled WITH superseded_by_review → NOT dispatchable (parked in the supersede→mint window)', async () => {
     // RFC-145: the dispatch contract reads the structured column (review.ts
     // writes it in the same supersede write; migration 0077 backfilled legacy
     // rows). errorMessage 只是人读 breadcrumb，不参与判定。
@@ -524,7 +533,7 @@ describe('RFC-095 — supersede window (isDispatchable / isReviewSupersededRow)'
       errorMessage:
         'superseded-by-review-iterated: Replaced by retry_index 2 due to review iterated of rv',
     })
-    expect(isDispatchable(marked, 'agent-single', NO_FRESH, [], definition)).toBe(false)
+    expect(await isDispatchable(marked, 'agent-single', NO_FRESH, [], definition)).toBe(false)
   })
 
   test('isReviewSupersededRow：列判定语义（非空即 superseded；errorMessage 不参与）', () => {
@@ -533,11 +542,13 @@ describe('RFC-095 — supersede window (isDispatchable / isReviewSupersededRow)'
     expect(isReviewSupersededRow({ supersededByReview: 'rejected' })).toBe(true)
   })
 
-  test('列未置时即便 errorMessage 带旧 marker 文案也不判 superseded（机器地位已取消）', () => {
+  test('列未置时即便 errorMessage 带旧 marker 文案也不判 superseded（机器地位已取消）', async () => {
     const breadcrumbOnly = row('n', 'canceled', {
       errorMessage: 'superseded-by-review-iterated: legacy-looking breadcrumb',
     })
     // 现实中 0077 backfill + review.ts 双写保证列恒在；此格锁「列是唯一判据」。
-    expect(isDispatchable(breadcrumbOnly, 'agent-single', NO_FRESH, [], definition)).toBe(true)
+    expect(await isDispatchable(breadcrumbOnly, 'agent-single', NO_FRESH, [], definition)).toBe(
+      true,
+    )
   })
 })

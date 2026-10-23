@@ -15,12 +15,17 @@
 // 红→绿对：把 `routes/agents.ts` 的 PUT 换回 `requireResourceGovern`，可编辑档那组
 // 立刻红；把 workflow 保存里的 `assertNameUnchangedForEditor` 删掉，改名那组立刻红。
 
+import {
+  agentFixture,
+  readAgentFixtures,
+  readWorkflowFixtures,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createSession } from './helpers/auth/sessionStore'
 import {
@@ -110,8 +115,7 @@ async function codeOf(res: Response): Promise<string> {
 
 async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name: `rfc324-agent-${id.slice(-6)}`,
     description: 'seeded',
@@ -128,8 +132,7 @@ async function agentRow(
   db: PersistenceDb,
   id: string,
 ): Promise<{ description: string; name: string }> {
-  const { agents } = tablesOf(db)
-  const rows = await db.select().from(agents).where(eq(agents.id, id))
+  const rows = await readAgentFixtures(db, { id })
   const row = rows[0]
   expect(row, '种子 agent 必须存在，否则本用例零预言力').toBeDefined()
   return { description: row!.description, name: row!.name }
@@ -250,8 +253,7 @@ const WF_DEFINITION = { $schema_version: 2, inputs: [], nodes: [], edges: [] }
 
 async function seedWorkflow(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: `rfc324-wf-${id.slice(-6)}`,
     description: 'seeded',
@@ -270,8 +272,7 @@ async function workflowRow(
   db: PersistenceDb,
   id: string,
 ): Promise<{ name: string; description: string; version: number }> {
-  const { workflows } = tablesOf(db)
-  const rows = await db.select().from(workflows).where(eq(workflows.id, id))
+  const rows = await readWorkflowFixtures(db, { id })
   const row = rows[0]
   expect(row, '种子 workflow 必须存在，否则本用例零预言力').toBeDefined()
   return { name: row!.name, description: row!.description, version: row!.version }

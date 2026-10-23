@@ -1,9 +1,15 @@
 // RFC-370: the real provider drive keeps multi-repository order, waits for the
 // selected profile acknowledgement and persists the existing failure facts.
+import {
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  readTaskRepoFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,7 +52,7 @@ async function fixture(
   const appHome = mkdtempSync(join(tmpdir(), 'aw-exclude-selected-'))
   let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
   try {
-    const { users, workflows, tasks, taskRepos } = tablesOf(db)
+    const { users } = tablesOf(db)
     await insertOne(db, users, {
       id: userId,
       username: userId,
@@ -62,12 +68,12 @@ async function fixture(
       nodes: [],
       edges: [],
     }
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: workflowId,
       definition: JSON.stringify(definition),
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify([
@@ -89,7 +95,7 @@ async function fixture(
       autoCommitPush: false,
     })
     for (const [repoIndex, mountPath] of ['', 'nested', 'nested/deeper'].entries()) {
-      await insertOne(db, taskRepos, {
+      await taskRepoFixture(db, {
         taskId,
         repoIndex,
         mountPath,
@@ -143,10 +149,11 @@ async function fixture(
       drive: () =>
         driver.drive({ taskId, appHome, executionContext, signal: new AbortController().signal }),
       async driveSeededChild() {
-        const parent = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+        const parent = (await readTaskFixtures(db, { id: taskId }))[0]!
         const childId = ulid()
-        await insertOne(db, tasks, {
-          ...parent,
+        const { repoCount: _repoCount, repos: _repos, ...parentSpec } = parent
+        await taskFixture(db, {
+          ...parentSpec,
           id: childId,
           name: childId,
           parentTaskId: taskId,
@@ -192,19 +199,18 @@ async function fixture(
         return {
           childId,
           childContext,
-          parentTaskId: (await db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
-            .parentTaskId,
+          parentTaskId: (await readTaskFixtures(db, { id: childId }))[0]!.parentTaskId,
         }
       },
       rows: () => {
-        return db
-          .select()
-          .from(taskRepos)
-          .where(eq(taskRepos.taskId, taskId))
-          .orderBy(taskRepos.repoIndex)
+        return readTaskRepoFixtures(
+          db,
+          { taskId },
+          { orderBy: [{ field: 'repoIndex', direction: 'asc' }] },
+        )
       },
       task: async () => {
-        return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+        return (await readTaskFixtures(db, { id: taskId }))[0]!
       },
       async close() {
         await execution!.shutdown()

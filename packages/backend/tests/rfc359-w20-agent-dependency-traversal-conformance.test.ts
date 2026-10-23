@@ -1,64 +1,55 @@
 // RFC-359 AC1: two save-time Agent dependency walks duplicated the same DFS.
 // Preserve their caller-owned root normalization and SQL while sharing the
 // traversal. Pure scheduling cases and real transactional readers are separate.
+import { createAgentDependencyReadPort } from '@/modules/resource-catalog/infrastructure/agentDependencyRead'
+import { agentFixture, patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { eq, inArray } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import ts from 'typescript'
 import { CreateAgentSchema } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { assertAgentDependencyTraversal } from '@/modules/resource-catalog/infrastructure/agentDependencyTraversal'
+import { assertAgentDependencyGraph } from '@/modules/resource-catalog/domain/agentDependencies'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
+
+// RFC-395 II-a：生产直接调用领域函数 assertAgentDependencyGraph；本套件的历史输入经这层薄适配
+// 对拍同一个领域实现（原 resource-catalog/infrastructure/agentDependencyTraversal.ts 仅供本套件，已删除）。
+async function assertAgentDependencyTraversal(
+  candidateId: string,
+  roots: readonly string[],
+  loadDependencies: (id: string) => Promise<readonly string[] | undefined>,
+): Promise<void> {
+  await assertAgentDependencyGraph({
+    candidateId,
+    dependencies: [],
+    roots,
+    load: loadDependencies,
+    semantics: 'catalog',
+  })
+}
 
 const OWNER = 'agent-traversal-owner'
 const IDS = ['traversal-a', 'traversal-b', 'traversal-leaf']
 type QueryShape = 'limited-array' | 'single-row'
 
-function decodeDependencies(raw: string): readonly string[] {
-  try {
-    const value: unknown = JSON.parse(raw)
-    return Array.isArray(value)
-      ? value.filter((entry): entry is string => typeof entry === 'string')
-      : []
-  } catch {
-    return []
-  }
-}
-
 function rowReader(db: PersistenceDb, shape: QueryShape, observed: string[]) {
+  const reader = createAgentDependencyReadPort(
+    db,
+    shape === 'limited-array' ? 'semantics' : 'package',
+  )
   return async (id: string): Promise<readonly string[] | undefined> => {
     observed.push(id)
-    if (shape === 'limited-array') {
-      const { agents } = tablesOf(db)
-      const row = (
-        await db
-          .select({ dependsOn: agents.dependsOn })
-          .from(agents)
-          .where(eq(agents.id, id))
-          .limit(1)
-      )[0]
-      return row === undefined ? undefined : decodeDependencies(row.dependsOn)
-    }
-    const { agents } = tablesOf(db)
-    const row = await first(
-      db
-        .select({ id: agents.id, dependsOn: agents.dependsOn })
-        .from(agents)
-        .where(eq(agents.id, id)),
-    )
-    return row === undefined ? undefined : decodeDependencies(row.dependsOn)
+    return reader.load(id)
   }
 }
 
 async function insertGraph(db: PersistenceDb, rows: Readonly<Record<string, string>>) {
   for (const [id, dependsOn] of Object.entries(rows)) {
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       ...createAgentPersistenceValues({
         id,
         agent: CreateAgentSchema.parse({ name: id }),
@@ -191,23 +182,23 @@ describe('ordered Agent dependency traversal', () => {
       'aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
       'assertAgentDependencyGraph',
     )
-    expect(semantics).toContain(
-      'await assertAgentDependencyTraversal(candidateId, unique(dependencyIds), async (id) =>',
-    )
-    expect(packageArm).toContain(
-      'await assertAgentDependencyTraversal(agentId, uniqueStrings(dependencyIds), async (id) =>',
-    )
+    expect(semantics).toContain('roots: unique(dependencyIds)')
+    expect(packageArm).toContain('roots: uniqueStrings(dependencyIds)')
+    expect(semantics).toContain("createAgentDependencyReadPort(transaction, 'semantics').load")
+    expect(packageArm).toContain("createAgentDependencyReadPort(transaction, 'package').load")
     for (const body of [semantics, packageArm]) {
-      expect(body).toContain("'agent-dependency-self'")
-      expect(body.indexOf("'agent-dependency-self'")).toBeLessThan(
-        body.indexOf('await assertAgentDependencyTraversal'),
-      )
+      expect(body).toContain('await validateDependencyGraph(')
+      expect(body).toContain("semantics: 'catalog'")
       expect(body).not.toMatch(/new Set|function visit/)
     }
-    expect(semantics).toContain('.select({ dependsOn: agents.dependsOn })')
-    expect(semantics).toContain('.limit(1))[0]')
-    expect(packageArm).toContain('.select({ id: agents.id, dependsOn: agents.dependsOn })')
-    expect(packageArm).toContain('await first(')
+    const domain = readFileSync(join(infrastructure, '../domain/agentDependencies.ts'), 'utf8')
+    expect(domain.indexOf("'agent-dependency-self'")).toBeLessThan(
+      domain.indexOf('async function visit'),
+    )
+    const reader = functionBody('agentDependencyRead.ts', 'createAgentDependencyReadPort')
+    expect(reader).toContain('{ dependsOn: agents.dependsOn }')
+    expect(reader).toContain('{ id: agents.id, dependsOn: agents.dependsOn }')
+    expect(reader).toContain('.limit(1))[0]')
     expect(functionBody('agentPersistenceSemantics.ts', 'unique')).toContain(
       'new Set(values.filter((value) => value.length > 0))',
     )
@@ -278,8 +269,7 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
           throw sentinel
         }),
       ).rejects.toBe(sentinel)
-      const { agents } = tablesOf(harness.db)
-      expect(await harness.db.select().from(agents).where(inArray(agents.id, IDS))).toEqual([])
+      expect(await readAgentFixtures(harness.db, { id: IDS })).toEqual([])
     })
 
     test(`${shape}: a nested missing row aborts the transaction after the original JSON fallback`, async () => {
@@ -293,11 +283,11 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
           const reader = rowReader(tx, shape, observed)
           await assertAgentDependencyTraversal('candidate', ['traversal-a'], reader)
           expect(observed).toEqual(['traversal-a', 'traversal-leaf'])
-          const { agents } = tablesOf(tx)
-          await tx
-            .update(agents)
-            .set({ dependsOn: '["missing-z","missing-a"]' })
-            .where(eq(agents.id, 'traversal-leaf'))
+          await patchAgentFixture(
+            tx,
+            { id: 'traversal-leaf' },
+            { dependsOn: '["missing-z","missing-a"]' },
+          )
           observed.length = 0
           await assertAgentDependencyTraversal('candidate', ['traversal-a'], reader)
         }),
@@ -307,8 +297,7 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
         details: { notFound: ['missing-z'] },
       })
       expect(observed).toEqual(['traversal-a', 'traversal-leaf', 'missing-z'])
-      const { agents } = tablesOf(harness.db)
-      expect(await harness.db.select().from(agents).where(inArray(agents.id, IDS))).toEqual([])
+      expect(await readAgentFixtures(harness.db, { id: IDS })).toEqual([])
     })
   }
 })

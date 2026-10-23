@@ -6,13 +6,11 @@
 // node_run was never promoted out of awaiting_human, leaving the task
 // permanently parked.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,10 +37,9 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     // Preserve the root lineage supplied by the original SQLite INSERT trigger.
     executionLineageId: taskId,
@@ -70,8 +67,7 @@ async function insertClarifyRun(
   status: 'awaiting_human' | 'running' | 'done' | 'canceled',
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'clr_1',
@@ -198,11 +194,7 @@ describeEachProvider(
         scope: { taskId: h.taskId },
       })
       expect(r1.newAlerts).toBe(1)
-      const { nodeRuns } = tablesOf(h.db)
-      await h.db
-        .update(nodeRuns)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(nodeRuns.id, run))
+      await patchNodeRunFixture(h.db, { id: run }, { status: 'done', finishedAt: Date.now() })
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
         scope: { taskId: h.taskId },

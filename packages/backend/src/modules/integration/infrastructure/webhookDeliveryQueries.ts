@@ -1,5 +1,6 @@
 // RFC-359 W4-B4 —— webhook 投递审计 / 回放读模型：一份实现，两个 provider 共用。
 
+import { createTaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
@@ -148,8 +149,7 @@ export function createWebhookDeliveryQueries(db: PersistenceDb): WebhookDelivery
       }
     },
     async terminalControl(deliveryId, actor) {
-      const { webhookMrControlEffects, webhookMrControlTargets, tasks, taskCollaborators } =
-        tablesOf(db)
+      const { webhookMrControlEffects, webhookMrControlTargets, taskCollaborators } = tablesOf(db)
       const effect = (
         await db
           .select()
@@ -163,20 +163,7 @@ export function createWebhookDeliveryQueries(db: PersistenceDb): WebhookDelivery
         .from(webhookMrControlTargets)
         .where(eq(webhookMrControlTargets.effectId, effect.id))
       const taskIds = targetRows.map((target) => target.taskId)
-      const taskRows =
-        taskIds.length === 0
-          ? []
-          : await db
-              .select({
-                id: tasks.id,
-                ownerUserId: tasks.ownerUserId,
-                status: tasks.status,
-                spaceKind: tasks.spaceKind,
-                workspacePruningAt: tasks.workspacePruningAt,
-                workspacePrunedAt: tasks.workspacePrunedAt,
-              })
-              .from(tasks)
-              .where(inArray(tasks.id, taskIds))
+      const taskRows = await createTaskTriggerQueries(db).terminalWorkspaces(taskIds)
       const membershipIds =
         actor.permissions.has('tasks:read:all') || actor.user.id === SYSTEM_USER_ID
           ? new Set(taskIds)

@@ -1,5 +1,15 @@
-import type { MergeStateOrNull, NodeRunStatus, RerunCause } from '@agent-workflow/shared'
+import type { MergeStateOrNull, NodeRunStatus } from '@agent-workflow/shared'
 
+import type {
+  NodeRunIdentitySnapshot,
+  NodeRunConfigView,
+  NodeRunRuntimeStateView,
+  NodeRunResultView,
+  NodeRunCheckpointView,
+  NodeRunInputView,
+} from '../../domain/nodeRunSnapshot'
+import type { SelectionChange } from './runSelection'
+import type { NodeRunProjectionWrite } from './nodeRunWrites'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
 /**
@@ -7,71 +17,16 @@ import type { TaskExecutionContextRef } from './taskExecutionTopology'
  * domain snapshot, not a Drizzle row: adapters deliberately copy the storage
  * record before it crosses the application seam.
  */
-export interface NodeExecutionSnapshot {
-  readonly seq: number | null
-  readonly id: string
-  readonly taskId: string
-  readonly nodeId: string
-  readonly parentNodeRunId: string | null
-  /** RFC-354 — the frame (wrapper generation row) this row hangs off; null at the top scope. */
-  readonly containerRunId: string | null
-  /** RFC-354 — derived root→here breadcrumb (`wrapperId:iteration/…`), `''` at the top scope. */
-  readonly scopePath: string
-  readonly iteration: number
-  readonly shardKey: string | null
+export interface NodeExecutionSnapshot
+  extends
+    NodeRunIdentitySnapshot,
+    NodeRunConfigView,
+    NodeRunRuntimeStateView,
+    NodeRunResultView,
+    NodeRunCheckpointView,
+    NodeRunInputView {
+  /** II-a 既有选择端口的尝试编号别名；由适配器与 attemptIndex 同源投影。 */
   readonly retryIndex: number
-  readonly wgRound: number | null
-  readonly reviewIteration: number
-  readonly status: NodeRunStatus
-  readonly startedAt: number | null
-  readonly finishedAt: number | null
-  readonly pid: number | null
-  readonly spawnBinaryPath: string | null
-  readonly spawnLaunchNonce: string | null
-  readonly exitCode: number | null
-  readonly errorMessage: string | null
-  readonly failureCode: string | null
-  readonly promptText: string | null
-  readonly promptPath: string | null
-  readonly envelopeNonce: string | null
-  readonly forceActivated: boolean
-  readonly tokInput: number | null
-  readonly tokOutput: number | null
-  readonly tokCacheCreate: number | null
-  readonly tokCacheRead: number | null
-  readonly tokTotal: number | null
-  readonly preSnapshot: string | null
-  readonly opencodeSessionId: string | null
-  readonly runtime: string | null
-  readonly runtimeBinary: string | null
-  readonly runtimeParamsJson: string | null
-  readonly inventorySnapshotJson: string | null
-  readonly runtimeInventoryJson: string | null
-  readonly startupVerificationJson: string | null
-  readonly wrapperProgressJson: string | null
-  readonly injectedMemoriesJson: string | null
-  readonly portValidationFailuresJson: string | null
-  readonly commitPushJson: string | null
-  readonly preSnapshotReposJson: string | null
-  readonly isoWorktreePath: string | null
-  readonly isoBaseSnapshot: string | null
-  readonly isoBaseSnapshotReposJson: string | null
-  readonly isoNodeTree: string | null
-  readonly isoNodeTreeReposJson: string | null
-  readonly isoSubmodulesJson: string | null
-  readonly isoSubmodulesReposJson: string | null
-  readonly mergeState: MergeStateOrNull
-  readonly consumedUpstreamRunsJson: string | null
-  readonly shardValueHash: string | null
-  readonly rerunCause: RerunCause | null
-  readonly supersededByReview: string | null
-  readonly rolledBack: boolean | null
-  readonly agentOverrideName: string | null
-  readonly agentOverrideId: string | null
-  readonly childTaskId: string | null
-  readonly continuationSlotKey: string | null
-  readonly lineageSlotPathJson: string | null
-  readonly operationGeneration: number
 }
 
 export interface NodeExecutionOutputSnapshot {
@@ -129,51 +84,7 @@ export interface NodeExecutionQuery {
   readonly excludeSuperseded?: boolean
 }
 
-export type NodeExecutionProjectionPatch = Partial<
-  Pick<
-    NodeExecutionSnapshot,
-    | 'childTaskId'
-    | 'commitPushJson'
-    | 'consumedUpstreamRunsJson'
-    | 'envelopeNonce'
-    | 'errorMessage'
-    | 'failureCode'
-    | 'finishedAt'
-    | 'injectedMemoriesJson'
-    | 'inventorySnapshotJson'
-    | 'isoBaseSnapshot'
-    | 'isoBaseSnapshotReposJson'
-    | 'isoNodeTree'
-    | 'isoNodeTreeReposJson'
-    | 'isoSubmodulesJson'
-    | 'isoSubmodulesReposJson'
-    | 'isoWorktreePath'
-    | 'mergeState'
-    | 'opencodeSessionId'
-    | 'pid'
-    | 'portValidationFailuresJson'
-    | 'preSnapshot'
-    | 'preSnapshotReposJson'
-    | 'promptPath'
-    | 'promptText'
-    | 'rolledBack'
-    | 'runtime'
-    | 'runtimeBinary'
-    | 'runtimeInventoryJson'
-    | 'runtimeParamsJson'
-    | 'shardValueHash'
-    | 'spawnBinaryPath'
-    | 'spawnLaunchNonce'
-    | 'startedAt'
-    | 'startupVerificationJson'
-    | 'tokCacheCreate'
-    | 'tokCacheRead'
-    | 'tokInput'
-    | 'tokOutput'
-    | 'tokTotal'
-    | 'wrapperProgressJson'
-  >
->
+export type NodeExecutionProjectionPatch = NodeRunProjectionWrite
 
 export interface NodeExecutionOutputWrite {
   readonly portName: string
@@ -197,6 +108,7 @@ export interface NodeExecutionPersistence {
   patch(input: {
     readonly nodeRunId: string
     readonly values: NodeExecutionProjectionPatch
+    readonly selection?: SelectionChange
     readonly executionContext?: TaskExecutionContextRef
     readonly now?: number
   }): Promise<boolean>

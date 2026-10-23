@@ -1,7 +1,3 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
-import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 // RFC-359 W8-A —— `ChildExecutionLaunchOperations` 的**双引擎对拍**。
 //
 // 这一对**不是**一份实现被抄了两遍，对拍就是用来把这一点钉住的证据（判定与逐条差额见
@@ -37,6 +33,18 @@ import { createWorkspacePreparationJournal } from '@/modules/task-execution/infr
 // 两侧共有的那几道（parent 不存在 / 非 running / git 身份快照残缺 / parent node_run 不存在）也
 // 一并锁住，免得将来任一侧悄悄少一道。
 
+import {
+  nodeRunFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+  readTaskRepoFixtures,
+} from './helpers/model'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
+import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -58,7 +66,11 @@ import { createProviderTaskExecutionModule } from '@/modules/task-execution/comp
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 // 两侧实现各值 import 一条：这一对的对拍见证判据就锁在这里（`rfc359-w5-provider-pair-conformance`），
 // 走 composition 的再导出会让这份对拍在账本里看不见。
-import { createChildExecutionLaunchOperations } from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
+import {
+  createChildExecutionLaunchOperations,
+  type ChildWorkgroupLaunchResources,
+} from '@/modules/task-execution/infrastructure/childExecutionLaunchOperations'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
 import {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriverLifecyclePort,
@@ -210,7 +222,7 @@ interface SeedOverrides {
 }
 
 async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<void> {
-  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: OWNER_ID,
     username: 'owner',
@@ -219,7 +231,7 @@ async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<v
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: CHILD_WORKFLOW_ID,
     name: 'child-workflow',
     definition: JSON.stringify(LATEST_DEFINITION),
@@ -231,7 +243,7 @@ async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<v
     { id: PARENT_TASK_ID, status: overrides.parentStatus ?? ('running' as const) },
     ...extraParents,
   ]) {
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: parent.id,
       name: parent.id,
       workflowId: CHILD_WORKFLOW_ID,
@@ -273,7 +285,7 @@ async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<v
       ]),
     })
   }
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: PARENT_RUN_ID,
     taskId: parentRunTaskId,
     nodeId: 'call-node',
@@ -343,9 +355,6 @@ function unusedWorkgroupResources() {
     async loadExistingAgentIds(): Promise<readonly string[]> {
       return refuse()
     },
-    async ensureHostWorkflow(): Promise<void> {
-      return refuse()
-    },
     integrity: {
       [agentLaunchResourceIntegrityParticipantBrand]:
         'agent-launch-resource-integrity-participant' as const,
@@ -376,7 +385,10 @@ interface LaunchTarget {
  * 合并后它锁「将来别再分叉」——想证明它还活着，变异必须只动**一侧**（见本文件行级比对那条
  * 用例的 plan 记录：单侧把 `catalogVisibility` 写死 / 把 `task_repos.working_branch` 改掉，都当场红）。
  */
-function operationsFor(harness: ProviderHarness): LaunchTarget {
+function operationsFor(
+  harness: ProviderHarness,
+  workgroup: ChildWorkgroupLaunchResources = unusedWorkgroupResources(),
+): LaunchTarget {
   const db = harness.db as unknown as PostgresqlDatabaseClient
   const persistence = createTaskExecutionPersistence(db)
   let finalized = false
@@ -396,7 +408,7 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
             },
           }),
         ),
-        workgroup: unusedWorkgroupResources(),
+        workgroup,
       }),
       async settle() {
         for (let attempt = 0; attempt < 200 && !finalized; attempt += 1) {
@@ -428,7 +440,7 @@ function operationsFor(harness: ProviderHarness): LaunchTarget {
         },
       }),
     ),
-    workgroup: unusedWorkgroupResources(),
+    workgroup,
   })
   return {
     operations,
@@ -497,10 +509,10 @@ function comparableRows(rows: readonly Record<string, unknown>[]): unknown[] {
 
 /** 子任务那一行 + PG 铸造机显式写的每一张卫星表。少写一张也要红。 */
 async function childRows(db: PersistenceDb): Promise<Record<string, unknown>> {
-  const { tasks, taskRepos, taskSpaceNodes, taskCollaborators, taskExecutionIntents } = tablesOf(db)
+  const { taskSpaceNodes, taskCollaborators, taskExecutionIntents } = tablesOf(db)
   const [task, repos, spaceNodes, collaborators, intents] = await Promise.all([
-    db.select().from(tasks).where(eq(tasks.id, CHILD_TASK_ID)),
-    db.select().from(taskRepos).where(eq(taskRepos.taskId, CHILD_TASK_ID)),
+    readTaskFixtures(db, { id: CHILD_TASK_ID }),
+    readTaskRepoFixtures(db, { taskId: CHILD_TASK_ID }),
     db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, CHILD_TASK_ID)),
     db.select().from(taskCollaborators).where(eq(taskCollaborators.taskId, CHILD_TASK_ID)),
     db.select().from(taskExecutionIntents).where(eq(taskExecutionIntents.taskId, CHILD_TASK_ID)),
@@ -544,6 +556,78 @@ async function settledChildRows(db: PersistenceDb): Promise<Record<string, unkno
 const mintedChildRows = new Map<string, Record<string, unknown>>()
 
 describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHarness) => {
+  test('RFC-395 II-a A2: call-workgroup launches with no catalog anchor; call-workflow still requires its resource', async () => {
+    await seed(harness.db)
+    const { workflows } = tablesOf(harness.db)
+    await harness.db.delete(workflows).where(eq(workflows.id, CHILD_WORKFLOW_ID))
+    expect(await launchError(harness)).toBe('workflow-not-found')
+    expect(await childExists(harness.db)).toBe(false)
+    const target = operationsFor(harness, {
+      async loadExistingAgentIds(ids) {
+        return ids
+      },
+      integrity: {
+        [agentLaunchResourceIntegrityParticipantBrand]:
+          'agent-launch-resource-integrity-participant',
+        async assertUsable() {},
+      },
+    })
+    const request = workflowRequest(schedulerDriver([]))
+    try {
+      await target.operations.launchWorkgroup({
+        actor: request.actor,
+        parentTaskId: request.parentTaskId,
+        parentNodeRunId: request.parentNodeRunId,
+        invocationDepth: request.invocationDepth,
+        materializedSpace: request.materializedSpace,
+        runtime: request.runtime,
+        schedulerDriver: request.schedulerDriver,
+        frozenGroup: {
+          id: 'frozen-group',
+          version: 1,
+          group: {
+            id: 'frozen-group',
+            name: 'Frozen group',
+            version: 1,
+            description: '',
+            instructions: '',
+            mode: 'leader_worker',
+            outputContract: 'files',
+            leaderMemberId: 'member',
+            switches: { shareOutputs: true, directMessages: false, blackboard: false },
+            maxRounds: 3,
+            completionGate: false,
+            members: [
+              {
+                id: 'member',
+                memberType: 'agent',
+                agentId: 'agent',
+                agentName: 'worker',
+                userId: null,
+                displayName: 'worker',
+                roleDesc: '',
+                sortOrder: 0,
+              },
+            ],
+          },
+        },
+        goal: 'Produce the result',
+        name: 'group child',
+        collaboratorUserIds: [],
+      })
+      await target.settle()
+      expect((await readTaskFixtures(harness.db, { id: CHILD_TASK_ID }))[0]).toMatchObject({
+        workgroupId: 'frozen-group',
+        workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
+        workflowVersion: 1,
+        parentTaskId: PARENT_TASK_ID,
+      })
+      expect(await readWorkflowFixtures(harness.db)).toEqual([])
+    } finally {
+      await target.settle()
+    }
+  })
+
   // 正向对照：合法的一次子启动在两个引擎上都把子任务铸出来。没有它，下面那一排「都拒」
   // 的断言可以被一个「什么都拒」的实现全部满足。
   test('a well-formed child launch mints the child on both engines', async () => {
@@ -596,13 +680,10 @@ describeEachProvider('RFC-359 W8-A child execution launch', (harness: ProviderHa
       parentTriggerContextJson: JSON.stringify(PARENT_STORED_TRIGGER_CONTEXT),
     })
     expect(await launchError(harness, { triggerContext: RUNTIME_TRIGGER_CONTEXT })).toBeNull()
-    const { tasks } = tablesOf(harness.db)
     const row = (
-      await harness.db
-        .select({ triggerContextJson: tasks.triggerContextJson })
-        .from(tasks)
-        .where(eq(tasks.id, CHILD_TASK_ID))
-        .limit(1)
+      await readTaskFixtures(harness.db, { id: CHILD_TASK_ID }, { limit: 1 }).then((rows) =>
+        rows.map((row) => ({ triggerContextJson: row.triggerContextJson })),
+      )
     )[0]
     expect(
       row?.triggerContextJson === undefined || row.triggerContextJson === null

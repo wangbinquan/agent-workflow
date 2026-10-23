@@ -1,20 +1,21 @@
 // RFC-339 — task-execution-owned loop/git/fanout wrapper mechanics.
 
-import { isSingleRootRepository } from '@agent-workflow/shared'
+import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
+import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
+import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import { taskCheckpointRefs, type TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
 import type { computeShardScope } from '@/modules/task-execution/domain/fanoutScope'
 import type {
   Agent,
   FailureCode,
-  MergeState,
   WorkflowDefinition,
   WorkflowEdge,
   WorkflowNode,
 } from '@agent-workflow/shared'
 import {
-  type NodeRunOrderKey,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   declaredPorts,
-  isMergeStateSettled,
   stringifyKind,
   tryParseKind,
 } from '@agent-workflow/shared'
@@ -22,13 +23,11 @@ import {
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 
-import {
-  consumedMapsEqual,
-  isFresherNodeRun,
-  parseConsumedJson,
-  pickFreshestRun,
-  pickReusableShardRun,
-} from '@/services/freshness'
+import { consumedMapsEqual, parseConsumedJson } from '@/services/freshness'
+import { encodeConsumedEdges } from '../infrastructure/runSelection/consumedCodec'
+import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
+import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
+import type { ShardRequest } from '../application/ports/runSelection'
 import { toContainerRelative } from '@/modules/task-execution/public/queries'
 import { runTaskAgentWithFamily as runNode } from './taskAgentRunFamily'
 import type { RunResult } from '../application/ports/taskAgentRun'
@@ -73,7 +72,6 @@ import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
   isolatedRunBinding,
-  parseIsoJsonMap,
   parseIsoSubmodules,
   pickString,
   readPortRowAtFrame,
@@ -128,7 +126,7 @@ export function createWrapperMechanicsPorts(
           }))
         : handle.repos.map((repo, index) => ({
             path: repo.isoWorktreePath,
-            mountPath: state.repos[index]?.mountPath ?? repo.worktreeDirName,
+            mountPath: state.repos[index]?.mountPath ?? repo.mountPath,
             readonly: state.repos[index]?.readonly ?? false,
           }))
     )
@@ -156,7 +154,11 @@ export function createWrapperMechanicsPorts(
     persistProgress: async (runId, progress) => {
       await state.opts.persistence.nodeExecution.patch({
         nodeRunId: runId,
-        values: { wrapperProgressJson: encodeWrapperProgress(progress) },
+        values: {
+          runtime: {
+            wrapperProgressJson: encodeWrapperProgress(progress),
+          },
+        },
         ...(state.opts.executionContext === undefined
           ? {}
           : { executionContext: state.opts.executionContext }),
@@ -210,7 +212,11 @@ export function createWrapperMechanicsPorts(
     async recordConsumed(runId, consumed) {
       await state.opts.persistence.nodeExecution.patch({
         nodeRunId: runId,
-        values: { consumedUpstreamRunsJson: JSON.stringify(consumed) },
+        values: {
+          inputs: {
+            ...prepareConsumedInputs({ record: consumed }),
+          },
+        },
         ...(state.opts.executionContext === undefined
           ? {}
           : { executionContext: state.opts.executionContext }),
@@ -222,11 +228,20 @@ export function createWrapperMechanicsPorts(
         nodeId,
         iteration,
       })
-      const previous = pickFreshestRun(
-        rows.filter((row) => row.id !== excludeRunId && row.consumedUpstreamRunsJson !== null),
-        { topLevelOnly: true },
-      )
-      return previous?.consumedUpstreamRunsJson ?? null
+      const selection = createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } })
+      const previous = (
+        await selection.familyHistory(
+          state.taskId,
+          {
+            nodeId,
+            iteration,
+            runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id),
+          },
+          { topLevelOnly: true, consumedOnly: true },
+        )
+      ).at(-1)
+      if (previous === undefined) return null
+      return encodeConsumedEdges(await selection.consumed(previous.id))
     },
     async outputOf(runId, portName) {
       const row = (await state.opts.persistence.nodeExecution.listOutputs(runId)).find(
@@ -237,7 +252,7 @@ export function createWrapperMechanicsPorts(
         : {
             content: row.content,
             kind: row.kind,
-            archiveJson: row.archiveJson,
+            archiveJson: copyLegacyPortArchive(row.archiveJson),
             active: row.active,
           }
     },
@@ -249,7 +264,7 @@ export function createWrapperMechanicsPorts(
             portName: input.portName,
             content: input.content,
             kind: input.kind ?? null,
-            archiveJson: input.archiveJson ?? null,
+            archiveJson: copyLegacyPortArchive(input.archiveJson ?? null),
             active: input.active ?? true,
           },
         ],
@@ -334,14 +349,14 @@ export function createWrapperMechanicsPorts(
         : {
             ...state,
             repos: handle.repos.map((repo, index) => ({
-              repoIndex: index,
+              ...state.repos[index]!,
+              ordinal: state.repos[index]!.ordinal,
               repoPath: repo.repoPath,
               worktreePath: repo.isoWorktreePath,
-              worktreeDirName: repo.worktreeDirName,
               mountPath:
                 kind === 'wrapper-loop'
-                  ? (state.repos[index]?.mountPath ?? repo.worktreeDirName)
-                  : repo.worktreeDirName,
+                  ? (state.repos[index]?.mountPath ?? repo.mountPath)
+                  : repo.mountPath,
               readonly: kind === 'wrapper-loop' ? (state.repos[index]?.readonly ?? false) : false,
               baseBranch: repo.baseBranch,
               baseCommit: repo.baseSnapshot,
@@ -575,25 +590,36 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     ).filter((row) => (row.shardKey ?? null) === rowShardKey)
   let candidates = await readCandidates()
   const forcedProcessRetry = args.processRetryIndex !== undefined
-  const reusableNow = () =>
-    args.reuseDisabled || forcedProcessRetry
-      ? undefined
-      : pickReusableShardRun(candidates, { shardKey: rowShardKey, valueHash })
+  const selectShard = async () =>
+    (
+      await createRunSelectionOracleSnapshot(candidates, { scope: { kind: 'rows' } }).shardSet(
+        taskId,
+        {
+          wrapperRunId,
+          iteration,
+          shards: [{ nodeId: innerNode.id, shardKey: rowShardKey, valueHash }],
+          reuseDisabled: args.reuseDisabled,
+          processRetryIndex: args.processRetryIndex,
+        },
+      )
+    ).shards[0]!
+  let selected = await selectShard()
   // RFC-370 — a done shard is reusable only once its delta is in this scope's
   // canonical. One whose merge-back a crash or a lost execution lease
   // interrupted finishes it here, in the dispatching scope (its merge target);
   // a shard whose merge-back failed is re-run instead of replayed without it.
-  const interrupted = reusableNow()
+  const interrupted = candidates.find((row) => row.id === selected.reusable?.id)
   if (
     interrupted !== undefined &&
-    interrupted.id === pickFreshestRun(candidates, { topLevelOnly: false })?.id &&
+    interrupted.id === selected.current?.id &&
     (interrupted.mergeState === 'pending-merge' || interrupted.mergeState === 'isolating')
   ) {
     await completeInterruptedMerge(state, interrupted, log)
     candidates = await readCandidates()
+    selected = await selectShard()
   }
-  const freshest = pickFreshestRun(candidates, { topLevelOnly: false })
-  const reusable = reusableNow()
+  const freshest = selected.current
+  const reusable = selected.reusable
   let shardRunId: string
   let shardRetryIndex: number
   // RFC-130 §8.3 D9 (T14): when this dispatch RE-RUNS a shard whose prior attempt's
@@ -609,29 +635,13 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   // columns → skipped. Applied only to the private iso — canon is never touched before
   // the rerun succeeds (AC-6). Branch 1 (reuse) returns before the iso is built.
   let priorShardUndo: { base: Record<string, string>; node: Record<string, string> } | null = null
-  const doneMergedCandidates = candidates.filter(
-    (c) => c.status === 'done' && c.mergeState === ('merged' satisfies MergeState),
-  )
-  if (doneMergedCandidates.length === 1) {
-    const priorMergedRow = doneMergedCandidates[0]!
-    const priorBase: Record<string, string> = {}
-    const priorNode: Record<string, string> = {}
-    if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
-      if (priorMergedRow.isoBaseSnapshot !== null) priorBase[''] = priorMergedRow.isoBaseSnapshot
-      if (priorMergedRow.isoNodeTree !== null) priorNode[''] = priorMergedRow.isoNodeTree
-    } else {
-      Object.assign(priorBase, parseIsoJsonMap(priorMergedRow.isoBaseSnapshotReposJson))
-      Object.assign(priorNode, parseIsoJsonMap(priorMergedRow.isoNodeTreeReposJson))
-    }
+  const priorMergedRow = candidates.find((row) => row.id === selected.singleMergedCandidate?.id)
+  if (priorMergedRow !== undefined) {
+    const priorBase = taskCheckpointRefs(priorMergedRow.checkpoints, 'isolationBase')
+    const priorNode = taskCheckpointRefs(priorMergedRow.checkpoints, 'nodeTree')
     if (Object.keys(priorNode).length > 0) priorShardUndo = { base: priorBase, node: priorNode }
   }
-  if (
-    !forcedProcessRetry &&
-    freshest !== undefined &&
-    reusable !== undefined &&
-    reusable.id === freshest.id &&
-    (isMergeStateSettled(reusable.mergeState) || reusable.mergeState === 'conflict-human')
-  ) {
+  if (selected.replayable && reusable !== null) {
     // Branch 1 — replay. The `reusable.id === freshest.id` guard refuses a
     // done row that has been SUPERSEDED by a fresher attempt of any status
     // (e.g. a user-targeted shard retry placeholder): replaying it would undo
@@ -642,12 +652,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     broadcastNodeStatus(taskId, reusable.id, innerNode.id, 'done')
     return { kind: 'ok', shardKey, outputs, message: '' }
   }
-  if (
-    !forcedProcessRetry &&
-    freshest !== undefined &&
-    freshest.status !== 'done' &&
-    freshest.parentNodeRunId === wrapperRunId
-  ) {
+  if (selected.rerunInPlace && freshest !== null) {
     // Branch 2 — re-run the existing same-generation child in place.
     // allowTerminal: a reaped child is 'interrupted' (terminal); reset to
     // pending so runNode's mark-running (pending → running) applies cleanly.
@@ -666,7 +671,11 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // so future reuse decisions compare against what actually ran.
     await state.opts.persistence.nodeExecution.patch({
       nodeRunId: shardRunId,
-      values: { shardValueHash: valueHash },
+      values: {
+        config: {
+          shardValueHash: valueHash,
+        },
+      },
       ...(state.opts.executionContext === undefined
         ? {}
         : { executionContext: state.opts.executionContext }),
@@ -677,17 +686,25 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // (priorShardUndo) was already derived above from the latest done+merged
     // candidate and is applied at merge-back.
     shardRunId = await state.opts.persistence.nodeRuns.mint({
+      ...deriveNodeRunRole({
+        nodeId: innerNode.id,
+        rerunCause: forcedProcessRetry ? 'process-retry' : 'fanout-shard',
+      }),
       taskId,
       nodeId: innerNode.id,
       status: 'pending',
       cause: forcedProcessRetry ? 'process-retry' : 'fanout-shard',
-      retryIndex: args.processRetryIndex ?? 0,
+      retryIndex: nodeRunAttemptIndex({ kind: 'explicit', attempt: args.processRetryIndex }),
       containerRunId: wrapperRunId,
       iteration,
       overrides: {
-        parentNodeRunId: wrapperRunId,
-        shardKey: rowShardKey,
-        shardValueHash: valueHash,
+        identity: {
+          parentNodeRunId: wrapperRunId,
+          shardKey: rowShardKey,
+        },
+        config: {
+          shardValueHash: valueHash,
+        },
       },
       ...(state.opts.executionContext === undefined
         ? {}
@@ -750,7 +767,12 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       to: 'failed',
       allowedFrom: ['pending'],
       reason: 'fanout-shard-injection-failed',
-      extra: { finishedAt: Date.now(), errorMessage: injection.message },
+      extra: {
+        identity: {
+          finishedAt: Date.now(),
+          errorMessage: injection.message,
+        },
+      },
       ...(state.opts.executionContext === undefined
         ? {}
         : { executionContext: state.opts.executionContext }),
@@ -805,16 +827,16 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
             try {
               await workspaceRecord(iso).scope.undoShard({
                 workspaceRef: r.isoWorktreePath,
-                priorNodeCommit: priorShardUndo.node[r.worktreeDirName],
-                priorBaseCommit: priorShardUndo.base[r.worktreeDirName],
+                priorNodeCommit: priorShardUndo.node[r.mountPath],
+                priorBaseCommit: priorShardUndo.base[r.mountPath],
                 log,
                 forcedRelativePaths: r.forcedRepoRelPaths,
               })
             } catch (err) {
               log.warn('T14 iso-undo failed — superimposition fallback', {
                 shardKey,
-                worktreeDirName: r.worktreeDirName,
-                mountPath: r.worktreeDirName,
+                worktreeDirName: r.mountPath,
+                mountPath: r.mountPath,
                 subdir: '',
                 readonly: false,
                 error: describeEffectError(err),
@@ -871,8 +893,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
               repos: iso.repos.map((r) => ({
                 repoPath: r.repoPath,
                 worktreePath: r.isoWorktreePath,
-                worktreeDirName: r.worktreeDirName,
-                mountPath: r.worktreeDirName,
+                mountPath: r.mountPath,
                 subdir: '',
                 readonly: false,
                 baseBranch: r.baseBranch,
@@ -950,7 +971,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
             nodeRunId: shardRunId,
             via: 'live',
             extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
-              toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
+              toContainerRelative(state.repos[0]?.mountPath ?? '', p),
             ),
             conflictResolver: (conflicts, containerPath) =>
               resolveMergeConflicts(state, {
@@ -1117,7 +1138,8 @@ async function dispatchFanoutAggregatorAttempt(
   // Every inner row that fed this aggregation: an existing aggregator row may
   // only be REPLAYED when it is fresher (pure id-order) than ALL of them — a
   // shard that re-ran after the old aggregation makes that aggregation stale.
-  const participatingRows: NodeRunOrderKey[] = []
+  const participatingRows: NodeExecutionSnapshot[] = []
+  const shardRequests: ShardRequest[] = []
   const incoming = definition.edges.filter(
     (e) => e.target.nodeId === aggNode.id && e.boundary === undefined,
   )
@@ -1134,10 +1156,20 @@ async function dispatchFanoutAggregatorAttempt(
       // sorted by shardKey dictionary order (matches agent-multi convention).
       const sortedShards = [...shards].sort((a, b) => a.shardKey.localeCompare(b.shardKey))
       for (const s of sortedShards) {
-        const row = pickReusableShardRun(innerRows, {
+        const request = {
+          nodeId: edge.source.nodeId,
           shardKey: s.shardKey,
           valueHash: sha256Hex(s.value),
+        }
+        shardRequests.push(request)
+        const selected = await createRunSelectionOracleSnapshot(innerRows, {
+          scope: { kind: 'rows' },
+        }).shardSet(taskId, {
+          wrapperRunId,
+          iteration,
+          shards: [request],
         })
+        const row = innerRows.find((candidate) => candidate.id === selected.participating[0]?.id)
         if (row === undefined) continue
         participatingRows.push(row)
         const outRows = await state.opts.persistence.nodeExecution.listOutputs(row.id)
@@ -1155,7 +1187,16 @@ async function dispatchFanoutAggregatorAttempt(
       }
     } else {
       // shared upstream — single (NULL-shardKey) row, plain content.
-      const row = pickReusableShardRun(innerRows, { shardKey: null, valueHash: null })
+      const request = { nodeId: edge.source.nodeId, shardKey: null, valueHash: null }
+      shardRequests.push(request)
+      const selected = await createRunSelectionOracleSnapshot(innerRows, {
+        scope: { kind: 'rows' },
+      }).shardSet(taskId, {
+        wrapperRunId,
+        iteration,
+        shards: [request],
+      })
+      const row = innerRows.find((candidate) => candidate.id === selected.participating[0]?.id)
       if (row !== undefined) {
         participatingRows.push(row)
         const outRows = await state.opts.persistence.nodeExecution.listOutputs(row.id)
@@ -1188,27 +1229,36 @@ async function dispatchFanoutAggregatorAttempt(
         childOnly: true,
       })
     ).filter((row) => row.shardKey === null)
-  let freshestAgg = pickFreshestRun(await readAggCandidates(), { topLevelOnly: false })
+  let aggCandidates = await readAggCandidates()
+  const selectAggregator = () =>
+    createRunSelectionOracleSnapshot([...participatingRows, ...aggCandidates], {
+      scope: { kind: 'rows' },
+    }).shardSet(taskId, {
+      wrapperRunId,
+      iteration,
+      shards: shardRequests,
+      aggregatorNodeId: aggNode.id,
+      reuseDisabled: args.reuseDisabled,
+      processRetryIndex: args.processRetryIndex,
+    })
+  let selectedAggregator = await selectAggregator()
+  let freshestAgg = aggCandidates.find((row) => row.id === selectedAggregator.aggregator?.id)
   const forcedProcessRetry = args.processRetryIndex !== undefined
-  const replayable = (row: typeof freshestAgg): row is NonNullable<typeof freshestAgg> =>
-    !forcedProcessRetry &&
-    !args.reuseDisabled &&
-    row !== undefined &&
-    row.status === 'done' &&
-    participatingRows.every((participating) => isFresherNodeRun(row, participating))
   // RFC-370 — same rule as the shards: an interrupted merge-back completes in
   // the dispatching scope before the aggregation is replayed, a failed one re-runs.
   if (
-    replayable(freshestAgg) &&
+    !forcedProcessRetry &&
+    !args.reuseDisabled &&
+    freshestAgg?.status === 'done' &&
+    selectedAggregator.aggregatorNewerThanInputs &&
     (freshestAgg.mergeState === 'pending-merge' || freshestAgg.mergeState === 'isolating')
   ) {
     await completeInterruptedMerge(state, freshestAgg, log)
-    freshestAgg = pickFreshestRun(await readAggCandidates(), { topLevelOnly: false })
+    aggCandidates = await readAggCandidates()
+    selectedAggregator = await selectAggregator()
+    freshestAgg = aggCandidates.find((row) => row.id === selectedAggregator.aggregator?.id)
   }
-  if (
-    replayable(freshestAgg) &&
-    (isMergeStateSettled(freshestAgg.mergeState) || freshestAgg.mergeState === 'conflict-human')
-  ) {
+  if (selectedAggregator.aggregatorReplayable && freshestAgg !== undefined) {
     const outRows = await state.opts.persistence.nodeExecution.listOutputs(freshestAgg.id)
     const outputs: Record<string, string> = {}
     for (const o of outRows) outputs[o.portName] = o.content
@@ -1217,12 +1267,7 @@ async function dispatchFanoutAggregatorAttempt(
   }
   let aggRunId: string
   let aggRetryIndex: number
-  if (
-    !forcedProcessRetry &&
-    freshestAgg !== undefined &&
-    freshestAgg.status !== 'done' &&
-    freshestAgg.parentNodeRunId === wrapperRunId
-  ) {
+  if (selectedAggregator.aggregatorRerunInPlace && freshestAgg !== undefined) {
     // Re-run the same-generation residue in place (allowTerminal: a reaped
     // aggregator is 'interrupted'; reset to pending for runNode's mark-running).
     aggRunId = freshestAgg.id
@@ -1239,14 +1284,22 @@ async function dispatchFanoutAggregatorAttempt(
     aggRetryIndex = freshestAgg.retryIndex
   } else {
     aggRunId = await state.opts.persistence.nodeRuns.mint({
+      ...deriveNodeRunRole({
+        nodeId: aggNode.id,
+        rerunCause: forcedProcessRetry ? 'process-retry' : 'fanout-aggregator',
+      }),
       taskId,
       nodeId: aggNode.id,
       status: 'pending',
       cause: forcedProcessRetry ? 'process-retry' : 'fanout-aggregator',
-      retryIndex: args.processRetryIndex ?? 0,
+      retryIndex: nodeRunAttemptIndex({ kind: 'explicit', attempt: args.processRetryIndex }),
       containerRunId: wrapperRunId,
       iteration,
-      overrides: { parentNodeRunId: wrapperRunId },
+      overrides: {
+        identity: {
+          parentNodeRunId: wrapperRunId,
+        },
+      },
       ...(state.opts.executionContext === undefined
         ? {}
         : { executionContext: state.opts.executionContext }),
@@ -1262,7 +1315,12 @@ async function dispatchFanoutAggregatorAttempt(
       to: 'failed',
       allowedFrom: ['pending'],
       reason: 'fanout-aggregator-injection-failed',
-      extra: { finishedAt: Date.now(), errorMessage: injection.message },
+      extra: {
+        identity: {
+          finishedAt: Date.now(),
+          errorMessage: injection.message,
+        },
+      },
       ...(state.opts.executionContext === undefined
         ? {}
         : { executionContext: state.opts.executionContext }),
@@ -1383,8 +1441,7 @@ async function dispatchFanoutAggregatorAttempt(
               repos: iso.repos.map((r) => ({
                 repoPath: r.repoPath,
                 worktreePath: r.isoWorktreePath,
-                worktreeDirName: r.worktreeDirName,
-                mountPath: r.worktreeDirName,
+                mountPath: r.mountPath,
                 subdir: '',
                 readonly: false,
                 baseBranch: r.baseBranch,
@@ -1468,7 +1525,7 @@ async function dispatchFanoutAggregatorAttempt(
             nodeRunId: aggRunId,
             via: 'live',
             extraForcedContainerPaths: (result.portFilePaths ?? []).map((p) =>
-              toContainerRelative(state.repos[0]?.worktreeDirName ?? '', p),
+              toContainerRelative(state.repos[0]?.mountPath ?? '', p),
             ),
             conflictResolver: (conflicts, containerPath) =>
               resolveMergeConflicts(state, {
@@ -1641,12 +1698,7 @@ export async function createOrRebuildWrapperIso(
   state: SchedulerState,
   wrapperRunId: string,
   existing: {
-    isoBaseSnapshot: string | null
-    isoBaseSnapshotReposJson: string | null
-    // RFC-210: the rebuilt wrapper iso merges back like any other node's, so the
-    // caller must hand its persisted submodule topology through too.
-    isoSubmodulesJson?: string | null
-    isoSubmodulesReposJson?: string | null
+    checkpoints: readonly TaskRepositoryCheckpoint[]
   } | null,
 ): Promise<IsoHandle> {
   const { taskId } = state
@@ -1693,10 +1745,16 @@ export async function createOrRebuildWrapperIso(
         nodeRunId: wrapperRunId,
         event: { kind: 'reenter-isolation' },
         extra: {
-          isoWorktreePath: null,
-          isoBaseSnapshot: null,
-          isoBaseSnapshotReposJson: null,
-          wrapperProgressJson: null,
+          runtime: {
+            isoWorktreePath: null,
+            wrapperProgressJson: null,
+          },
+          checkpoint: {
+            checkpoints: state.repos.map((repo) => ({
+              mountPath: repo.mountPath,
+              isolationBase: undefined,
+            })),
+          },
         },
         ...(state.opts.executionContext === undefined
           ? {}
@@ -1714,18 +1772,11 @@ export async function createOrRebuildWrapperIso(
     }
   }
   if (effectiveExisting !== null) {
-    const baseSnapshots: Record<string, string> = {}
-    if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
-      if (effectiveExisting.isoBaseSnapshot !== null) {
-        baseSnapshots[''] = effectiveExisting.isoBaseSnapshot
-      }
-    } else {
-      Object.assign(baseSnapshots, parseIsoJsonMap(effectiveExisting.isoBaseSnapshotReposJson))
-    }
+    const baseSnapshots = taskCheckpointRefs(effectiveExisting.checkpoints, 'isolationBase')
     if (Object.keys(baseSnapshots).length > 0) {
       const taskBaseHeads: Record<string, string> = {}
       for (const repo of state.repos) {
-        taskBaseHeads[repo.worktreeDirName] = (await scope.head(repo.worktreePath)).stdout.trim()
+        taskBaseHeads[repo.mountPath] = (await scope.head(repo.worktreePath)).stdout.trim()
       }
       return await restoreTaskIsolation(state, {
         // 这个 handle **要拿去 merge-back**：指错路径不是少清一个目录，
@@ -1739,15 +1790,7 @@ export async function createOrRebuildWrapperIso(
         // RFC-210: a rebuilt wrapper iso merges back like any other, so it
         // carries the same submodule topology. (The discard-only rebuild below
         // deliberately does not — it needs paths and refs, nothing else.)
-        submodules: restoredSubmodules(
-          parseIsoSubmodules(
-            {
-              isoSubmodulesJson: effectiveExisting.isoSubmodulesJson ?? null,
-              isoSubmodulesReposJson: effectiveExisting.isoSubmodulesReposJson ?? null,
-            },
-            state.repos,
-          ),
-        ),
+        submodules: restoredSubmodules(parseIsoSubmodules(effectiveExisting.checkpoints)),
       })
     }
     // No persisted iso base (legacy / passthrough row) — fall through to create.

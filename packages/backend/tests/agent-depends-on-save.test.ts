@@ -13,15 +13,14 @@
 // "happy path with closure ordering" case that's not visible from the save
 // guard alone.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec } from '@/platform/persistence/queryHelpers'
+import { createAgentDependencyReferenceLookup } from '../src/modules/resource-catalog/infrastructure/referenceLookup'
+import { patchAgentFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createAgent } from '../src/services/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {
-  agentsDependingOnIn,
   findAgentsDependingOn,
   resolveDependsClosure,
   validateDependsOn,
@@ -43,8 +42,7 @@ interface AgentSeed {
 function reverseDependencies(db: PersistenceDb) {
   return {
     async findDependents(agentId: string) {
-      const { agents } = tablesOf(db)
-      return agentsDependingOnIn(await db.select().from(agents), agentId).map(({ id, name }) => ({
+      return (await createAgentDependencyReferenceLookup(db).find(agentId)).map(({ id, name }) => ({
         id,
         name,
       }))
@@ -173,11 +171,7 @@ describeEachProvider('RFC-022 validateDependsOn (save-time guard)', (harness) =>
       { name: 'top', dependsOn: ['mid'] },
     )
     const midId = ids.get('mid')!
-    const { sql } = await import('drizzle-orm')
-    await rawExec(
-      db,
-      sql`UPDATE agents SET depends_on = ${JSON.stringify([midId, 'ghost-id'])} WHERE name = 'top'`,
-    )
+    await patchAgentFixture(db, { name: 'top' }, { dependsOn: JSON.stringify([midId, 'ghost-id']) })
     const top = await getAgent(db, 'top')
     expect(top).not.toBeNull()
     if (top === null) throw new Error('unreachable')

@@ -19,14 +19,21 @@
 // runTask 会给 canceled sibling 铸新行——旧版「b 行数恒 1」断言是竞态，已改为等待终态
 // 后断言行集。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
+import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, describe, expect, test } from 'bun:test'
 
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createRetryEngine } from './helpers/retryEngine'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
@@ -61,6 +68,12 @@ let seq = 0
 function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -103,7 +116,7 @@ describe('S-22（纯函数面）— retryNode 后的行集：目标可跑、canc
     return { definition, scopeNodes, scopeIds, upstreams }
   }
 
-  test('retry 后第一 tick：a 的 failed 重试行 ready（N1），b 的 canceled 行也 ready（复活信号，RFC-095）', () => {
+  test('retry 后第一 tick：a 的 failed 重试行 ready（N1），b 的 canceled 行也 ready（复活信号，RFC-095）', async () => {
     const { definition, scopeNodes, scopeIds, upstreams } = postRetryScenario()
     const rows = [
       row('in', 'done'),
@@ -111,7 +124,7 @@ describe('S-22（纯函数面）— retryNode 后的行集：目标可跑、canc
       row('b', 'canceled'),
       row('a', 'failed', { retryIndex: 1 }), // retryNode 铸的 'queued for retry' 行（更晚 id ⇒ latest）
     ]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -133,7 +146,7 @@ describe('S-22（纯函数面）— retryNode 后的行集：目标可跑、canc
     expect(f.allSettled).toBe(false)
   })
 
-  test('a 重跑 done 后 b 仍 ready——scope 不再 stalled（S-22 黑洞闭合）', () => {
+  test('a 重跑 done 后 b 仍 ready——scope 不再 stalled（S-22 黑洞闭合）', async () => {
     const { definition, scopeNodes, scopeIds, upstreams } = postRetryScenario()
     const rows = [
       row('in', 'done'),
@@ -141,7 +154,7 @@ describe('S-22（纯函数面）— retryNode 后的行集：目标可跑、canc
       row('b', 'canceled'),
       row('a', 'done', { retryIndex: 1 }), // 重试已成功
     ]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -194,8 +207,7 @@ async function waitForTerminalTask(
   taskId: string,
 ): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
-    const { tasks } = tablesOf(db)
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
   }
@@ -208,11 +220,10 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     runA: string
     runB: string
   }> {
-    const { agents, workflows, tasks, nodeRuns } = tablesOf(db)
     // mock opencode 需要 agent 行（getAgent）与真实存在的 worktree 目录（spawn cwd）。
     // readonly=true ⇒ stash 快照路径 permissive，纯目录（非 git）即可——先例：
     // scheduler-boundary-wrapper-resume-interrupted.test.ts。
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: ulid(),
       name: 'x',
       description: 'test',
@@ -233,7 +244,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     }
     const canonicalDefinition = await canonicalizeWorkflowAgentIds(db, definition)
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'wf-s22',
       definition: JSON.stringify(canonicalDefinition),
@@ -241,7 +252,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     const taskId = ulid()
     const worktreePath = join(APP_HOME, `wt-${taskId}`)
     mkdirSync(worktreePath, { recursive: true })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 't-s22',
       id: taskId,
       workflowId,
@@ -258,7 +269,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     })
     const runA = ulid()
     const runB = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runA,
       taskId,
       nodeId: 'a',
@@ -268,7 +279,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       startedAt: Date.now() - 900,
       finishedAt: Date.now() - 600,
     })
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runB,
       taskId,
       nodeId: 'b',
@@ -311,8 +322,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     // errorSummary 拼进断言：失败时直接暴露失败原因，便于诊断。
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
-    const { nodeRuns } = tablesOf(db)
-    const all = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const all = await readNodeRunFixtures(db, { taskId })
     // 目标节点 a：retryNode 铸的 retryIndex=1 failed 占位行（'queued for retry'）
     // 作为历史保留，其后由调度器铸更晚的 done 重跑行。
     const minted = all.find((r) => r.nodeId === 'a' && r.errorMessage === 'queued for retry')
@@ -334,8 +344,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
   test('对照：running 任务仍被状态门拒绝（ConflictError "task-still-running"）——证明放行 canceled 是门的选择而非门失效', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const { taskId, runA } = await seedCanceledTask(db)
-    const { tasks } = tablesOf(db)
-    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'running' })
 
     await expect(
       createRetryEngine(db, {

@@ -3,8 +3,8 @@ import type { SkillTreeFiles } from './creationContentStore'
 /** Physical changes selected by AW's editor, restore or import workflow. */
 export type SkillVersionContentChange =
   | { readonly kind: 'retain' }
-  | { readonly kind: 'write-main'; readonly content: string }
-  | { readonly kind: 'write-file'; readonly path: string; readonly content: string }
+  | { readonly kind: 'write-main'; readonly content: Uint8Array }
+  | { readonly kind: 'write-file'; readonly path: string; readonly content: Uint8Array }
   | { readonly kind: 'delete-file'; readonly path: string }
   | { readonly kind: 'restore-version'; readonly version: number }
   | ({ readonly kind: 'replace-files' } & SkillTreeFiles)

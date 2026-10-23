@@ -8,7 +8,7 @@
 // happened. If this goes red, RFC-026 has accidentally bled inline behavior
 // into the default isolated path — investigate before relaxing.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -80,8 +80,7 @@ async function setup(
   sessionMode: 'isolated' | undefined,
 ) {
   const agentId = ulid()
-  const { agents, workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, agents, {
+  await agentFixture(h.db, {
     id: agentId,
     name: 'designer',
     description: 't',
@@ -121,8 +120,8 @@ async function setup(
   }
   const taskId = ulid()
   const workflowId = ulid()
-  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
-  await insertOne(h.db, tasks, {
+  await workflowFixture(h.db, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,

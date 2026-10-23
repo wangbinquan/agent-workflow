@@ -1,5 +1,6 @@
 // RFC-041 — task feedback service + clarify/review enqueue hooks.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -21,8 +22,7 @@ const ACTOR: ReviewActor = {
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -31,7 +31,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,

@@ -5,6 +5,7 @@
 // 同一段断言在两个引擎上各跑一遍：身份读取按资源类型走 ACL 表、授权等级按 (type,id,user) 精确命中、
 // owner+name 查找只回自己的、读模型按 id / name 取快照并只回活跃用户；附源码锁。
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -48,10 +49,8 @@ async function seedAgent(
   input: { readonly ownerUserId: string; readonly name: string },
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(
+  await agentFixture(
     db,
-    agents,
     createAgentPersistenceValues({
       id,
       agent: CreateAgentSchema.parse({ name: input.name }),

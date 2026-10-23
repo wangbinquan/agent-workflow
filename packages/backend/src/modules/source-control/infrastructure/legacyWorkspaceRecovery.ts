@@ -1,5 +1,6 @@
 // Historical Tasks have no preparation journal. Keep their existing reclaim
 // algorithm at the physical owner; journaled Tasks must never enter this path.
+import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runGit, withWorktreeRegistryLock } from '@/util/git'
@@ -26,13 +27,14 @@ export async function reclaimLegacyWorkspaceArtifacts(
     )
   }
   const store = dependencies.store
+  const requestedSource = decodeRequestedSource(task)
   const cachedRepoIds = new Set<string>()
-  if (task.cachedRepoId !== null && task.cachedRepoId.length > 0) {
-    cachedRepoIds.add(task.cachedRepoId)
+  if (requestedSource.cachedRepoId !== null && requestedSource.cachedRepoId.length > 0) {
+    cachedRepoIds.add(requestedSource.cachedRepoId)
   }
-  if (task.repoGroupId !== null && task.repoGroupId.length > 0) {
+  if (requestedSource.repoGroupId !== null && requestedSource.repoGroupId.length > 0) {
     try {
-      const layout = await resolveRepoGroupLayout(store, task.repoGroupId)
+      const layout = await resolveRepoGroupLayout(store, requestedSource.repoGroupId)
       for (const repository of layout.repos) cachedRepoIds.add(repository.cachedRepoId)
     } catch (error) {
       dependencies.log.warn('could not resolve repository group while reclaiming retry artifacts', {

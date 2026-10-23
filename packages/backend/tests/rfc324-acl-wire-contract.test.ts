@@ -14,8 +14,7 @@
 // AC-16（bypass 判定不变）的完整证明在 rfc324-access-policy-equivalence 的穷举里；
 // 这里补一条 HTTP 层的对照，确认那条纯函数结论真的接到了端点上。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
@@ -69,8 +68,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   }
   const owner = await mk('owner', 'user')
   const agentId = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId,
     name: `rfc324-wire-${agentId.slice(-6)}`,
     description: 'seeded',

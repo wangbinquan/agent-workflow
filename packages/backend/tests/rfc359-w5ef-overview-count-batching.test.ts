@@ -23,6 +23,7 @@
 // ② **条数真的降下来了**——只锁数值不锁条数，有人把它改回逐表循环、数值照样对，
 //    而这条判据存在的唯一理由（AC-11 那 1ms）就悄悄没了。
 
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -57,7 +58,7 @@ const actor = buildActor({
 
 async function seed(harness: ProviderHarness): Promise<void> {
   const now = Date.now()
-  const { users, agents, workflows } = tablesOf(harness.db)
+  const { users } = tablesOf(harness.db)
   await insertOne(harness.db, users, {
     id: OWNER,
     username: 'w5ef-owner',
@@ -73,7 +74,7 @@ async function seed(harness: ProviderHarness): Promise<void> {
     ['w5ef-builtin', true],
     ['w5ef-mine', false],
   ] as const) {
-    await insertOne(harness.db, agents, {
+    await agentFixture(harness.db, {
       id: ulid(),
       name,
       description: '',
@@ -83,9 +84,9 @@ async function seed(harness: ProviderHarness): Promise<void> {
       builtin,
       createdAt: now,
       updatedAt: now,
-    } as PersistenceTables['agents']['$inferInsert'])
+    })
   }
-  await insertOne(harness.db, workflows, {
+  await workflowFixture(harness.db, {
     id: ulid(),
     name: 'w5ef-flow',
     description: '',
@@ -96,7 +97,7 @@ async function seed(harness: ProviderHarness): Promise<void> {
     builtin: false,
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['workflows']['$inferInsert'])
+  })
 }
 
 describeEachProvider('RFC-359 §5ef 概览计数批量化（双引擎）', (harness) => {

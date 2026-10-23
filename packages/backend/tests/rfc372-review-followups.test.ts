@@ -1,4 +1,10 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import type {
@@ -84,14 +90,14 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  const { clarifyRounds } = tablesOf(h.db)
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'review',
     definition: JSON.stringify(definition),
     schemaVersion: 7,
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'review',
     executionLineageId: taskId,
@@ -108,7 +114,7 @@ async function seed(
     inputs: JSON.stringify(options.inputs ?? {}),
     startedAt: Date.now(),
   })
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: askingNodeRunId,
     taskId,
     nodeId: 'asking',
@@ -221,8 +227,7 @@ describeEachProvider('RFC-372 review O1: task background for follow-ups', (h) =>
         taskId: fixture.taskId,
       }),
     ).toBeNull()
-    const { tasks } = tablesOf(h.db)
-    await h.db.update(tasks).set({ inputs: '{' }).where(eq(tasks.id, other.taskId))
+    await patchTaskFixture(h.db, { id: other.taskId }, { inputs: '{' })
     expect(
       await generation(h).context({ askingNodeRunId: other.askingNodeRunId, taskId: other.taskId }),
     ).toBeNull()
@@ -354,7 +359,11 @@ describe('RFC-372 review O3: one in-flight registry shared with the seal', () =>
       'utf8',
     )
     expect(seal).toContain("from '../clarifyFollowupActivity'")
-    expect(seal).not.toMatch(/from '\.\.\/\.\.\/application\//)
+    // RFC-395 II-a A4 adds this type-only port; the activity registry must still stay in infrastructure.
+    const sealPortImport =
+      "import type { ClarifySealDecisionParticipantInTx } from '../../application/ports/clarifySealDecisionParticipant'"
+    expect(seal).toContain(sealPortImport)
+    expect(seal.replace(sealPortImport, '')).not.toMatch(/from '\.\.\/\.\.\/application\//)
   })
 })
 
@@ -374,10 +383,10 @@ describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
   for (const mode of ['standalone', 'hosted'] as const)
     test(`${mode}: selected binding receives frozen runtime, abort and original observation ownership`, async () => {
       const fixture = await seed(h)
-      const { nodeRuns } = tablesOf(h.db)
-      await h.db
-        .update(nodeRuns)
-        .set({
+      await patchNodeRunFixture(
+        h.db,
+        { id: fixture.askingNodeRunId },
+        {
           runtime: 'opencode',
           runtimeBinary: '/frozen/opencode',
           runtimeParamsJson: JSON.stringify({
@@ -390,8 +399,8 @@ describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
               acceptedName: 'frozen-runtime-name',
             },
           }),
-        })
-        .where(eq(nodeRuns.id, fixture.askingNodeRunId))
+        },
+      )
       const requests: SystemAgentRunRequest[] = []
       const bindings: unknown[] = [],
         released: unknown[] = []
@@ -477,12 +486,13 @@ describeEachProvider('RFC-378 selected follow-up execution family', (h) => {
       // Old or malformed snapshots must not fabricate today's registration.
       fail = false
       for (const identity of [undefined, { registrationId: '', configurationRevision: -1 }]) {
-        await h.db
-          .update(nodeRuns)
-          .set({
+        await patchNodeRunFixture(
+          h.db,
+          { id: fixture.askingNodeRunId },
+          {
             runtimeParamsJson: JSON.stringify({ model: 'frozen/model', __observation: identity }),
-          })
-          .where(eq(nodeRuns.id, fixture.askingNodeRunId))
+          },
+        )
         expect(await generator.generate({ ...request, requestId: randomUUID() })).toBe(generated)
         expect(requests.at(-1)?.runtimeObservationIdentity).toBeUndefined()
       }

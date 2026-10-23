@@ -1,4 +1,7 @@
+// RFC-395 II-a rebaseline: HEAD inverse matches the previous pin; only A2 subject/name SQL
+// and A7 catalog-query forwarding changed. Prefix/gate inverses and binding assertions remain exact.
 // RFC359 W25: real original SQL, original bindings, complete rows and snapshot.
+import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
@@ -6,7 +9,7 @@ import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq, sql, SQL, StringChunk } from 'drizzle-orm'
+import { sql, SQL, StringChunk } from 'drizzle-orm'
 import { createInMemoryDb } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -143,7 +146,7 @@ function giantFamily(): FixtureRow[] {
   ]
 }
 async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<void> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
@@ -153,7 +156,7 @@ async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<voi
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'w25-workflow',
     name: 'W25 workflow',
     definition: '{ "fixture": true }',
@@ -162,7 +165,7 @@ async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<voi
   })
   for (const row of rows) {
     const family = row.root === undefined ? row.id : row.root
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: row.id,
       name: row.name ?? 'match',
       workflowId: 'w25-workflow',
@@ -189,7 +192,6 @@ async function seed(db: PersistenceDb, rows: readonly FixtureRow[]): Promise<voi
       ownerUserId: VIEWER.userId,
       launchOrigin: 'manual',
       catalogVisibility: 'public',
-      repoCount: 1,
     })
   }
 }
@@ -302,21 +304,25 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
   for (const fixture of cases)
     test(fixture.name, async () => {
       await seed(harness.db, fixture.rows)
-      const { tasks } = tablesOf(harness.db)
-      const before = await harness.db.select().from(tasks).orderBy(tasks.id)
+      const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
       await compare(harness, harness.db, fixture.raw)
-      expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
-      expect(JSON.stringify(await harness.db.select().from(tasks).orderBy(tasks.id))).toBe(
-        JSON.stringify(before),
-      )
+      expect(
+        await readTaskFixtures(harness.db, undefined, {
+          orderBy: [{ field: 'id', direction: 'asc' }],
+        }),
+      ).toEqual(before)
+      expect(
+        JSON.stringify(
+          await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] }),
+        ),
+      ).toBe(JSON.stringify(before))
     })
   test('the actual page facade retains every cursor, complete row and family count', async () => {
     await seed(harness.db, [
       ...independentRoots(12),
       { id: 'same-time-child', root: 'root-00', parent: 'root-00', startedAt: 1000 },
     ])
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
     const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
     let cursor: string | undefined
     const seen: string[] = []
@@ -330,24 +336,30 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
       cursor = result.nextCursor ?? undefined
     } while (cursor !== undefined)
     expect(seen).toEqual(independentRoots(12).map((row) => row.id))
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(before)
   })
   test('a transaction changes the selected path while rollback preserves all stored JSON', async () => {
     await seed(harness.db, independentRoots())
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
     const original = await compare(harness, harness.db, RAW)
     const stop = new Error('rollback bounded root prefix')
     await expect(
       harness.session.transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        await tx.update(tasks).set({ startedAt: 1000 }).where(eq(tasks.workflowId, 'w25-workflow'))
+        await patchTaskFixture(tx, { workflowId: 'w25-workflow' }, { startedAt: 1000 })
         const changed = await compare(harness, tx, RAW)
         expect(changed).not.toEqual(original)
         throw stop
       }),
     ).rejects.toBe(stop)
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(before)
     expect(await compare(harness, harness.db, RAW)).toEqual(original)
   })
 })
@@ -359,7 +371,7 @@ test('the inverse retains the exact complete W23 source', () => {
     createHash('sha256')
       .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
       .digest('hex'),
-  ).toBe('22f387e0745fcf493dfc070418d3aba1c6408bc80f3bdc4015158d1c6ad9575e')
+  ).toBe('a7ac309b24ca035cdcad79cd1e04d43c352c0c11bb576462f29741eeb122e164')
 })
 test('the real PG compiler retains the original SQL and explains every additional binding', async () => {
   const statements: { sql: string; values: readonly unknown[] }[] = []

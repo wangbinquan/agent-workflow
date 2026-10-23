@@ -29,13 +29,17 @@
 // rfc128-p2-per-question-endpoint.test.ts 的 P5-0 块）。任一断言变红 = guard 行为被改，
 // 须确认是 P5-B/C 有意放开（届时把锁迁移到逐题重跑语义），而非误删。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
@@ -102,8 +106,7 @@ function crossDef(): WorkflowDefinition {
 async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ taskId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -111,7 +114,7 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ t
     version: 1,
     schemaVersion: def.$schema_version,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     executionLineageId: taskId,
@@ -137,15 +140,14 @@ async function seedSelfRound(
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, selfDef())
   const sourceRunId = `nr_src_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: '',
+    checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
   const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
     kind: 'self',
@@ -167,8 +169,7 @@ async function seedCrossRound(
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, crossDef())
   const questionerRunId = `nr_q_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     {
       id: `nr_d_${Math.random().toString(36).slice(2, 8)}`,
@@ -176,7 +177,7 @@ async function seedCrossRound(
       nodeId: 'designer',
       status: 'done',
       iteration: 0,
-      preSnapshot: 'stub',
+      checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
   const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
@@ -194,13 +195,11 @@ async function seedCrossRound(
 }
 
 function roundOf(db: PersistenceDb, taskId: string) {
-  const { clarifyRounds } = tablesOf(db)
-  return db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+  return readClarifyRoundFixtures(db, { taskId })
 }
 
 function nodeRunStatusOf(db: PersistenceDb, id: string) {
-  const { nodeRuns } = tablesOf(db)
-  return db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, id))
+  return readNodeRunFixtures(db, { id }).then((rows) => rows.map((row) => ({ status: row.status })))
 }
 
 /** Seal via the route's call shape, capturing the thrown error (or undefined on success).
@@ -244,7 +243,7 @@ describeEachProvider('RFC-128 full-seal behavior providers', (harness) => {
       // undispatched → the park source holds the asking node until dispatch mints the continuation.
       const [round] = await roundOf(db, taskId)
       expect(round?.status).toBe('answered')
-      expect(round?.answersJson ?? null).not.toBeNull()
+      expect(round?.answers ?? null).not.toBeNull()
       expect((await nodeRunStatusOf(db, originNodeRunId))[0]?.status).toBe('done')
     })
 

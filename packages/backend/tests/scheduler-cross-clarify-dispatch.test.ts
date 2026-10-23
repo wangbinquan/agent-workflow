@@ -16,7 +16,15 @@
 //      External Feedback context (## External Feedback section appears
 //      in node_runs.promptText).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
@@ -112,8 +120,7 @@ async function seedAgent(
   name: string,
   outputs: string[] = ['main'],
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -132,13 +139,12 @@ async function seedWorkflowAndTask(
 ): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -360,8 +366,8 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, t2.taskId)))[0]
+    const { clarifyRounds, nodeRuns } = tablesOf(h.db)
+    const taskRow = (await readTaskFixtures(h.db, { id: t2.taskId }))[0]
     expect(taskRow?.status).toBe('awaiting_human')
 
     const sessions = await h.db
@@ -549,7 +555,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // short-circuit it to done.
     const { dispatchCrossClarifyNode } = await import('../src/services/clarify/service')
     const nrId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: nrId,
       taskId,
       nodeId: 'cross1',
@@ -605,8 +611,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // answer so the unified dispatch has prior rows to inherit (a never-run
     // frontier target is rejected — assertSafeFrontierTarget).
     const qRunId = ulid()
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: qRunId,
       taskId,
       nodeId: 'questioner',
@@ -615,7 +620,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       iteration: 0,
     })
     const priorDesigner = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: priorDesigner,
       taskId,
       nodeId: 'designer',
@@ -669,7 +674,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // RFC-333 T7: createClarifyRound now parks the task together with the gate.
     // The production route resumes after dispatch; this direct-service fixture
     // performs the same scheduler re-entry without starting a second driver.
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'plan v2' }) }, () =>
       runTask({
@@ -685,9 +690,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
 
-    const designerRow = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, designerRunId))
-    )[0]
+    const designerRow = (await readNodeRunFixtures(h.db, { id: designerRunId }))[0]
     // RFC-132 (PR-C): the designer's cross Q&A rides the SINGLE flat `## Clarify Q&A` block (§5 ②b) —
     // no separate `## External Feedback` / `### From '...'` section.
     expect(readNodeRunPrompt(designerRow, join(h.appHome, 'runs')) ?? '').toContain(
@@ -722,8 +725,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // CONSUMED this designer run (so a designer rerun makes it provenance-stale
     // and gets it re-dispatched downstream).
     const inRunId = ulid()
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: inRunId,
       taskId,
       nodeId: 'in1',
@@ -732,7 +734,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       iteration: 0,
     })
     const priorDesigner = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: priorDesigner,
       taskId,
       nodeId: 'designer',
@@ -741,14 +743,14 @@ function registerProviderCases1(provider: ProviderHarness) {
       iteration: 0,
     })
     const qRunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: qRunId,
       taskId,
       nodeId: 'questioner',
       status: 'done',
       retryIndex: 0,
       iteration: 0,
-      consumedUpstreamRunsJson: JSON.stringify({ designer: priorDesigner }),
+      consumedEdges: [{ producerNodeId: 'designer', producerRunId: priorDesigner }],
     })
 
     // The questioner asked a cross-clarify question (target = designer); answered.
@@ -801,7 +803,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // RFC-333 T7: the gate open atomically parked the task. The production
     // answer route resumes after dispatch; mirror that handoff in this direct
     // service-to-scheduler fixture.
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     // Designer reruns (fresh output) → the questioner rerun consumes it → prompt is built.
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'plan v2' }) }, () =>
@@ -818,7 +820,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
 
-    const allRuns = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const allRuns = await readNodeRunFixtures(h.db, { taskId })
     const questionerRuns = allRuns
       .filter((r) => r.nodeId === 'questioner' && r.parentNodeRunId === null)
       .sort((a, b) => (a.id < b.id ? 1 : -1))
@@ -977,7 +979,7 @@ function registerProviderCases2(provider: ProviderHarness) {
           sessionRestartBudget: 0,
         }),
     )
-    const { clarifyRounds, tasks } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     const sess = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
@@ -996,7 +998,7 @@ function registerProviderCases2(provider: ProviderHarness) {
       actor,
     })
     // RFC-097: runTask's entry CAS only claims pending tasks (test stand-in for resumeTask).
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     // Round 1: questioner stop-rerun spawns + finalizes (outputs).
     await withEnv(

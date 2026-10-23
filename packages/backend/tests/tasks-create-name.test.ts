@@ -2,10 +2,8 @@
 // names with 422, persisting the trimmed value on accept, and behaving the
 // same way for JSON and multipart body paths.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readTaskFixtures, workflowFixture } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -63,8 +61,7 @@ describeEachProvider('RFC-359 W51 task name database', (databaseHarness) => {
 
       const db = databaseHarness.db
       const wfId = ulid()
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: wfId,
         name: 'wf',
         definition: JSON.stringify(EMPTY_DEF),
@@ -189,8 +186,7 @@ describeEachProvider('RFC-359 W51 task name database', (databaseHarness) => {
       expect(res.status).toBe(201)
       const body = (await res.json()) as { id: string; name: string }
       expect(body.name).toBe(name)
-      const { tasks } = tablesOf(h.db)
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, body.id)))[0]
+      const row = (await readTaskFixtures(h.db, { id: body.id }))[0]
       expect(row?.name).toBe(name)
     })
 
@@ -205,8 +201,7 @@ describeEachProvider('RFC-359 W51 task name database', (databaseHarness) => {
       expect(res.status).toBe(201)
       const body = (await res.json()) as { id: string; name: string }
       expect(body.name).toBe('PR-1234 fix')
-      const { tasks } = tablesOf(h.db)
-      const row = (await h.db.select().from(tasks).where(eq(tasks.id, body.id)))[0]
+      const row = (await readTaskFixtures(h.db, { id: body.id }))[0]
       expect(row?.name).toBe('PR-1234 fix')
     })
 

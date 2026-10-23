@@ -13,6 +13,15 @@
 // dispatched entry) survive below as HAND-SEEDED pre-upgrade leftovers — the dispatch gate must
 // keep protecting them through the migration window.
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+  clarifyRoundFixtureRuntimeInput,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -109,8 +118,7 @@ function ans(qid: string) {
 
 async function seedTask(db: PersistenceDb, taskId: string, _deferred = true): Promise<void> {
   const def = liveDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -118,7 +126,7 @@ async function seedTask(db: PersistenceDb, taskId: string, _deferred = true): Pr
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -144,8 +152,7 @@ async function seedRun(
   over: { status?: string; iteration?: number; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -155,7 +162,7 @@ async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -182,8 +189,7 @@ async function seedAnsweredRound(
   })
   const roundId = ulid()
   const status = opts.status ?? 'answered'
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: roundId,
     taskId,
     kind: opts.kind,
@@ -194,8 +200,8 @@ async function seedAnsweredRound(
     targetConsumerNodeId: opts.kind === 'cross' ? D : null,
     loopIter: opts.loopIter ?? 0,
     iteration: opts.iteration ?? 0,
-    questionsJson: JSON.stringify(opts.questions),
-    answersJson: JSON.stringify(opts.questions.map((q) => ans(q.id))),
+    questions: JSON.stringify(opts.questions),
+    answers: JSON.stringify(opts.questions.map((q) => ans(q.id))),
     directive: 'continue',
     status,
     answeredAt: Date.now(),
@@ -868,7 +874,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         answers: [ans('q1'), ans('q2')],
         actor,
       })
-      const { taskQuestions, clarifyRounds } = tablesOf(db)
+      const { taskQuestions } = tablesOf(db)
       const afterSubmit = await db
         .select()
         .from(taskQuestions)
@@ -881,11 +887,10 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         ),
       ).toBe(true)
       // The later LAZY reconcile (listTaskQuestions path) must NOT reset them to undispatched/open.
-      const roundRows = await db
-        .select()
-        .from(clarifyRounds)
-        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
-      await reconcileTaskQuestionsForRound(db, roundRows[0]!)
+      const roundRows = await readClarifyRoundFixtures(db, {
+        intermediaryNodeRunId: clarifyNodeRunId,
+      })
+      await reconcileTaskQuestionsForRound(db, clarifyRoundFixtureRuntimeInput(roundRows[0]!))
       const afterReconcile = await db
         .select()
         .from(taskQuestions)
@@ -1104,15 +1109,11 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         ],
         actor,
       })
-      const { clarifyRounds } = tablesOf(db)
       const sess = (
-        await db
-          .select()
-          .from(clarifyRounds)
-          .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+        await readClarifyRoundFixtures(db, { intermediaryNodeRunId: clarifyNodeRunId })
       )[0]
       expect(sess?.status).toBe('answered')
-      const finalAnswers = JSON.parse(sess!.answersJson ?? '[]') as Array<{
+      const finalAnswers = JSON.parse(sess!.answers ?? '[]') as Array<{
         questionId: string
         selectedOptionLabels: string[]
       }>

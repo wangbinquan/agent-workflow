@@ -10,7 +10,13 @@
 // 两次 runTask 之间用 withEnv 换 MOCK_OPENCODE_CLARIFY_BODY 即可让下一轮问不同问题;最后一轮
 // 用 MOCK_OPENCODE_OUTPUTS 让 agent 产出 doc。self-clarify 多轮不涉 fanout(与协作者 4220+ 无关)。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -199,13 +205,12 @@ function registerProviderCases1(provider: ProviderHarness) {
     }
     const workflowId = ulid()
     const taskId = ulid()
-    const { workflows, tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, workflows, {
+    await workflowFixture(h.db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
     })
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       id: taskId,
       name: 't5',
       workflowId,
@@ -227,12 +232,11 @@ function registerProviderCases1(provider: ProviderHarness) {
         : {}),
     })
 
+    const { clarifyRounds } = tablesOf(h.db)
     // ---- ROUND 1: P 问 ----
     const R1 = clarifyBody('r1q', 'ROUND1_PLATFORM_Q', ['R1_ANS_REACT', 'R1_ANS_VUE'])
     await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: R1 }, () => run(h, taskId))
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-      'awaiting_human',
-    )
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('awaiting_human')
     const r1sess = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
@@ -250,14 +254,12 @@ function registerProviderCases1(provider: ProviderHarness) {
       [await selfEntryId(h, taskId, r1sess.intermediaryNodeRunId)],
       actor,
     )
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     // ---- ROUND 2: P 再问(注入 round1) ----
     const R2 = clarifyBody('r2q', 'ROUND2_LANGUAGE_Q', ['R2_ANS_TYPESCRIPT', 'R2_ANS_JS'])
     await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: R2 }, () => run(h, taskId))
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-      'awaiting_human',
-    )
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('awaiting_human')
     const r2sess = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     ).find((s) => s.iteration === 1)!
@@ -276,14 +278,14 @@ function registerProviderCases1(provider: ProviderHarness) {
       actor,
     )
     const finalRerunId = d2.reruns[0]!.nodeRunId
-    await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
     // ---- FINAL: P 产出 doc(STOP 放行 → output) ----
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ doc: 'FINAL_DOC' }) }, () =>
       run(h, taskId),
     )
 
-    const finalRerun = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, finalRerunId)))[0]!
+    const finalRerun = (await readNodeRunFixtures(h.db, { id: finalRerunId }))[0]!
     expect(finalRerun.status).toBe('done')
     const prompt = finalRerun.promptText ?? ''
     // round1 答案:旧 window 判据在此丢失(01KWDKBS bug);RFC-131 派生老化保留它。

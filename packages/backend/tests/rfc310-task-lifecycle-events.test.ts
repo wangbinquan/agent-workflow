@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
@@ -48,16 +48,15 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
       now: () => now,
       id: () => `task-event-resource-${++ordinal}`,
     })
-    const { workflows, tasks, committedEvents, committedEventDeliveries, eventRecords } =
-      tablesOf(db)
-    await insertOne(db, workflows, {
+    const { committedEvents, committedEventDeliveries, eventRecords } = tablesOf(db)
+    await workflowFixture(db, {
       id: 'workflow-1',
       name: 'Lifecycle fixture',
       definition: '{}',
       createdAt: now,
       updatedAt: now,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: 'task-1',
       name: 'Lifecycle fixture',
       workflowId: 'workflow-1',
@@ -96,7 +95,7 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
       now,
       reason: 'lifecycle event fixture',
     })
-    expect(await first(db.select().from(tasks).where(eq(tasks.id, 'task-1')))).toMatchObject({
+    expect((await readTaskFixtures(db, { id: 'task-1' }))[0]).toMatchObject({
       status: 'failed',
       lifecycleEventRevision: 2,
     })

@@ -1,3 +1,5 @@
+import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
+import type { TaskRepositoryCheckpoint } from '@/modules/task-execution/public/types'
 // RFC-098 WP-10 T-a (audit S-16) — the single node_runs INSERT factory.
 //
 // Before this module, 13 call sites across 6 files each hand-rolled their own
@@ -15,11 +17,9 @@
 // Lifecycle note (RFC-098 design 对抗检视修订 #10): the RFC-053 state machine
 // (`lifecycle.ts`) governs UPDATES, not INSERTS — minting a row directly at
 // 'running' is legal here and is exactly what the commit&push container row
-// does (commitPushRunner.ts). The factory enforces the one invariant that
-// direct-running minting must keep: a 'running' row MUST be a child row
-// (parentNodeRunId non-null), because a top-level running row would enter
-// deriveFrontier's in-flight set and freeze the frontier. Violation throws
-// (pinned by node-run-mint.test.ts).
+// does (commitPushRunner.ts). Minting now checks explicit role + container:
+// a born-running node attempt needs a container; synthetic and container rows
+// retain their legitimate task-level shapes. Historical parent is independent.
 
 import { isClarifyRerunCause, type NodeRunStatus, type RerunCause } from '@agent-workflow/shared'
 import type { RuntimeKind } from '@/services/runtime'
@@ -40,6 +40,7 @@ import type {
   NodeRunLifecyclePersistence,
   NodeRunMintInput,
   NodeRunMintRecord,
+  NodeRunMintOverrides,
 } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import {
@@ -82,7 +83,7 @@ export interface MintInheritSource {
   parentNodeRunId: string | null
   /** RFC-354 — a rerun / placeholder stays in the frame of the row it is minted from. */
   containerRunId?: string | null
-  preSnapshot: string | null
+  checkpointInheritance: readonly TaskRepositoryCheckpoint[]
   /** RFC-328 causal slot/generation inheritance; optional for legacy fixtures. */
   continuationSlotKey?: string | null
   lineageSlotPathJson?: string | null
@@ -95,64 +96,11 @@ export interface MintInheritSource {
  * explicit `null` is a real value (e.g. review-rerun rows force
  * parentNodeRunId null, the legacy rerun mints force startedAt null).
  */
-export interface MintNodeRunOverrides {
-  parentNodeRunId?: string | null
-  shardKey?: string | null
-  reviewIteration?: number
-  preSnapshot?: string | null
-  /** RFC-098 B3: fanout shard child rows only. */
-  shardValueHash?: string | null
-  /** RFC-074 provenance map `{upstreamNodeId: nodeRunId}` (JSON). */
-  consumedUpstreamRunsJson?: string | null
-  errorMessage?: string | null
-  /**
-   * RFC-306 §10 — one-shot "run anyway" marker. Set only on the retry
-   * placeholder the user's click produced; the run that follows mints its own
-   * row WITHOUT it, which is what makes the override apply to exactly one
-   * dispatch instead of becoming a permanent property of the node.
-   */
-  forceActivated?: boolean
-  /**
-   * Default is `Date.now()`. The clarify / cross-clarify / review rerun
-   * mints historically wrote NO startedAt (NULL) — they pass `null`
-   * explicitly to preserve that (the runner stamps real timing when the row
-   * actually runs).
-   */
-  startedAt?: number | null
-  /** Default: now for status 'done', NULL otherwise. */
-  finishedAt?: number | null
-  /**
-   * RFC-127 借壳: name of the borrowed agent X this row runs under, while
-   * node_id stays the original node P. NULL/undefined = the node's default
-   * agent (normal path). Orthogonal to `inheritFrom` (the inheritance list has
-   * no agent — borrowing is a new dimension).
-   */
-  agentOverrideName?: string | null
-  /**
-   * RFC-223 (PR-3a): the CANONICAL id of the borrowed / workgroup-member agent
-   * (sibling of `agentOverrideName`). Producers stamp BOTH; consumers resolve
-   * by this id first. NULL/undefined = the node's default agent.
-   */
-  agentOverrideId?: string | null
-  /** RFC-189 — leader_worker workgroup round ordinal（1-based）. Workgroup
-   *  turn mints stamp it; everything else leaves NULL. */
-  wgRound?: number | null
-  /**
-   * RFC-200 (T1b) — per-run envelope nonce. Normally left unset, so the factory
-   * generates a fresh unpredictable one (default). The runner passes an explicit
-   * value on the inline-followup path so the follow-up dispatch REUSES the
-   * anchor round's nonce (the resumed opencode session already told the agent
-   * that nonce; a fresh one would make the parser reject the agent's output) —
-   * mirrors how the runner inherits the memory snapshot from the first attempt.
-   */
-  envelopeNonce?: string
-  /** RFC-328 internal causal identity overrides. */
-  continuationSlotKey?: string | null
-  lineageSlotPathJson?: string | null
-  operationGeneration?: number
-}
+export type MintNodeRunOverrides = NodeRunMintOverrides
 
 export interface MintNodeRunArgs {
+  role: NodeRunMintInput['role']
+  syntheticKind: NodeRunMintInput['syntheticKind']
   /** Preallocated identity for a transaction manifest (RFC-333 review-open). */
   id?: string
   taskId: string
@@ -626,6 +574,22 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     iteration: args.iteration,
     consumedUpstreamJson: args.consumedUpstreamJson,
     rows: args.rows,
+    selection: createRunSelectionOracleSnapshot(
+      args.rows.map((row) => ({
+        ...row,
+        taskId: args.taskId,
+        nodeId: args.nodeId,
+        iteration: args.iteration,
+      })),
+      {
+        scope: {
+          kind: 'node',
+          taskId: args.taskId,
+          nodeId: args.nodeId,
+          iteration: args.iteration,
+        },
+      },
+    ),
     inheritReviewIteration: args.inheritReviewIteration,
     clearAgentOverride: args.clearAgentOverride,
     trackRetryIndex: args.trackRetryIndex,

@@ -1,5 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-029 T4 + T8 — runner.ts must:
 //   1. copy aw-inventory-dump.mjs into the per-run dir before spawning,
@@ -18,7 +17,6 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 
 import type { Agent, RuntimeInventoryObservation } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -63,15 +61,14 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -96,8 +93,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 
 async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n1',
@@ -169,8 +165,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     // 停写旧列（RFC-297 T22）；观测落在新列上，且富字段一个不少（AC-2）。
     expect(row.inventorySnapshotJson).toBeNull()
     expect(row.runtimeInventoryJson).not.toBeNull()
@@ -210,8 +205,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     expect(row.inventorySnapshotJson).toBeNull()
     // 插件没写出文件 → 观测缺失，reason 原样透传（不再是「假装有一份 captured:false
     // 快照」的旧形状）。
@@ -248,14 +242,13 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
           nodeKind: 'agent-single',
         }),
     )
-    const { nodeRuns } = tablesOf(h.db)
     // runner cleans up runRoot on success — assert via the dump plugin source
     // file that should have been copied in. We can't peek at runRoot anymore
     // because cleanup ran; the inventory landing (previous test) is the
     // positive proof the plugin pathway was wired. This test asserts the
     // node row got an observation write (not NULL) on the failure branch too,
     // which means readSnapshotFromRunDir was called.
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     expect(row.runtimeInventoryJson).not.toBeNull()
   })
 
@@ -305,8 +298,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     // 清单：无条件落库——「这一轮加载了什么」谁都想知道。
     expect(row.runtimeInventoryJson).not.toBeNull()
     const observation: RuntimeInventoryObservation = JSON.parse(row.runtimeInventoryJson!)
@@ -354,8 +346,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
         }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]!
     expect(row.inventorySnapshotJson).toBeNull()
   })
 })

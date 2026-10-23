@@ -1,4 +1,5 @@
 import {
+  collectWorkflowDependencyRefs,
   collectWorkflowCallRefs,
   collectWorkgroupCallRefs,
   type WorkflowDefinition,
@@ -23,14 +24,11 @@ export interface WorkflowValidationApplicationDependencies {
 }
 
 function agentReferences(definition: WorkflowDefinition): ReadonlySet<string> {
-  const references = new Set<string>()
-  for (const node of definition.nodes ?? []) {
-    if (node.kind !== 'agent-single' || !('agentId' in node)) continue
-    if (typeof node.agentId === 'string' && node.agentId.length > 0) {
-      references.add(node.agentId)
-    }
-  }
-  return references
+  return new Set(
+    collectWorkflowDependencyRefs(definition, { throwOnNullNode: true })
+      .filter((ref) => ref.resourceType === 'agent')
+      .map((ref) => ref.value),
+  )
 }
 
 function workflowReferences(definition: WorkflowDefinition): ReadonlySet<string> {

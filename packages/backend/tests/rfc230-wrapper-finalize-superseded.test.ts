@@ -11,7 +11,13 @@
 // 反向同样上锁：真正的数据不一致（例如已 done 又要写 failed）**仍然**大声抛出，
 // 不许被这套收敛掩盖 —— 见文末的源码层断言。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readFileSync } from 'node:fs'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -58,8 +64,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -113,15 +118,14 @@ function fanoutDef(): WorkflowDefinition {
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -162,11 +166,9 @@ async function supersedeWrapperWhenRunning(
   event: { kind: 'mark-interrupted' } | { kind: 'mark-canceled'; reason?: string },
 ): Promise<void> {
   for (let i = 0; i < 200; i++) {
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select({ id: nodeRuns.id, status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'fan')))
+    const rows = await readNodeRunFixtures(db, { taskId, nodeId: 'fan' }).then((rows) =>
+      rows.map((row) => ({ id: row.id, status: row.status })),
+    )
     const running = rows.find((r) => r.status === 'running')
     if (running !== undefined) {
       await transitionNodeRunStatus({ db, nodeRunId: running.id, event })
@@ -206,8 +208,8 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
     )
     await superseder
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     // 头号断言：这正是事故里那条任务级失败摘要，必须消失。
     expect(t?.errorSummary).not.toBe('scheduler error')
     expect(t?.errorMessage ?? '').not.toContain('refuse to overwrite')
@@ -248,8 +250,7 @@ describe('RFC-230 — wrapper finalize 撞上外部终态', () => {
     )
     await superseder
 
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('canceled')
     expect(t?.errorSummary).not.toBe('scheduler error')
   })

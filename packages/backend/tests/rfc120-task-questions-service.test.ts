@@ -9,8 +9,16 @@
 //   * reconcile is idempotent (listing twice does not duplicate rows).
 //   * sourceNodeId + phase filters.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+  type ClarifyRoundFixtureSpec,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
@@ -50,8 +58,7 @@ const Q = (id: string) => ({
 })
 
 async function seedTask(db: PersistenceDb, taskId = 'task-1') {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-1',
     name: 'wf',
     definition: '{}',
@@ -59,7 +66,7 @@ async function seedTask(db: PersistenceDb, taskId = 'task-1') {
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     workflowId: 'wf-1',
@@ -87,8 +94,7 @@ async function seedRun(
     withOutput?: boolean
   } = {},
 ) {
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -98,27 +104,26 @@ async function seedRun(
     startedAt: Date.now(),
   })
   if (over.withOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'result', content: 'x' })
   }
 }
 
 async function seedRound(
   db: PersistenceDb,
   taskId: string,
-  over: Partial<PersistenceTables['clarifyRounds']['$inferSelect']> & {
+  over: Partial<ClarifyRoundFixtureSpec> & {
     id: string
     kind: 'self' | 'cross'
     askingNodeId: string
     intermediaryNodeRunId: string
-    questionsJson: string
+    questions: string
   },
 ) {
   // FK: clarify_rounds.asking_node_run_id + intermediary_node_run_id → node_runs.
   const askingRunId = `${over.id}-ask`
   await seedRun(db, taskId, askingRunId, over.askingNodeId)
   await seedRun(db, taskId, over.intermediaryNodeRunId, `${over.id}-intnode`)
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     taskId,
     askingNodeRunId: askingRunId,
     intermediaryNodeId: `${over.id}-int`,
@@ -141,9 +146,9 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       kind: 'self',
       askingNodeId: 'designer',
       intermediaryNodeRunId: 'c1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'answered',
-      answersJson: JSON.stringify([
+      answers: JSON.stringify([
         {
           questionId: 'q1',
           selectedOptionIndices: [0],
@@ -181,9 +186,9 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       askingNodeId: 'auditor', // questioner
       targetConsumerNodeId: 'coder', // graph designer (NOT auto-added anymore)
       intermediaryNodeRunId: 'x1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'answered',
-      answersJson: JSON.stringify([
+      answers: JSON.stringify([
         {
           questionId: 'q1',
           selectedOptionIndices: [],
@@ -209,7 +214,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       askingNodeId: 'auditor',
       targetConsumerNodeId: 'coder',
       intermediaryNodeRunId: 'x3-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
     const list = await listTaskQuestions(db, taskId)
@@ -232,21 +237,21 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       kind: 'self',
       askingNodeId: 'designer',
       intermediaryNodeRunId: 'terminal-question-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
 
-    const { tasks, taskQuestions } = tablesOf(db)
+    const { taskQuestions } = tablesOf(db)
     // The first board read happens only after the task is terminal. It must hide
     // the actionable card while still lazily materializing the audit ledger.
-    await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'done' })
     expect(await listTaskQuestions(db, taskId)).toEqual([])
     expect(
       await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
     ).toHaveLength(1)
 
     for (const status of ['failed', 'canceled', 'interrupted'] as const) {
-      await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status })
       expect(await listTaskQuestions(db, taskId), status).toEqual([])
       expect(
         await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
@@ -254,7 +259,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       ).toHaveLength(1)
     }
 
-    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'running' })
     expect(await listTaskQuestions(db, taskId)).toHaveLength(1)
   })
 
@@ -266,7 +271,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       kind: 'self',
       askingNodeId: 'designer',
       intermediaryNodeRunId: 'c2-int',
-      questionsJson: JSON.stringify([Q('q1'), Q('q2')]),
+      questions: JSON.stringify([Q('q1'), Q('q2')]),
       status: 'answered',
     })
     const first = await listTaskQuestions(db, taskId)
@@ -286,7 +291,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       kind: 'self',
       askingNodeId: 'nodeA',
       intermediaryNodeRunId: 'a1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
     await seedRound(db, taskId, {
@@ -294,7 +299,7 @@ describeEachProvider('RFC-120 T3 listTaskQuestions', (harness) => {
       kind: 'self',
       askingNodeId: 'nodeB',
       intermediaryNodeRunId: 'b1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
     const onlyA = await listTaskQuestions(db, taskId, { sourceNodeId: 'nodeA' })
@@ -319,8 +324,8 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       kind: 'self',
       askingNodeId: 'designer',
       intermediaryNodeRunId: 'c1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
-      status: 'answered',
+      questions: JSON.stringify([Q('q1')]),
+      status: 'answered', // answered but never dispatched (legacy / data-lost round)
     })
     // RFC-132: dispatch+bind 取代 consumption-stamp seed(相位读 entry 自身 dispatch 状态)。
     const [pre] = await listTaskQuestions(db, taskId)
@@ -352,7 +357,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       kind: 'self',
       askingNodeId: 'designer',
       intermediaryNodeRunId: 'p1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
     const [entry] = await listTaskQuestions(db, taskId)
@@ -369,9 +374,9 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       askingNodeId: 'auditor', // questioner
       targetConsumerNodeId: 'coder', // graph designer (not auto-added)
       intermediaryNodeRunId: `${id}-int`,
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'answered',
-      answersJson: JSON.stringify([
+      answers: JSON.stringify([
         { questionId: 'q1', selectedOptionIndices: [], selectedOptionLabels: [], customText: 'x' },
       ]),
     })
@@ -417,7 +422,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       askingNodeId: 'auditor',
       targetConsumerNodeId: 'coder',
       intermediaryNodeRunId: 'x1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
     const [questioner] = await listTaskQuestions(db, taskId)
@@ -578,7 +583,7 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       kind: 'self',
       askingNodeId: 'designer',
       intermediaryNodeRunId: 's1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'awaiting_human',
     })
     const [entry] = await listTaskQuestions(db, taskId)
@@ -613,8 +618,8 @@ describeEachProvider('RFC-120 Codex impl-gate regressions (F1/F2/F3)', (harness)
       kind: 'self',
       askingNodeId: 'designer',
       intermediaryNodeRunId: 'c1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
-      status: 'answered', // answered but never dispatched (legacy / data-lost round)
+      questions: JSON.stringify([Q('q1')]),
+      status: 'answered',
     })
     // RFC-132 统一模型:相位一律派生自 entry 自身 dispatch 状态。answered-undispatched(迁移
     // 垫片 skip 的数据损轮)→ pending(可经 board dispatch 补救),不再是旧 consumption-stamp
@@ -640,7 +645,7 @@ describeEachProvider('RFC-120 Codex impl-gate regressions (F1/F2/F3)', (harness)
       askingNodeId: 'auditor',
       targetConsumerNodeId: 'coder',
       intermediaryNodeRunId: 'x1-int',
-      questionsJson: JSON.stringify([Q('q1')]),
+      questions: JSON.stringify([Q('q1')]),
       status: 'answered',
     })
     // RFC-162: a designer handler is created by a reassign (adds a designer row targeting the

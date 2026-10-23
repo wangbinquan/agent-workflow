@@ -164,10 +164,12 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
     expect(await locks()).toEqual([])
     const { skillVersions } = tablesOf(harness.db)
     expect(await harness.db.select().from(skillVersions)).toHaveLength(1)
-    expect(contents.get(result.id)).toMatchObject({
-      kind: 'main',
-      content: expect.stringContaining('initial body'),
-    })
+    const initializedContent = contents.get(result.id)!
+    expect(initializedContent.kind).toBe('main')
+    expect(
+      initializedContent.kind === 'main' &&
+        Buffer.from(initializedContent.content).toString('utf8'),
+    ).toEqual(expect.stringContaining('initial body'))
     expect(existsSync(appHome)).toBe(false)
   })
 
@@ -276,7 +278,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
           versionContent: versions,
         },
         input,
-        { kind: 'main', content: 'initial bytes' },
+        { kind: 'main', content: Buffer.from('initial bytes') },
         {
           __afterDbCommitForTest() {
             throw failure
@@ -302,7 +304,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
         versionContent: versions,
       },
       input,
-      { kind: 'main', content: 'bundle body' },
+      { kind: 'main', content: Buffer.from('bundle body') },
     )
     expect(staged.skillDir).toBe(`blob:${staged.skillId}`)
     expect(await reserve()).toMatchObject({ phase: 'fs-published', active: 1 })

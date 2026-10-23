@@ -8,6 +8,7 @@ import type {
   ResourcePackageResourceSnapshot,
 } from '../application/package/ports'
 import { ACL_TABLES } from './aclRegistry'
+import { catalogResourcePredicate } from './workflowCatalogPredicate'
 import { createResourceGrantReadPort } from './resourceVisibility'
 import {
   runResourceCatalogTransaction,
@@ -28,7 +29,13 @@ export function createResourcePackageOwnedResourceLookup(
       const rows = await db
         .select({ id: table.id })
         .from(table)
-        .where(and(eq(table.ownerUserId, input.ownerUserId), eq(table.name, input.name)))
+        .where(
+          catalogResourcePredicate(
+            input.kind,
+            table.id,
+            and(eq(table.ownerUserId, input.ownerUserId), eq(table.name, input.name)),
+          ),
+        )
       return rows.map((row) => row.id)
     },
   }
@@ -141,7 +148,7 @@ async function listPackageRowsByIds(
   const query = db
     .select()
     .from(table)
-    .where(inArray(table.id, [...ids]))
+    .where(catalogResourcePredicate(type, table.id, inArray(table.id, [...ids])))
   return orderById ? await query.orderBy(asc(table.id)) : await query
 }
 
@@ -156,7 +163,7 @@ async function listPackageRowsByNames(
   const query = db
     .select()
     .from(table)
-    .where(inArray(table.name, [...names]))
+    .where(catalogResourcePredicate(type, table.id, inArray(table.name, [...names])))
   return orderById ? await query.orderBy(asc(table.id)) : await query
 }
 

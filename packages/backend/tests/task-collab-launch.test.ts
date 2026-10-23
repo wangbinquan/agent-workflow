@@ -7,7 +7,7 @@
 //   - updateTaskMembers: owner/admin-only writes, full-replace semantics,
 //     owner transfer keeps the previous owner as collaborator
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -45,14 +45,13 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
 
   async function seedTask(id: string, ownerId: string) {
     const wfId = `wf-${id}`
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: `wf-${id}`,
       description: '',
       definition: '{}',
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 'fixture-task',
       id,
       workflowId: wfId,
@@ -194,8 +193,7 @@ describeEachProvider('taskCollab — RFC-099 membership model', (harness) => {
     })
     expect(after.ownerUserId).toBe(carol)
     expect(after.members.map((m) => m.user.id).sort()).toEqual([bob, dave].sort())
-    const { tasks } = tablesOf(db)
-    const taskRow = (await db.select().from(tasks).where(eq(tasks.id, 'task-4')))[0]!
+    const taskRow = (await readTaskFixtures(db, { id: 'task-4' }))[0]!
     expect(taskRow.ownerUserId).toBe(carol)
     // membership flipped: bob is now role 'user'
     expect(

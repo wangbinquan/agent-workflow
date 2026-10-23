@@ -4,8 +4,7 @@
 // broke" (observed on a real refactor task). The service now stamps
 // `emptyHint` so the frontend can explain WHY the view is empty.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -52,14 +51,13 @@ describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) =
   ): Promise<string> {
     const taskId = `01EH${Math.random().toString(36).slice(2, 10).toUpperCase()}`
     const workflowId = `wf-${taskId}`
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       definition: JSON.stringify({ nodes: [], edges: [] }),
       version: 1,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify([

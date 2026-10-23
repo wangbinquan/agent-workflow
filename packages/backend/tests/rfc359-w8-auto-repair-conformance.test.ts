@@ -3,6 +3,7 @@
 // reconciliation. The automatic binding retains null actor attribution and the
 // existing S4 audit snapshots and failure outcome.
 
+import { nodeRunFixture, patchTaskFixture, readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
@@ -136,8 +137,8 @@ async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<S
     overrides.worktreeMissing === true
       ? join(tmpdir(), `aw-rfc359-w8-missing-${taskId}`)
       : mkdtempSync(join(tmpdir(), 'aw-rfc359-w8-wt-'))
-  const { tasks, lifecycleAlerts } = tablesOf(db)
-  await insertOne(db, tasks, {
+  const { lifecycleAlerts } = tablesOf(db)
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w8-auto-repair',
@@ -388,8 +389,8 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     const db = harness.db
     const { taskId, alertId } = await seed(db)
     const nodeRunId = `run-${ulid()}`
-    const { nodeRuns, committedEventFamilyCutovers, tasks, committedEvents } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { nodeRuns, committedEventFamilyCutovers, committedEvents } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: nodeRunId,
       taskId,
       nodeId: 'worker',
@@ -401,7 +402,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       .update(committedEventFamilyCutovers)
       .set({ mode: 'dispatchable', epoch: 1, changedAt: NOW, changeRef: 'rfc359-p04-s4' })
       .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
-    const before = await firstRow(db.select().from(tasks).where(eq(tasks.id, taskId)))
+    const before = (await readTaskFixtures(db, { id: taskId }))[0]
     if (before === undefined) throw new Error(`missing fixture task ${taskId}`)
     const { persistence, repairs } = repairEngineFor(harness)
     const previous = createProviderTaskExecutionModule({
@@ -463,7 +464,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       now: () => NOW,
     })
     const result = forTask(await command.run(OPEN_POLICY), taskId)
-    const after = await firstRow(db.select().from(tasks).where(eq(tasks.id, taskId)))
+    const after = (await readTaskFixtures(db, { id: taskId }))[0]
     const run = await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))
     const audit = await auditRows(db, taskId)
     const events = await db
@@ -644,21 +645,19 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     for (const entry of [manual, automatic]) {
       expect(await statusOf(harness.db, entry.taskId)).toBe('interrupted')
       expect(await alertResolvedAt(harness.db, entry.alertId)).toBeNull()
-      const { tasks } = tablesOf(harness.db)
       // The committed kick survives a failed resume. Preserve its original
       // diagnostic fields, including the automatic caller's alert reference.
       expect(
-        await firstRow(
-          harness.db
-            .select({
-              finishedAt: tasks.finishedAt,
-              errorSummary: tasks.errorSummary,
-              errorMessage: tasks.errorMessage,
-              failedNodeId: tasks.failedNodeId,
-            })
-            .from(tasks)
-            .where(eq(tasks.id, entry.taskId)),
-        ),
+        (
+          await readTaskFixtures(harness.db, { id: entry.taskId }).then((rows) =>
+            rows.map((row) => ({
+              finishedAt: row.finishedAt,
+              errorSummary: row.errorSummary,
+              errorMessage: row.errorMessage,
+              failedNodeId: row.failedNodeId,
+            })),
+          )
+        )[0],
       ).toEqual({
         finishedAt: NOW,
         errorSummary: 'manual-repair-S4',
@@ -689,8 +688,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       ...binding,
       resolveOptions: async (alert) => {
         const options = await binding.resolveOptions(alert)
-        const { tasks } = tablesOf(harness.db)
-        await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+        await patchTaskFixture(harness.db, { id: taskId }, { status: 'running' })
         return options
       },
       operations: persistence.recoveryAdministration,
@@ -716,8 +714,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     const manual = await seed(harness.db)
     const automatic = await seed(harness.db)
     const resume = async (taskId: string) => {
-      const { tasks } = tablesOf(harness.db)
-      await harness.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(harness.db, { id: taskId }, { status: 'pending' })
     }
     const { persistence, repairs } = repairEngineFor(harness, { resume })
     const notices: TaskRouteLifecycleAlertNotice[] = []
@@ -771,9 +768,8 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
       const { persistence, repairs } = repairEngineFor(harness, {
         resume,
         beforeTransition: async (taskId) => {
-          const { tasks } = tablesOf(harness.db)
           // The real lifecycle CAS observes a row changed after the engine's preflight.
-          await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+          await patchTaskFixture(harness.db, { id: taskId }, { status: 'running' })
         },
       })
       if (caller === 'manual') {

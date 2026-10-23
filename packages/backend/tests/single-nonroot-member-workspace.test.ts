@@ -6,7 +6,17 @@
 // Both providers exercise production operations; root and multi-member controls
 // also cover root sparse/explicit-directory layouts materialized as groups.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readStoredCheckpointFixture } from './helpers/model/checkpoint'
+import { decodeTaskRollbackCheckpoints } from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  readNodeRunFixtures,
+  checkpointValues,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -15,7 +25,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { computeSummary, type StructuralDiff } from '@agent-workflow/shared'
-import { gitStashSnapshot } from '@/util/git'
+
 import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/public/participants'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
@@ -83,12 +93,12 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
     return singleMemberWorkspaceFixture(harness, { ...shape, tmp, appHome, cleanup })
   }
   async function settle(taskId: string, status: 'done' | 'interrupted') {
-    const { taskExecutionIntents, tasks } = tablesOf(harness.db)
+    const { taskExecutionIntents } = tablesOf(harness.db)
     await harness.db
       .update(taskExecutionIntents)
       .set({ state: 'completed', completedAt: 1 })
       .where(eq(taskExecutionIntents.taskId, taskId))
-    await harness.db.update(tasks).set({ status, finishedAt: 1 }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(harness.db, { id: taskId }, { status, finishedAt: 1 })
   }
   function change(task: Awaited<ReturnType<typeof fixture>>['task']) {
     for (const repo of task.repos) {
@@ -128,8 +138,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           expect(task.worktreePath).toContain(join('worktrees', 'group'))
         const binding = { persistence: createTaskExecutionPersistence(harness.db) }
         const runId = ulid()
-        const { nodeRuns } = tablesOf(harness.db)
-        await insertOne(harness.db, nodeRuns, {
+        await nodeRunFixture(harness.db, {
           id: runId,
           taskId: task.id,
           nodeId: 'A',
@@ -148,12 +157,14 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         await persistIsoBase(binding, runId, handle)
         const trees = await snapshotNodeIsoFinal(handle)
         await persistIsoNodeTree(binding, runId, trees, handle)
-        const row = (await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
-        expect(row.isoNodeTreeReposJson === null).toBe(shape.scalar)
-        expect(row.isoBaseSnapshotReposJson === null).toBe(shape.scalar)
-        expect(
-          shape.scalar ? { '': row.isoNodeTree } : JSON.parse(row.isoNodeTreeReposJson!),
-        ).toEqual(trees)
+        const row = (await readNodeRunFixtures(harness.db, { id: runId }))[0]!
+        expect(Object.keys(checkpointValues(row.checkpoints, 'nodeTree')).sort()).toEqual(
+          [...shape.mounts].sort(),
+        )
+        expect(Object.keys(checkpointValues(row.checkpoints, 'isolationBase')).sort()).toEqual(
+          [...shape.mounts].sort(),
+        )
+        expect(checkpointValues(row.checkpoints, 'nodeTree')).toEqual(trees)
         const state = {
           taskId: task.id,
           task,
@@ -197,19 +208,16 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         async () => {
           const { task } = await fixture(shape)
           const runId = ulid()
-          const { nodeRuns } = tablesOf(harness.db)
-          await insertOne(harness.db, nodeRuns, {
+          await nodeRunFixture(harness.db, {
             id: runId,
             taskId: task.id,
             nodeId: 'A',
             status: 'running',
             startedAt: 1,
-            preSnapshot: shape.scalar ? task.baseCommit : null,
-            preSnapshotReposJson: shape.scalar
-              ? null
-              : JSON.stringify(
-                  Object.fromEntries(task.repos.map((r) => [r.mountPath, r.baseCommit])),
-                ),
+            checkpoints: task.repos.map((repo) => ({
+              mountPath: repo.mountPath,
+              preSnapshot: repo.baseCommit ?? undefined,
+            })),
           })
           change(task)
           const diff = await getTaskStructuralDiff(
@@ -233,8 +241,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
       async () => {
         const { task } = await fixture(shape)
         const runId = ulid()
-        const { nodeRuns } = tablesOf(harness.db)
-        await insertOne(harness.db, nodeRuns, {
+        await nodeRunFixture(harness.db, {
           id: runId,
           taskId: task.id,
           nodeId: 'G',
@@ -329,14 +336,13 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const { task } = await fixture(shape)
         const runId = ulid()
         writeFileSync(join(task.repos[0]!.worktreePath, 'notes.md'), 'artifact\n')
-        const { nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
-        await insertOne(harness.db, nodeRuns, {
+        await nodeRunFixture(harness.db, {
           id: runId,
           taskId: task.id,
           nodeId: 'A',
           status: 'done',
         })
-        await insertOne(harness.db, nodeRunOutputs, {
+        await nodeRunOutputFixture(harness.db, {
           nodeRunId: runId,
           portName: 'result',
           content: 'notes.md',
@@ -363,59 +369,55 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
     )
 
     for (const operation of ['plan', 'execute'] as const) {
-      for (const resetOnEmptySnapshot of [false, true]) {
-        test(
-          `${shape.name}: rollback ${operation} uses member snapshots (retry=${resetOnEmptySnapshot})`,
-          async () => {
-            const { task } = await fixture(shape)
-            const snapshots: Record<string, string> = {}
+      test(
+        `${shape.name}: rollback ${operation} uses member snapshots`,
+        async () => {
+          const { task } = await fixture(shape)
+          const snapshots: Record<string, string> = {}
+          for (const repo of task.repos) {
+            writeFileSync(
+              join(repo.worktreePath, 'src/a.ts'),
+              'export function value() { return 10 }\n',
+            )
+            snapshots[repo.mountPath] = await legacyStashSnapshotFixture(repo.worktreePath)
+            expect(snapshots[repo.mountPath]).not.toBe('')
+          }
+          change(task)
+          const runId = ulid()
+          await nodeRunFixture(harness.db, {
+            id: runId,
+            checkpoints: Object.entries(snapshots).map(([mountPath, preSnapshot]) => ({
+              mountPath,
+              preSnapshot,
+            })),
+            taskId: task.id,
+            nodeId: 'A',
+            status: 'failed',
+          })
+          const stored = await readStoredCheckpointFixture(harness.db, runId)
+          const run = decodeTaskRollbackCheckpoints(
+            stored,
+            task.repos.map((repo) => repo.mountPath),
+          )
+          const target = (await loadRollbackTarget(harness.db, task.id))!
+          if (operation === 'plan') {
+            const plan = planNodeRunRollbackTargets(target, run)
+            expect(plan.map((r) => [r.worktreePath, r.snapshot])).toEqual(
+              task.repos.map((r) => [r.worktreePath, snapshots[r.mountPath]!]),
+            )
+          } else {
+            const result = await rollbackNodeRunWorktrees(target, run, {}, log)
+            expect(result).toEqual({ attempted: true, failures: [] })
             for (const repo of task.repos) {
-              writeFileSync(
-                join(repo.worktreePath, 'src/a.ts'),
-                'export function value() { return 10 }\n',
+              expect(readFileSync(join(repo.worktreePath, 'src/a.ts'), 'utf8')).toContain(
+                'return 10',
               )
-              snapshots[repo.mountPath] = await gitStashSnapshot(repo.worktreePath)
-              expect(snapshots[repo.mountPath]).not.toBe('')
+              expect(existsSync(join(repo.worktreePath, 'notes.md'))).toBe(false)
             }
-            change(task)
-            const runId = ulid()
-            const run = {
-              id: runId,
-              preSnapshot: shape.scalar ? snapshots['']! : null,
-              preSnapshotReposJson: shape.scalar ? null : JSON.stringify(snapshots),
-            }
-            const { nodeRuns } = tablesOf(harness.db)
-            await insertOne(harness.db, nodeRuns, {
-              ...run,
-              taskId: task.id,
-              nodeId: 'A',
-              status: 'failed',
-            })
-            const target = (await loadRollbackTarget(harness.db, task.id))!
-            if (operation === 'plan') {
-              const plan = planNodeRunRollbackTargets(target, run, { resetOnEmptySnapshot })
-              expect(plan.map((r) => [r.worktreePath, r.snapshot])).toEqual(
-                task.repos.map((r) => [r.worktreePath, snapshots[r.mountPath]!]),
-              )
-            } else {
-              const result = await rollbackNodeRunWorktrees(
-                target,
-                run,
-                { resetOnEmptySnapshot },
-                log,
-              )
-              expect(result).toEqual({ attempted: true, failures: [] })
-              for (const repo of task.repos) {
-                expect(readFileSync(join(repo.worktreePath, 'src/a.ts'), 'utf8')).toContain(
-                  'return 10',
-                )
-                expect(existsSync(join(repo.worktreePath, 'notes.md'))).toBe(false)
-              }
-            }
-          },
-          TIMEOUT,
-        )
-      }
+          }
+        },
+        TIMEOUT,
+      )
     }
     test(
       `${shape.name}: resume preflight rejects a surviving container with no member`,
@@ -501,10 +503,8 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
               await workspaceGit(repo.repoPath, ['for-each-ref', '--format=%(refname)', ref]),
             ).toBe('')
           }
-          const { tasks } = tablesOf(harness.db)
           expect(
-            (await harness.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!
-              .workspacePrunedAt,
+            (await readTaskFixtures(harness.db, { id: task.id }))[0]!.workspacePrunedAt,
           ).not.toBeNull()
         },
         TIMEOUT,

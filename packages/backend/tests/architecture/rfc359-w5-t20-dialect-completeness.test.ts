@@ -401,7 +401,7 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
   // （`platform/persistence/databaseTransaction.ts`，它本来就是渲染器），隔离级别的语义一字未变
   // ——中立原语的 `serializable` 显式记着以本文件当年那段为蓝本。
   // ──────────────────────────────────────────────────────────────────────────
-  // RFC-359 W11 销账：`platform/persistence/maintenanceExecutionFence.ts: indexed-by ×1` ——
+  // RFC-359 W11 销账：`modules/task-execution/infrastructure/maintenanceExecutionFence.ts: indexed-by ×1` ——
   // 两份实现（SQLite 裸 raw SQL + PG 查询构造器）合成一份，索引提示由 `engineOf(db).indexHint()`
   // 渲染：SQLite `INDEXED BY "<index>"`、PG 空。SQLite 侧当初裸写它的**全部理由**（满库终态
   // node run 时 planner 会改选整表扫）由对拍里的 `EXPLAIN QUERY PLAN` 断言接着守住。

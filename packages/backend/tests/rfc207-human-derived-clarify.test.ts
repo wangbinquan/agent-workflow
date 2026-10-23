@@ -23,10 +23,11 @@ import {
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
@@ -36,8 +37,8 @@ import {
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
-function decideOutcome(input: WakeInput, wake: WakeSet) {
-  const { snapshot, inflight } = wakeSnapshotOf(input)
+async function decideOutcome(input: WakeInput, wake: WakeSet) {
+  const { snapshot, inflight } = await wakeSnapshotOf(input)
   return decideWorkgroupOutcome(snapshot, inflight, wake)
 }
 
@@ -200,71 +201,71 @@ describe('RFC-207 prompt — the clarify invite follows the resolved permission'
 })
 
 describe('RFC-207 engine — gate resolve follows the roster', () => {
-  test('no human + leader declared done → done (nobody to confirm)', () => {
+  test('no human + leader declared done → done (nobody to confirm)', async () => {
     const input = wakeInput({
       config: cfg({ completionGate: true }),
       gate: { declaredDone: true, awaitingConfirmation: false, rejected: false },
     })
-    expect(decideOutcome(input, EMPTY_WAKE)).toEqual({ kind: 'done' })
+    expect(await decideOutcome(input, EMPTY_WAKE)).toEqual({ kind: 'done' })
   })
-  test('human + gate on + declared done → awaiting_gate', () => {
+  test('human + gate on + declared done → awaiting_gate', async () => {
     const input = wakeInput({
       config: cfgHuman({ completionGate: true }),
       gate: { declaredDone: true, awaitingConfirmation: false, rejected: false },
     })
-    expect(decideOutcome(input, EMPTY_WAKE)).toEqual({ kind: 'awaiting-gate' })
+    expect(await decideOutcome(input, EMPTY_WAKE)).toEqual({ kind: 'awaiting-gate' })
   })
 })
 
 describe('RFC-207 engine — leader-idle auto-nudge (now unconditional)', () => {
-  test('leader idle → leader-nudge (nudgeCount 0)', () => {
+  test('leader idle → leader-nudge (nudgeCount 0)', async () => {
     const input = wakeInput({ config: cfg() })
-    expect(decideOutcome(input, EMPTY_WAKE)).toEqual({
+    expect(await decideOutcome(input, EMPTY_WAKE)).toEqual({
       kind: 'leader-nudge',
     })
   })
-  test('nudgeCount = trailing nudge count; below the limit still nudges', () => {
+  test('nudgeCount = trailing nudge count; below the limit still nudges', async () => {
     const near = wakeInput({
       config: cfg(),
       messages: Array.from({ length: WG_LEADER_IDLE_NUDGE_LIMIT - 1 }, (_, i) => nudgeMsg(`n${i}`)),
     })
-    expect(decideOutcome(near, EMPTY_WAKE)).toEqual({
+    expect(await decideOutcome(near, EMPTY_WAKE)).toEqual({
       kind: 'leader-nudge',
     })
   })
-  test('at the nudge limit → park awaiting_human (no hot loop)', () => {
+  test('at the nudge limit → park awaiting_human (no hot loop)', async () => {
     const at = wakeInput({
       config: cfg(),
       messages: Array.from({ length: WG_LEADER_IDLE_NUDGE_LIMIT }, (_, i) => nudgeMsg(`n${i}`)),
     })
-    expect(decideOutcome(at, EMPTY_WAKE)).toEqual({
+    expect(await decideOutcome(at, EMPTY_WAKE)).toEqual({
       kind: 'awaiting-human',
       reason: 'leader-idle',
     })
   })
-  test('a non-nudge message after nudges resets the count (progress)', () => {
+  test('a non-nudge message after nudges resets the count (progress)', async () => {
     const input = wakeInput({
       config: cfg(),
       // RFC-217 T2 — the counter keys on kind, so「进展」以非 nudge kind 表达
       // （真实进展消息是 chat/dispatch/result，从不是 nudge）。
       messages: [nudgeMsg('n0'), nudgeMsg('n1'), nudgeMsg('n2', 'real work dispatched', 'chat')],
     })
-    expect(decideOutcome(input, EMPTY_WAKE)).toEqual({
+    expect(await decideOutcome(input, EMPTY_WAKE)).toEqual({
       kind: 'leader-nudge',
     })
   })
   // RFC-207 §3.3 — this used to be "non-autonomous parks immediately". A cheap
   // retry before spending a human's attention is better for BOTH kinds of group,
   // so the split is gone; a roster with a human nudges first as well.
-  test('a roster with a human nudges first too, and still parks at the limit', () => {
-    expect(decideOutcome(wakeInput({ config: cfgHuman() }), EMPTY_WAKE)).toEqual({
+  test('a roster with a human nudges first too, and still parks at the limit', async () => {
+    expect(await decideOutcome(wakeInput({ config: cfgHuman() }), EMPTY_WAKE)).toEqual({
       kind: 'leader-nudge',
     })
     const spent = wakeInput({
       config: cfgHuman(),
       messages: Array.from({ length: WG_LEADER_IDLE_NUDGE_LIMIT }, (_, i) => nudgeMsg(`n${i}`)),
     })
-    expect(decideOutcome(spent, EMPTY_WAKE)).toEqual({
+    expect(await decideOutcome(spent, EMPTY_WAKE)).toEqual({
       kind: 'awaiting-human',
       reason: 'leader-idle',
     })

@@ -1,3 +1,4 @@
+import { workflowFixture } from './helpers/model'
 import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { schemaFixtureDb } from './helpers/schemaFixture'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -174,7 +175,7 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
         writeFileSync(configPath, '{}')
         const ownerUserId = ulid(),
           workflowId = ulid()
-        const { users, workflows } = tablesOf(harness.db)
+        const { users } = tablesOf(harness.db)
         await insertOne(harness.db, users, {
           id: ownerUserId,
           username: ownerUserId,
@@ -186,7 +187,7 @@ describeEachProvider('RFC-381 CFG-45 fusion live configuration', (harness) => {
           createdAt: 1,
           updatedAt: 1,
         })
-        await insertOne(harness.db, workflows, {
+        await workflowFixture(harness.db, {
           id: workflowId,
           name: workflowId,
           definition: JSON.stringify({ $schema_version: 5, inputs: [], nodes: [], edges: [] }),

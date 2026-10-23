@@ -14,8 +14,7 @@
 //
 // 合一之前这条在 PostgreSQL 上是**红**的（缺口真实存在的证据）；
 // 合一之后两个引擎都必须绿。重入面的逐条勘察见 plan §5hm 第 1 步。
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -41,14 +40,13 @@ const silentLog: TaskExecutionTopologyLogger = {
 
 async function seedTerminalTask(db: PersistenceDb): Promise<string> {
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     definition: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
   })
   const taskId = `task_${ulid()}`
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,

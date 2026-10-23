@@ -17,7 +17,13 @@
 // runNode call). Tests 3–5 use MOCK_OPENCODE_OUTPUTS to fake one envelope
 // per subprocess.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -76,8 +82,7 @@ async function seedAgent(
     extra.outputKinds = options.outputKinds
   }
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -99,15 +104,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -199,17 +203,14 @@ function registerProviderCases1(provider: ProviderHarness) {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
     // wrapper-fanout row done + __done__ signal port empty
     const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow.length).toBe(1)
     expect(wrapperRow[0]?.status).toBe('done')
-    const wrapperOuts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, wrapperRow[0]!.id))
+    const wrapperOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapperRow[0]!.id })
     expect(wrapperOuts.find((o) => o.portName === '__done__')?.content).toBe('')
     // No shard children minted
     const allRuns = await h.db.select().from(nodeRuns)
@@ -328,15 +329,15 @@ function registerProviderCases1(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
     const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow[0]?.status).toBe('done')
     // 2 shard children with shardKey set to the path itself (path<md> family)
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapperRow[0]!.id)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapperRow[0]!.id,
+    )
     expect(innerRows.length).toBe(2)
     expect(innerRows.map((r) => r.shardKey).sort()).toEqual(['a.md', 'b.md'])
     // Each shard child done
@@ -344,10 +345,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       expect(r.status).toBe('done')
     }
     // wrapper outlet is __done__ (no aggregator)
-    const wrapperOuts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, wrapperRow[0]!.id))
+    const wrapperOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapperRow[0]!.id })
     expect(wrapperOuts.some((o) => o.portName === '__done__')).toBe(true)
   })
 
@@ -415,21 +413,18 @@ function registerProviderCases1(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
     const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow[0]?.status).toBe('done')
-    const wrapperOuts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, wrapperRow[0]!.id))
+    const wrapperOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapperRow[0]!.id })
     // Wrapper outlet renamed via outputWrapperPortNames: result → final
     expect(wrapperOuts.find((o) => o.portName === 'final')?.content).toBe('final-result')
     // Aggregator row minted as child of wrapper (parentNodeRunId set), shardKey=null
-    const aggRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'aggNode'))
-    ).filter((r) => r.parentNodeRunId === wrapperRow[0]!.id)
+    const aggRows = (await readNodeRunFixtures(h.db, { nodeId: 'aggNode' })).filter(
+      (r) => r.parentNodeRunId === wrapperRow[0]!.id,
+    )
     expect(aggRows.length).toBe(1)
     expect(aggRows[0]?.shardKey).toBeNull()
     expect(aggRows[0]?.status).toBe('done')
@@ -501,10 +496,10 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
+    const { tasks } = tablesOf(h.db)
     const taskRows = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(taskRows[0]?.status).toBe('done')
-    const innerRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
+    const innerRows = await readNodeRunFixtures(h.db, { nodeId: 'inner' })
     expect(innerRows).toHaveLength(2)
     expect(innerRows.map((row) => row.shardKey).sort()).toEqual(['a.md', 'b.md'])
     expect(innerRows.every((row) => row.promptText?.includes('shared-policy') === true)).toBe(true)
@@ -550,9 +545,9 @@ function registerProviderCases1(provider: ProviderHarness) {
     const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow[0]?.errorMessage ?? '').toContain('cartesian-exceeds-max')
     // No shard children minted (guard fired before dispatch).
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId !== null)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId !== null,
+    )
     expect(innerRows.length).toBe(0)
   })
 }

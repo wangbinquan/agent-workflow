@@ -1,6 +1,11 @@
+import {
+  taskGateOpenCondition,
+  taskGateVisibleCondition,
+} from '@/modules/task-execution/public/queries'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { isMindmapRound, clarifyDecisionsEqual } from '@agent-workflow/shared'
+import { isMindmapRound } from '@agent-workflow/shared'
 // RFC-349 SQLite compatibility adapter for the RFC-058 clarify-round helpers.
 // Provider-neutral callers enter through services/clarify/rounds.ts or the
 // collaboration public query/command surface; database mechanisms stay here.
@@ -18,31 +23,15 @@ import { isMindmapRound, clarifyDecisionsEqual } from '@agent-workflow/shared'
 //     RFC-056 缺口 2 的结构性修复保留在 WHERE 子句里）。
 //   - `saveClarifyDraft`（RFC-099）—— 服务端逐题协作草稿（last-write-wins +
 //     逐题归属 + 提交冻结）。
-//   - `freezeAnswerAttributions` / `buildFrozenAttributionSet` —— 提交时点的
-//     归属快照（审计列/只读 UI 用，绝不进 agent prompt）。
 
-import {
-  and,
-  count,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  notInArray,
-  or,
-  type SQL,
-} from 'drizzle-orm'
+import { and, count, desc, eq, type SQL } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
-import { taskVisibilityCondition } from '@/db/query'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { chunkedAll } from '@/util/sqlChunk'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   TERMINAL_TASK_STATUSES,
-  type ClarifyAnswer,
-  type ClarifyAnswerAttributions,
   type ClarifyDirective,
   type ClarifyDraftValue,
   type ClarifyQuestion,
@@ -53,8 +42,10 @@ import {
   terminatedAsForStatus,
   type ClarifyRoundStatus,
 } from '@agent-workflow/shared'
-import { ConflictError, NotFoundError } from '@/util/errors'
+import { NotFoundError } from '@/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
+import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 
 /**
  * RFC-122: pure oracle for the scheduler's `effectiveHasClarifyChannel` — the
@@ -281,25 +272,22 @@ export async function listClarifyRoundSummaries(
  */
 export async function countAwaitingClarifyRounds(db: PersistenceDb, actor: Actor): Promise<number> {
   const canReadAllTasks = actor.permissions.has('tasks:read:all')
-  const { clarifyRounds, tasks } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   const conditions: SQL<unknown>[] = [
     eq(clarifyRounds.status, 'awaiting_human'),
-    or(isNull(tasks.id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]))!,
+    taskGateOpenCondition(db, clarifyRounds.taskId, canReadAllTasks),
   ]
   if (!canReadAllTasks) {
-    // 受限用户：孤儿轮次掉出（与旧实现「先把行查出来再判定」同形——查不到的 taskId
-    // 不会进 visible 集合），再 AND 上 owner∨协作者。
-    conditions.push(isNotNull(tasks.id))
-    const visibility = taskVisibilityCondition(db, {
-      userId: actor.user.id,
-      canReadAllTasks: false,
-    })
-    if (visibility !== undefined) conditions.push(visibility)
+    conditions.push(
+      taskGateVisibleCondition(db, clarifyRounds.taskId, {
+        userId: actor.user.id,
+        canReadAllTasks: false,
+      }),
+    )
   }
   const rows = await db
     .select({ n: count() })
     .from(clarifyRounds)
-    .leftJoin(tasks, eq(tasks.id, clarifyRounds.taskId))
     .where(and(...conditions))
   return rows[0]?.n ?? 0
 }
@@ -313,7 +301,7 @@ export async function getClarifyRoundDetail(
   db: PersistenceDb,
   intermediaryNodeRunId: string,
 ): Promise<ClarifyRound> {
-  const { clarifyRounds, nodeRuns } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   const rows = await db
     .select()
     .from(clarifyRounds)
@@ -337,13 +325,7 @@ export async function getClarifyRoundDetail(
   // sweep, 'wg-clarify-disabled' from the workgroup flip); expose it
   // verbatim as an optional field.
   if (row.status === 'canceled' || row.status === 'abandoned') {
-    const run = (
-      await db
-        .select({ errorMessage: nodeRuns.errorMessage })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, intermediaryNodeRunId))
-        .limit(1)
-    )[0]
+    const run = await createNodeRunQueries(db).readFields(intermediaryNodeRunId, ['errorMessage'])
     if (run?.errorMessage != null && run.errorMessage !== '') {
       detail.sealedCause = run.errorMessage
     }
@@ -399,19 +381,13 @@ function rowToDetail(
   const titles = titlesByTaskAndNode.get(row.taskId)
   const intermediaryTitle = titles?.get(row.intermediaryNodeId)
   let questions: ClarifyQuestion[] = []
-  let answers: ClarifyAnswer[] | undefined
+  const projection = decodeLegacyClarifyAnswerColumns(row)
+  const answers = projection.detailAnswers
   let truncationWarnings: ClarifyRound['truncationWarnings']
   try {
     questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
   } catch {
     /* keep empty */
-  }
-  if (row.answersJson !== null) {
-    try {
-      answers = JSON.parse(row.answersJson) as ClarifyAnswer[]
-    } catch {
-      /* keep undefined */
-    }
   }
   if (row.truncationWarningsJson !== null) {
     try {
@@ -455,22 +431,8 @@ function rowToDetail(
     // RFC-099 (D7/D8) — UI-only attribution + live draft state. These fields
     // are NEVER read by buildPromptContext above (prompt isolation).
     submittedByRole: (row.submittedByRole ?? null) as ClarifyRound['submittedByRole'],
-    answerAttributions: parseJsonRecord<ClarifyRound['answerAttributions']>(
-      row.answerAttributionsJson,
-    ),
-    draftAnswers: parseJsonRecord<ClarifyRound['draftAnswers']>(row.draftAnswersJson),
-  }
-}
-
-/** Defensive JSON parse → null on malformed / non-object. */
-function parseJsonRecord<T>(raw: string | null): T | null {
-  if (raw === null) return null
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null
-    return parsed as T
-  } catch {
-    return null
+    answerAttributions: projection.answerAttributions,
+    draftAnswers: projection.draftAnswers,
   }
 }
 
@@ -480,11 +442,10 @@ async function loadTaskStatusesByTaskId(
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   if (taskIds.length === 0) return out
-  const { tasks } = tablesOf(db)
-  const rows = await db
-    .select({ id: tasks.id, status: tasks.status })
-    .from(tasks)
-    .where(inArray(tasks.id, taskIds))
+
+  const rows = await createTaskGateQueries(db)
+    .listContexts(taskIds)
+    .then((rows) => rows.map((row) => ({ id: row.id, status: row.status })))
   for (const t of rows) out.set(t.id, t.status)
   return out
 }
@@ -501,8 +462,9 @@ async function loadTaskNamesByTaskId(
   const out = new Map<string, string>()
   if (taskIds.length === 0) return out
   const rows = await chunkedAll(taskIds, (ids) => {
-    const { tasks } = tablesOf(db)
-    return db.select({ id: tasks.id, name: tasks.name }).from(tasks).where(inArray(tasks.id, ids))
+    return createTaskGateQueries(db)
+      .listContexts(ids)
+      .then((rows) => rows.map((row) => ({ id: row.id, name: row.name })))
   })
   for (const t of rows) out.set(t.id, t.name)
   return out
@@ -517,11 +479,9 @@ async function loadNodeTitlesByTask(
   const out = new Map<string, Map<string, string>>()
   if (taskIds.length === 0) return out
   const taskRows = await chunkedAll(taskIds, (ids) => {
-    const { tasks } = tablesOf(db)
-    return db
-      .select({ id: tasks.id, workflowSnapshot: tasks.workflowSnapshot })
-      .from(tasks)
-      .where(inArray(tasks.id, ids))
+    return createTaskGateQueries(db)
+      .listDefinitionContexts(ids)
+      .then((rows) => rows.map((row) => ({ id: row.id, workflowSnapshot: row.workflowSnapshot })))
   })
   for (const t of taskRows) {
     const inner = new Map<string, string>()
@@ -594,65 +554,11 @@ export interface SaveClarifyDraftResult {
 export async function saveClarifyDraft(
   args: SaveClarifyDraftArgs,
 ): Promise<SaveClarifyDraftResult> {
-  const { clarifyRounds } = tablesOf(args.db)
-  const rows = await args.db
-    .select()
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.id, args.roundId))
-    .limit(1)
-  const row = rows[0]
-  if (row === undefined || row.intermediaryNodeRunId !== args.intermediaryNodeRunId) {
-    throw new NotFoundError('clarify-round-not-found', `clarify round '${args.roundId}' not found`)
-  }
-  if (row.status !== 'awaiting_human') {
-    throw new ConflictError(
-      'clarify-round-not-awaiting',
-      `clarify round '${args.roundId}' is '${row.status}' — drafts only apply while awaiting_human`,
-    )
-  }
-  const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
-  if (!questions.some((q) => q.id === args.questionId)) {
-    throw new NotFoundError(
-      'clarify-question-not-found',
-      `question '${args.questionId}' not in round '${args.roundId}'`,
-    )
-  }
-  const now = Date.now()
-  await databaseSessionFor(args.db).transaction(async (tx) => {
-    const { tasks, clarifyRounds } = tablesOf(tx)
-    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, row.taskId)
-    const fresh = (
-      await tx
-        .select({
-          draftAnswersJson: clarifyRounds.draftAnswersJson,
-          answerAttributionsJson: clarifyRounds.answerAttributionsJson,
-          status: clarifyRounds.status,
-        })
-        .from(clarifyRounds)
-        .where(eq(clarifyRounds.id, args.roundId))
-    )[0]
-    if (fresh === undefined || fresh.status !== 'awaiting_human') {
-      throw new ConflictError(
-        'clarify-round-not-awaiting',
-        `clarify round '${args.roundId}' is no longer awaiting_human`,
-      )
-    }
-    const drafts = parseJsonRecord<Record<string, ClarifyDraftValue>>(fresh.draftAnswersJson) ?? {}
-    const attrs = parseJsonRecord<ClarifyAnswerAttributions>(fresh.answerAttributionsJson) ?? {}
-    drafts[args.questionId] = args.value
-    attrs[args.questionId] = { userId: args.editor.userId, role: args.editor.role, updatedAt: now }
-    await tx
-      .update(clarifyRounds)
-      .set({
-        draftAnswersJson: JSON.stringify(drafts),
-        answerAttributionsJson: JSON.stringify(attrs),
-      })
-      .where(eq(clarifyRounds.id, args.roundId))
-  })
+  const { taskId, updatedAt: now } = await createClarifyAnswerWritePort(args.db).saveDraft(args)
   // Live-sync other members' open forms ("X just edited question N").
   if (args.draftEvents !== undefined) {
     await args.draftEvents.publish({
-      taskId: row.taskId,
+      taskId,
       nodeRunId: args.intermediaryNodeRunId,
       roundId: args.roundId,
       questionId: args.questionId,
@@ -660,7 +566,7 @@ export async function saveClarifyDraft(
       occurredAt: now,
     })
   } else {
-    taskBroadcaster.broadcast(TASK_CHANNEL(row.taskId), {
+    taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
       id: -1,
       type: 'clarify.draft.updated',
       nodeRunId: args.intermediaryNodeRunId,
@@ -671,88 +577,4 @@ export async function saveClarifyDraft(
     })
   }
   return { roundId: args.roundId, questionId: args.questionId, updatedAt: now }
-}
-
-/** True when a submitted answer's user-state equals the stored draft value. */
-function draftMatchesAnswer(draft: ClarifyDraftValue | undefined, answer: ClarifyAnswer): boolean {
-  if (draft === undefined) return false
-  const a = [...(draft.selectedOptionIndices ?? [])].sort((x, y) => x - y)
-  const b = [...(answer.selectedOptionIndices ?? [])].sort((x, y) => x - y)
-  if (a.length !== b.length || a.some((v, i) => v !== b[i])) return false
-  return (
-    (draft.customText ?? '') === (answer.customText ?? '') &&
-    clarifyDecisionsEqual(draft.decision, answer.decision)
-  )
-}
-
-/**
- * Pure attribution freeze (D8): per answered question, keep the draft's last
- * editor when the submitted value matches the draft; otherwise the submitter
- * modified it at submit time and the attribution becomes theirs.
- */
-export function freezeAnswerAttributions(args: {
-  answers: readonly ClarifyAnswer[]
-  draftAnswers: Record<string, ClarifyDraftValue> | null
-  draftAttributions: ClarifyAnswerAttributions | null
-  submitter: { userId: string; role: TaskActorRole }
-  now: number
-}): ClarifyAnswerAttributions {
-  const out: ClarifyAnswerAttributions = {}
-  for (const answer of args.answers) {
-    const draft = args.draftAnswers?.[answer.questionId]
-    const draftAttr = args.draftAttributions?.[answer.questionId]
-    if (draftAttr !== undefined && draftMatchesAnswer(draft, answer)) {
-      out[answer.questionId] = draftAttr
-    } else {
-      out[answer.questionId] = {
-        userId: args.submitter.userId,
-        role: args.submitter.role,
-        updatedAt: args.now,
-      }
-    }
-  }
-  return out
-}
-
-/**
- * Build the clarify_rounds `.set()` fragment that freezes attribution at
- * submit time. Reads the round's current draft columns; returns the frozen
- * attribution + cleared draft. Callers (submitClarifyAnswers /
- * submitCrossClarifyAnswers) spread it into their existing rounds update so
- * the freeze rides the same write.
- */
-export async function buildFrozenAttributionSet(
-  db: PersistenceDb,
-  roundId: string,
-  answers: readonly ClarifyAnswer[],
-  submitter: { userId: string; role: TaskActorRole },
-): Promise<{
-  submittedByRole: TaskActorRole
-  answerAttributionsJson: string
-  draftAnswersJson: null
-}> {
-  const { clarifyRounds } = tablesOf(db)
-  const rows = await db
-    .select({
-      draftAnswersJson: clarifyRounds.draftAnswersJson,
-      answerAttributionsJson: clarifyRounds.answerAttributionsJson,
-    })
-    .from(clarifyRounds)
-    .where(eq(clarifyRounds.id, roundId))
-    .limit(1)
-  const row = rows[0]
-  const frozen = freezeAnswerAttributions({
-    answers,
-    draftAnswers: parseJsonRecord<Record<string, ClarifyDraftValue>>(row?.draftAnswersJson ?? null),
-    draftAttributions: parseJsonRecord<ClarifyAnswerAttributions>(
-      row?.answerAttributionsJson ?? null,
-    ),
-    submitter,
-    now: Date.now(),
-  })
-  return {
-    submittedByRole: submitter.role,
-    answerAttributionsJson: JSON.stringify(frozen),
-    draftAnswersJson: null,
-  }
 }

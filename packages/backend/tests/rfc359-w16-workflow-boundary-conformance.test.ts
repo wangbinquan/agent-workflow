@@ -2,16 +2,15 @@
 // definition-boundary algorithms; closure traversal and save CAS stay intact.
 // These real-database cases first passed against the original implementations.
 
+import { patchWorkflowFixture, readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import {
   WorkflowDefinitionSchema,
   migrateWorkflowDefinitionToLatest,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
@@ -111,8 +110,7 @@ function calling(two = false): WorkflowDefinition {
 }
 
 async function seedWorkflow(db: PersistenceDb, id: string, raw: string) {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: 'shared-child',
     description: 'original description',
@@ -124,8 +122,7 @@ async function seedWorkflow(db: PersistenceDb, id: string, raw: string) {
 }
 
 async function readRow(db: PersistenceDb, id: string) {
-  const { workflows } = tablesOf(db)
-  const row = await first(db.select().from(workflows).where(eq(workflows.id, id)))
+  const row = (await readWorkflowFixtures(db, { id }))[0]
   if (row === undefined) throw new Error(`workflow boundary fixture row missing: ${id}`)
   return row
 }
@@ -200,8 +197,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
           ? { ...latest, $schema_version: version }
           : { ...rawChild, $schema_version: version },
       )
-      const { workflows } = tablesOf(harness.db)
-      await harness.db.update(workflows).set({ definition: raw }).where(eq(workflows.id, W1))
+      await patchWorkflowFixture(harness.db, { id: W1 }, { definition: raw })
       const before = await readRow(harness.db, W1)
       expect(await port.validate(candidate)).toEqual(expected)
       expect(await readRow(harness.db, W1)).toEqual(before)
@@ -214,8 +210,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
     const port = validator(harness.db)
     const candidate = { definition: calling(), currentWorkflow: ROOT }
     for (const raw of ['{', 'null', '{}', '{"$schema_version":6,"nodes":"wrong","edges":[]}']) {
-      const { workflows } = tablesOf(harness.db)
-      await harness.db.update(workflows).set({ definition: raw }).where(eq(workflows.id, W1))
+      await patchWorkflowFixture(harness.db, { id: W1 }, { definition: raw })
       const before = await readRow(harness.db, W1)
       const result = await port.validate(candidate)
       expect(result.result.ok).toBe(false)
@@ -225,8 +220,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
       expect(await readRow(harness.db, W1)).toEqual(before)
     }
     const raw = JSON.stringify(child())
-    const { workflows } = tablesOf(harness.db)
-    await harness.db.update(workflows).set({ definition: raw }).where(eq(workflows.id, W1))
+    await patchWorkflowFixture(harness.db, { id: W1 }, { definition: raw })
     expect((await port.validate(candidate)).result).toEqual({ ok: true, issues: [] })
     expect((await readRow(harness.db, W1)).definition).toBe(raw)
   })
@@ -237,8 +231,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
     const port = validator(harness.db)
     const candidate = { definition: calling(true), currentWorkflow: ROOT }
     expect((await port.validate(candidate)).result).toEqual({ ok: true, issues: [] })
-    const { workflows } = tablesOf(harness.db)
-    await harness.db.update(workflows).set({ name: 'renamed-child' }).where(eq(workflows.id, W2))
+    await patchWorkflowFixture(harness.db, { id: W2 }, { name: 'renamed-child' })
     const renamed = await port.validate(candidate)
     expect(renamed.result.ok).toBe(false)
     expect(renamed.result.issues.map((issue) => issue.code)).toContain('edge-target-port-missing')
@@ -277,8 +270,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
         repo.create(actor, { name: '_invalid', description: '', definition: invalid }),
       ),
     ).toEqual(legacy)
-    const { workflows } = tablesOf(harness.db)
-    expect(await harness.db.select().from(workflows).where(eq(workflows.id, W1))).toEqual([])
+    expect(await readWorkflowFixtures(harness.db, { id: W1 })).toEqual([])
     expect(clockCalls).toBe(0)
     expect(events).toEqual([])
     const created = await repo.create(actor, {
@@ -312,11 +304,7 @@ describeEachProvider('RFC-359 W16 Workflow definition boundaries', (harness) => 
       definition: definition({ $schema_version: 1 }),
     })
     expect(JSON.parse((await readRow(harness.db, created.id)).definition).$schema_version).toBe(7)
-    const { workflows } = tablesOf(harness.db)
-    await harness.db
-      .update(workflows)
-      .set({ name: 'Legacy Name With Spaces' })
-      .where(eq(workflows.id, created.id))
+    await patchWorkflowFixture(harness.db, { id: created.id }, { name: 'Legacy Name With Spaces' })
     now += 100
     const saved = await repo.update(actor, created.id, {
       expectedVersion: 1,

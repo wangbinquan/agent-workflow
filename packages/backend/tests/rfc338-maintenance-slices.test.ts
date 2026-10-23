@@ -1,6 +1,7 @@
 // RFC-338 D5 / AC-2 — owner adapters expose bounded, replay-safe slices so
 // foreground writers get a lock handoff between maintenance batches.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite, queryRows, first as firstRow } from '@/platform/persistence/queryHelpers'
@@ -43,6 +44,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
     }),
   },
   digitalEmployee: { sweepExpiredInputUploads: async () => 0 },
+  atomicApply: { converge: async () => ({ failed: 0, rolledForward: 0 }) },
   intent: {
     scratch: { sweep: async () => ({ removed: 0 }) },
     recovery: {
@@ -107,13 +109,13 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const db = createInMemoryDb(MIGRATIONS)
     const appHome = mkdtempSync(join(tmpdir(), 'rfc338-event-count-'))
     try {
-      const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { nodeRunEvents } = tablesOf(db)
+      await workflowFixture(db, {
         id: 'event-count-workflow',
         name: 'event-count-workflow',
         definition: '{"nodes":[],"edges":[],"inputs":[]}',
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: 'event-count-task',
         name: 'event-count-task',
         workflowId: 'event-count-workflow',
@@ -127,7 +129,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
         startedAt: 1,
         finishedAt: 2,
       })
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: 'event-count-run',
         taskId: 'event-count-task',
         nodeId: 'node',

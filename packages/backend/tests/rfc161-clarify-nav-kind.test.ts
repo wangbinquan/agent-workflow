@@ -12,8 +12,7 @@
 //   - a clarify run with no round → null (would 404)
 //   - the safety property: clarifyNavKind != null ⟹ getClarifyRoundDetail resolves.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -31,8 +30,7 @@ type TaskStatus = 'running' | 'awaiting_human' | 'canceled' | 'failed' | 'interr
 
 async function seedTask(db: PersistenceDb, status: TaskStatus = 'running'): Promise<string> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, name: 'wf', nodes: [], edges: [] }),
@@ -41,7 +39,7 @@ async function seedTask(db: PersistenceDb, status: TaskStatus = 'running'): Prom
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     // Preserve the exact task lineage formerly supplied by SQLite's retained INSERT trigger.
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
@@ -69,8 +67,7 @@ async function seedRun(
   opts: { id?: string; nodeId: string; status: NodeRunStatus; startedAt?: number },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId,
@@ -98,8 +95,7 @@ async function seedRound(
   },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id,
     taskId,
     kind: opts.kind ?? 'self',
@@ -111,8 +107,8 @@ async function seedRound(
     targetConsumerNodeId: null,
     loopIter: 0,
     iteration: 0,
-    questionsJson: JSON.stringify(Q),
-    answersJson: opts.status === 'awaiting_human' ? null : JSON.stringify([]),
+    questions: JSON.stringify(Q),
+    answers: opts.status === 'awaiting_human' ? null : JSON.stringify([]),
     directive: null,
     status: opts.status,
     createdAt: opts.createdAt,

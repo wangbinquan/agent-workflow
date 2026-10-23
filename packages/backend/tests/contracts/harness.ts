@@ -11,6 +11,7 @@
 //   - packages/backend/tests/api-contract.test.ts          (drives the registry)
 //   - packages/backend/tests/api-contract-coverage.test.ts (scans + matches)
 
+import { agentFixture, nodeRunFixture, taskFixture, workflowFixture } from '../helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
@@ -118,19 +119,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     role: 'admin',
     password: 'correctPassword123',
   })
-  const {
-    users,
-    agents,
-    skills,
-    mcps,
-    plugins,
-    workgroups,
-    workflows,
-    tasks,
-    scheduledTasks,
-    nodeRuns,
-    memories,
-  } = tablesOf(db)
+  const { users, skills, mcps, plugins, workgroups, scheduledTasks, memories } = tablesOf(db)
   const aliceRows = await db.select().from(users)
   const alice = aliceRows.find((u) => u.username === 'alice')
   if (!alice) throw new Error('contract harness: failed to seed alice')
@@ -151,7 +140,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   const memoryId = ulid()
 
   const now = Date.now()
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId,
     name: agentName,
     description: 'contract-suite seed',
@@ -193,7 +182,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     createdAt: now,
     updatedAt: now,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'contract-workflow',
     description: 'contract-suite seed',
@@ -220,7 +209,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
       edges: [],
     }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'contract-task',
     workflowId,
@@ -252,7 +241,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     createdAt: now,
     updatedAt: now,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'agent_1',

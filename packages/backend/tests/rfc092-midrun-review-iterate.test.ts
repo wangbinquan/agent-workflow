@@ -21,11 +21,17 @@
 // 状态。prompt 证据走 mock 落盘 argv（scheduler-audit-s05 的
 // MOCK_OPENCODE_CAPTURE_ARGV_TO 模式：argv[1] 即完整 user prompt）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -40,7 +46,7 @@ import { wakeHumanGateContinuation } from '../src/services/task'
 import { submitTaskContinuation } from '../src/modules/task-execution/application/submitTaskContinuation'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import { runGit } from '../src/util/git'
+import { runGit } from '../src/util/git' // 同毫秒插入仍保 id 单调（pure-id freshness）
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -152,8 +158,7 @@ async function buildHarness(): Promise<Harness> {
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -173,13 +178,12 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-rfc092-s1-review',
     definition: JSON.stringify(definition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc092-midrun-review-iterate',
     id: taskId,
     workflowId,
@@ -210,11 +214,7 @@ async function waitFor<T>(
 }
 
 async function topLevelRuns(db: DbClient, taskId: string, nodeId: string) {
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  const rows = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId }] })
   return rows.filter((r) => r.parentNodeRunId === null)
 }
 
@@ -342,11 +342,11 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       }, 'parked review while slow sibling is still running')
       revRunId = revRun.id
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
+      const { nodeRuns } = tablesOf(h.db)
       // RFC-333 T7 将 review 投影与任务停泊合并为一次 TaskParkTx；
       // slow sibling 仍在同一次活调度调用中运行，所以这里锁定新的
       // awaiting_review 状态，后续 iterate 仍由这次调用自取。
-      const midTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const midTask = (await readTaskFixtures(h.db, { id: taskId }))[0]!
       expect(midTask.status).toBe('awaiting_review')
 
       // 真实入口：先落一条行内评论，再 iterate 打回。
@@ -404,11 +404,11 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     await runPromise
     await continuationPromise
 
-    const { tasks, nodeRuns, docVersions } = tablesOf(h.db)
+    const { nodeRuns, docVersions } = tablesOf(h.db)
     // 正确语义（RFC-092 §1.2）：slow settle 后的 tick 经 pending-bypass 先自取
     // author 的 rerun 行、再自取翻回 pending 的 review 行 → 新一轮 review 停泊。
     // 任务以真实的 awaiting_review 收场，绝不是 'scheduler stalled' 假失败。
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(taskRow.errorMessage ?? '').not.toContain('scheduler stalled')
     expect({ status: taskRow.status, errorMessage: taskRow.errorMessage }).toEqual({
       status: 'awaiting_review',
@@ -469,7 +469,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       schedulerDriver,
       awaitScheduler: true,
     })
-    const finalTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(finalTask.status).toBe('done')
     const revDone = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, revRunId)))[0]!
     expect(revDone.status).toBe('done')

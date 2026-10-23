@@ -1,5 +1,6 @@
+import { taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec, first } from '@/platform/persistence/queryHelpers'
+import { first } from '@/platform/persistence/queryHelpers'
 import {
   createCollaborationCommandContext,
   resolveCollaborationCommandContext,
@@ -13,7 +14,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 import { HumanGateOperationRecovery } from '@/modules/collaboration/application/recoverHumanGateOperations'
 import type {
@@ -46,20 +47,19 @@ function absolute(appHome: string, relativePath: string): string {
 }
 
 async function seedTask(db: PersistenceDb): Promise<void> {
-  await rawExec(
-    db,
-    sql`
-    INSERT INTO tasks (
-      id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-      base_branch, branch, status, inputs, started_at
-    ) VALUES (
-      'task-333', 'task-333', 'workflow-333',
-      '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
-      '/tmp/rfc333', '/tmp/rfc333', 'main', 'agent-workflow/task-333',
-      'running', '{}', ${NOW}
-    )
-  `,
-  )
+  await taskFixture(db, {
+    id: 'task-333',
+    name: 'task-333',
+    workflowId: 'workflow-333',
+    workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+    repoPath: '/tmp/rfc333',
+    worktreePath: '/tmp/rfc333',
+    baseBranch: 'main',
+    branch: 'agent-workflow/task-333',
+    status: 'running',
+    inputs: '{}',
+    startedAt: NOW,
+  })
 }
 
 function openRequest(manifestDigest = 'source-v1'): CanonicalHumanGateRequest {

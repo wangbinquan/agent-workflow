@@ -1,7 +1,5 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -23,18 +21,14 @@ describeEachProvider(
         const borrowed: PersistenceDb = binding.db
         const recording = database.recordStatements()
         try {
-          await insertOne(borrowed, tablesOf(borrowed).workflows, {
+          await workflowFixture(borrowed, {
             id: 'w29-binding',
             name: `database-${index}`,
             definition: '{}',
           })
-          const rows = await database.db
-            .select({
-              id: tablesOf(database.db).workflows.id,
-              name: tablesOf(database.db).workflows.name,
-            })
-            .from(tablesOf(database.db).workflows)
-            .where(eq(tablesOf(database.db).workflows.id, 'w29-binding'))
+          const rows = await readWorkflowFixtures(database.db, { id: 'w29-binding' }).then((rows) =>
+            rows.map((row) => ({ id: row.id, name: row.name })),
+          )
           expect(rows).toEqual([{ id: 'w29-binding', name: `database-${index}` }])
           expect(
             recording.statements.filter((statement) =>

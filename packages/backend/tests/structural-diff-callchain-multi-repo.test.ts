@@ -9,8 +9,7 @@
 // chain keeps resolving in the same repo on the next click. Also locks the pure
 // splitRepoRef seam.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -78,8 +77,7 @@ async function buildHarness(): Promise<Harness> {
     repos.push(repoPath)
   }
   const db = createInMemoryDb(MIGRATIONS)
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-cc',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),

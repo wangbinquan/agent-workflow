@@ -8,6 +8,7 @@
 // C7(proposal §5):无参 GET 保持旧 `{items}` 全量形状;带任一参数才切分页
 // 封套——两种形状都在 HTTP 层锁死。
 
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
@@ -115,7 +116,7 @@ async function seed(db: PersistenceDb): Promise<RepoSeed[]> {
     })
   }
 
-  const { users, workflows, tasks, taskRepos, scheduledTasks } = tablesOf(db)
+  const { users, scheduledTasks } = tablesOf(db)
   // 引用面三源:
   //   r01 ← task_repos 两个不同 task(计 2)+ 下面 tD 的 task_repos 行(计 1)= 3
   //   r05 ← 仅 tasks.cachedRepoId(无 task_repos 行)(计 1)
@@ -130,13 +131,13 @@ async function seed(db: PersistenceDb): Promise<RepoSeed[]> {
     createdAt: T0,
     updatedAt: T0,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf1',
     name: 'wf',
     definition: '{"nodes":[],"edges":[],"inputs":[]}',
   })
   const mkTask = async (id: string, cachedRepoId: string | null): Promise<void> => {
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id,
       name: id,
       workflowId: 'wf1',
@@ -165,7 +166,7 @@ async function seed(db: PersistenceDb): Promise<RepoSeed[]> {
   await mkTask('tC', 'r05')
   await mkTask('tD', 'r02')
   const mkTaskRepo = async (taskId: string, cachedRepoId: string): Promise<void> => {
-    await insertOne(db, taskRepos, {
+    await taskRepoFixture(db, {
       taskId,
       repoIndex: 0,
       repoPath: `/tmp/${taskId}`,

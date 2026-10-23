@@ -9,10 +9,8 @@
 // **并发 claimNew 恰好一个成功、另一个是 owner-conflict**——它防重复认领靠的是主键
 // `(protocol, session_id)` + 能力矩阵的唯一冲突映射，不是靠隔离级别。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -27,10 +25,9 @@ async function seedRunningRun(db: PersistenceDb): Promise<{
   runId: string
 }> {
   const workflowId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  await workflowFixture(db, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'lease task',
     workflowId,
@@ -45,7 +42,7 @@ async function seedRunningRun(db: PersistenceDb): Promise<{
   })
   const runId = ulid()
   const nodeId = 'n1'
-  await insertOne(db, nodeRuns, { id: runId, taskId, nodeId, status: 'running' })
+  await nodeRunFixture(db, { id: runId, taskId, nodeId, status: 'running' })
   return { taskId, nodeId, runId }
 }
 
@@ -71,8 +68,7 @@ describeEachProvider('RFC-359 W4-D24 —— 运行时会话租约', (harness) =>
     const lease = await operations.load('opencode', sessionId)
     expect(lease?.taskId).toBe(taskId)
     expect(lease?.leaseNodeRunId).toBe(runId)
-    const { nodeRuns } = tablesOf(db)
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)).limit(1))[0]
+    const run = (await readNodeRunFixtures(db, { id: runId }, { limit: 1 }))[0]
     expect(run?.opencodeSessionId).toBe(sessionId)
 
     // 同一个 (protocol, sessionId) 再认领：run 已经带上 session，先撞 run-not-claimable。
@@ -128,23 +124,10 @@ describeEachProvider('RFC-359 W4-D24 —— 运行时会话租约', (harness) =>
     expect(lease).not.toBeUndefined()
     const winner = [a, b].find((seed) => seed.taskId === lease?.taskId)
     expect(winner).not.toBeUndefined()
-    const { nodeRuns } = tablesOf(db)
-    const run = (
-      await db
-        .select()
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, winner?.runId ?? ''))
-        .limit(1)
-    )[0]
+    const run = (await readNodeRunFixtures(db, { id: winner?.runId ?? '' }, { limit: 1 }))[0]
     expect(run?.opencodeSessionId).toBe(sessionId)
     const loser = [a, b].find((seed) => seed.taskId !== lease?.taskId)
-    const loserRun = (
-      await db
-        .select()
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, loser?.runId ?? ''))
-        .limit(1)
-    )[0]
+    const loserRun = (await readNodeRunFixtures(db, { id: loser?.runId ?? '' }, { limit: 1 }))[0]
     expect(loserRun?.opencodeSessionId ?? null).toBeNull()
   })
 

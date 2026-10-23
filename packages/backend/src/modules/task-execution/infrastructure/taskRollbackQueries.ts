@@ -1,5 +1,6 @@
 // RFC-359 W4-B1 —— 回滚目标投影：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
 
+import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
 
@@ -28,7 +29,7 @@ export class DrizzleTaskRollbackQueries implements TaskRollbackQueries {
     const repositoryRows = await this.db
       .select({
         worktreePath: taskRepos.worktreePath,
-        worktreeDirName: taskRepos.worktreeDirName,
+        mountPath: taskRepos.mountPath,
       })
       .from(taskRepos)
       .where(eq(taskRepos.taskId, taskId))
@@ -40,7 +41,9 @@ export class DrizzleTaskRollbackQueries implements TaskRollbackQueries {
       repositories: Object.freeze(
         repositoryRows.length > 0
           ? repositoryRows.map((repository) => Object.freeze({ ...repository }))
-          : [Object.freeze({ worktreePath: task.worktreePath, worktreeDirName: '' })],
+          : projectStoredTaskRepositorySurface(task).repos.map(({ worktreePath, mountPath }) =>
+              Object.freeze({ worktreePath, mountPath }),
+            ),
       ),
     })
   }

@@ -9,6 +9,7 @@ import type {
 } from '../application/ports/intentContextResourceAuthorization'
 import type { CatalogSelectorKind } from '../domain/resourceKinds'
 import { ACL_TABLES } from './aclRegistry'
+import { catalogResourcePredicate } from './workflowCatalogPredicate'
 
 /**
  * RFC-359 W4-D20 —— Intent 上下文的资源身份 / 授权读取：一份异步实现，两个 provider 共用
@@ -34,7 +35,7 @@ export function createIntentContextResourceAuthorizationReadPort(
             visibility: table.visibility,
           })
           .from(table)
-          .where(eq(table.id, resourceId))
+          .where(catalogResourcePredicate(resourceType, table.id, eq(table.id, resourceId)))
           .limit(1)
       )[0]
       return row === undefined

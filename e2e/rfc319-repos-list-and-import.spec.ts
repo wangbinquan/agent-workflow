@@ -71,6 +71,7 @@
 //     被淹没在分页窗口里。
 //   · REPO-33 放最后 —— 它只读，不改任何状态，谁在它前面都无所谓。
 
+import { taskFixtureSql } from './fixtures/model'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -326,26 +327,23 @@ function seedRepoRows(rows: readonly SeedRepoRow[], hashOffset: number): void {
  */
 function seedReferencingTask(taskId: string, cachedRepoId: string): void {
   const now = Date.now()
-  const values = [
-    sqlText(taskId),
-    sqlText('RFC-319 repos-list fixture task'),
-    sqlText('rfc319-repos-fixture-workflow'),
-    sqlText('{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}'),
-    sqlText('/tmp/rfc319-repos-fixture/repo'),
-    sqlText(cachedRepoId),
-    sqlText('/tmp/rfc319-repos-fixture/worktree'),
-    sqlText('main'),
-    sqlText(`agent-workflow/${taskId}`),
-    sqlText('done'),
-    sqlText('{}'),
-    String(now),
-    String(now),
-  ].join(', ')
   runSqlite(
     dbPath(),
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, cached_repo_id,' +
-      ' worktree_path, base_branch, branch, status, inputs, started_at, finished_at)' +
-      ` VALUES (${values});`,
+    taskFixtureSql({
+      id: taskId,
+      name: 'RFC-319 repos-list fixture task',
+      workflowId: 'rfc319-repos-fixture-workflow',
+      workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      repoPath: '/tmp/rfc319-repos-fixture/repo',
+      cachedRepoId,
+      worktreePath: '/tmp/rfc319-repos-fixture/worktree',
+      baseBranch: 'main',
+      branch: `agent-workflow/${taskId}`,
+      status: 'done',
+      inputs: '{}',
+      startedAt: now,
+      finishedAt: now,
+    }),
   )
 }
 

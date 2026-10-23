@@ -26,8 +26,16 @@
 //
 // 双引擎是缺省（`helpers/eachProvider.ts`）：缺 `AW_TEST_POSTGRESQL_URL` 是硬红不是 skip。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  patchTaskFixture,
+  readNodeRunFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -42,7 +50,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { withPostgresqlTaskAggregateTransaction } from '@/modules/task-execution/infrastructure/postgresqlTaskLifecycleTransaction'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { createMaintenanceExecutionFence } from '@/platform/persistence/maintenanceExecutionFence'
+import { createMaintenanceExecutionFence } from '@/modules/task-execution/infrastructure/maintenanceExecutionFence'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -64,7 +72,7 @@ const asClient = (db: PersistenceDb): PostgresqlDatabaseClient =>
 
 async function seedTask(db: PersistenceDb, startedAt: number): Promise<string> {
   const now = Date.now()
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -78,7 +86,7 @@ async function seedTask(db: PersistenceDb, startedAt: number): Promise<string> {
     })
     .onConflictDoNothing()
   const workflowId = `wf_${ulid()}`
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc359-w11',
     description: '',
@@ -87,7 +95,7 @@ async function seedTask(db: PersistenceDb, startedAt: number): Promise<string> {
     schemaVersion: 4,
   })
   const id = `t_${ulid()}`
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: 'rfc359 w11 task',
     workflowId,
@@ -104,7 +112,6 @@ async function seedTask(db: PersistenceDb, startedAt: number): Promise<string> {
     branchStartedAt: startedAt,
     finishedAt: startedAt + 1,
     ownerUserId: OWNER,
-    repoCount: 1,
     spaceKind: 'local' as const,
     parentTaskId: null,
     executionLineageId: id,
@@ -115,18 +122,17 @@ async function seedTask(db: PersistenceDb, startedAt: number): Promise<string> {
 async function seedRun(
   db: PersistenceDb,
   taskId: string,
-  values: Partial<PersistenceTables['nodeRuns']['$inferInsert']> & { nodeId: string },
+  values: Partial<NodeRunFixtureSpec> & { nodeId: string },
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     status: 'done',
     retryIndex: 0,
     iteration: 0,
     ...values,
-  } as PersistenceTables['nodeRuns']['$inferInsert'])
+  })
   return id
 }
 
@@ -313,21 +319,24 @@ describeEachProvider('RFC-359 W11 ③ greatest()：两个引擎上的真实执�
     const taskId = await seedTask(db, 100)
     const bumpTo = async (occurredAt: number): Promise<void> => {
       const { tasks } = tablesOf(db)
-      await db
-        .update(tasks)
-        .set({
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        {
           branchStartedAt: engine.greatest(
             sql`coalesce(${tasks.branchStartedAt}, 0)`,
             sql`${occurredAt}`,
           ),
-        })
-        .where(eq(tasks.id, taskId))
+        },
+      )
     }
     const read = async (): Promise<number | null> => {
-      const { tasks } = tablesOf(db)
       return asNumber(
-        (await db.select({ v: tasks.branchStartedAt }).from(tasks).where(eq(tasks.id, taskId)))[0]
-          ?.v,
+        (
+          await readTaskFixtures(db, { id: taskId }).then((rows) =>
+            rows.map((row) => ({ v: row.branchStartedAt })),
+          )
+        )[0]?.v,
       )
     }
 
@@ -409,21 +418,21 @@ describeEachProvider('RFC-359 W11 ④ 聚合根行锁：渲染权归矩阵', (ha
 
     await expect(
       withPostgresqlTaskAggregateTransaction(asClient(db), taskId, async (tx) => {
-        const { nodeRuns } = tablesOf(tx)
-        await insertOne(tx, nodeRuns, {
+        await nodeRunFixture(tx, {
           id: runId,
           taskId,
           nodeId: 'n1',
           status: 'done',
           retryIndex: 0,
           iteration: 0,
-        } as PersistenceTables['nodeRuns']['$inferInsert'])
+        })
         throw new Error('body failed')
       }),
     ).rejects.toThrow('body failed')
 
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.id, runId))
+    const rows = await readNodeRunFixtures(db, { id: runId }).then((rows) =>
+      rows.map((row) => ({ id: row.id })),
+    )
     expect(rows, '体内抛错却留下了行 ⇒ 这笔事务没有回滚').toEqual([])
   })
 })

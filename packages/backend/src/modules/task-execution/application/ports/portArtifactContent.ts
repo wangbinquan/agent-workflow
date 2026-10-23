@@ -86,7 +86,7 @@ export interface PortArtifactArchiveRequest extends PortArtifactArchiveNamespace
     readonly source: PortArtifactWorkspaceFile
     readonly sourcePath: string
   }[]
-  readonly worktreeDirName: string
+  readonly mountPath: string
 }
 
 export interface PortArtifactReadRequest {
@@ -110,7 +110,7 @@ export interface PortArtifactOperations extends PortArtifactReader {
 export interface NativeArchivePortArtifactsOptions extends PortArtifactArchiveNamespace {
   appHome: string
   items: Array<{ sourceAbs: string; sourcePath: string }>
-  worktreeDirName: string
+  mountPath: string
   worktreeRootAbs: string
 }
 

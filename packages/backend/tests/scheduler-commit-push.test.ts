@@ -13,6 +13,12 @@
 //     here we lock the live wiring path (diff-driven trigger + runNode-driven
 //     commit-agent message + git push).
 
+import {
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -172,11 +178,10 @@ describe('RFC-075 scheduler auto commit&push', () => {
       },
     )
 
-    const { nodeRuns } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+    const rows = await readNodeRunFixtures(h.db, { taskId: task.id })
     // The commit CONTAINER row carries commit_push_json; session children share
     // the nodeId but have null commit_push_json.
-    const commitRow = rows.find((r) => isCommitPushNodeId(r.nodeId) && r.commitPushJson !== null)
+    const commitRow = rows.find((r) => isCommitPushNodeId(r.nodeId) && r.commitPush !== null)
     expect(commitRow).toBeDefined()
     expect(commitRow!.nodeId).toBe(commitPushNodeId('writer'))
     expect(commitRow!.parentNodeRunId).not.toBeNull()
@@ -184,11 +189,11 @@ describe('RFC-075 scheduler auto commit&push', () => {
     // The message-gen session was captured on a child node_run (parent = the
     // commit container) so the detail page can show it.
     const sessionChild = rows.find(
-      (r) => r.parentNodeRunId === commitRow!.id && r.commitPushJson === null,
+      (r) => r.parentNodeRunId === commitRow!.id && r.commitPush === null,
     )
     expect(sessionChild).toBeDefined()
 
-    const meta = JSON.parse(commitRow!.commitPushJson!) as CommitPushMeta
+    const meta = JSON.parse(commitRow!.commitPush!) as CommitPushMeta
     expect(meta.pushOutcome).toBe('pushed')
     expect(meta.messageSource).toBe('llm')
     expect(meta.commitSha).toMatch(/^[a-f0-9]{40}$/)
@@ -228,36 +233,30 @@ describe('RFC-075 scheduler auto commit&push', () => {
     )
     const branchRef = `refs/heads/agent-workflow/${task.id}`
     const commitRuns = async () => {
-      const { nodeRuns } = tablesOf(h.db)
-      return (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).filter(
+      return (await readNodeRunFixtures(h.db, { taskId: task.id })).filter(
         (r) => r.rerunCause === 'commit-push',
       )
     }
     const [interrupted] = await commitRuns()
     expect(interrupted?.status).toBe('done')
-    const { tasks, nodeRuns } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // The interruption: the commit never happened, nothing reached the remote,
     // the container row was reaped `interrupted` and the task stopped.
-    const worktree = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!.worktreePath
+    const worktree = (await readTaskFixtures(h.db, { id: task.id }))[0]!.worktreePath
     expect((await runGit(worktree, ['reset', '--soft', 'HEAD~1'])).exitCode).toBe(0)
     expect((await runGit(h.remote, ['update-ref', '-d', branchRef])).exitCode).toBe(0)
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'interrupted', commitPushJson: null })
-      .where(eq(nodeRuns.id, interrupted!.id))
+    await patchNodeRunFixture(
+      h.db,
+      { id: interrupted!.id },
+      { status: 'interrupted', commitPush: null },
+    )
     // Its message session was left adoptable (a hosted boot puts a run whose
     // remote execution is unsettled back to `pending`), but nothing dispatches it.
-    const session = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
+    const session = (await readNodeRunFixtures(h.db, { taskId: task.id })).find(
       (r) => r.parentNodeRunId === interrupted!.id,
     )!
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'pending', finishedAt: null })
-      .where(eq(nodeRuns.id, session.id))
-    await h.db
-      .update(tasks)
-      .set({ status: 'pending', finishedAt: null })
-      .where(eq(tasks.id, task.id))
+    await patchNodeRunFixture(h.db, { id: session.id }, { status: 'pending', finishedAt: null })
+    await patchTaskFixture(h.db, { id: task.id }, { status: 'pending', finishedAt: null })
 
     await runTaskWithRealTestTopology({
       taskId: task.id,
@@ -271,19 +270,16 @@ describe('RFC-075 scheduler auto commit&push', () => {
     const rerun = runs.find((r) => r.id !== interrupted!.id)!
     expect(rerun.status).toBe('done')
     expect(rerun.parentNodeRunId).toBe(interrupted!.parentNodeRunId)
-    expect((JSON.parse(rerun.commitPushJson!) as CommitPushMeta).pushOutcome).toBe('pushed')
+    expect((JSON.parse(rerun.commitPush!) as CommitPushMeta).pushOutcome).toBe('pushed')
     expect((await runGit(h.remote, ['rev-parse', '--verify', branchRef])).exitCode).toBe(0)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]!.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: task.id }))[0]!.status).toBe('done')
     // The superseded attempt's session is retired, so its execution is settled.
     expect((await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, session.id)))[0]!.status).toBe(
       'canceled',
     )
 
     // Only an interrupted latest run is re-run: another resume publishes nothing new.
-    await h.db
-      .update(tasks)
-      .set({ status: 'pending', finishedAt: null })
-      .where(eq(tasks.id, task.id))
+    await patchTaskFixture(h.db, { id: task.id }, { status: 'pending', finishedAt: null })
     await runTaskWithRealTestTopology({
       taskId: task.id,
       db: h.db,

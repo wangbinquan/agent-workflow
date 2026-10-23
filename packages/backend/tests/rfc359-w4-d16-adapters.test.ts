@@ -1,3 +1,4 @@
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -192,9 +193,8 @@ describeEachProvider('RFC-359 W4-D16 —— Mcp 仓库', (harness) => {
     })
     const agentId = ulid()
     const { agents, mcpRuntimeTestSessions } = tablesOf(harness.db)
-    await insertOne(
+    await agentFixture(
       harness.db,
-      agents,
       createAgentPersistenceValues({
         id: agentId,
         agent: CreateAgentSchema.parse({

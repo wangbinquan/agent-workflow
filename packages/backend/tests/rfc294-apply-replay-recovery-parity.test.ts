@@ -10,10 +10,12 @@
 // 这四条是**合一前后都不许变**的用户可见行为，正是合一最容易悄悄改掉的那一类
 // （回收阈值、收敛的幂等性、失败重放的语义）。任何一条红都说明合一动了不该动的东西。
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
+import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { randomBytes } from 'node:crypto'
@@ -27,7 +29,7 @@ import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { applyIntentChangeset, type IntentApplyReceipt } from '@/modules/intent/composition/apply'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
-import { composeSqliteResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { encodeZip } from '@/util/zip'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
@@ -127,14 +129,14 @@ async function replayPackageApply(importId: string): Promise<unknown> {
 }
 
 function convergePackageApplies(): Promise<{ failed: number; rolledForward: number }> {
-  const maintenance = composeSqliteResourcePackageApplyMaintenance({
+  const maintenance = composeResourcePackageApplyMaintenance({
     db,
     appHome,
     pluginsDir: join(appHome, 'plugins'),
     activitySource: { activeApplyIds: () => [] },
   })
-  return maintenance.command
-    .converge({ activeApplyIds: [] })
+  return createAtomicApplyRecovery([maintenance.scene])
+    .converge({ 'resource-package': [] })
     .then((receipt) => ({ failed: receipt.failed, rolledForward: receipt.rolledForward }))
 }
 
@@ -228,11 +230,13 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
       const pair = await seedPair('crash', 'applying', Date.now())
 
       expect(
-        await composeIntentApplyConvergence({
-          db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
-        }).converge({ activeJournalIds: [] }),
+        await createAtomicApplyRecovery([
+          composeIntentApplyRecoveryScene({
+            db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
+        ]).converge({ intent: [] }),
       ).toEqual({
         failed: 0,
         rolledForward: 0,
@@ -245,7 +249,7 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
       expect((await bundleState(pair.bundleId))?.state).toBe('applying')
 
       const stale = Date.now() - 11 * 60 * 1000
-      const { intentApplyJournal, resourceBundleApplies, agents } = tablesOf(db)
+      const { intentApplyJournal, resourceBundleApplies } = tablesOf(db)
       await db
         .update(intentApplyJournal)
         .set({ updatedAt: stale })
@@ -256,11 +260,13 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
         .where(eq(resourceBundleApplies.id, pair.bundleId))
 
       expect(
-        await composeIntentApplyConvergence({
-          db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
-        }).converge({ activeJournalIds: [] }),
+        await createAtomicApplyRecovery([
+          composeIntentApplyRecoveryScene({
+            db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
+        ]).converge({ intent: [] }),
       ).toEqual({
         failed: 1,
         rolledForward: 0,
@@ -293,7 +299,7 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
         code: 'bundle-apply-failed-replay',
       })
 
-      expect(await db.select().from(agents)).toEqual([])
+      expect(await readAgentFixtures(db)).toEqual([])
       expect(await db.select().from(intentApplyJournal)).toHaveLength(1)
       expect(await db.select().from(resourceBundleApplies)).toHaveLength(1)
     })
@@ -377,3 +383,5 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
     })
   })
 })
+
+// 2026-10-22 RFC-395 II-a A6：上文为原迁位记录；当前测试通过 composeResourcePackageApplyMaintenance 的 scene 驱动共享机制。

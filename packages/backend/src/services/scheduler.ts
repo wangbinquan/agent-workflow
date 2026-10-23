@@ -5,6 +5,8 @@
 // mechanics and a few source-compatible exports
 // until their separately authorized waves cut over.
 
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
 // RFC-253 — script node execution.
@@ -21,7 +23,6 @@ import {
   commitPushNodeId,
 } from '@/services/commitPush'
 import { runCommitPush } from '@/services/commitPushRunner'
-import { pickFreshestRun } from '@/services/freshness'
 import { runTaskAgentWithFamily as runNode } from '@/modules/task-execution/public/commands'
 import { type Logger } from '@/util/log'
 import {
@@ -93,7 +94,7 @@ export async function inspectReadonlyRepos(state: SchedulerState, log: Logger): 
     const changed = status.stdout.trim() === '' ? [] : status.stdout.trim().split('\n')
     await state.opts.persistence.scheduler.recordReadonlyDirty({
       taskId: state.task.id,
-      repoIndex: repo.repoIndex,
+      repoIndex: repo.ordinal,
       changedCount: changed.length,
       ...(state.opts.executionContext === undefined
         ? {}
@@ -142,7 +143,16 @@ export async function maybeRunCommitPush(
     nodeId: node.id,
     iteration,
   })
-  const parentNodeRunId = pickFreshestRun(parentRows, { topLevelOnly: true })?.id ?? null
+  const parentHistory = await createRunHistorySnapshot(
+    task.id,
+    parentRows.map((row) => ({
+      ...row,
+      nodeId: node.id,
+      status: 'done' as const,
+      iteration,
+    })),
+  ).familyHistory(task.id, { nodeId: node.id, iteration }, { topLevelOnly: true })
+  const parentNodeRunId = parentHistory.at(-1)?.id ?? null
   const agentLabel: string =
     node.kind === 'agent-single' && typeof node.agentName === 'string' ? node.agentName : node.id
   const branch = task.branch
@@ -176,7 +186,7 @@ export async function maybeRunCommitPush(
     if (publicationTransport === undefined) {
       throw new Error('repository-publication-transport-not-composed')
     }
-    const repoSlug = repo.worktreeDirName
+    const repoSlug = repo.mountPath
     const nodeId = commitPushNodeId(node.id, repoSlug || undefined)
     const baseRef = repo.baseBranch || task.baseBranch
     const repoName = repoSlug || repo.repoPath.split('/').pop() || 'repo'
@@ -194,12 +204,17 @@ export async function maybeRunCommitPush(
       // the detail page groups the captured session(s) under the commit row.
       try {
         const sessionRunId = await state.opts.persistence.nodeRuns.mint({
+          ...deriveNodeRunRole({ nodeId: nodeId, rerunCause: 'commit-push-session' }),
           taskId: task.id,
           nodeId,
           status: 'pending',
           cause: 'commit-push-session',
           iteration,
-          overrides: { parentNodeRunId: ctx.nodeRunId },
+          overrides: {
+            identity: {
+              parentNodeRunId: ctx.nodeRunId,
+            },
+          },
         })
         // RFC-117: freeze the resolved commit runtime onto the session row via
         // inheritFrom — its source is config.commitPushRuntime / deprecated model

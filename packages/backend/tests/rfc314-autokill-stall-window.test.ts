@@ -14,7 +14,7 @@
 // 另加两条结构判据（形状退化在小库上永远看不出来）：语句数不随事件量增长；EXPLAIN 不许
 // 出现 SCAN 或 TEMP B-TREE。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -41,9 +41,9 @@ async function seedRun(
   const workflowId = ulid()
   const taskId = ulid()
   const nodeRunId = ulid()
-  const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
-  await insertOne(db, tasks, {
+  const { nodeRunEvents } = tablesOf(db)
+  await workflowFixture(db, { id: workflowId, name: 'wf', definition: '{}' })
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc314-fixture',
     workflowId,
@@ -61,7 +61,7 @@ async function seedRun(
     inputs: '{}',
     startedAt: opts.startedAt,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'n1',

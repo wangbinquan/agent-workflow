@@ -15,6 +15,7 @@
 // 另外两格是**客户端代理注入**，用的是 bun:sqlite 的同步执行面，只能留在单引擎：
 // 见下方 `describe('materialize 期竞态与真错不吞…')` 的头注。
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
@@ -60,8 +61,7 @@ async function seedUser(id: string): Promise<void> {
 async function seedAgent(name: string, ownerUserId = OWNER): Promise<string> {
   const id = ulid()
   const now = Date.now()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: name,
@@ -70,7 +70,7 @@ async function seedAgent(name: string, ownerUserId = OWNER): Promise<string> {
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['agents']['$inferInsert'])
+  })
   return id
 }
 

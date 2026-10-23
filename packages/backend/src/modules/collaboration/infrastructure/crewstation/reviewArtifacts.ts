@@ -3,6 +3,7 @@
 // id); the gate journal keeps the receipt and stays the only publication and
 // recovery authority. Cleanup of an unconsumed document is an owner release;
 // whether its upload ever completed is settled by object maintenance.
+import { legacyReviewTask } from '@/platform/content/legacyReview'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, or } from 'drizzle-orm'
 import { z } from 'zod'
@@ -42,7 +43,7 @@ export const hostedReviewPublicationKey = (artifact: {
   artifactKey: string
 }) => `${artifact.operationId}/${sha256Hex(artifact.artifactKey)}`
 const keyFor = hostedReviewPublicationKey
-const taskOf = (finalPath: string) => /^runs\/([^/]+)\//.exec(finalPath)?.[1] ?? null
+const taskOf = legacyReviewTask
 
 function receiptFor(artifact: HumanGateArtifactSnapshot) {
   const receipt = Receipt.parse(JSON.parse(artifact.receiptJson ?? 'null'))

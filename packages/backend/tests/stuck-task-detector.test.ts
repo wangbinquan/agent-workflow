@@ -8,6 +8,15 @@
 // call `runStuckTaskDetector` and assert on `openAlerts` filtered to the
 // rule under test.
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -46,10 +55,9 @@ async function buildHarness(
 
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes, edges: [] }
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -85,8 +93,7 @@ async function insertRun(
   },
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId,
@@ -142,12 +149,10 @@ describeEachProvider('RFC-053 PR-E — S4 (pending too long)', (harness) => {
   // 里带 childBudget 提示；顶层任务维持 5min（上面两条用例锁定不变）。
   async function markAsChild(hh: Harness): Promise<void> {
     const parentId = ulid()
-    const { tasks } = tablesOf(hh.db)
-    const [childRow] = await hh.db
-      .select({ workflowId: tasks.workflowId, workflowSnapshot: tasks.workflowSnapshot })
-      .from(tasks)
-      .where(eq(tasks.id, hh.taskId))
-    await insertOne(hh.db, tasks, {
+    const [childRow] = await readTaskFixtures(hh.db, { id: hh.taskId }).then((rows) =>
+      rows.map((row) => ({ workflowId: row.workflowId, workflowSnapshot: row.workflowSnapshot })),
+    )
+    await taskFixture(hh.db, {
       id: parentId,
       name: 'parent',
       workflowId: childRow!.workflowId,
@@ -160,7 +165,7 @@ describeEachProvider('RFC-053 PR-E — S4 (pending too long)', (harness) => {
       inputs: '{}',
       startedAt: T0 - 60 * MIN_MS,
     })
-    await hh.db.update(tasks).set({ parentTaskId: parentId }).where(eq(tasks.id, hh.taskId))
+    await patchTaskFixture(hh.db, { id: hh.taskId }, { parentTaskId: parentId })
   }
 
   test('D11 child: pending 10 min (5<t<30) → NO S4 alert (childBudget legitimate wait)', async () => {
@@ -258,10 +263,9 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'awaiting_human', T0 - 45 * MIN_MS)
       const srcRun = await insertRun(h.db, h.taskId, { nodeId: 'src', status: 'done' })
       const run = await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
-      const { clarifyRounds } = tablesOf(h.db)
       // RFC-108 T8 (AR-16): the detector now reads the unified clarify_rounds
       // (self-clarify dual-writes it, RFC-058). Insert an OPEN self round.
-      await insertOne(h.db, clarifyRounds, {
+      await clarifyRoundFixture(h.db, {
         id: ulid(),
         taskId: h.taskId,
         kind: 'self',
@@ -273,11 +277,11 @@ describeEachProvider(
         targetConsumerNodeId: null,
         loopIter: 0,
         iteration: 0,
-        questionsJson: '[]',
-        answersJson: null,
+        questions: '[]',
+        answers: null,
         directive: null,
         status: 'awaiting_human',
-        truncationWarningsJson: null,
+        truncationWarnings: null,
         designerRunTriggeredAt: null,
         abandonedAt: null,
         createdAt: T0 - 45 * MIN_MS,
@@ -295,10 +299,9 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'awaiting_human', T0 - 45 * MIN_MS)
       const srcRun = await insertRun(h.db, h.taskId, { nodeId: 'src', status: 'done' })
       const run = await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
-      const { clarifyRounds } = tablesOf(h.db)
       // RFC-108 T8 (AR-16): an ANSWERED round in the unified clarify_rounds is not
       // "open" — S2 must still fire (the task is parked with nothing live to answer).
-      await insertOne(h.db, clarifyRounds, {
+      await clarifyRoundFixture(h.db, {
         id: ulid(),
         taskId: h.taskId,
         kind: 'self',
@@ -310,11 +313,12 @@ describeEachProvider(
         targetConsumerNodeId: null,
         loopIter: 0,
         iteration: 0,
-        questionsJson: '[]',
-        answersJson: '[]',
+        questions: '[]',
+        answers: '[]',
         directive: null,
-        status: 'answered', // ← closed
-        truncationWarningsJson: null,
+        status: 'answered',
+        // ← closed
+        truncationWarnings: null,
         designerRunTriggeredAt: null,
         abandonedAt: null,
         createdAt: T0 - 45 * MIN_MS,
@@ -337,8 +341,7 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'awaiting_human', T0 - 45 * MIN_MS)
       const askingRun = await insertRun(h.db, h.taskId, { nodeId: 'questioner', status: 'done' })
       const crossRun = await insertRun(h.db, h.taskId, { nodeId: 'xclr', status: 'awaiting_human' })
-      const { clarifyRounds } = tablesOf(h.db)
-      await insertOne(h.db, clarifyRounds, {
+      await clarifyRoundFixture(h.db, {
         id: ulid(),
         taskId: h.taskId,
         kind: 'cross',
@@ -350,11 +353,12 @@ describeEachProvider(
         targetConsumerNodeId: 'designer',
         loopIter: 0,
         iteration: 0,
-        questionsJson: '[]',
-        answersJson: null,
+        questions: '[]',
+        answers: null,
         directive: null,
-        status: 'awaiting_human', // ← open cross round (no clarify_sessions row)
-        truncationWarningsJson: null,
+        status: 'awaiting_human',
+        // ← open cross round (no clarify_sessions row)
+        truncationWarnings: null,
         designerRunTriggeredAt: null,
         abandonedAt: null,
         createdAt: T0 - 45 * MIN_MS,
@@ -422,8 +426,7 @@ describeEachProvider('RFC-098 WP-8 — S5 (running, active runs, events stalled)
   test('stuck: active run + zero events ever → S5 with per-run {nodeRunId,nodeId,pid,lastEventTs}', async () => {
     h = await buildHarness(harness.db, 'running', T0 - 60 * MIN_MS)
     const runId = await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
-    const { nodeRuns } = tablesOf(h.db)
-    await h.db.update(nodeRuns).set({ pid: 4242 }).where(eq(nodeRuns.id, runId))
+    await patchNodeRunFixture(h.db, { id: runId }, { pid: 4242 })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       now: () => T0,
@@ -517,9 +520,8 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
       operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
       now: () => T0,
     })
-    const { tasks } = tablesOf(h.db)
     // Promote task out of pending.
-    await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
+    await patchTaskFixture(h.db, { id: h.taskId }, { status: 'running' })
     // Give it an active run so S3 doesn't immediately fire.
     await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'running' })
     const r2 = await runStuckTaskDetector({

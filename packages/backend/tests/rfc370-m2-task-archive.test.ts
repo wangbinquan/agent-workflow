@@ -2,6 +2,7 @@
 // lists object parts that are `task-archive` publications of the neutral
 // journal; object-backed sources are linked, never copied, and no archived byte
 // is stored in the database.
+import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -68,13 +69,13 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
         publications: journal.publications,
         workspaces,
       })
-    const { workflows, tasks, nodeRuns, nodeExecutionEventSources } = tablesOf(db)
-    await insertOne(db, workflows, { id: 'wf', name: 'archive', definition: '{}' })
+    const { nodeExecutionEventSources } = tablesOf(db)
+    await workflowFixture(db, { id: 'wf', name: 'archive', definition: '{}' })
     for (const [id, parentTaskId] of [
       ['parent', null],
       ['child', 'parent'],
     ] as const)
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id,
         name: id,
         workflowId: 'wf',
@@ -89,7 +90,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
         finishedAt: 2,
         parentTaskId,
       })
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: 'run',
       taskId: 'parent',
       nodeId: 'node',
@@ -144,8 +145,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     )
     expect(result.archived).toHaveLength(1)
     expect([...result.archived[0]!.taskIds].sort()).toEqual(['child', 'parent'])
-    const { tasks } = tablesOf(f.db)
-    expect(await f.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(f.db)).toHaveLength(0)
     const second = f.reopen()
     const root = 'cs-archive:tasks/parent'
     expect(JSON.parse(await second.readText(`${root}/manifest.json`)).rows.node_run_events).toBe(
@@ -192,12 +192,11 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
       { ...first.locations, now: 100 * 86400_000 },
     )
     expect(lost).toBe(true)
-    const { tasks } = tablesOf(f.db)
-    expect(await f.db.select().from(tasks)).toHaveLength(2)
+    expect(await readTaskFixtures(f.db)).toHaveLength(2)
     const second = f.reopen()
     const recovery = createDrizzleTaskArchiveMaintenanceCommand(f.db, second)
     await recovery.recover({ ...second.locations, now: 101 * 86400_000 })
-    expect(await f.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(f.db)).toHaveLength(0)
     expect(await second.readText('cs-archive:tasks/parent/runs/child/node/prompt.md')).toBe(
       'task file child',
     )
@@ -240,8 +239,7 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     await expect(
       binding.content.appendText('cs-archive:tasks/.tmp-parent/db/tasks.jsonl', '{}\n'),
     ).rejects.toThrow('lost archive fence')
-    const { tasks } = tablesOf(f.db)
-    expect(await f.db.select().from(tasks).where(eq(tasks.id, 'parent'))).toHaveLength(1)
+    expect(await readTaskFixtures(f.db, { id: 'parent' })).toHaveLength(1)
     expect(await binding.content.exists('cs-archive:tasks/parent')).toBe(false)
     expect(() => binding.content.resolve('cs-archive:tasks', '..', 'escape')).toThrow(
       'reference-invalid',

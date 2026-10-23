@@ -9,6 +9,7 @@
 // stored them on the workflow definition, this PR wires them through the
 // API contract.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -27,8 +28,8 @@ async function seed(
 ): Promise<{ db: PersistenceDb; taskId: string }> {
   const wfId = 'wf_test_1'
   const taskId = 'task_test_1'
-  const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { docVersions } = tablesOf(db)
+  await workflowFixture(db, {
     id: wfId,
     name: 'Test Workflow',
     description: '',
@@ -38,7 +39,7 @@ async function seed(
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -57,7 +58,7 @@ async function seed(
   let i = 0
   for (const rn of opts.reviewNodes) {
     const runId = `nr_${i}`
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runId,
       taskId,
       nodeId: rn.nodeId,

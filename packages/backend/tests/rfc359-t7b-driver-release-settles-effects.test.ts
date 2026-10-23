@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLogger } from '@/util/log'
 // RFC-359 W1-T7b（P0-10）—— 驱动释放时清算 process effect，两个引擎各跑一遍。
@@ -61,8 +61,7 @@ function continuation(taskId: string): CanonicalContinuationRequest {
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-t7b',
     description: '',
@@ -70,7 +69,7 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -121,8 +120,7 @@ async function seedOwnedProcessEffect(
   expect(attached).toBe('attached')
 
   const runId = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -166,10 +164,7 @@ async function seedOwnedProcessEffect(
       launchNonce: `${taskId}-nonce`,
     })
   }
-  await db
-    .update(nodeRuns)
-    .set({ status: over.runStatus ?? 'done' })
-    .where(eq(nodeRuns.id, runId))
+  await patchNodeRunFixture(db, { id: runId }, { status: over.runStatus ?? 'done' })
   return { taskId, intentId, runId, effect, persistence, module, controller, token: claimed.token }
 }
 

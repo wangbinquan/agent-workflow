@@ -11,13 +11,13 @@ describe('RFC-333 T4 workspace rollback plan preparation', () => {
       candidates: [
         {
           sourceNodeRunId: 'run-b',
-          targets: [{ worktreePath: '/work/repo-b', worktreeDirName: 'b', snapshot: 'sha-b' }],
+          targets: [{ worktreePath: '/work/repo-b', mountPath: 'b', snapshot: 'sha-b' }],
         },
         {
           sourceNodeRunId: 'run-a',
           targets: [
-            { worktreePath: '/work/repo-a', worktreeDirName: 'a', snapshot: 'sha-a' },
-            { worktreePath: '/work/repo-empty', worktreeDirName: 'empty', snapshot: '' },
+            { worktreePath: '/work/repo-a', mountPath: 'a', snapshot: 'sha-a' },
+            { worktreePath: '/work/repo-empty', mountPath: 'empty', snapshot: '' },
           ],
         },
       ],
@@ -72,8 +72,8 @@ describe('RFC-333 T4 workspace rollback plan preparation', () => {
           {
             sourceNodeRunId: 'run-a',
             targets: [
-              { worktreePath: '/work/repo-a', worktreeDirName: 'a', snapshot: 'sha-a' },
-              { worktreePath: '/work/repo-b', worktreeDirName: 'b', snapshot: 'missing' },
+              { worktreePath: '/work/repo-a', mountPath: 'a', snapshot: 'sha-a' },
+              { worktreePath: '/work/repo-b', mountPath: 'b', snapshot: 'missing' },
             ],
           },
         ],

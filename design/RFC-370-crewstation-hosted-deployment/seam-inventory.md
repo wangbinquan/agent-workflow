@@ -331,3 +331,7 @@
 | `packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts`    | 16      | `dbdf372c506c794e` |
 | `packages/backend/src/services/webhook/githubAdapter.ts`                                           | 243,579 | `99e24c6495c36ac1` |
 | `packages/backend/src/services/webhook/gitlabAdapter.ts`                                           | 186,511 | `c39d3b8fd5a677e2` |
+
+### 2026-10-22 RFC-395 II-a A6 补记
+
+基线 `a53425b8` 的原始清单行和 hash 保持不变。当前 `sqliteResourcePackageMaintenance.ts` 已迁至 `resourcePackageLegacyRecovery.ts`；此迁位不改写该基线的生成结果。

@@ -660,9 +660,17 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const prestage = engine.indexOf(
       'for (const plan of plans) await resourceSession.prestage(plan, { recordArtifact })',
     )
-    const bigTransaction = engine.indexOf(
-      'const transactionResult = await databaseSessionFor(dependencies.db).transaction(',
+    const bigTransaction = engine.indexOf('async commit(transaction, journalId, { bundle, plans })')
+    const mechanism = readFileSync(
+      resolve(sourceRoot, 'platform/atomic-apply/stateMachine.ts'),
+      'utf8',
     )
+    const prepareHook = mechanism.indexOf('await command.prepare(')
+    const transaction = mechanism.indexOf('const result = await journal.transaction(')
+    const domainCommit = mechanism.indexOf('await command.commit(tx, journalId, prepared)')
+    expect(prepareHook).toBeGreaterThanOrEqual(0)
+    expect(transaction).toBeGreaterThan(prepareHook)
+    expect(domainCommit).toBeGreaterThan(transaction)
     const participant = engine.indexOf('const attempt = resourceSession.createTransactionAttempt(')
     const authorize = engine.indexOf(
       'await attempt.participant.authorizeAndCommit(authority, plan)',
@@ -1026,7 +1034,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).not.toContain('/infrastructure/')
     // RFC-359 W4-D16：MCP 仓库只有一份中立实现（统一 serializable 事务），不再有 dbTxSync 的 SQLite 兼容岛。
     expect(repository).toContain('runResourceCatalogTransaction(')
-    expect(repository).toContain('findAgentReferencesInTransaction')
+    expect(repository).toContain('createAgentMcpReferenceLookup(transaction).find(mutation.id)')
     expect(repository).toContain("from './mcpPersistence'")
     expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
     expect(repository).not.toContain("createHash('sha256')")
@@ -1117,7 +1125,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).not.toContain('/infrastructure/')
     expect(repository).toContain('runResourceCatalogTransaction')
     expect(repository).toContain('fullPluginRowWhere')
-    expect(repository).toContain('findAgentReferencesInTransaction')
+    expect(repository).toContain('createAgentPluginReferenceLookup(transaction).find(deletion.id)')
     expect(repository).toContain("from './pluginPersistence'")
     expect(persistence).toContain("import { sha256Hex } from '@/util/hash'")
     expect(repository).not.toContain("createHash('sha256')")
@@ -1652,7 +1660,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     const sourceRoot = resolve(import.meta.dir, '../src')
     // RFC-359（plan §5dy）：通用 bundle 引擎整条退役，这条判据只剩**一台**引擎要问。
     const postgresqlEngine = readFileSync(
-      resolve(sourceRoot, 'platform/persistence/postgresqlResourcePackageAtomicApply.ts'),
+      resolve(sourceRoot, 'modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts'),
       'utf8',
     )
     const adapter = readFileSync(
@@ -1681,13 +1689,19 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(postgresqlEngine).toContain('input.mutationSessionFactory.create({')
     expect(postgresqlEngine).toContain('readSkillFile,')
     expect(postgresqlEngine).toContain('await session.prestage(item, { recordArtifact })')
-    expect(postgresqlEngine).toContain(".set({ state: 'applying', updatedAt: now() })")
+    const mechanism = readFileSync(
+      resolve(sourceRoot, 'platform/atomic-apply/stateMachine.ts'),
+      'utf8',
+    )
+    expect(postgresqlEngine).toContain('createAtomicApply(')
+    expect(mechanism).toContain("state: 'applying'")
+    expect(mechanism).toContain('journal.compareAndSet(')
     // RFC-359 W11：提交事务改走中立会话（`databaseSessionFor(db).transaction(...)`）后，
     // 仍按 provider 命名事务句柄取参的 `bindTransaction` 经具名窄化 `catalogTransaction(transaction)`
     // 拿到同一个句柄（PostgreSQL 上就是驱动 `db.transaction` 回调里的那个对象），位置与次序不变。
     // 同 SQLite 侧 W4-D23b 的 `sqliteMembers(tx)`。
     expect(postgresqlEngine).toContain(
-      'const transactionSession = session.bindTransaction(catalogTransaction(transaction))',
+      'const transactionSession = session.bindTransaction(transaction)',
     )
     expect(postgresqlEngine).toContain(
       'await assertActiveHumanMappings(transactionSession.reader, humanMappings.activeUserIds)',
@@ -1697,7 +1711,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(postgresqlEngine).toContain(
       'await session.compensate({ artifacts, databaseCommitted: false })',
     )
-    expect(postgresqlEngine).toContain('activeApplyIds()')
+    expect(postgresqlEngine).toContain('activeApplyIds: machine.activeJournalIds')
 
     // 「七条臂不得绕回 legacy 写服务」这条判据只剩两个被问对象（引擎 + 参与者）。
     for (const legacyWriter of [
@@ -2236,8 +2250,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       const routeSource = readFileSync(resolve(sourceRoot, 'routes', route), 'utf8')
       for (const contract of contracts) expect(routeSource).toContain(contract)
     }
-    expect(maintenanceWorker).toContain('ResourcePackageApplyMaintenanceCommand')
-    expect(maintenanceWorker).toContain('resourcePackageMaintenance.command')
+    expect(maintenanceWorker).toContain('createAtomicApplyRecovery')
+    expect(maintenanceWorker).toContain('resourcePackageRecoveryScene')
     expect(
       readFileSync(resolve(sourceRoot, 'bootstrap/daemonModules/resourceCatalog.ts'), 'utf8'),
     ).toContain('SkillCatalogBootParticipant')

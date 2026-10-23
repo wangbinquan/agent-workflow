@@ -19,6 +19,13 @@
 // If any assertion here goes red after a refactor, the refactor changed
 // user-visible ACL behavior — that is a bug per RFC-282 §0 (功能不受影响).
 
+import {
+  agentFixture,
+  patchAgentFixture,
+  patchWorkflowFixture,
+  readAgentFixtures,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -30,7 +37,6 @@ import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTa
 import { deleteAgent } from '../src/services/agent'
 import { deleteWorkflow } from '../src/services/workflow'
 import { deleteWorkgroup } from '../src/services/workgroups'
-import { eq } from 'drizzle-orm'
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 
@@ -98,8 +104,8 @@ describeEachProvider(
         await seedUser(db, id, role)
       }
       wfId = ulid()
-      const { workflows, agents, workgroups } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { workgroups } = tablesOf(db)
+      await workflowFixture(db, {
         id: wfId,
         name: `wf-${wfId.toLowerCase()}`,
         description: '',
@@ -111,7 +117,7 @@ describeEachProvider(
         updatedAt: Date.now(),
       })
       agentId = ulid()
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: agentId,
         name: `ag-${agentId.toLowerCase()}`,
         ownerUserId: ownerId,
@@ -174,8 +180,7 @@ describeEachProvider(
     }
 
     test('public target passes for a stranger (visibility, not ownership, gates create)', async () => {
-      const { agents } = tablesOf(db)
-      await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, agentId))
+      await patchAgentFixture(db, { id: agentId }, { visibility: 'public' })
       const created = await createScheduledTask(db, createInput('agent') as never, {
         actor: actorOf(strangerId),
       })
@@ -200,8 +205,8 @@ describeEachProvider(
       for (const id of [ownerId, grantedId, strangerId]) await seedUser(db, id)
       const aId = ulid()
       const now = Date.now()
-      const { agents, workflows, workgroups } = tablesOf(db)
-      await insertOne(db, agents, {
+      const { workgroups } = tablesOf(db)
+      await agentFixture(db, {
         id: aId,
         name: `ag-${aId.toLowerCase()}`,
         ownerUserId: ownerId,
@@ -209,10 +214,10 @@ describeEachProvider(
         createdAt: now,
         updatedAt: now,
       })
-      const fresh = await db.select().from(agents).where(eq(agents.id, aId))
+      const fresh = await readAgentFixtures(db, { id: aId })
       agentRow = { id: aId, updatedAt: fresh[0]!.updatedAt, aclRevision: fresh[0]!.aclRevision }
       wfId = ulid()
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: wfId,
         name: `wf-${wfId.toLowerCase()}`,
         description: '',
@@ -296,8 +301,7 @@ describeEachProvider(
     })
 
     test('workflow: builtin outranks 403 — visible non-owner on a builtin row gets builtin-readonly', async () => {
-      const { workflows } = tablesOf(db)
-      await db.update(workflows).set({ builtin: true }).where(eq(workflows.id, wfId))
+      await patchWorkflowFixture(db, { id: wfId }, { builtin: true })
       await expect(
         deleteWorkflow(
           db,

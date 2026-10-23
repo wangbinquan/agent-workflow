@@ -10,6 +10,13 @@
 // completeApproved（非 approved 拒绝、幂等 upsert、sourceFilePath 缺失时的兜底内容、事务原子性）、
 // unapprove（CAS 只吃 approved、二次调用为 false、跨任务 / 跨 run 不越界）。
 
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -25,8 +32,7 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_w7r_${ulid()}`
   const workflowId = `wf_w7r_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -34,7 +40,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -52,8 +58,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
 
 async function seedReviewRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = `nr_w7r_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'review', status: 'awaiting_review' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'review', status: 'awaiting_review' })
   return id
 }
 
@@ -89,11 +94,9 @@ async function seedDocVersion(
 }
 
 async function outputsOf(db: PersistenceDb, nodeRunId: string): Promise<Record<string, string>> {
-  const { nodeRunOutputs } = tablesOf(db)
-  const rows = await db
-    .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-    .from(nodeRunOutputs)
-    .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+  const rows = await readNodeRunOutputFixtures(db, { nodeRunId }).then((rows) =>
+    rows.map((row) => ({ portName: row.portName, content: row.content })),
+  )
   return Object.fromEntries(rows.map(({ portName, content }) => [portName, content]))
 }
 
@@ -120,8 +123,7 @@ describeEachProvider('RFC-359 W7 —— 评审修复参与者：inspect', (harne
     expect(await repair.inspect({ ...identity, taskId: 'task_other' })).toBeNull()
     expect(await repair.inspect({ ...identity, nodeRunId: 'nr_other' })).toBeNull()
 
-    const { nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId,
       portName: 'approved_doc',
       content: 'docs/result.md',

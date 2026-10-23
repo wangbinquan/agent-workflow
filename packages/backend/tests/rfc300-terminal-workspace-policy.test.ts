@@ -2,11 +2,15 @@
 // and the lifecycle atomicity seam: terminal status + prune claim are one CAS,
 // while a losing CAS leaves no orphaned claim.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import type { SpaceKind, TaskStatus } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -30,8 +34,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
     db = harness.db
     uninstallAfterCommitPump = null
     workflowId = ulid()
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'rfc300-policy',
       definition: '{}',
@@ -45,11 +48,10 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
 
   async function seedTask(
     status: TaskStatus = 'running',
-    overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+    overrides: Partial<TaskFixtureSpec> = {},
   ): Promise<string> {
     const id = ulid()
-    const { tasks } = tablesOf(db)
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id,
       name: 'rfc300-policy',
       workflowId,
@@ -69,8 +71,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
   }
 
   async function rowOf(id: string) {
-    const { tasks } = tablesOf(db)
-    return (await db.select().from(tasks).where(eq(tasks.id, id)))[0]!
+    return (await readTaskFixtures(db, { id }))[0]!
   }
 
   /**
@@ -254,8 +255,7 @@ describeEachProvider('rfc300-terminal-workspace-policy', (harness) => {
           now: 301,
           reason: 'rfc300-atomic-loss',
           beforeCas: async () => {
-            const { tasks } = tablesOf(db)
-            await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
+            await patchTaskFixture(db, { id: taskId }, { status: 'canceled' })
           },
         }),
       ).rejects.toBeInstanceOf(ConcurrentTaskTransition)

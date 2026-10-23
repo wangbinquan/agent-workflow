@@ -10,8 +10,7 @@
 //
 // 这套断言两个引擎各跑一遍读面的核心判据：启动工作流可见性、调用目标按名解析、agent 注入闭包
 // 展开与依赖缺失，以及闭包冻结的产物在两个引擎上逐字相同。
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -62,8 +61,7 @@ async function seedWorkflow(
   },
 ): Promise<string> {
   const id = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: input.name,
     definition: JSON.stringify(input.definition ?? EMPTY_DEFINITION),
@@ -80,8 +78,7 @@ async function seedAgent(
   input: { readonly name: string; readonly dependsOn?: readonly string[] },
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name: input.name,
     description: '',

@@ -6,6 +6,7 @@
 // `DatabaseSession` 上，`createClarifyDecisionCommand` 对两个 provider 是同一段代码。
 // 场景对照 SQLite 黄金锁 `rfc128-p5-d-autodispatch.test.ts` / `rfc128-p1-per-question-seal.test.ts`。
 
+import { patchNodeRunFixture, readTaskFixtures, readClarifyRoundFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -55,8 +56,7 @@ async function seedOpenSelfRound(db: PersistenceDb, taskId: string) {
 }
 
 const roundById = async (db: PersistenceDb, id: string) => {
-  const { clarifyRounds } = tablesOf(db)
-  return (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, id)))[0]!
+  return (await readClarifyRoundFixtures(db, { id }))[0]!
 }
 const runById = async (db: PersistenceDb, id: string) => {
   const { nodeRuns } = tablesOf(db)
@@ -136,7 +136,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     expect(roundRow.answeredBy).toBe('u1')
     expect(roundRow.directive).toBe('continue')
     expect(
-      JSON.parse(roundRow.answersJson ?? '[]').map((a: { questionId: string }) => a.questionId),
+      JSON.parse(roundRow.answers ?? '[]').map((a: { questionId: string }) => a.questionId),
     ).toEqual(['q1', 'q2'])
     expect((await runById(db, round.origin)).status).toBe('done')
     const entries = await entriesOf(db, round.origin)
@@ -151,10 +151,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     expect(minted).toHaveLength(1)
     expect(minted[0]!.nodeId).toBe(DESIGNER)
     expect(minted[0]!.status).toBe('pending')
-    const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.status).not.toBe(
-      'awaiting_human',
-    )
+    expect((await readTaskFixtures(db, { id: taskId }))[0]!.status).not.toBe('awaiting_human')
     // RFC-041：仅 self 轮 finalize 后入蒸馏队列，sourceEventId = round id。
     expect(enqueuer.calls).toEqual([
       { sourceKind: 'clarify', sourceEventId: round.roundId, taskId },
@@ -295,11 +292,11 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const db = harness.db
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
-    const { nodeRuns } = tablesOf(db)
-    await db
-      .update(nodeRuns)
-      .set({ status: 'failed', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, round.origin))
+    await patchNodeRunFixture(
+      db,
+      { id: round.origin },
+      { status: 'failed', finishedAt: Date.now() },
+    )
     const full = await sealRoundQuestions({
       db,
       originNodeRunId: round.origin,
@@ -311,7 +308,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const sealed = await roundById(db, round.roundId)
     expect(sealed.status).toBe('answered')
     expect(
-      JSON.parse(sealed.answersJson ?? '[]').map((a: { questionId: string }) => a.questionId),
+      JSON.parse(sealed.answers ?? '[]').map((a: { questionId: string }) => a.questionId),
     ).toEqual(['q1', 'q2'])
     expect((await runById(db, round.origin)).status).toBe('failed')
   })

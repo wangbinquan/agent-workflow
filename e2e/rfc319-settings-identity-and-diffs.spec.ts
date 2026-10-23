@@ -114,6 +114,11 @@
 //     真正驱动得到的状态，不把不可达的分支写成期望。
 
 import {
+  patchNodeRunFixtureSql,
+  readNodeRunCheckpointFixturesSql,
+  fixtureSqlParameter,
+} from './fixtures/model'
+import {
   expect,
   test,
   type Browser,
@@ -1247,17 +1252,20 @@ test('RFC-319 TASK-35：变更页签的作用域下拉切到某个节点时，�
   const [runOne, runTwo] = runs
   runSqlite(
     dbFile,
-    `UPDATE node_runs SET pre_snapshot = '${task.baseCommit}' WHERE id = '${runOne!.id}';` +
-      `UPDATE node_runs SET pre_snapshot = '${afterFirst}' WHERE id = '${runTwo!.id}';`,
+    `${patchNodeRunFixtureSql({ id: runOne!.id }, { checkpoints: [{ mountPath: '', preSnapshot: task.baseCommit }] })};${patchNodeRunFixtureSql({ id: runTwo!.id }, { checkpoints: [{ mountPath: '', preSnapshot: afterFirst }] })};`,
   )
   // 回读自证：`db.exec()` 对多语句脚本里的约束错误不抛异常（协议 §5.3）。
-  const seeded = querySqlite<{ id: string; pre_snapshot: string | null }>(
+  const seeded = querySqlite<{ id: string; preSnapshot: string | null }>(
     dbFile,
-    'SELECT id, pre_snapshot FROM node_runs WHERE id IN (?, ?)',
+    readNodeRunCheckpointFixturesSql(
+      { id: { $in: [fixtureSqlParameter, fixtureSqlParameter] } },
+      '',
+      'preSnapshot',
+    ),
     [runOne!.id, runTwo!.id],
   )
   expect(
-    new Set(seeded.map((row) => row.pre_snapshot)),
+    new Set(seeded.map((row) => row.preSnapshot)),
     '快照没真的写进 node_runs ⇒ 节点作用域无从解析',
   ).toEqual(new Set([task.baseCommit, afterFirst]))
 

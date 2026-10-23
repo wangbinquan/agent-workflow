@@ -106,7 +106,7 @@ import { type WebhookDispatcher } from '@/services/webhook/dispatcherTypes'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/ownerIdentityQueries'
 import { reconcileRepositoryTransportConnectionProjections } from '@/modules/source-control/composition'
 import type { composePostgresqlMemoryOperations } from '@/modules/memory/composition'
-import type { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import type { ResourcePackageApplyActivityQuery } from '@/modules/resource-catalog/public/queries'
 import {
   type SelectedTaskExecutionProviderRuntime,
   type TaskExecutionBackgroundStartDependencies,
@@ -267,10 +267,7 @@ export interface DaemonApplicationRuntime<P extends DatabaseProvider = DatabaseP
   readonly webhookTerminalControl: ReturnType<typeof composeMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
   readonly intentModules: DaemonIntentModules
-  readonly resourcePackageActivity: Pick<
-    ReturnType<typeof createPostgresqlResourcePackageAtomicApplyOperations>,
-    'activeApplyIds'
-  >
+  readonly resourcePackageActivity: ResourcePackageApplyActivityQuery
   readonly driveHumanGateContinuation: (input: {
     readonly taskId: string
     readonly continuationRef: string

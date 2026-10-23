@@ -1,4 +1,5 @@
 // RFC-333/RFC-375 — pending continuations recover through the live managed worker.
+import { nodeRunFixture, readNodeRunFixtures, readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -18,8 +19,7 @@ import { createTaskExecutionPersistence } from '../src/modules/task-execution/co
 const NOW = 1_788_969_900_000
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-rfc333-recovery',
@@ -33,7 +33,10 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
     inputs: '{}',
     startedAt: NOW,
     executionLineageId: taskId,
-    lineageSlotPathJson: '[]',
+    // RFC-395 II-a: run fixtures now derive lineage; an empty path was never a valid mint input.
+    lineageSlotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
+    ]),
   })
 }
 
@@ -60,7 +63,9 @@ async function seedIntent(
     payloadJson: input.payloadJson ?? '{"v":1}',
     executionLineageId: input.taskId,
     continuationSlotKey: `${input.taskId}:root`,
-    slotPathJson: '[]',
+    slotPathJson: JSON.stringify([
+      { stableNodeKey: 'task-root', frozenOccurrenceKey: input.taskId, workflowRevision: null },
+    ]),
     operationGeneration: 0,
     expectedTaskRevision: 1,
     createdAt: input.createdAt,
@@ -79,8 +84,8 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       state: 'pending',
       createdAt: NOW,
     })
-    const { nodeRuns, tasks, taskExecutionIntents } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { taskExecutionIntents } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: 'run-gate-before-wake',
       taskId: 'task-gate-before-wake',
       nodeId: 'designer',
@@ -93,20 +98,18 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       { tasks: 0, runs: 0 },
     )
     expect(
-      await first(
-        db
-          .select({ status: tasks.status })
-          .from(tasks)
-          .where(eq(tasks.id, 'task-gate-before-wake')),
-      ),
+      (
+        await readTaskFixtures(db, { id: 'task-gate-before-wake' }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
+      )[0],
     ).toEqual({ status: 'pending' })
     expect(
-      await first(
-        db
-          .select({ status: nodeRuns.status })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, 'run-gate-before-wake')),
-      ),
+      (
+        await readNodeRunFixtures(db, { id: 'run-gate-before-wake' }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
+      )[0],
     ).toEqual({ status: 'pending' })
     expect(
       await first(
@@ -136,8 +139,8 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
         continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds: [] },
       }),
     })
-    const { nodeRuns, tasks, taskExecutionIntents } = tablesOf(db)
-    await db.insert(nodeRuns).values([
+    const { nodeRuns, taskExecutionIntents } = tablesOf(db)
+    await nodeRunFixture(db, [
       {
         id: 'run-gate-old-owner',
         taskId,
@@ -163,7 +166,11 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       }),
     ).toEqual({ tasks: 0, runs: 1 })
     expect(
-      await first(db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))),
+      (
+        await readTaskFixtures(db, { id: taskId }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
+      )[0],
     ).toEqual({ status: 'pending' })
     expect(
       await db

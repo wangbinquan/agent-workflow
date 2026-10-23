@@ -18,6 +18,8 @@
 // "live-name" divergence assertions below fail if anyone reintroduces it.
 // Frontend wiring is locked by tasks-workgroup-badge.test.ts.
 
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -27,15 +29,10 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { getTask } from '../src/services/task'
-import {
-  WORKGROUP_HOST_WORKFLOW_ID,
-  WORKGROUP_HOST_WORKFLOW_NAME,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
 async function seedWorkflow(db: PersistenceDb, id: string, name: string): Promise<void> {
   const now = Date.now()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name,
     description: '',
@@ -60,8 +57,7 @@ async function seedTask(
 ): Promise<string> {
   const tId = ulid()
   const now = Date.now()
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: tId,
     name: opts.name,
     workflowId: opts.workflowId,
@@ -88,7 +84,6 @@ describeEachProvider(
   (harness) => {
     test('workgroupName comes from the frozen config, NOT the live workgroups resource', async () => {
       const db = harness.db
-      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
       const { workgroups } = tablesOf(db)
       // Live resource name deliberately DIVERGES from the frozen config name — the
@@ -96,7 +91,7 @@ describeEachProvider(
       await insertOne(db, workgroups, { id: groupId, name: 'live-name' })
       const tId = await seedTask(db, {
         name: 'ship it',
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
         workgroupId: groupId,
         workgroupConfigJson: JSON.stringify({
           workgroupName: 'design-crew',
@@ -107,20 +102,19 @@ describeEachProvider(
       const row = (await taskListSummariesProjection(db, { limit: 100 })).find((r) => r.id === tId)!
       expect(row.workgroupId).toBe(groupId)
       expect(row.workgroupName).toBe('design-crew') // frozen config, not 'live-name'
-      // The workflow join still resolves the builtin host — proving the UI reads
-      // the GROUP name (not this anchor) for the label + link.
-      expect(row.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
+      // RFC-395: the compatibility host name is projected with no catalog host row;
+      // the UI still uses the frozen GROUP name for its label and link.
+      expect(row.workflowName).toBe(TASK_DEFINITION_HOSTS.workgroup.name)
     })
 
     test('renaming the live workgroup does NOT change the frozen name (freeze-at-launch)', async () => {
       const db = harness.db
-      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
       const { workgroups } = tablesOf(db)
       await insertOne(db, workgroups, { id: groupId, name: 'design-crew' })
       const tId = await seedTask(db, {
         name: 't',
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
         workgroupId: groupId,
         workgroupConfigJson: JSON.stringify({ workgroupName: 'design-crew' }),
       })
@@ -143,11 +137,10 @@ describeEachProvider(
 
     test('a corrupt frozen config degrades workgroupName to null (never 5xx the list)', async () => {
       const db = harness.db
-      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
       const tId = await seedTask(db, {
         name: 't',
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
         workgroupId: groupId,
         workgroupConfigJson: '{ not valid json',
       })
@@ -169,7 +162,6 @@ describeEachProvider(
   (harness) => {
     test('the detail payload carries workgroupName from the frozen config, not the host anchor', async () => {
       const db = harness.db
-      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
       const { workgroups } = tablesOf(db)
       // Live resource name diverges — the detail must read the frozen one (ACL
@@ -177,7 +169,7 @@ describeEachProvider(
       await insertOne(db, workgroups, { id: groupId, name: 'live-name' })
       const tId = await seedTask(db, {
         name: 'ship it',
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
         workgroupId: groupId,
         workgroupConfigJson: JSON.stringify({
           workgroupName: 'design-crew',
@@ -189,7 +181,7 @@ describeEachProvider(
       expect(task.workgroupId).toBe(groupId)
       expect(task.workgroupName).toBe('design-crew') // frozen, not 'live-name'
       // The FK anchor still resolves — proving the UI reads the GROUP, not this.
-      expect(task.workflowName).toBe(WORKGROUP_HOST_WORKFLOW_NAME)
+      expect(task.workflowName).toBe(TASK_DEFINITION_HOSTS.workgroup.name)
     })
 
     test('workgroupName is null in the detail payload for a non-workgroup task', async () => {
@@ -205,11 +197,10 @@ describeEachProvider(
 
     test('a corrupt frozen config degrades detail workgroupName to null (never 5xx)', async () => {
       const db = harness.db
-      await seedWorkflow(db, WORKGROUP_HOST_WORKFLOW_ID, WORKGROUP_HOST_WORKFLOW_NAME)
       const groupId = ulid()
       const tId = await seedTask(db, {
         name: 't',
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
         workgroupId: groupId,
         workgroupConfigJson: '{ not valid json',
       })
@@ -227,8 +218,7 @@ describeEachProvider(
 describeEachProvider('RFC-177 — sourceAgentId projected into the list summary', (harness) => {
   test('listTasks + getTask carry the frozen sourceAgentId for an agent task', async () => {
     const db = harness.db
-    const wfId = ulid()
-    await seedWorkflow(db, wfId, 'agent-host')
+    const wfId = TASK_DEFINITION_HOSTS.agent.id
     const tId = await seedTask(db, {
       name: 'agent-task',
       workflowId: wfId,

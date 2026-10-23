@@ -29,12 +29,17 @@
 // The picker's own predicate matrix stays behaviorally locked by
 // rfc096-pick-freshest.test.ts; this file locks the dispatch-layer WIRING.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type NodeRunFixtureSpec,
+  clarifyRoundFixture,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
@@ -93,8 +98,7 @@ function mkQuestion(id: string): ClarifyQuestion {
 async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `t_${ulid()}`
   const def = fixtureDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc096-designer-rerun-pick',
     description: '',
@@ -102,7 +106,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId: `wf_${taskId}`,
@@ -125,11 +129,10 @@ async function seedRun(
   db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']>,
+  fields: Partial<NodeRunFixtureSpec>,
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -158,15 +161,14 @@ async function seedAnsweredCrossRound(
     taskId,
     loopIter: 0,
     iteration: 0,
-    questionsJson: JSON.stringify([mkQuestion('q1')]),
-    answersJson: JSON.stringify([
+    questions: JSON.stringify([mkQuestion('q1')]),
+    answers: JSON.stringify([
       { questionId: 'q1', selectedOptionIndices: [0], selectedOptionLabels: [], customText: '' },
     ]),
     directive: 'continue' as const,
     status: 'answered' as const,
   }
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     ...common,
     kind: 'cross',
     askingNodeId: Q,
@@ -179,8 +181,7 @@ async function seedAnsweredCrossRound(
 }
 
 async function loadRun(db: PersistenceDb, id: string) {
-  const { nodeRuns } = tablesOf(db)
-  return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]
+  return (await readNodeRunFixtures(db, { id }))[0]
 }
 
 describeEachProvider(

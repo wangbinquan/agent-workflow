@@ -1,3 +1,4 @@
+// RFC-395 II-a A6: artifact-format portability now tests shared-codec fixtures; manifest records that exact transition.
 // RFC-317 T14 / T15 / T21 —— 断言「不存在」的守卫必须证明自己还咬得动。
 //
 // 事故形态

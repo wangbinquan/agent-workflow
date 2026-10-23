@@ -13,13 +13,11 @@
 // validates exactly the contract the scheduler relies on without standing up
 // the whole clarify flow.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -55,15 +53,14 @@ async function buildHarness(__db: PersistenceDb) {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -87,8 +84,7 @@ async function buildHarness(__db: PersistenceDb) {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n', status: 'pending' })
   return id
 }
 
@@ -139,8 +135,7 @@ describeEachProvider('RFC-042 follow-up + RFC-039 directive bias passthrough', (
         clarifyChannel: { kind: 'self', directive: 'mandatory', injectStopNotice: false },
       }),
     )
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]
     const prompt = row?.promptText ?? ''
     expect(prompt).toContain('Keep clarifying')
     expect(prompt).toContain('MUST be another `<workflow-clarify>` envelope')
@@ -171,8 +166,7 @@ describeEachProvider('RFC-042 follow-up + RFC-039 directive bias passthrough', (
         clarifyChannel: { kind: 'self', directive: 'mandatory', injectStopNotice: false },
       }),
     )
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]
     const prompt = row?.promptText ?? ''
     expect(prompt).not.toContain('Keep clarifying')
     expect(prompt).not.toContain('MUST be another `<workflow-clarify>` envelope')

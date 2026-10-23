@@ -144,7 +144,7 @@ export function createSkillTreeVersionParticipant(input: {
           files: files
             .filter((file) => file.path !== MAIN)
             .map((file) => ({ path: file.path, content: file.content })),
-          mainContent,
+          mainContent: Buffer.from(mainContent, 'utf8'),
         },
         {
           source: request.versionSource,

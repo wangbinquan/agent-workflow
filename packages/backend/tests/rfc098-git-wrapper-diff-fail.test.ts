@@ -19,7 +19,13 @@
 // the breakage → wrapper done, git_diff carries the changed path (the normal
 // path is byte-unchanged by the fail-closed catch).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -102,8 +108,7 @@ async function seedTask(h: Harness): Promise<string> {
   // READONLY inner agent: no pre-snapshot stash runs against the (about to
   // be) broken tree — the wrapper finalize is the first git touchpoint.
   const probeAgentId = ulid()
-  const { agents, workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, agents, {
+  await agentFixture(h.db, {
     id: probeAgentId,
     name: 'probe',
     description: 'test',
@@ -126,12 +131,12 @@ async function seedTask(h: Harness): Promise<string> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc098-s24-task',
     id: taskId,
     workflowId,
@@ -183,10 +188,10 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
       }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // HEADLINE: the task FAILED loudly (pre-B1 it went DONE with an empty
     // git_diff — downstream fan-out silently short-circuited on empty source).
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     // RFC-130: the shim deletes `.git` in process.cwd() = the ISOLATED worktree, so
     // the failure surfaces either at the inner node's merge-back (iso `.git` gone →
@@ -219,12 +224,10 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
 
     // Fail-closed means NO git_diff output row was written (pre-B1 wrote an
     // empty-string git_diff port).
-    const outputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(
-        and(eq(nodeRunOutputs.nodeRunId, wgRun?.id ?? ''), eq(nodeRunOutputs.portName, 'git_diff')),
-      )
+    const outputs = await readNodeRunOutputFixtures(h.db, {
+      nodeRunId: wgRun?.id ?? '',
+      portName: 'git_diff',
+    })
     expect(outputs.length).toBe(0)
   }, 20_000)
 
@@ -242,8 +245,8 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
       }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     const wgRun = (
@@ -254,12 +257,10 @@ describe('RFC-098 B1 — S-24: wrapper-git finalize diff failure is fail-closed'
     )[0]
     expect(wgRun?.status).toBe('done')
 
-    const outputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(
-        and(eq(nodeRunOutputs.nodeRunId, wgRun?.id ?? ''), eq(nodeRunOutputs.portName, 'git_diff')),
-      )
+    const outputs = await readNodeRunOutputFixtures(h.db, {
+      nodeRunId: wgRun?.id ?? '',
+      portName: 'git_diff',
+    })
     expect(outputs.length).toBe(1)
     expect(outputs[0]?.content).toBe('newfile.txt')
   }, 20_000)

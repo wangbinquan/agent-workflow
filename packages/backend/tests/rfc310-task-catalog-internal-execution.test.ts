@@ -2,6 +2,7 @@
 // executions remain durable and directly addressable without entering public
 // pagination, hierarchy or facets.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -73,7 +74,7 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
   test('public workflow pages, cursors and facets exclude generic internal trees', async () => {
     const db = harness.db
     const now = 1_788_278_400_000
-    const { users, workflows, tasks } = tablesOf(db)
+    const { users, tasks } = tablesOf(db)
     await insertOne(db, users, {
       id: 'catalog-owner',
       username: 'catalog-owner',
@@ -82,12 +83,12 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
       createdAt: now,
       updatedAt: now,
     })
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'wf-rfc310-catalog',
       name: 'Public workflow',
       definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
     })
-    await db.insert(tasks).values([
+    await taskFixture(db, [
       task('public-new', 500),
       task('internal-attempt-1', 400, { catalogVisibility: 'internal' }),
       task('internal-attempt-2', 300, { catalogVisibility: 'internal' }),

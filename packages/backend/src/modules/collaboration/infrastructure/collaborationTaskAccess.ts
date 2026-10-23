@@ -1,6 +1,9 @@
 // RFC-359 W4-B3 —— 协作侧的任务可见性 / 角色解析：一份实现，两个 provider 共用。
 
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { TaskGateDefinitionContext } from '@/modules/task-execution/public/queries'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq } from 'drizzle-orm'
 
@@ -15,7 +18,7 @@ import type {
 } from '../application/ports/collaborationTaskAccess'
 import type { ReviewActor } from '../public/types'
 
-function snapshot(row: PersistenceTables['tasks']['$inferSelect']): CollaborationTaskSnapshot {
+function snapshot(row: TaskGateDefinitionContext): CollaborationTaskSnapshot {
   return {
     id: row.id,
     ownerUserId: row.ownerUserId,
@@ -26,7 +29,7 @@ function snapshot(row: PersistenceTables['tasks']['$inferSelect']): Collaboratio
 async function resolve(
   db: PersistenceDb,
   actor: ReviewActor,
-  row: PersistenceTables['tasks']['$inferSelect'] | undefined,
+  row: TaskGateDefinitionContext | undefined,
 ): Promise<CollaborationTaskAccessDecision> {
   if (row === undefined) return { task: null, visible: false, actorRole: null }
   const { taskCollaborators } = tablesOf(db)
@@ -53,19 +56,11 @@ async function resolve(
 export function createCollaborationTaskAccessPort(db: PersistenceDb): CollaborationTaskAccessPort {
   return {
     async resolveTask(actor, taskId) {
-      const { tasks } = tablesOf(db)
-      const row = await first(db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))
+      const row = await first(createTaskGateQueries(db).listDefinitionContexts([taskId]))
       return await resolve(db, actor, row)
     },
     async resolveNodeRunTask(actor, nodeRunId) {
-      const { nodeRuns } = tablesOf(db)
-      const run = await first(
-        db
-          .select({ taskId: nodeRuns.taskId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, nodeRunId))
-          .limit(1),
-      )
+      const run = (await createNodeRunQueries(db).readFields(nodeRunId, ['taskId'])) ?? undefined
       if (run === undefined) {
         return { nodeRunExists: false, taskId: null, task: null, visible: false, actorRole: null }
       }
@@ -73,7 +68,7 @@ export function createCollaborationTaskAccessPort(db: PersistenceDb): Collaborat
       return { nodeRunExists: true, taskId: run.taskId, ...decision }
     },
     async resolveClarifyRoundTask(actor, intermediaryNodeRunId) {
-      const { clarifyRounds, nodeRuns } = tablesOf(db)
+      const { clarifyRounds } = tablesOf(db)
       const round = await first(
         db
           .select({ taskId: clarifyRounds.taskId })
@@ -83,13 +78,8 @@ export function createCollaborationTaskAccessPort(db: PersistenceDb): Collaborat
           .limit(1),
       )
       if (round === undefined) {
-        const run = await first(
-          db
-            .select({ id: nodeRuns.id })
-            .from(nodeRuns)
-            .where(eq(nodeRuns.id, intermediaryNodeRunId))
-            .limit(1),
-        )
+        const run =
+          (await createNodeRunQueries(db).readFields(intermediaryNodeRunId, ['id'])) ?? undefined
         return {
           roundExists: false,
           nodeRunExists: run !== undefined,

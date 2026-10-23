@@ -12,6 +12,7 @@
 // `DrizzleTaskOwnershipPersistence`（provider 中立），装配不再分叉，因此这里不再按能力矩阵
 // 挑实现。**这份文件锁住的每一条在合一前后都成立**——它当初就是这么用的。
 
+import { taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -41,8 +42,8 @@ async function seed(db: PersistenceDb): Promise<{ taskId: string; intentId: stri
   const slotPath = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ])
-  const { tasks, taskExecutionIntents } = tablesOf(db)
-  await insertOne(db, tasks, {
+  const { taskExecutionIntents } = tablesOf(db)
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-d28a',

@@ -2,8 +2,16 @@
 // transaction with domain projections, the canonical lifecycle event, exactly
 // one continuation intent, and the linked pre-drive rollback effect.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { humanGateCheckpointProjectionMember } from '@/modules/task-execution/infrastructure/humanGateProjection'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -33,10 +41,7 @@ import type { GateWorkspaceRollbackExecutor } from '@/modules/task-execution/app
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
-import {
-  humanGateNodeProjectionFence,
-  type HumanGateNodeProjectionMember,
-} from '@/modules/task-execution/domain/humanGateContinuation'
+import { humanGateNodeProjectionFence } from '@/modules/task-execution/domain/humanGateContinuation'
 import {
   encodeLineageSlotPath,
   type LineageSlot,
@@ -53,8 +58,7 @@ async function seedTask(
   taskId: string,
   status: 'pending' | 'running' | 'awaiting_review' | 'awaiting_human' | 'failed' | 'interrupted',
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-rfc333',
@@ -75,8 +79,7 @@ async function seedTask(
 async function seedDecisionNodes(db: PersistenceDb, taskId: string) {
   const sourceNodeRunId = `${taskId}-source`
   const rerunNodeRunId = `${taskId}-rerun`
-  const { nodeRuns } = tablesOf(db)
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     {
       id: sourceNodeRunId,
       taskId,
@@ -85,11 +88,11 @@ async function seedDecisionNodes(db: PersistenceDb, taskId: string) {
       retryIndex: 0,
       iteration: 0,
       reviewIteration: 0,
-      preSnapshot: 'a'.repeat(40),
       rerunCause: null,
       supersededByReview: 'rejected',
       rolledBack: false,
       operationGeneration: 0,
+      checkpoints: [{ mountPath: '', preSnapshot: 'a'.repeat(40) }],
     },
     {
       id: rerunNodeRunId,
@@ -107,40 +110,10 @@ async function seedDecisionNodes(db: PersistenceDb, taskId: string) {
   return { sourceNodeRunId, rerunNodeRunId }
 }
 
-function projectionMember(
-  row: PersistenceTables['nodeRuns']['$inferSelect'],
-): HumanGateNodeProjectionMember {
-  return {
-    id: row.id,
-    taskId: row.taskId,
-    nodeId: row.nodeId,
-    parentNodeRunId: row.parentNodeRunId,
-    iteration: row.iteration,
-    shardKey: row.shardKey,
-    retryIndex: row.retryIndex,
-    reviewIteration: row.reviewIteration,
-    status: row.status,
-    failureCode: row.failureCode,
-    preSnapshot: row.preSnapshot,
-    preSnapshotReposJson: row.preSnapshotReposJson,
-    rerunCause: row.rerunCause,
-    supersededByReview: row.supersededByReview,
-    rolledBack: row.rolledBack,
-    continuationSlotKey: row.continuationSlotKey,
-    lineageSlotPathJson: row.lineageSlotPathJson,
-    operationGeneration: row.operationGeneration,
-  }
-}
-
 async function projectionFence(tx: PersistenceDb, ids: readonly string[]) {
-  const { nodeRuns } = tablesOf(tx)
+  const rows = await readNodeRunFixtures(tx, { id: { $in: [...ids] } })
   return humanGateNodeProjectionFence(
-    (
-      await tx
-        .select()
-        .from(nodeRuns)
-        .where(inArray(nodeRuns.id, [...ids]))
-    ).map(projectionMember),
+    rows.map((row) => humanGateCheckpointProjectionMember(row, [''])),
   )
 }
 
@@ -193,8 +166,7 @@ function settleShape(settled: {
 
 async function prepareOpenOperation(input: { db: PersistenceDb; taskId: string }) {
   const askingNodeRunId = `${input.taskId}-asking`
-  const { nodeRuns } = tablesOf(input.db)
-  await insertOne(input.db, nodeRuns, {
+  await nodeRunFixture(input.db, {
     id: askingNodeRunId,
     taskId: input.taskId,
     nodeId: 'writer',
@@ -291,9 +263,9 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
     })
     // 停靠一次要发两条已提交事件：任务生命周期一条 + collaboration 开门一条。
     expect(parked.eventRefs).toHaveLength(2)
-    const { tasks, collaborationGateOperations, clarifyRounds, taskQuestions, committedEvents } =
+    const { collaborationGateOperations, clarifyRounds, taskQuestions, committedEvents } =
       tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+    expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 2,
     })
@@ -372,8 +344,8 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
           now: NOW + 2,
         }),
       ).rejects.toThrow()
-      const { tasks, collaborationGateOperations } = tablesOf(db)
-      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
+      const { collaborationGateOperations } = tablesOf(db)
+      expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('running')
       expect(
         (
           await db
@@ -413,8 +385,8 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       await seedTask(db, taskId, status)
       const created = await createManual(db, taskId)
 
-      const { tasks, taskQuestions, collaborationGateOperations } = tablesOf(db)
-      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(status)
+      const { taskQuestions, collaborationGateOperations } = tablesOf(db)
+      expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe(status)
       expect(
         (await db.select().from(taskQuestions).where(eq(taskQuestions.id, created.questionId)))[0],
       ).toMatchObject({
@@ -489,7 +461,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     })
     const claimed = await module.claim({ db, intentId: intent.intentId, now: NOW })
     module.claimGate.leave(claimed.permit)
-    const { taskExecutionOwners, tasks, collaborationGateOperations } = tablesOf(db)
+    const { taskExecutionOwners, collaborationGateOperations } = tablesOf(db)
     const ownerBefore = (
       await db.select().from(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
     )[0]!
@@ -504,7 +476,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       revision: ownerBefore.revision,
       state: 'claimed',
     })
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('running')
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
@@ -513,7 +485,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       .settleManualQuestionParks({ taskId, token: claimed.token, now: NOW + 20 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+    expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 2,
     })
@@ -532,7 +504,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const taskId = 'task-333-manual-dispatched-before-settle'
     await seedTask(db, taskId, 'running')
     const created = await createManual(db, taskId)
-    const { taskQuestions, tasks, collaborationGateOperations } = tablesOf(db)
+    const { taskQuestions, collaborationGateOperations } = tablesOf(db)
     await db
       .update(taskQuestions)
       .set({ dispatchedAt: NOW + 11, dispatchedBy: 'user-rfc333' })
@@ -545,7 +517,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: false })
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('running')
     expect(
       (
         await db
@@ -561,7 +533,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const taskId = 'task-333-manual-auto-dispatch-deferred'
     await seedTask(db, taskId, 'running')
     const created = await createManual(db, taskId)
-    const { taskQuestions, tasks, collaborationGateOperations } = tablesOf(db)
+    const { taskQuestions, collaborationGateOperations } = tablesOf(db)
     // Regression: a mixed-cause "dispatch all" atomically mints the first
     // handler rerun and marks the lower-priority manual question for automatic
     // dispatch. Parking here, before the DAG can run that predecessor, leaves
@@ -579,7 +551,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       .then(settleShape)
 
     expect(settled).toEqual({ consumed: 1, parked: false })
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('running')
     expect(
       (
         await db
@@ -596,10 +568,11 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     await seedTask(db, taskId, 'awaiting_human')
     const created = await createManual(db, taskId)
     const { tasks, collaborationGateOperations } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({ status: 'running', lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 3` })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      { status: 'running', lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 3` },
+    )
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
@@ -608,7 +581,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       .settleManualQuestionParks({ taskId, now: NOW + 30 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+    expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 5,
     })
@@ -638,8 +611,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       now: NOW + 40,
     })
     expect(outcome).toEqual({ kind: 'manual-question-pending' })
-    const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('running')
   })
 })
 
@@ -655,8 +627,8 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
     )
 
     expect(receipt.taskRevision).toBe(2)
-    const { tasks, taskExecutionIntents, taskExecutionEffects, committedEvents } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+    const { taskExecutionIntents, taskExecutionEffects, committedEvents } = tablesOf(db)
+    expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'pending',
       lifecycleEventRevision: 2,
     })
@@ -824,11 +796,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       try {
         await expect(
           databaseSessionFor(db).transaction(async (tx) => {
-            const { nodeRuns } = tablesOf(tx)
-            await tx
-              .update(nodeRuns)
-              .set({ reviewIteration: 1 })
-              .where(eq(nodeRuns.id, ids.sourceNodeRunId))
+            await patchNodeRunFixture(tx, { id: ids.sourceNodeRunId }, { reviewIteration: 1 })
             const fence =
               fault === 'projection'
                 ? oldFence
@@ -843,12 +811,12 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
           }),
         ).rejects.toThrow()
 
-        const { nodeRuns, tasks, taskExecutionIntents, committedEvents } = tablesOf(db)
+        const { nodeRuns, taskExecutionIntents, committedEvents } = tablesOf(db)
         expect(
           (await db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)))[0]
             ?.reviewIteration,
         ).toBe(0)
-        expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+        expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
           status: 'awaiting_review',
           lifecycleEventRevision: 1,
         })
@@ -921,7 +889,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
     expect(events).toEqual([`load:operation:${taskId}`, `act:operation:${taskId}`])
-    const { taskExecutionEffects, taskExecutionEffectAttempts, nodeRuns } = tablesOf(db)
+    const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(db)
     expect((await db.select().from(taskExecutionEffects))[0]).toMatchObject({
       state: 'succeeded',
       lastAttemptNo: 1,
@@ -930,9 +898,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       state: 'succeeded',
       applicationEvidence: 'applied',
     })
-    expect(
-      (await db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)))[0]?.rolledBack,
-    ).toBe(true)
+    expect((await readNodeRunFixtures(db, { id: ids.sourceNodeRunId }))[0]?.rolledBack).toBe(true)
   })
 
   test('pre-drive preserves the exact legacy task-gate resume variant without weakening RFC-333 payloads', async () => {

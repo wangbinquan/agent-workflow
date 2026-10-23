@@ -59,6 +59,7 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
   test('autoResume no longer excludes turn-engine workgroups', () => {
     const src = read('autoResume.ts')
     expect(src).not.toContain('!isTurnEngineWorkgroupTask(t)')
+    expect(src).not.toMatch(/!\s*isTurnEngineTaskSubject\s*\(/)
   })
 
   test('reconcileRunningAssignments is wired into the engine (re)entry', () => {

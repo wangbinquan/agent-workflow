@@ -14,17 +14,24 @@
 // (or believe the scheduler will produce) and lock in current consistent
 // behavior. PR-B onwards keep these green by construction.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq, and } from 'drizzle-orm'
-// RFC-074 PR-C: freshness is pure ULID id-order. These tests seed multiple
-// node_runs synchronously and rely on creation order, so we use a MONOTONIC
-// factory — plain ulid() is not monotonic within a millisecond and would make
-// "scheduler picks the later row" non-deterministic.
+import { eq } from 'drizzle-orm'
+// Freshness follows the seq allocated in builder-call order: seed historical
+// rows before their replacements so the scheduler picks the later row.
+// Keep the monotonic ID factory for predictable fixture IDs; seq determines freshness.
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory()
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -58,8 +65,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
     await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
     const db = harness.db
-    const { agents, workflows, tasks } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -83,13 +89,13 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       edges: [],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 't',
       id: taskId,
       executionLineageId: taskId,
@@ -125,11 +131,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
     nodeId: string,
     iteration = 0,
   ): Promise<{ id: string; status: string; retryIndex: number }> {
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+    const rows = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId }] })
     let latest: (typeof rows)[number] | undefined
     for (const r of rows) {
       if (r.iteration !== iteration) continue
@@ -146,8 +148,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
     opts: { retryIndex?: number; clarifyIteration?: number; portContent?: string } = {},
   ): Promise<string> {
     const id = ulid()
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId,
       nodeId: 'doc',
@@ -157,7 +158,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       startedAt: Date.now() - 200,
       finishedAt: Date.now() - 100,
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: id,
       portName: 'docpath',
       content: opts.portContent ?? '# v',
@@ -178,8 +179,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
     },
   ): Promise<string> {
     const id = ulid()
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId,
       nodeId: 'rev_1',
@@ -208,8 +208,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(reviewId)
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const { nodeRuns } = tablesOf(h.db)
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -233,8 +233,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(doneId)
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const { nodeRuns } = tablesOf(h.db)
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -263,14 +263,14 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
         finishedAt: Date.now() - 50,
       })
 
-      // isFresherNodeRun ranks retry=1 above retry=0 — scheduler picks placeholder.
+      // The placeholder is minted after the done row, so the scheduler picks its later seq.
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(placeholderId)
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
+      const { nodeRuns } = tablesOf(h.db)
       // But dispatchReviewNode's RFC-052 "ANY top-level row done → short-circuit" rule
       // overrides freshness. Done row is preserved; placeholder is left alone too.
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -308,8 +308,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(pendingId)
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const { nodeRuns } = tablesOf(h.db)
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -349,13 +349,13 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(clarifyRerunId)
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
+      const { nodeRuns } = tablesOf(h.db)
       // Done row at ci=0 still triggers "ANY done → short-circuit" though! This is
       // intentional: once the user approved the review at some point, even a
       // clarify rerun shouldn't re-trigger the review. The clarify rerun row will
       // simply linger pending — scheduler treats this node as done via the
       // any-done short-circuit.
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -401,8 +401,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(p2)
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const { nodeRuns } = tablesOf(h.db)
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -425,7 +425,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       )
     })
 
-    test('C7 ulid tiebreak: two rows at identical (ci, retryIndex) → newer ulid wins', async () => {
+    test('C7 mint order: two rows at identical (ci, retryIndex) → later seq wins', async () => {
       await seedAgentDone(h.db, h.taskId)
       const older = await seedReviewRow(h.db, h.taskId, {
         status: 'failed',
@@ -439,7 +439,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
         retryIndex: 0,
         finishedAt: null as never,
       })
-      // The two share (ci=0, retry=0). isFresherNodeRun uses ulid as tiebreak.
+      // The two share (ci=0, retry=0); the later builder call allocates the larger seq.
       const latest = await pickLatestRow(h.db, h.taskId, 'rev_1')
       expect(latest.id).toBe(newer)
       void older
@@ -449,8 +449,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       await seedAgentDone(h.db, h.taskId)
       // iter=0 done
       const iter0 = ulid()
-      const { nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: iter0,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -463,7 +462,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       })
       // iter=1 pending (e.g., a loop wrapper second iteration)
       const iter1 = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: iter1,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -486,8 +485,7 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       // Fan-out shard child (parentNodeRunId set). Even though it would
       // dominate by retryIndex, it must be skipped.
       const childId = ulid()
-      const { nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: childId,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -521,8 +519,8 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
         reviewIteration: 5,
       })
 
-      const { tasks, docVersions, nodeRuns } = tablesOf(h.db)
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const { docVersions, nodeRuns } = tablesOf(h.db)
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,

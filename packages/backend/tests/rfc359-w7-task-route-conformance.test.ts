@@ -16,8 +16,18 @@
 // 「两个引擎跑同一份代码」这句话在对拍里是假的。A 段是公共契约，B 段（原「实测分叉」）
 // 已经没有一条按引擎分叉的断言，整段变成「不许再分家」的锁。
 
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  type TaskRepoFixtureSpec,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -270,8 +280,7 @@ async function seedWorkflow(
   options: { builtin?: boolean; name?: string } = {},
 ): Promise<string> {
   const id = `wf_${ulid()}`
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: options.name ?? 'rfc359-w7-taskroute',
     description: '',
@@ -293,7 +302,6 @@ interface SeedTaskOptions {
   readonly spaceKind?: string
   readonly worktreePath?: string
   readonly baseCommit?: string | null
-  readonly repoCount?: number
   readonly name?: string
   /** RFC-359 第 6 刀：`taskExecutionKind` 的判别列——置上它就是一个 agent 任务，不是工作流任务。 */
   readonly sourceAgentName?: string
@@ -303,8 +311,7 @@ async function seedTask(db: PersistenceDb, options: SeedTaskOptions = {}): Promi
   const id = `t_${ulid()}`
   await seedUsers(db)
   const workflowId = options.workflowId ?? (await seedWorkflow(db))
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: options.name ?? 'rfc359 w7 task',
     workflowId,
@@ -319,7 +326,6 @@ async function seedTask(db: PersistenceDb, options: SeedTaskOptions = {}): Promi
     inputs: '{}',
     startedAt: options.startedAt ?? Date.now(),
     ownerUserId: options.ownerUserId === undefined ? OWNER : options.ownerUserId,
-    repoCount: options.repoCount ?? 1,
     spaceKind: (options.spaceKind ?? 'local') as 'local',
     parentTaskId: options.parentTaskId ?? null,
     parentNodeRunId: options.parentNodeRunId ?? null,
@@ -344,18 +350,17 @@ async function seedMembers(
 async function seedRun(
   db: PersistenceDb,
   taskId: string,
-  values: Partial<PersistenceTables['nodeRuns']['$inferInsert']> & { nodeId: string },
+  values: Partial<NodeRunFixtureSpec> & { nodeId: string },
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     status: 'done',
     retryIndex: 0,
     iteration: 0,
     ...values,
-  } as PersistenceTables['nodeRuns']['$inferInsert'])
+  })
   return id
 }
 
@@ -383,11 +388,11 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
 
     const failedNode = 'writer'
     const taskId = await seedTask(harness.db, { status: 'failed', name: 'A1' })
-    const { tasks } = tablesOf(harness.db)
-    await harness.db
-      .update(tasks)
-      .set({ failedNodeId: failedNode, errorSummary: 'boom' })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(
+      harness.db,
+      { id: taskId },
+      { failedNodeId: failedNode, errorSummary: 'boom' },
+    )
     await seedRun(harness.db, taskId, {
       nodeId: failedNode,
       status: 'failed',
@@ -637,8 +642,7 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
       finishedAt: 6_000,
     })
     const pending = await seedRun(harness.db, taskId, { nodeId: 'later', status: 'pending' })
-    const { nodeRunOutputs } = tablesOf(harness.db)
-    await insertOne(harness.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(harness.db, {
       nodeRunId: started,
       portName: 'out',
       content: 'value',
@@ -690,12 +694,11 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
 
   test('A14 diff：缺 base commit → 409；工作树不存在 → 410', async () => {
     const ops = operations(harness)
-    const noBase = await seedTask(harness.db, { baseCommit: null, repoCount: 1 })
+    const noBase = await seedTask(harness.db, { baseCommit: null })
     expect(await code(ops.diff(noBase))).toBe('task-no-base-commit')
 
     const missing = await seedTask(harness.db, {
       baseCommit: 'deadbeef',
-      repoCount: 1,
       worktreePath: join(APP_HOME, 'worktrees', 'nope'),
     })
     expect(await code(ops.diff(missing))).toBe('task-worktree-missing')
@@ -705,13 +708,11 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
 
   test('A15 diff：多仓一个可用 base commit 都没有 → 409（弱侧抬齐）', async () => {
     const ops = operations(harness)
-    const taskId = await seedTask(harness.db, {
-      repoCount: 2,
-      worktreePath: APP_HOME,
-      baseCommit: null,
-    })
-    const { taskRepos } = tablesOf(harness.db)
-    await harness.db.insert(taskRepos).values([0, 1].map((index) => repoRow(taskId, index)))
+    const taskId = await seedTask(harness.db, { worktreePath: APP_HOME, baseCommit: null })
+    await taskRepoFixture(
+      harness.db,
+      [0, 1].map((index) => repoRow(taskId, index)),
+    )
     expect(await code(ops.diff(taskId))).toBe('task-no-base-commit')
   })
 
@@ -960,11 +961,7 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
     const taskId = await seedTask(harness.db, {
       worktreePath: join(APP_HOME, 'wt', 'pruned'),
     })
-    const { tasks } = tablesOf(harness.db)
-    await harness.db
-      .update(tasks)
-      .set({ workspacePrunedAt: Date.now() })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(harness.db, { id: taskId }, { workspacePrunedAt: Date.now() })
     expect(
       await code(ops.syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 1 })),
       '合并前只有 PG 在前置门拦，SQLite 穿过去到 resumeKick 才报',
@@ -1004,11 +1001,7 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
   test('B6→A 任务行投影的严格度两侧同一档：枚举外的 space_kind 一律拒绝', async () => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db)
-    const { tasks } = tablesOf(harness.db)
-    await harness.db
-      .update(tasks)
-      .set({ spaceKind: 'isolated' as 'local' })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(harness.db, { id: taskId }, { spaceKind: 'isolated' as 'local' })
     expect(
       await code(ops.get(taskId)),
       '两个引擎都必须拒绝——合并前只有 PG 拒，SQLite 原样投出',
@@ -1053,7 +1046,7 @@ describeEachProvider('rfc359-w7 task route launch · C 段可驱动面', (harnes
   })
 })
 
-function repoRow(taskId: string, index: number): PersistenceTables['taskRepos']['$inferInsert'] {
+function repoRow(taskId: string, index: number): TaskRepoFixtureSpec {
   return {
     taskId,
     repoIndex: index,
@@ -1062,8 +1055,7 @@ function repoRow(taskId: string, index: number): PersistenceTables['taskRepos'][
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
     worktreePath: join(APP_HOME, 'worktrees', taskId, `repo-${index}`),
-    worktreeDirName: `repo-${index}`,
-    mountPath: index === 0 ? '' : `repo-${index}`,
+    mountPath: `repo-${index}`,
     subdir: '',
     readonly: false,
     baseCommit: null,

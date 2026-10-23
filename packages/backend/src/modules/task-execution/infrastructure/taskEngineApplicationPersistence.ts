@@ -1,5 +1,8 @@
 // RFC-359 W4-B1 —— TaskEngine drive 快照读取 + 工作区 profile 更新：一份实现，两个 provider 共用。
 
+import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
+import { taskWorkgroupConfigFromRow } from './taskWorkgroupConfig'
+import { decodeTaskSubject } from '../domain/taskSubject'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, asc, eq } from 'drizzle-orm'
@@ -10,6 +13,7 @@ import type {
   TaskEngineApplicationPersistence,
   TaskEngineDriveSnapshot,
 } from '../application/ports/taskEngineApplicationPersistence'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 
 export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplicationPersistence {
@@ -28,7 +32,22 @@ export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplic
       .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
       .from(taskCollaborators)
       .where(eq(taskCollaborators.taskId, taskId))
-    return { task, repositories, collaborators }
+    const mounts = repositories.map(decodeTaskRepositoryMount)
+    const {
+      repos: _repos,
+      spaceNodes: _spaceNodes,
+      ...repository
+    } = projectStoredTaskRepositorySurface(task, mounts, [], 'stored')
+    return {
+      task: {
+        ...task,
+        ...repository,
+        subject: decodeTaskSubject(task),
+        workgroupConfig: taskWorkgroupConfigFromRow(task),
+      },
+      repositories: mounts,
+      collaborators,
+    }
   }
 
   async findStatus(taskId: string) {

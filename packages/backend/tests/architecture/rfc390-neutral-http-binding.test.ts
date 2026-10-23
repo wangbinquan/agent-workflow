@@ -35,7 +35,7 @@ const HTTP_OWNERS = [
   'composeWorkgroupTaskRoomDynamicWorkflow',
   'composePostgresqlResourcePackageProvider',
   'composePostgresqlResourcePackageCatalog',
-  'createPostgresqlResourcePackageAtomicApplyOperations',
+  'createResourcePackageAtomicApplyOperations',
   'composeTaskWorkspaceQueries',
   'createCollaborationTaskAccessPort',
   'composeCollaborationRouteOperations',

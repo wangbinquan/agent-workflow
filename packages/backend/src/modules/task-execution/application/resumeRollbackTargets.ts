@@ -1,4 +1,4 @@
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import type { RunSelectionReader } from './ports/runSelection'
 /**
  * RFC-359 AC-1（第 10 刀）—— resume 的回滚目标选择器，**全仓唯一一份**。
  *
@@ -21,7 +21,7 @@ import { compareNodeRunMintOrder } from '@agent-workflow/shared'
  *     没有写（子任务在调用节点的 iso 里干活），它的 interrupted 行由调度器的领养路径处理
  *     （重新挂上 / merge_state 暂存重放），**永远不走 pre_snapshot 回滚 + 重铸**。
  */
-export function selectResumeRollbackTargets<
+export async function selectResumeRollbackTargets<
   R extends {
     id: string
     seq: number | null
@@ -30,13 +30,16 @@ export function selectResumeRollbackTargets<
     status: string
     childTaskId?: string | null
   },
->(runs: readonly R[]): R[] {
+>(runs: readonly R[], selection: RunSelectionReader, taskId: string): Promise<R[]> {
   const latestPerNode = new Map<string, R>()
-  for (const run of runs) {
-    if (run.parentNodeRunId !== null) continue
-    const previous = latestPerNode.get(run.nodeId)
-    if (previous === undefined || compareNodeRunMintOrder(run, previous) > 0)
-      latestPerNode.set(run.nodeId, run)
+  for (const nodeId of new Set(
+    runs.filter((run) => run.parentNodeRunId === null).map((run) => run.nodeId),
+  )) {
+    const selected = (await selection.familyHistory(taskId, { nodeId }, { topLevelOnly: true })).at(
+      -1,
+    )
+    const run = runs.find((row) => row.id === selected?.id)
+    if (run !== undefined) latestPerNode.set(nodeId, run)
   }
   return [...latestPerNode.values()].filter(
     (run) =>

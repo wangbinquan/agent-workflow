@@ -1,9 +1,10 @@
 // RFC-374 T6: catch-up is boot step zero and hosted recovery starts only after activation; failure stops execution initialization.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture } from './helpers/model'
+import { patchLegacyRunSelectionFixture } from './helpers/model/runSelectionOracle'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { runTaskExecutionBootRecovery } from '@/modules/task-execution/composition/bootRecovery'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
+import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import type {
   TaskExecutionBootRecoveryInput,
   BootExecutionRecoveryFactory,
@@ -77,7 +78,9 @@ describeEachProvider('RFC-374 boot step zero', (harness) => {
   test('real backfill completes before preparing or reaping, and reports its work', async () => {
     const taskId = await seedSequenceTask(harness.db)
     const { nodeRuns } = tablesOf(harness.db)
-    await insertOne(harness.db, nodeRuns, { id: 'legacy', taskId, nodeId: 'n', status: 'running' })
+    await nodeRunFixture(harness.db, { id: 'legacy', taskId, nodeId: 'n', status: 'running' })
+    // RFC-395 II-a A1 normally allocates seq; this boot test explicitly needs a pre-backfill row.
+    await patchLegacyRunSelectionFixture(harness.db, 'legacy', { seq: null })
     const order: string[] = [],
       store = createNodeRunSeqBackfillStore(harness.db)
     const report = await runTaskExecutionBootRecovery(
@@ -98,8 +101,7 @@ describeEachProvider('RFC-374 boot step zero', (harness) => {
   })
   test('a real allocator failure rejects daemon boot before recovery or listeners', async () => {
     const taskId = await seedSequenceTask(harness.db)
-    const { nodeRuns } = tablesOf(harness.db)
-    await insertOne(harness.db, nodeRuns, {
+    await nodeRunFixture(harness.db, {
       id: 'invalid',
       taskId,
       nodeId: 'n',

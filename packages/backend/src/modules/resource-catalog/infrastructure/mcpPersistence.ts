@@ -18,7 +18,7 @@ import {
   assertInitialResourceOwner,
   initialPrivateResourceAcl,
 } from '../application/resourceDefaults'
-import type { McpAgentReference, McpCreateRecord, McpProjection } from '../application/mcps/ports'
+import type { McpCreateRecord, McpProjection } from '../application/mcps/ports'
 import type { McpCatalogResource } from '../public/types'
 import { transitionMcpRuntimeTests } from './mcpRuntimeTestTransitions'
 
@@ -247,35 +247,4 @@ export async function commitLegacyMcpUpdateInTx(
     reason: (prepared.set.enabled ?? row.enabled) ? 'mcp-config-changed' : 'mcp-disabled',
     now: typeof prepared.set.updatedAt === 'number' ? prepared.set.updatedAt : Date.now(),
   })
-}
-
-export interface AgentReferencePersistenceRow {
-  readonly id: string
-  readonly name: string
-  readonly raw: unknown
-  readonly ownerUserId: string | null
-  readonly visibility: 'public' | 'private'
-}
-
-export function collectMcpAgentReferences(
-  rows: readonly AgentReferencePersistenceRow[],
-  mcpId: string,
-): McpAgentReference[] {
-  const references: McpAgentReference[] = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(String(row.raw)) as unknown
-      if (Array.isArray(parsed) && parsed.includes(mcpId)) {
-        references.push({
-          id: row.id,
-          name: row.name,
-          ownerUserId: row.ownerUserId,
-          visibility: row.visibility,
-        })
-      }
-    } catch {
-      // Preserve the established fail-closed behavior for corrupt legacy JSON.
-    }
-  }
-  return references
 }

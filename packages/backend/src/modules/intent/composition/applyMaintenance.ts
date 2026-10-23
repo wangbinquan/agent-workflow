@@ -1,16 +1,13 @@
+import { createIntentApplyRecoveryScene } from '../infrastructure/intentApplyRecovery'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createLogger, type Logger } from '@/util/log'
-import {
-  createIntentApplyJournalConvergence,
-  type IntentApplyJournalConvergence,
-} from '../infrastructure/intentApplyArtifactLifecycle'
 import type { IntentApplyArtifactLifecycle } from '../infrastructure/intentApplyEngine'
 import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
 import type { LegacyIntentSkillArtifactCompat } from '../ports/skillArtifactCompensation'
 import { composeIntentApplyArtifactLifecycle } from './apply'
 
 /** Recovery-only composition (both providers); it never constructs apply resources. */
-export function composeIntentApplyConvergence(input: {
+export function composeIntentApplyRecoveryScene(input: {
   readonly db: PersistenceDb
   readonly appHome: string
   readonly pluginsDir: string
@@ -19,9 +16,9 @@ export function composeIntentApplyConvergence(input: {
   readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
   readonly now?: () => number
   readonly log?: Logger
-}): IntentApplyJournalConvergence {
+}) {
   const log = input.log ?? createLogger('intentApplyMaintenance')
-  return createIntentApplyJournalConvergence({
+  return createIntentApplyRecoveryScene({
     db: input.db,
     artifacts: input.artifacts ?? composeIntentApplyArtifactLifecycle(input),
     ...(input.now === undefined ? {} : { now: input.now }),

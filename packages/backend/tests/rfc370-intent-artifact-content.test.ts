@@ -1,5 +1,6 @@
 // RFC-370: selected content must drive real Intent apply and recovery without
 // replacing AW's resource transaction, durable journal or old-format replay.
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -20,12 +21,12 @@ import {
   composeIntentApplyArtifactLifecycle,
   composeIntentApplyOperations,
 } from '@/modules/intent/composition/apply'
-import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
-import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
+import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
+import { composeIntentMaintenanceCommandsForDatabase } from './helpers/atomicApplyMaintenance'
 import {
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
-} from '@/modules/intent/domain/journalArtifacts'
+} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
 import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import type {
   IntentPluginArtifactOwner,
@@ -558,14 +559,16 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
     })
     unavailable = false
-    const recovery = composeIntentApplyConvergence({
-      db: harness.db,
-      appHome: f.appHome,
-      pluginsDir: join(f.appHome, 'plugins'),
-      content: artifactContent,
-    })
+    const recovery = createAtomicApplyRecovery([
+      composeIntentApplyRecoveryScene({
+        db: harness.db,
+        appHome: f.appHome,
+        pluginsDir: join(f.appHome, 'plugins'),
+        content: artifactContent,
+      }),
+    ])
     let settled = false
-    const pending = recovery.converge({ activeJournalIds: [] }).then((result) => {
+    const pending = recovery.converge({ intent: [] }).then((result) => {
       settled = true
       return result
     })
@@ -645,10 +648,62 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     expect(existsSync(f.appHome)).toBe(false)
   })
 
+  test('deleted legacy skill discards its staged version without publication', async () => {
+    const f = await fixture('skill')
+    const artifact: IntentJournalArtifactV1 = {
+      kind: 'skill-version-stage',
+      staged: {
+        skillId: 'deleted',
+        skillName: 'deleted',
+        opId: null,
+        publishId: 'publish',
+        newVersion: 2,
+        newHash: hash,
+        filesDir: 'object-ref:live',
+        versionDir: 'object-ref:version',
+        stagingDir: 'object-ref:stage',
+        noop: null,
+      },
+    }
+    const discarded: unknown[] = []
+    const lifecycle = composeIntentApplyArtifactLifecycle({
+      db: harness.db,
+      appHome: f.appHome,
+      content: content({
+        discardLegacy: (value) => {
+          discarded.push(value)
+        },
+        publishSkill: () => {
+          throw new Error('deleted skill cannot publish')
+        },
+      }),
+    })
+    // RFC-395 II-a A6：已删除技能完成处置，暂存内容仍交给 storage owner 丢弃。
+    expect(await lifecycle.rollForward([artifact], log)).toBe(true)
+    expect(discarded).toEqual([artifact])
+    expect(existsSync(f.appHome)).toBe(false)
+  })
+
   test('selected legacy publication preserves whole-batch unmarking and waits before advancing each journal', async () => {
     const f = await fixture('skill'),
       entered = barrier(),
       release = barrier()
+    // RFC-395 II-a A6：已删除技能现在丢弃暂存；此例显式种行以继续锁定 legacy 整批发布。
+    const { skills } = tablesOf(harness.db)
+    for (const id of ['first', 'second'])
+      await insertOne(harness.db, skills, {
+        id,
+        name: id,
+        description: '',
+        managedPath: `object-ref:${id}-live`,
+        contentVersion: 2,
+        ownerUserId: ownerId,
+        visibility: 'private',
+        reservationState: 'ready',
+        versionState: 'snapshot-authoritative',
+        createdAt: 1,
+        updatedAt: 1,
+      })
     const artifacts: IntentJournalArtifactV1[] = ['first', 'second'].map((skillId) => ({
       kind: 'skill-version-stage',
       staged: {
@@ -678,48 +733,50 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       error: 'retryable',
     })
     const calls: string[] = []
-    const recovery = composeIntentApplyConvergence({
-      db: harness.db,
-      appHome: f.appHome,
-      pluginsDir: join(f.appHome, 'plugins'),
-      content: content({
-        async publishSkill() {
-          throw new Error('legacy publication must use the selected compatibility owner')
+    const recovery = createAtomicApplyRecovery([
+      composeIntentApplyRecoveryScene({
+        db: harness.db,
+        appHome: f.appHome,
+        pluginsDir: join(f.appHome, 'plugins'),
+        content: content({
+          async publishSkill() {
+            throw new Error('legacy publication must use the selected compatibility owner')
+          },
+        }),
+        legacySkillArtifacts: {
+          unmarkSkillBootVerified(skillId) {
+            calls.push(`unmark:${skillId}`)
+          },
+          async publishStagedSkillVersion(db, options, value) {
+            expect(db).toBe(harness.db)
+            expect(options).toEqual({ appHome: f.appHome })
+            const artifact =
+              artifacts.find(
+                (entry) => entry.kind === 'skill-version-stage' && entry.staged === value,
+              ) ??
+              artifacts.find(
+                (entry) =>
+                  entry.kind === 'skill-version-stage' &&
+                  JSON.stringify(entry.staged) === JSON.stringify(value),
+              )
+            if (artifact?.kind !== 'skill-version-stage') throw new Error('unknown staged artifact')
+            calls.push(`publish:${artifact.staged.skillId}`)
+            if (artifact.staged.skillId === 'first') {
+              entered.release()
+              await release.pending
+            }
+          },
+          async loadSkillOperationState() {
+            throw new Error('null operation id must not query operation state')
+          },
+          async finishOperation() {
+            throw new Error('version-only replay must not finish create operations')
+          },
         },
       }),
-      legacySkillArtifacts: {
-        unmarkSkillBootVerified(skillId) {
-          calls.push(`unmark:${skillId}`)
-        },
-        async publishStagedSkillVersion(db, options, value) {
-          expect(db).toBe(harness.db)
-          expect(options).toEqual({ appHome: f.appHome })
-          const artifact =
-            artifacts.find(
-              (entry) => entry.kind === 'skill-version-stage' && entry.staged === value,
-            ) ??
-            artifacts.find(
-              (entry) =>
-                entry.kind === 'skill-version-stage' &&
-                JSON.stringify(entry.staged) === JSON.stringify(value),
-            )
-          if (artifact?.kind !== 'skill-version-stage') throw new Error('unknown staged artifact')
-          calls.push(`publish:${artifact.staged.skillId}`)
-          if (artifact.staged.skillId === 'first') {
-            entered.release()
-            await release.pending
-          }
-        },
-        async loadSkillOperationState() {
-          throw new Error('null operation id must not query operation state')
-        },
-        async finishOperation() {
-          throw new Error('version-only replay must not finish create operations')
-        },
-      },
-    })
+    ])
     let settled = false
-    const pending = recovery.converge({ activeJournalIds: [] }).then((result) => {
+    const pending = recovery.converge({ intent: [] }).then((result) => {
       settled = true
       return result
     })
@@ -789,11 +846,6 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       appHome: f.appHome,
       pluginsDir: join(f.appHome, 'plugins'),
       scratchDirectoryName: 'scratch',
-      resourcePackages: {
-        async converge() {
-          return { failed: 0, rolledForward: 0 }
-        },
-      },
       content: content({
         async discardSkill(value) {
           expect(value.artifact).toEqual(native)
@@ -877,11 +929,6 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       appHome: f.appHome,
       pluginsDir: join(f.appHome, 'plugins'),
       scratchDirectoryName: 'scratch',
-      resourcePackages: {
-        async converge() {
-          return { failed: 0, rolledForward: 0 }
-        },
-      },
       content: content(),
       log: {
         ...log,

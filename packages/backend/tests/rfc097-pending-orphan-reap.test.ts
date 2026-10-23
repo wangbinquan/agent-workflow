@@ -16,6 +16,14 @@
 //   2. 对照：boot 收割之后经 launchTestTask 正常发起的任务完全不受影响（其 pending
 //      窗口在 boot 之后、同进程内，收割摸不到它），照常跑到 done。
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
@@ -78,8 +86,7 @@ async function buildHarness(): Promise<Harness> {
   const db = createInMemoryDb(MIGRATIONS)
   await seedTestDefaultOpencodeRuntime(db)
   const workerId = ulid()
-  const { agents, workflows } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: workerId,
     name: 'worker',
     description: 'test',
@@ -98,7 +105,7 @@ async function buildHarness(): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf-rfc097-reap',
     definition: JSON.stringify(definition),
@@ -117,10 +124,8 @@ async function buildHarness(): Promise<Harness> {
  *  且错误四元组已被 resume 清空，节点行仍是历史 failed（resumeTask 不改行状态）。 */
 async function seedCrashedResumeResidue(h: Harness): Promise<{ taskId: string; runId: string }> {
   const taskId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(h.db)
-  const def = (await h.db.select().from(workflows).where(eq(workflows.id, h.workflowId)))[0]!
-    .definition
-  await insertOne(h.db, tasks, {
+  const def = (await readWorkflowFixtures(h.db, { id: h.workflowId }))[0]!.definition
+  await taskFixture(h.db, {
     id: taskId,
     name: 'rfc097-crashed-resume',
     workflowId: h.workflowId,
@@ -137,7 +142,7 @@ async function seedCrashedResumeResidue(h: Harness): Promise<{ taskId: string; r
     errorMessage: null,
   })
   const runId = ulid()
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: runId,
     taskId,
     nodeId: 'work',
@@ -156,8 +161,7 @@ async function waitForTerminalTask(
   taskId: string,
 ): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
-    const { tasks } = tablesOf(db)
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
   }
@@ -173,8 +177,8 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
 
   test('resume 中途崩溃残留的 pending 任务：reap 翻 interrupted(daemon-restart)，resumeTask 恢复跑到终态', async () => {
     const { taskId, runId } = await seedCrashedResumeResidue(h)
-    const { tasks, taskExecutionIntents, nodeRuns } = tablesOf(h.db)
-    const taskBeforeReap = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { taskExecutionIntents, nodeRuns } = tablesOf(h.db)
+    const taskBeforeReap = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     const crashedIntentId = ulid()
     await insertOne(h.db, taskExecutionIntents, {
       id: crashedIntentId,
@@ -198,7 +202,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
     // 节点行是历史 failed（不在 running/pending 收割集）→ 行侧零收割。
     expect(r.runs).toBe(0)
 
-    const reaped = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const reaped = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(reaped.status).toBe('interrupted')
     expect(reaped.errorSummary).toBe('daemon-restart')
     expect(reaped.errorMessage ?? '').toContain('daemon restarted')

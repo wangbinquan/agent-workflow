@@ -9,6 +9,7 @@
 //     envelope-followup retries (RFC-042); NULL stays NULL.
 //   - parseInjectedSnapshotJson defends against corrupt rows.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -45,8 +46,7 @@ function mkAgent(id: string, name = id): Agent {
 
 async function seedTask(db: PersistenceDb): Promise<{ taskId: string; workflowId: string }> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -55,7 +55,7 @@ async function seedTask(db: PersistenceDb): Promise<{ taskId: string; workflowId
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -246,8 +246,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
     status?: 'done' | 'failed' | 'pending' | 'running' | 'interrupted'
   }): Promise<string> {
     const id = opts.id ?? ulid()
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId: opts.taskId,
       nodeId: opts.nodeId,
@@ -256,7 +255,7 @@ describeEachProvider('RFC-046 — loadInjectedSnapshotFromFirstAttempt', (harnes
       retryIndex: opts.retryIndex,
       reviewIteration: opts.reviewIteration ?? 0,
       status: opts.status ?? 'done',
-      injectedMemoriesJson: opts.json,
+      injectedMemories: opts.json,
     })
     return id
   }

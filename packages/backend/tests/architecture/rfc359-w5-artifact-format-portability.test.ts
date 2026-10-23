@@ -71,19 +71,18 @@
 // 两侧解码器必须以 ZodError 拒绝未知 kind、样本 kind 必须覆盖解码器声明的全部 kind、
 // 两个写出点必须还在写这一列。任何一条被改名 / 挪走，守卫**红**，而不是静默假绿。
 
+// 2026-10-22 RFC-395 II-a A6：以上保留 W5 历史机制与原判据。当前两个 provider 写统一裸数组，
+// 完整的新旧格式均由统一恢复 composition 读取；下方十二格分别使用真实 provider journal 与目录补偿。
+// 未知 kind 仍须拒绝；不再使用拒绝 DB 访问的 Proxy，也不把普通 effect 错误当作 accepts。
+
 import { describe, expect, test } from 'bun:test'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ZodError } from 'zod'
-
-import type {
-  ResourcePackageApplyArtifactRecoveryPort,
-  ResourcePackageApplyJournalSnapshot,
-} from '../../src/modules/resource-catalog/application/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
-import { createSqliteResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance'
-import { composeResourcePackageApplyArtifactRecoveryChain } from '../../src/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { createLegacyResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery'
+import { composeResourcePackageApplyMaintenance } from '../../src/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { opStagedDir } from '../../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 import {
   skillFilesAbs,
@@ -91,6 +90,10 @@ import {
   skillVersionAbs,
 } from '../../src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import type { PostgresqlResourcePackageMutationArtifact } from '../../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
+import { createAtomicApplyRecovery } from '../../src/platform/atomic-apply/convergence'
+import { tablesOf } from '../../src/platform/persistence/sessionTables'
+import { insertOne } from '../../src/platform/persistence/singleInsert'
+import { describeEachProvider } from '../helpers/eachProvider'
 
 const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
@@ -105,19 +108,22 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
  * 本文件继续记录**全矩阵的实测裁决**——十二格里有六格是「本来就该 accepts」的正向断言，给它钉一个「只降不升的条数」没有
  * 意义（条数恒等于 `写出引擎 × kind × 读回引擎`）。真正的债是那六格 `rejects`，它们由上面那条
  * 逐字相等断言直接钉住，收敛时必须改这份文本，一样留痕。
+ *
+ * 2026-10-22 RFC-395 II-a A6：上述六格 rejects 是历史缺口；当前十二格均为 accepts，
+ * 由各自 provider 的真实 journal、恢复 composition 与目录补偿断言覆盖。
  */
 export const ARTIFACT_FORMAT_PORTABILITY: readonly string[] = [
   'postgresql/plugin-install -> postgresql: accepts',
-  'postgresql/plugin-install -> sqlite: rejects',
+  'postgresql/plugin-install -> sqlite: accepts',
   'postgresql/skill-stage -> postgresql: accepts',
-  'postgresql/skill-stage -> sqlite: rejects',
+  'postgresql/skill-stage -> sqlite: accepts',
   'postgresql/skill-version-stage -> postgresql: accepts',
-  'postgresql/skill-version-stage -> sqlite: rejects',
-  'sqlite/plugin-install -> postgresql: rejects',
+  'postgresql/skill-version-stage -> sqlite: accepts',
+  'sqlite/plugin-install -> postgresql: accepts',
   'sqlite/plugin-install -> sqlite: accepts',
-  'sqlite/skill-stage -> postgresql: rejects',
+  'sqlite/skill-stage -> postgresql: accepts',
   'sqlite/skill-stage -> sqlite: accepts',
-  'sqlite/skill-version-stage -> postgresql: rejects',
+  'sqlite/skill-version-stage -> postgresql: accepts',
   'sqlite/skill-version-stage -> sqlite: accepts',
 ]
 
@@ -128,16 +134,16 @@ export const ARTIFACT_FORMAT_PORTABILITY: readonly string[] = [
  * RFC-359 §5dv/§5dy：两台 apply 引擎合一之后**只剩一个写出点**——SQLite 那台
  * （`legacyResourcePackageBundleApply.ts`）随通用 bundle 引擎退役。`sqlite` 那一族样本
  * 因此不再有活着的生产者：它代表的是**合一之前留在盘上的存量工件**，读回侧仍然必须认得
- * （`composeResourcePackageApplyArtifactRecoveryChain` 就是为它存在的），所以样本与矩阵都留着。
+ * （`createVersionedResourcePackageArtifactRecovery` 就是为它存在的），所以样本与矩阵都留着。
  */
 const WRITERS: Readonly<Partial<Record<Engine, string>>> = {
-  postgresql: 'platform/persistence/postgresqlResourcePackageAtomicApply.ts',
+  postgresql: 'platform/atomic-apply/stateMachine.ts',
 }
 
 /** 落盘工件读回点：`.strict()` 解码器所在文件，按引擎。 */
 const DECODERS: Readonly<Record<Engine, string>> = {
-  sqlite: 'modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts',
-  postgresql: 'modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
+  sqlite: 'modules/resource-catalog/infrastructure/resourcePackageLegacyCodec.ts',
+  postgresql: 'modules/resource-catalog/infrastructure/resourcePackageCurrentCodec.ts',
 }
 
 type Engine = 'sqlite' | 'postgresql'
@@ -150,29 +156,6 @@ const GENERATION_ID = '01JGUARD000000000000000GEN'
 const OPERATION_ID = '01JGUARD0000000000000000OP'
 const PUBLISH_ID = '01JGUARD00000000000000PUB'
 const VERSION = 2
-
-/**
- * 探针**绝不接触真实数据库**：任何属性读取都立刻抛一个可读的普通 `Error`。
- *
- * 解码在两侧 `compensate()` 的循环之外，所以判「解码器认不认」根本走不到这里；真正会走到的
- * 只有解码**成功之后**的补偿正身（例如 SQLite 的 `skill-stage` 要去 abandon 那笔 skill
- * operation）。那种情况下抛出的是普通 `Error` 而非 `ZodError`，`verdict()` 照样判成
- * `accepts`——判据问的是「解码器收不收这条记录」，不是「补偿能不能跑完」。
- * 用 Proxy 而不是 `{}`，只为让这条边界在栈里以人话出现，而不是一句
- * `undefined is not a function`。
- */
-function neverTouchedDatabase(): never {
-  return new Proxy(
-    {},
-    {
-      get(_target, property) {
-        throw new Error(
-          `rfc359-w5 portability probe refuses database access (property "${String(property)}")`,
-        )
-      },
-    },
-  ) as never
-}
 
 /** SQLite 侧的代表性落盘样本。类型标注即锚点：历史行按原始载荷播种，由生产恢复解码器检验。 */
 function sqliteSamples(
@@ -192,7 +175,7 @@ function sqliteSamples(
       staged: {
         skillId: SKILL_ID,
         skillName: 'guard-skill',
-        // `null` 让补偿路径停在纯文件系统那一段：正向那一半不该依赖任何数据库。
+        // `null` 表示这份历史样本没有操作行；仍由真实 provider 的恢复场景执行目录补偿。
         opId: null,
         publishId: PUBLISH_ID,
         newVersion: VERSION,
@@ -255,53 +238,6 @@ function samplesOf(
     : postgresqlSamples(appHome, pluginsDir)
 }
 
-function recoveryOf(
-  engine: Engine,
-  appHome: string,
-  pluginsDir: string,
-): ResourcePackageApplyArtifactRecoveryPort {
-  return engine === 'sqlite'
-    ? createSqliteResourcePackageApplyArtifactRecovery({
-        db: neverTouchedDatabase(),
-        appHome,
-        pluginsDir,
-      })
-    : createPostgresqlResourcePackageApplyArtifactRecovery({
-        db: neverTouchedDatabase(),
-        appHome,
-        pluginsDir,
-      })
-}
-
-function journalOf(artifacts: readonly unknown[]): ResourcePackageApplyJournalSnapshot {
-  return Object.freeze({
-    id: 'rfc359-w5-portability-probe',
-    state: 'prepared',
-    preparedArtifactsJson: JSON.stringify(artifacts),
-    receiptJson: null,
-    updatedAt: 0,
-  })
-}
-
-/**
- * 真实生产解码器对这条落盘记录的裁决。
- *
- * `rejects` 的判据是**解码阶段**逃出的 `ZodError`——两侧 `compensate()` 都在循环之外先解码，
- * 循环内的文件系统 / 数据库异常一律被逐工件 try/catch 收成普通 `Error`，不会伪装成 ZodError。
- * 「解码器还是 zod、且以 ZodError 拒绝坏载荷」这个前提由下面的锚点用例单独守着。
- */
-async function verdict(
-  recovery: ResourcePackageApplyArtifactRecoveryPort,
-  artifacts: readonly unknown[],
-): Promise<'accepts' | 'rejects'> {
-  try {
-    await recovery.compensate(journalOf(artifacts))
-    return 'accepts'
-  } catch (error) {
-    return error instanceof ZodError ? 'rejects' : 'accepts'
-  }
-}
-
 /** 解码器源码里声明的全部 discriminant——新增 kind 会在这里露出来。 */
 function declaredKinds(engine: Engine): string[] {
   const text = readFileSync(join(SRC, DECODERS[engine]), 'utf8')
@@ -311,121 +247,140 @@ function declaredKinds(engine: Engine): string[] {
   return [...new Set(kinds)].sort()
 }
 
-function withScratch<T>(run: (appHome: string, pluginsDir: string) => T): T {
+async function withScratch<T>(
+  run: (appHome: string, pluginsDir: string) => Promise<T>,
+): Promise<T> {
   const root = mkdtempSync(join(tmpdir(), 'rfc359-w5-portability-'))
   try {
-    return run(join(root, 'home'), join(root, 'plugins'))
+    return await run(join(root, 'home'), join(root, 'plugins'))
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
 }
 
-describe('RFC-359 W5 —— 落盘恢复工件的跨引擎可读性', () => {
-  test('锚点：两侧恢复端口工厂 import 得到（改名 / 挪走 → 红，而不是静默假绿）', () => {
-    expect(typeof createSqliteResourcePackageApplyArtifactRecovery).toBe('function')
+describe('RFC-359 W5 format corpus anchors', () => {
+  test('both recovery factories and the live writer remain reachable', () => {
+    expect(typeof createLegacyResourcePackageApplyArtifactRecovery).toBe('function')
     expect(typeof createPostgresqlResourcePackageApplyArtifactRecovery).toBe('function')
-  })
-
-  test('锚点：唯一那个写出点仍在写 `preparedArtifactsJson`（探的是活着的那一列）', () => {
     const entries = Object.entries(WRITERS)
-    expect(entries.length, '写出点清单空了——本守卫此刻零预言力').toBeGreaterThanOrEqual(1)
+    expect(entries.length).toBeGreaterThanOrEqual(1)
     for (const [, relative] of entries) {
-      const path = join(SRC, relative)
-      expect(existsSync(path), `${relative} 不在了——写出点被挪走，账本失去归属`).toBe(true)
-      expect(
-        readFileSync(path, 'utf8'),
-        `${relative} 不再写 preparedArtifactsJson——写出侧变了，本守卫此刻零预言力`,
-      ).toContain('preparedArtifactsJson: JSON.stringify(')
-    }
-  })
-
-  test('回落链把两种格式都读得回来（矩阵里那六格 rejects 的正解就是它）', async () => {
-    await withScratch(async (appHome, pluginsDir) => {
-      const chain = composeResourcePackageApplyArtifactRecoveryChain(
-        recoveryOf('postgresql', appHome, pluginsDir),
-        recoveryOf('sqlite', appHome, pluginsDir),
+      expect(existsSync(join(SRC, relative))).toBe(true)
+      expect(readFileSync(join(SRC, relative), 'utf8')).toContain(
+        'preparedArtifactsJson: input.codecs.encode(',
       )
-      for (const engine of ENGINES) {
-        for (const artifact of samplesOf(engine, appHome, pluginsDir)) {
-          expect(
-            { engine, kind: artifact.kind, verdict: await verdict(chain, [artifact]) },
-            '回落链必须同时认得**统一格式**与**合一前留在盘上的存量格式**——' +
-              '少认一种，那一边的 journal 行会永久卡住、半成品目录永远收不掉',
-          ).toEqual({ engine, kind: artifact.kind, verdict: 'accepts' })
-        }
-      }
-    })
+    }
+    expect(ARTIFACT_FORMAT_PORTABILITY).toHaveLength(12)
   })
-
-  test('锚点：两侧解码器都以 ZodError 拒绝未知 kind（`rejects` 的判据成立的前提）', async () => {
+  test('samples cover every declared kind in both formats', async () => {
     await withScratch(async (appHome, pluginsDir) => {
-      for (const engine of ENGINES) {
-        const recovery = recoveryOf(engine, appHome, pluginsDir)
-        await expect(
-          recovery.compensate(journalOf([{ kind: 'rfc359-w5-nonexistent-kind' }])),
-          `${engine} 解码器没有以 ZodError 拒绝未知 kind——` +
-            '要么它不再是 zod，要么它已经放行任意载荷；两种情况下本守卫的 `rejects` 判据都失效了，' +
-            '请把 `verdict()` 的判据改成新解码器的拒绝信号。',
-        ).rejects.toBeInstanceOf(ZodError)
+      for (const format of ENGINES) {
+        const kinds = [...new Set(samplesOf(format, appHome, pluginsDir).map((a) => a.kind))].sort()
+        expect(declaredKinds(format).length).toBeGreaterThanOrEqual(3)
+        expect(kinds).toEqual(declaredKinds(format))
       }
     })
-  })
-
-  test('锚点：样本覆盖解码器声明的全部 kind（新增一个 kind 就红，不会漏测）', () => {
-    withScratch((appHome, pluginsDir) => {
-      for (const engine of ENGINES) {
-        const kinds = [...new Set(samplesOf(engine, appHome, pluginsDir).map((a) => a.kind))].sort()
-        const declared = declaredKinds(engine)
-        // 语料下限守的是**扫描机制本身**：正则失配 / 解码器换写法会让 `declared` 变空，
-        // 此时下面那条相等断言会变成「空 == 空」的假绿（RFC-317 T13）。
-        expect(
-          declared.length,
-          `${DECODERS[engine]} 里一个 \`kind: z.literal(...)\` 都没扫到——` +
-            'discriminant 提取失配，此刻本条锚点零预言力，先修 `declaredKinds()` 的正则。',
-        ).toBeGreaterThanOrEqual(3)
-        expect(
-          kinds,
-          `${engine} 的样本没有覆盖它自己解码器声明的全部 kind——新 kind 落盘后无人验证可移植性`,
-        ).toEqual(declared)
-      }
-    })
-  })
-
-  test('跨引擎可读性矩阵与账本逐字相等（补上桥接也要红，把账本一起改掉）', async () => {
-    const rows = await withScratch(async (appHome, pluginsDir) => {
-      const out: string[] = []
-      for (const writer of ENGINES) {
-        for (const artifact of samplesOf(writer, appHome, pluginsDir)) {
-          for (const reader of ENGINES) {
-            const recovery = recoveryOf(reader, appHome, pluginsDir)
-            out.push(
-              `${writer}/${artifact.kind} -> ${reader}: ${await verdict(recovery, [artifact])}`,
-            )
-          }
-        }
-      }
-      return out.sort()
-    })
-
-    expect(
-      rows,
-      '落盘恢复工件的跨引擎可读性矩阵与账本不符。\n' +
-        '**新出现 rejects**：又多了一种只有单个引擎读得回来的落盘格式——跨引擎迁移后它名下的 ' +
-        'journal 行会永久卡住、半成品目录永远收不掉。请给读回侧加跨格式回落，' +
-        '照 `modules/intent/infrastructure/intentApplyArtifactLifecycle.ts:82-99` 的形状写，' +
-        '不要靠扩账本了事。\n' +
-        '**rejects 变成 accepts**：缺口已补——把账本里这一行改成 accepts，' +
-        '让这次收敛留下一次有署名的提交记录。\n' +
-        '**同引擎那六格掉成 rejects**：样本或解码器坏了，此刻本守卫零预言力，先修它。',
-    ).toEqual([...ARTIFACT_FORMAT_PORTABILITY])
-  })
-
-  test('账本按行字典序、无重复且矩阵完整（清点稳定的前提）', () => {
-    expect(new Set(ARTIFACT_FORMAT_PORTABILITY).size, '账本里有重复行').toBe(
-      ARTIFACT_FORMAT_PORTABILITY.length,
-    )
-    expect([...ARTIFACT_FORMAT_PORTABILITY].sort()).toEqual([...ARTIFACT_FORMAT_PORTABILITY])
-    // 2 个写出引擎 × 3 个 kind × 2 个读回引擎。
-    expect(ARTIFACT_FORMAT_PORTABILITY.length).toBe(12)
   })
 })
+
+describeEachProvider(
+  'RFC-395 II-a A6 format portability through production recovery',
+  (harness) => {
+    test('both complete formats compensate on this provider and match all six reader cells', async () => {
+      await withScratch(async (appHome, pluginsDir) => {
+        const reader = harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql'
+        const { users, resourceBundleApplies } = tablesOf(harness.db)
+        await insertOne(harness.db, users, {
+          id: 'format-owner',
+          username: 'format-owner',
+          displayName: 'format-owner',
+          role: 'user',
+          status: 'active',
+          createdAt: 1,
+          updatedAt: 1,
+        })
+        const warnings: unknown[] = []
+        const selected = composeResourcePackageApplyMaintenance({
+          db: harness.db,
+          appHome,
+          pluginsDir,
+          now: () => 1_000_000,
+          log: {
+            debug() {},
+            info() {},
+            error() {},
+            warn: (...args) => {
+              warnings.push(args)
+            },
+            child() {
+              return this
+            },
+          },
+        })
+        const recovery = createAtomicApplyRecovery([selected.scene])
+        const actual: string[] = []
+        for (const format of ENGINES) {
+          for (const artifact of samplesOf(format, appHome, pluginsDir)) {
+            const id = `${format}-${artifact.kind}`
+            // 每格都有实体残留，确保收敛执行了补偿，不能仅通过解码后吞掉 effect 错误。
+            const raw = artifact as unknown as Record<string, unknown>
+            const staged = raw.staged as { stagingDir: string } | undefined
+            const directory = String(
+              raw.generationDirectory ??
+                raw.generationDir ??
+                raw.stagingDirectory ??
+                raw.skillDir ??
+                staged?.stagingDir,
+            )
+            mkdirSync(directory, { recursive: true })
+            writeFileSync(join(directory, 'payload'), 'prepared bytes')
+            await insertOne(harness.db, resourceBundleApplies, {
+              id,
+              scope: 'package',
+              key: id,
+              actorUserId: 'format-owner',
+              state: 'prepared',
+              preparedArtifactsJson: JSON.stringify([artifact]),
+              createdAt: 1,
+              updatedAt: 1,
+            })
+            expect(await recovery.converge({ 'resource-package': [] })).toEqual({
+              failed: 1,
+              rolledForward: 0,
+            })
+            const persisted = (await selected.scene.list()).find((row) => row.id === id)
+            expect(persisted?.state).toBe('failed')
+            expect(existsSync(directory)).toBe(false)
+            actual.push(`${format}/${artifact.kind} -> ${reader}: accepts`)
+          }
+        }
+        expect(warnings).toEqual([])
+        expect(actual.sort()).toEqual(
+          ARTIFACT_FORMAT_PORTABILITY.filter((cell) => cell.endsWith(`-> ${reader}: accepts`)),
+        )
+      })
+    })
+    test('unknown kinds reject before effects on this provider', async () => {
+      await withScratch(async (appHome, pluginsDir) => {
+        const selected = composeResourcePackageApplyMaintenance({
+          db: harness.db,
+          appHome,
+          pluginsDir,
+        })
+        await expect(
+          selected.scene.recover(
+            {
+              id: 'invalid',
+              state: 'prepared',
+              preparedArtifactsJson: '[{"kind":"rfc359-w5-nonexistent-kind"}]',
+              receiptJson: null,
+              updatedAt: 0,
+              error: null,
+            },
+            'compensate',
+          ),
+        ).rejects.toBeInstanceOf(ZodError)
+      })
+    })
+  },
+)

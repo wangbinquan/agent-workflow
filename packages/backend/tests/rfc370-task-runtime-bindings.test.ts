@@ -1,7 +1,11 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import { createLocalTaskAgentRuntimeBindings } from '../src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings'
@@ -22,15 +26,14 @@ async function seed(harness: ProviderHarness) {
     workflowId = ulid(),
     taskId = ulid(),
     id = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'selected-runtime',
     definition: '{}',
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
@@ -47,16 +50,14 @@ async function seed(harness: ProviderHarness) {
     inputs: '{}',
     startedAt: 1,
   })
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n1', status: 'pending' })
   return { db, id }
 }
 async function columns(harness: ProviderHarness, id: string) {
-  const { nodeRuns } = tablesOf(harness.db)
   return (
-    await harness.db
-      .select({ protocol: nodeRuns.runtime, binary: nodeRuns.runtimeBinary })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, id))
+    await readNodeRunFixtures(harness.db, { id }).then((rows) =>
+      rows.map((row) => ({ protocol: row.runtime, binary: row.runtimeBinary })),
+    )
   )[0]
 }
 
@@ -87,11 +88,7 @@ describeEachProvider('RFC-370 selected Task runtime bindings', (harness) => {
     if (resumed.runtimeBinding === null) throw new Error('resumed binding missing')
     expect(selected.contents.runtimeBinary(resumed.runtimeBinding)).toBe(originalBinary)
     const session = 'session-' + ulid()
-    const { nodeRuns } = tablesOf(harness.db)
-    await harness.db
-      .update(nodeRuns)
-      .set({ opencodeSessionId: session })
-      .where(eq(nodeRuns.id, first.id))
+    await patchNodeRunFixture(harness.db, { id: first.id }, { opencodeSessionId: session })
     const inherited = await selected.bindings.ofSession(session)
     if (inherited === null || inherited.runtimeBinding === null)
       throw new Error('session binding missing')

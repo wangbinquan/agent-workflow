@@ -16,6 +16,7 @@
 //
 // 根不退化那条判据由 `rfc311-session-view-bounded.test.ts` 继续看守，这里不重复。
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -39,7 +40,7 @@ interface SeedEvent {
 }
 
 async function seedBase(db: PersistenceDb): Promise<string> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -52,8 +53,8 @@ async function seedBase(db: PersistenceDb): Promise<string> {
     nodes: [{ id: 'n1', kind: 'agent-single', data: { agentName: 'worker' } }],
     edges: [],
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: snapshot })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: snapshot })
+  await taskFixture(db, {
     id: 't1',
     name: 't1',
     workflowId: 'wf1',
@@ -87,8 +88,8 @@ async function seedRun(
   retryIndex = 0,
   eventChunkSize = 1,
 ): Promise<void> {
-  const { nodeRuns, nodeRunEvents } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  const { nodeRunEvents } = tablesOf(db)
+  await nodeRunFixture(db, {
     id: runId,
     taskId: 't1',
     nodeId: 'n1',

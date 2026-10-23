@@ -9,6 +9,7 @@
 // 因此本文件的主断言是**等价性**：同一份数据、同一个调用者，逐页拼起来必须与全量逐条相同，
 // 且分页项的字段集与全量项**逐字相同**（游标用的 `createdAt` 只活在内部，绝不能漏上 wire）。
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -182,8 +183,8 @@ describeEachProvider('RFC-352 T8 — 分页与全量等价', (harness) => {
     // 外人看不见私有 agent 名下的记忆——分页必须把它们跳过去继续凑，而不是返回带空洞的一页。
     const db = harness.db
     const owner = actorOfRole('user', 'u_owner')
-    const { agents, memories } = tablesOf(db)
-    await insertOne(db, agents, {
+    const { memories } = tablesOf(db)
+    await agentFixture(db, {
       id: 'agt_private',
       name: 'private-agent',
       ownerUserId: owner.user.id,

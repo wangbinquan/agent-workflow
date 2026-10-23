@@ -8,6 +8,7 @@
 //
 // 每条断言都落到真库上；纯闭包型组合根（技能工件补偿）驱动的是它交出来的真实原语，不是
 // `toBeDefined()`。
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -135,8 +136,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     const catalog = composeResourceCatalogFor({ db: asPostgresql(harness.db) })
 
     const agentId = `a_${ulid()}`
-    const { agents } = tablesOf(harness.db)
-    await insertOne(harness.db, agents, {
+    await agentFixture(harness.db, {
       id: agentId,
       name: `agent-${agentId.slice(-6).toLowerCase()}`,
       description: 'private agent',
@@ -179,8 +179,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     const participant = composeResourceScopeAccessParticipant()
     const publicWorkflowId = `wf_${ulid()}`
     const privateWorkflowId = `wf_${ulid()}`
-    const { workflows } = tablesOf(harness.db)
-    await harness.db.insert(workflows).values([
+    await workflowFixture(harness.db, [
       {
         id: publicWorkflowId,
         name: `wf-pub-${publicWorkflowId.slice(-6).toLowerCase()}`,
@@ -216,8 +215,7 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     const owner = await seedActor(harness.db)
     const stranger = await seedActor(harness.db)
     const workflowId = `wf_${ulid()}`
-    const { workflows } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: workflowId,
       name: `wf-${workflowId.slice(-6).toLowerCase()}`,
       description: '',
@@ -391,8 +389,7 @@ test('动态工作流校验上下文 + restore 后置恢复：都在一棵真 SQ
     // 装载的是当下的库存，不是快照：写一行 agent 之后再 load 必须看得见它。
     const agentId = `a_${ulid()}`
     const agentName = `agent-${agentId.slice(-6).toLowerCase()}`
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: agentId,
       name: agentName,
       description: '',

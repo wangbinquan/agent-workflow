@@ -3,6 +3,7 @@
 // code-history 组合层返回相同的 readiness、issues、repairActions 和度量计数。
 // 矩阵还保留批读上界：增加格子数量不能退回逐格查询；空仓库只读取配置表。
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -73,8 +74,7 @@ async function seedGitlabDeployment(db: PersistenceDb): Promise<void> {
 }
 
 async function seedAgent(db: PersistenceDb, id: string): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, { id, name: id, bodyMd: 'x', createdAt: NOW, updatedAt: NOW })
+  await agentFixture(db, { id, name: id, bodyMd: 'x', createdAt: NOW, updatedAt: NOW })
 }
 
 async function seedTemplate(

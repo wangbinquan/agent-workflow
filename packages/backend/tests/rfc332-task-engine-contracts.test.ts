@@ -1,6 +1,7 @@
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-332 — TaskEngine contracts, single-consumer cutover and architecture locks.
 
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -202,25 +203,36 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
 
   test('registry owner keeps the exact three-engine truth table', () => {
     const workgroupId = ulid()
-    expect(resolveTaskEngineSelection({ workgroupId: null }, null)).toEqual({
+    expect(
+      resolveTaskEngineSelection({ subject: { kind: 'workflow', sourceId: 'authored' } }, null),
+    ).toEqual({
       engine: 'dag',
       wgDispatch: null,
     })
     expect(
       resolveTaskEngineSelection(
-        { workgroupId, workgroupConfigJson: JSON.stringify({ mode: 'leader_worker' }) },
+        {
+          subject: { kind: 'workgroup', sourceId: workgroupId },
+          workgroupConfig: decodeTaskWorkgroupConfig(JSON.stringify({ mode: 'leader_worker' })),
+        },
         null,
       ),
     ).toEqual({ engine: 'workgroup-turns', wgDispatch: 'turn-engine' })
     expect(
       resolveTaskEngineSelection(
-        { workgroupId, workgroupConfigJson: JSON.stringify({ mode: 'dynamic_workflow' }) },
+        {
+          subject: { kind: 'workgroup', sourceId: workgroupId },
+          workgroupConfig: decodeTaskWorkgroupConfig(JSON.stringify({ mode: 'dynamic_workflow' })),
+        },
         'awaiting_confirm',
       ),
     ).toEqual({ engine: 'dw-generate', wgDispatch: 'dw-generate' })
     expect(
       resolveTaskEngineSelection(
-        { workgroupId, workgroupConfigJson: JSON.stringify({ mode: 'dynamic_workflow' }) },
+        {
+          subject: { kind: 'workgroup', sourceId: workgroupId },
+          workgroupConfig: decodeTaskWorkgroupConfig(JSON.stringify({ mode: 'dynamic_workflow' })),
+        },
         'executing',
       ),
     ).toEqual({ engine: 'dag', wgDispatch: 'dw-execute' })

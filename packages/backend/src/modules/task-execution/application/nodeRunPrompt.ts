@@ -1,3 +1,8 @@
+import {
+  decodeLegacyPrompt,
+  encodeLegacyPrompt,
+  legacyPromptNeedsFile,
+} from '@/platform/content/legacyPrompt'
 import { createLogger } from '@/util/log'
 import type {
   NodeRunPromptContentEffects,
@@ -7,7 +12,6 @@ import type {
 } from './ports/nodeRunPromptContent'
 
 const log = createLogger('node-run-prompt')
-const PROMPT_SPILL_MIN_BYTES = 4_096
 
 type EffectResult<T> = T | Promise<T>
 
@@ -55,8 +59,8 @@ export function storeNodeRunPromptContent(
   nodeRunId: string,
   prompt: string,
 ): EffectResult<PromptStorage> {
-  if (Buffer.byteLength(prompt, 'utf-8') < PROMPT_SPILL_MIN_BYTES) {
-    return { promptText: prompt, promptPath: null }
+  if (!legacyPromptNeedsFile(prompt)) {
+    return encodeLegacyPrompt(decodeLegacyPrompt({ promptText: prompt, promptPath: null }))
   }
   const rel = content.reference(taskId, nodeRunId)
   const failed = (error: unknown): PromptStorage => {
@@ -64,12 +68,12 @@ export function storeNodeRunPromptContent(
       nodeRunId,
       error: messageOf(error),
     })
-    return { promptText: prompt, promptPath: null }
+    return encodeLegacyPrompt(decodeLegacyPrompt({ promptText: prompt, promptPath: null }))
   }
   try {
     return finishEffect(
       content.write(rel, prompt),
-      () => ({ promptText: null, promptPath: rel }),
+      () => encodeLegacyPrompt(decodeLegacyPrompt({ promptText: null, promptPath: rel })),
       failed,
     )
   } catch (error) {
@@ -90,9 +94,10 @@ export function readNodeRunPromptContent(
   row: NodeRunPromptRow | null | undefined,
 ): EffectResult<string | null> {
   if (row === null || row === undefined) return null
-  if (row.promptText !== null) return row.promptText
-  if (row.promptPath === null) return null
-  const reference = row.promptPath
+  const ref = decodeLegacyPrompt(row)
+  if (ref === null) return null
+  if (ref.kind === 'inline') return ref.location.value.promptText
+  const reference = ref.location.value.promptPath!
   const failed = (error: unknown): null => {
     log.warn('prompt file unreadable', { path: reference, error: messageOf(error) })
     return null

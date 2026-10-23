@@ -27,12 +27,12 @@ import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/wor
 import { isLeaderWrapUpContinuation } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
-function deriveWake(input: WakeInput) {
-  const { snapshot, inflight } = wakeSnapshotOf(input)
+async function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = await wakeSnapshotOf(input)
   return deriveWakeSet(snapshot, inflight)
 }
-function decideOutcome(input: WakeInput, wake: ReturnType<typeof deriveWake>) {
-  const { snapshot, inflight } = wakeSnapshotOf(input)
+async function decideOutcome(input: WakeInput, wake: Awaited<ReturnType<typeof deriveWake>>) {
+  const { snapshot, inflight } = await wakeSnapshotOf(input)
   return decideWorkgroupOutcome(snapshot, inflight, wake)
 }
 
@@ -127,10 +127,10 @@ function wakeInput(overrides: Partial<WakeInput> = {}): WakeInput {
 }
 
 describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
-  test('probe C shape: at the cap WITH a done assignment → one grace wrap-up leader round', () => {
+  test('probe C shape: at the cap WITH a done assignment → one grace wrap-up leader round', async () => {
     // maxRounds:1, one leader round used, worker done, its result unconsumed by the
     // leader (new-content). Without the grace round this was capExceeded → failed.
-    const wake = deriveWake(
+    const wake = await deriveWake(
       wakeInput({
         assignments: [doneAsg()],
         messages: [resultMsg()], // leader cursor empty ⇒ unconsumed ⇒ would wake
@@ -143,8 +143,8 @@ describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
     expect(wake.capExceeded).toBe(false)
   })
 
-  test('at the cap with NO completed work → capExceeded, no grace round', () => {
-    const wake = deriveWake(
+  test('at the cap with NO completed work → capExceeded, no grace round', async () => {
+    const wake = await deriveWake(
       wakeInput({
         assignments: [], // nothing produced
         messages: [resultMsg()],
@@ -155,9 +155,9 @@ describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
     expect(wake.capExceeded).toBe(true)
   })
 
-  test('PAST the cap (budgetUsed = maxRounds+1) → no second grace round even with work', () => {
+  test('PAST the cap (budgetUsed = maxRounds+1) → no second grace round even with work', async () => {
     // the grace round already ran and was counted; only one is ever granted.
-    const wake = deriveWake(
+    const wake = await deriveWake(
       wakeInput({
         assignments: [doneAsg()],
         messages: [resultMsg()],
@@ -170,34 +170,34 @@ describe('RFC-187 §3-7 — grace wrap-up round at the cap', () => {
 })
 
 describe('RFC-187 §3-7 — decideWorkgroupOutcome preserves the deliverable', () => {
-  test('capExceeded WITH completed work → awaiting_human max-rounds-wrapup (not failed)', () => {
-    const out = decideOutcome(wakeInput({ assignments: [doneAsg()], budgetUsed: 2 }), {
+  test('capExceeded WITH completed work → awaiting_human max-rounds-wrapup (not failed)', async () => {
+    const out = await decideOutcome(wakeInput({ assignments: [doneAsg()], budgetUsed: 2 }), {
       items: [],
       capExceeded: true,
     })
     expect(out).toEqual({ kind: 'awaiting-human', reason: 'max-rounds-wrapup' })
   })
 
-  test('capExceeded with NO completed work → failed max-rounds (genuine spin)', () => {
-    const out = decideOutcome(wakeInput({ assignments: [], budgetUsed: 2 }), {
+  test('capExceeded with NO completed work → failed max-rounds (genuine spin)', async () => {
+    const out = await decideOutcome(wakeInput({ assignments: [], budgetUsed: 2 }), {
       items: [],
       capExceeded: true,
     })
     expect(out).toEqual({ kind: 'failed', reason: 'max-rounds' })
   })
 
-  test('a delivered (human-handoff) assignment also counts as salvageable', () => {
+  test('a delivered (human-handoff) assignment also counts as salvageable', async () => {
     const delivered = { ...doneAsg(), status: 'delivered' as const }
-    const out = decideOutcome(wakeInput({ assignments: [delivered], budgetUsed: 2 }), {
+    const out = await decideOutcome(wakeInput({ assignments: [delivered], budgetUsed: 2 }), {
       items: [],
       capExceeded: true,
     })
     expect(out).toEqual({ kind: 'awaiting-human', reason: 'max-rounds-wrapup' })
   })
 
-  test('a leader that already declaredDone finishes normally (autonomous → done)', () => {
+  test('a leader that already declaredDone finishes normally (autonomous → done)', async () => {
     // the wrap-up path only matters when the leader NEVER declared done.
-    const out = decideOutcome(
+    const out = await decideOutcome(
       wakeInput({
         assignments: [doneAsg()],
         budgetUsed: 2,

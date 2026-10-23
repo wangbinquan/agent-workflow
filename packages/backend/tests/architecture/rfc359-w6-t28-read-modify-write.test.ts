@@ -88,8 +88,8 @@
 //        原 `:644 :685`（acceptMessage）**是可达的**、且用户看得到：两个标签页同时发消息时两笔
 //        事务读到同一个 turnSeq，都插 `seq = n + 1`，PG 上后一笔撞唯一键抛 23505（不是 40001、
 //        不被重试）冒成 500，SQLite 上则是干净的 409。W8-T28 已按 §10.1 加 `lockAggregateRoot` 修掉。
-//   modules/collaboration/infrastructure/clarifyRounds.ts     1 处
-//     :605  clarifyRounds —— 读出 draftAnswersJson 反序列化、塞一条、整个写回（JSON 合并）
+//   modules/collaboration/infrastructure/clarifyAnswerWrite.ts     1 处
+//     saveDraft：II-a 保留 Task 锁；逐题领域值经旧列适配器做整 map 合并
 //   modules/intent/infrastructure/intentApplyEngine.ts      1 处
 //     :349  intentSessions —— commitSeq / contextManifestJson 由 sessionRow 算出后写回
 //     —— **不可达**（W8-T28 实测判定）：`apply` 的每一条入口都先过
@@ -758,3 +758,6 @@ describe('RFC-359 W6-T28 —— 判据的负 fixture（matcher 不咬了 ⇒ 违
       expect(readModifyWriteSites('fixture-generator-control.ts', fixture)).toEqual([])
   }, 30_000)
 })
+
+// 2026-10-22 RFC-395 II-a A6：上文 sessionApplyLock.ts 为历史依据；当前场景使用
+// platform/atomic-apply/keyedLock.ts 的同一串行算法，journal claim 则由 conflict insert 与 CAS 驱动。

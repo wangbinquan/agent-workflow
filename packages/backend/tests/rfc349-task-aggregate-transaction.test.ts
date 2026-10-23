@@ -134,7 +134,22 @@ describe('RFC-349 single-aggregate task transaction', () => {
     expect(end, '结束锚点不见了').toBeGreaterThan(start)
     const body = source.slice(start, end)
 
-    expect(body, '没有聚合根行锁就没有任何互斥').toContain('lockAggregateRoot(')
+    // RFC-395 II-a A7：tasks 行锁搬进了 task-execution 的人工门 participant（同一事务句柄），
+    // 判据不变——成员替换的事务体先取聚合根行锁，owner 实现里仍是 lockAggregateRoot。
+    expect(body, '没有聚合根行锁就没有任何互斥').toContain(
+      'createHumanGatePersistenceParticipantInTx(tx)',
+    )
+    expect(body, '没有聚合根行锁就没有任何互斥').toContain('taskHumanGate.lockTask(task.id)')
+    const owner = readFileSync(
+      resolve(
+        backendRoot,
+        'src/modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts',
+      ),
+      'utf8',
+    )
+    expect(owner, 'owner 的人工门锁不再是聚合根行锁').toContain(
+      'lockAggregateRoot(tx, tasks, tasks.id, taskId)',
+    )
     expect(body, '成员替换又回到 SERIALIZABLE ⇒ 托管上那 31 个 500 会一起回来').not.toContain(
       'withSerializableTaskExecution',
     )

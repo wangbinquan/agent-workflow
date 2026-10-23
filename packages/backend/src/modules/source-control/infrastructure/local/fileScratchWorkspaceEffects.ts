@@ -1,3 +1,4 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ScratchWorkspaceEffects } from '../../application/ports/scratchWorkspaceEffects'
@@ -36,7 +37,7 @@ export function createFileScratchWorkspaceEffects(input: {
     },
     restore(taskId: string, space: Parameters<ScratchWorkspaceEffects['restore']>[1]) {
       if (
-        space.worktreePath !== '' &&
+        !isTaskWorkspaceUnbound(space.worktreePath) &&
         space.worktreePath !== join(input.appHome, 'scratch', taskId)
       )
         throw new Error('scratch-preparation-artifact-mismatch')

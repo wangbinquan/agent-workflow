@@ -10,6 +10,7 @@
 // the same closure, so any behavior we lock in here matches what the
 // timer produces.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test, beforeEach } from 'bun:test'
@@ -30,8 +31,7 @@ async function seedTaskWithNodeRun(
   db: PersistenceDb,
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const wfId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -40,7 +40,7 @@ async function seedTaskWithNodeRun(
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId: wfId,
@@ -60,7 +60,7 @@ async function seedTaskWithNodeRun(
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'n1',
@@ -308,8 +308,8 @@ describeEachProvider('startLiveSubagentCapture', (harness) => {
   test('sibling sessionId already captured by another nodeRun is fully skipped', async () => {
     // Pre-seed a sibling node_run that already wrote rows for session 'A'.
     const siblingId = ulid()
-    const { nodeRuns, nodeRunEvents } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { nodeRunEvents } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: siblingId,
       taskId,
       nodeId: 'n2',

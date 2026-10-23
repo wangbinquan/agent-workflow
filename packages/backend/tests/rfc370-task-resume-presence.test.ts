@@ -1,13 +1,21 @@
 // RFC-370: ordinary routes use the selected SC presence facts before admission.
 // These real-provider cases stop at the existing source fence after a positive
 // receipt; they do not claim to execute the TaskEngine or a remote workspace.
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -26,7 +34,7 @@ async function seed(db: PersistenceDb, repositories = 1) {
     workflowId = ulid(),
     userId = ulid()
   const workspace = `workspace://${taskId}`
-  const { users, workflows, tasks, taskRepos } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: userId,
     username: userId,
@@ -37,8 +45,8 @@ async function seed(db: PersistenceDb, repositories = 1) {
     updatedAt: 1,
   })
   const definition = JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] })
-  await insertOne(db, workflows, { id: workflowId, name: 'resume presence', definition })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: workflowId, name: 'resume presence', definition })
+  await taskFixture(db, {
     id: taskId,
     name: 'resume presence',
     workflowId,
@@ -53,18 +61,18 @@ async function seed(db: PersistenceDb, repositories = 1) {
     inputs: '{}',
     startedAt: 1,
     finishedAt: 2,
-    repoCount: repositories,
     sourceTerminationFence: 'closed',
   })
   const refs = Array.from({ length: repositories }, (_, i) => `${workspace}/repo-${i}`)
   if (repositories > 1) {
-    await db.insert(taskRepos).values(
+    await taskRepoFixture(
+      db,
       refs.map((ref, repoIndex) => ({
         taskId,
         repoIndex,
         repoPath: ref,
         worktreePath: ref,
-        worktreeDirName: `repo-${repoIndex}`,
+        mountPath: `repo-${repoIndex}`,
         branch: `agent-workflow/${taskId}`,
       })),
     )
@@ -72,8 +80,8 @@ async function seed(db: PersistenceDb, repositories = 1) {
   return { taskId, userId, workspace, refs }
 }
 async function assertUnadmitted(db: PersistenceDb, taskId: string) {
-  const { tasks, taskExecutionOwners, taskExecutionIntents } = tablesOf(db)
-  const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+  const { taskExecutionOwners, taskExecutionIntents } = tablesOf(db)
+  const row = (await readTaskFixtures(db, { id: taskId }))[0]
   expect(row?.status).toBe('failed')
   expect(row?.lifecycleEventRevision).toBe(1)
   expect(
@@ -198,17 +206,17 @@ describeEachProvider('RFC-370 ordinary task resume selected workspace presence',
   for (const phase of ['preparing', 'pruning', 'pruned'] as const) {
     test(`${phase} retains its earlier decision without an existence call`, async () => {
       const fixture = await seed(harness.db)
-      const { tasks, nodeRuns } = tablesOf(harness.db)
-      await harness.db
-        .update(tasks)
-        .set({
+      await patchTaskFixture(
+        harness.db,
+        { id: fixture.taskId },
+        {
           ...(phase === 'preparing' ? { worktreePath: '' } : {}),
           ...(phase === 'pruning' ? { workspacePruningAt: 3 } : {}),
           ...(phase === 'pruned' ? { workspacePrunedAt: 3 } : {}),
-        })
-        .where(eq(tasks.id, fixture.taskId))
+        },
+      )
       if (phase === 'preparing')
-        await insertOne(harness.db, nodeRuns, {
+        await nodeRunFixture(harness.db, {
           id: ulid(),
           taskId: fixture.taskId,
           nodeId: '__repo_prep__',
@@ -245,10 +253,7 @@ describeEachProvider('RFC-370 ordinary task resume selected workspace presence',
         })
         await assertUnadmitted(harness.db, fixture.taskId)
         expect(
-          await harness.db
-            .select()
-            .from(tasks)
-            .where(and(eq(tasks.id, fixture.taskId), eq(tasks.status, 'failed'))),
+          await readTaskFixtures(harness.db, { id: fixture.taskId, status: 'failed' }),
         ).toHaveLength(1)
       } finally {
         await execution.shutdown()

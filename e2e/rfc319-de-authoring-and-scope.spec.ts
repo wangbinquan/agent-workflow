@@ -73,6 +73,7 @@
 //     `actorForToolAuthoring`（`routes/digitalEmployees.ts:51-64`）是 transport 层的判据，
 //     接口面就是它的完整用户面。
 
+import { taskFixtureSql } from './fixtures/model'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -669,14 +670,27 @@ test('RFC-319 DE-31b: 统一任务列表选「数字员工」类别后只剩员�
   const startedAt = Date.now() - 60_000
   runSqlite(
     dbPath(),
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,' +
-      ' base_branch, branch, status, inputs, started_at, finished_at, owner_user_id,' +
-      ' branch_started_at, root_task_id, parent_task_id, invocation_depth, source_agent_name,' +
-      ` source_agent_id) VALUES ('${agentTaskId}', 'RFC-319 DE-31b agent task', ` +
-      `'rfc319-de31b-workflow', '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',` +
-      ` '/tmp/rfc319-de31b/repo', '/tmp/rfc319-de31b/worktree', 'main', 'agent-workflow/de31b',` +
-      ` 'done', '{}', ${startedAt}, ${startedAt + 30_000}, '${adminUserId}', ${startedAt},` +
-      ` '${agentTaskId}', NULL, 0, 'rfc319-de31b-agent', 'rfc319-de31b-agent-id');`,
+    taskFixtureSql({
+      id: agentTaskId,
+      name: 'RFC-319 DE-31b agent task',
+      workflowId: 'rfc319-de31b-workflow',
+      workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+      repoPath: '/tmp/rfc319-de31b/repo',
+      worktreePath: '/tmp/rfc319-de31b/worktree',
+      baseBranch: 'main',
+      branch: 'agent-workflow/de31b',
+      status: 'done',
+      inputs: '{}',
+      startedAt,
+      finishedAt: startedAt + 30_000,
+      ownerUserId: adminUserId,
+      branchStartedAt: startedAt,
+      rootTaskId: agentTaskId,
+      parentTaskId: null,
+      invocationDepth: 0,
+      sourceAgentName: 'rfc319-de31b-agent',
+      sourceAgentId: 'rfc319-de31b-agent-id',
+    }),
   )
   // `runSqlite` 走 `db.exec()`，多语句脚本里的约束错误**不会抛**（事务回滚、零行落库、
   // 调用方看到成功）。种完必须回读自证，否则下面的断言在一个空现场上照样能绿。

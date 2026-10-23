@@ -116,7 +116,7 @@ export function archivePortArtifacts(
       nodeRunId: opts.nodeRunId,
       portName: opts.portName,
       items,
-      worktreeDirName: opts.worktreeDirName,
+      mountPath: opts.mountPath,
     }),
   )
 }

@@ -140,7 +140,7 @@ describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
     const source = readFileSync(resolve(backendRoot, 'src/main.ts'), 'utf8')
     for (const factory of [
       'composePostgresqlResourcePackageCatalog',
-      'createPostgresqlResourcePackageAtomicApplyOperations',
+      'createResourcePackageAtomicApplyOperations',
       'createPostgresqlCapabilityTemplatePackageMutationOwner',
       'createMcpTransactionLifecycle',
     ]) {

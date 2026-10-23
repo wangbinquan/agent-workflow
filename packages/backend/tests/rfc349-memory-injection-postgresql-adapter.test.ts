@@ -75,7 +75,8 @@ const primaryAgent = { id: 'agent-1' } as Agent
 describe('RFC-349 PostgreSQL runtime memory injection', () => {
   test('resolves every active scope and renders the same closed snapshot contract', async () => {
     const fake = fixture([
-      [['workflow-1', 'repo-legacy', 'group-1']],
+      // RFC-395 II-a: injectionContext now decodes the five subject columns first.
+      [['workflow-1', null, null, null, null, 'repo-legacy', 'group-1']],
       [['repo-1']],
       [['repo-1']],
       [memoryRow('m-agent', 'agent', 'agent-1', 'Agent rule')],

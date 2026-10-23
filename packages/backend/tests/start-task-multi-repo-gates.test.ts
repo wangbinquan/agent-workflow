@@ -14,8 +14,7 @@
 //   B15 single-repo (length === 1) + wrapper-git → still launches normally
 //       (v1 only blocks the multi-repo combo).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -67,8 +66,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
 
 async function seedWorkflow(db: DbClient, def: unknown): Promise<string> {
   const id = `wf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: 'wf',
     definition: JSON.stringify(def),

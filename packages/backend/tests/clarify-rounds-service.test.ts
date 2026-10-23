@@ -13,8 +13,7 @@
 //     drops the legacy tables + migrates all writers to clarify_rounds, the
 //     PR-A baseline tests will exercise these helpers indirectly.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -45,8 +44,7 @@ async function seedTask(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rounds-test',
     description: '',
@@ -54,7 +52,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -114,8 +112,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
   test('kind=all returns both self + cross; kind filter narrows', async () => {
     const db = harness.db
     const { taskId } = await seedTask(db)
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
-    await db.insert(nodeRuns).values([
+    await nodeRunFixture(db, [
       {
         id: 'nr_d',
         taskId,
@@ -149,7 +146,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
         iteration: 0,
       },
     ])
-    await db.insert(clarifyRounds).values([
+    await clarifyRoundFixture(db, [
       {
         id: 'r_self',
         taskId,
@@ -159,7 +156,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
         intermediaryNodeId: 'clarify1',
         intermediaryNodeRunId: 'nr_c',
         iteration: 0,
-        questionsJson: sampleQuestionsJson('self Q'),
+        questions: sampleQuestionsJson('self Q'),
         status: 'awaiting_human',
       },
       {
@@ -172,7 +169,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
         intermediaryNodeRunId: 'nr_cc',
         targetConsumerNodeId: 'designer',
         iteration: 0,
-        questionsJson: sampleQuestionsJson('cross Q'),
+        questions: sampleQuestionsJson('cross Q'),
         status: 'awaiting_human',
       },
     ])
@@ -193,8 +190,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
   test('limit caps the result set; default status=awaiting_human filters answered', async () => {
     const db = harness.db
     const { taskId } = await seedTask(db)
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
-    await db.insert(nodeRuns).values([
+    await nodeRunFixture(db, [
       {
         id: 'nr_d',
         taskId,
@@ -212,7 +208,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
         iteration: 0,
       },
     ])
-    await db.insert(clarifyRounds).values([
+    await clarifyRoundFixture(db, [
       {
         id: 'r_a_open',
         taskId,
@@ -222,7 +218,7 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
         intermediaryNodeId: 'clarify1',
         intermediaryNodeRunId: 'nr_c',
         iteration: 0,
-        questionsJson: sampleQuestionsJson('open Q'),
+        questions: sampleQuestionsJson('open Q'),
         status: 'awaiting_human',
       },
       {
@@ -234,8 +230,8 @@ describeEachProvider('RFC-058 T12 — listClarifyRounds filter dispatch', (harne
         intermediaryNodeId: 'clarify1',
         intermediaryNodeRunId: 'nr_c',
         iteration: 1,
-        questionsJson: sampleQuestionsJson('done Q'),
-        answersJson: sampleAnswersJson(),
+        questions: sampleQuestionsJson('done Q'),
+        answers: sampleAnswersJson(),
         directive: 'continue',
         status: 'answered',
       },
@@ -260,8 +256,7 @@ async function seedNodeRun(
   id: string,
   nodeId: string,
 ): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -277,8 +272,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
-    const { clarifyRounds } = tablesOf(db)
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: 'r1',
       taskId,
       kind: 'self',
@@ -290,11 +284,11 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
       targetConsumerNodeId: null,
       loopIter: 0,
       iteration: 0,
-      questionsJson: sampleQuestionsJson('S1'),
-      answersJson: null,
+      questions: sampleQuestionsJson('S1'),
+      answers: null,
       directive: null,
       status: 'awaiting_human',
-      truncationWarningsJson: null,
+      truncationWarnings: null,
       designerRunTriggeredAt: null,
       abandonedAt: null,
       createdAt: 1000,
@@ -326,8 +320,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c1', 'clarify1')
     await seedNodeRun(db, taskId, 'nr_c2', 'clarify1')
-    const { clarifyRounds } = tablesOf(db)
-    await db.insert(clarifyRounds).values([
+    await clarifyRoundFixture(db, [
       {
         id: 'r_open',
         taskId,
@@ -337,7 +330,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
         intermediaryNodeId: 'clarify1',
         intermediaryNodeRunId: 'nr_c1',
         iteration: 0,
-        questionsJson: sampleQuestionsJson('Q open'),
+        questions: sampleQuestionsJson('Q open'),
         status: 'awaiting_human',
         createdAt: 1000,
       },
@@ -350,8 +343,8 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
         intermediaryNodeId: 'clarify1',
         intermediaryNodeRunId: 'nr_c2',
         iteration: 1,
-        questionsJson: sampleQuestionsJson('Q done'),
-        answersJson: sampleAnswersJson(),
+        questions: sampleQuestionsJson('Q done'),
+        answers: sampleAnswersJson(),
         directive: 'continue',
         status: 'answered',
         createdAt: 2000,
@@ -373,8 +366,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
     await seedNodeRun(db, taskId, 'nr_q', 'questioner')
     await seedNodeRun(db, taskId, 'nr_c1', 'clarify1')
     await seedNodeRun(db, taskId, 'nr_cc1', 'cc1')
-    const { clarifyRounds } = tablesOf(db)
-    await db.insert(clarifyRounds).values([
+    await clarifyRoundFixture(db, [
       {
         id: 'r_self',
         taskId,
@@ -384,7 +376,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
         intermediaryNodeId: 'clarify1',
         intermediaryNodeRunId: 'nr_c1',
         iteration: 0,
-        questionsJson: sampleQuestionsJson('self Q'),
+        questions: sampleQuestionsJson('self Q'),
         status: 'awaiting_human',
         createdAt: 1000,
       },
@@ -398,7 +390,7 @@ describeEachProvider('RFC-058 T14 — listClarifyRoundSummaries (REST projector)
         intermediaryNodeRunId: 'nr_cc1',
         targetConsumerNodeId: 'designer',
         iteration: 0,
-        questionsJson: sampleQuestionsJson('cross Q'),
+        questions: sampleQuestionsJson('cross Q'),
         status: 'awaiting_human',
         createdAt: 2000,
       },
@@ -419,8 +411,7 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
-    const { clarifyRounds } = tablesOf(db)
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: 'r1',
       taskId,
       kind: 'self',
@@ -429,8 +420,8 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
       intermediaryNodeId: 'clarify1',
       intermediaryNodeRunId: 'nr_c',
       iteration: 0,
-      questionsJson: sampleQuestionsJson('Detail Q'),
-      answersJson: null,
+      questions: sampleQuestionsJson('Detail Q'),
+      answers: null,
       status: 'awaiting_human',
       createdAt: 1000,
     })
@@ -450,8 +441,7 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
     const { taskId } = await seedTask(db)
     await seedNodeRun(db, taskId, 'nr_d', 'designer')
     await seedNodeRun(db, taskId, 'nr_c', 'clarify1')
-    const { clarifyRounds } = tablesOf(db)
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: 'r_ans',
       taskId,
       kind: 'self',
@@ -460,8 +450,8 @@ describeEachProvider('RFC-058 T14 — getClarifyRoundDetail (REST projector)', (
       intermediaryNodeId: 'clarify1',
       intermediaryNodeRunId: 'nr_c',
       iteration: 0,
-      questionsJson: sampleQuestionsJson('Q'),
-      answersJson: sampleAnswersJson(),
+      questions: sampleQuestionsJson('Q'),
+      answers: sampleAnswersJson(),
       directive: 'continue',
       status: 'answered',
       createdAt: 1000,

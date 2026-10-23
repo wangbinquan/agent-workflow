@@ -1,8 +1,14 @@
 // RFC-359 W4-B1 批 2h —— 优雅停机幸存者处置（TaskExecutionShutdownOperations）两份合一，两个引擎各跑一遍：
 // running 幸存者的控制面 CAS（不过 owner 围栏）+ intent 终态化 + revision 推进；owner 行按精确元组 CAS 进 recovery-required。
 
+import {
+  type TaskFixtureSpec,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -16,14 +22,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
-async function seedTask(
-  db: PersistenceDb,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-): Promise<string> {
+async function seedTask(db: PersistenceDb, over: Partial<TaskFixtureSpec> = {}): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -31,7 +33,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -87,7 +89,7 @@ describeEachProvider('RFC-359 W4-B1 批 2h —— 停机幸存者处置', (harne
     // 幸存者的 owner 仍是 claimed：控制面越权收场，不过围栏。
     await seedOwner(db, taskId, 'claimed')
     const intentId = `intent_${ulid()}`
-    const { taskExecutionIntents, tasks } = tablesOf(db)
+    const { taskExecutionIntents } = tablesOf(db)
     await insertOne(db, taskExecutionIntents, {
       id: intentId,
       taskId,
@@ -108,25 +110,23 @@ describeEachProvider('RFC-359 W4-B1 批 2h —— 停机幸存者处置', (harne
     const ops = new DrizzleTaskExecutionShutdownOperations(db)
     expect(await ops.listRunningTaskIds()).toContain(taskId)
     const before = (
-      await db
-        .select({ revision: tasks.lifecycleEventRevision })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({ revision: row.lifecycleEventRevision })),
+      )
     )[0]!.revision
     expect(await ops.interruptSurvivor({ taskId, now: 9, errorMessage: 'budget exceeded' })).toBe(
       true,
     )
     const after = (
-      await db
-        .select({
-          status: tasks.status,
-          revision: tasks.lifecycleEventRevision,
-          errorSummary: tasks.errorSummary,
-          errorMessage: tasks.errorMessage,
-          finishedAt: tasks.finishedAt,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          status: row.status,
+          revision: row.lifecycleEventRevision,
+          errorSummary: row.errorSummary,
+          errorMessage: row.errorMessage,
+          finishedAt: row.finishedAt,
+        })),
+      )
     )[0]!
     expect(after).toEqual({
       status: 'interrupted',

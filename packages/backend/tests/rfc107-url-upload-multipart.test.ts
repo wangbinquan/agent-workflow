@@ -19,8 +19,9 @@
 // All git is offline via a `file://` bare repo (mirrors start-task-url.test.ts);
 // no `RUN_GIT_NETWORK` dependency.
 
+import { readTaskFixtures, readTaskRepoFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { queryRows, first } from '@/platform/persistence/queryHelpers'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import {
   afterEach,
@@ -48,7 +49,6 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import { eq as eqOp } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
@@ -403,11 +403,11 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('workflow-invalid')
-    const { cachedRepos, tasks } = tablesOf(h.db)
+    const { cachedRepos } = tablesOf(h.db)
     // The decisive assertion: validation ran BEFORE resolve/clone, so the repo
     // cache was never touched and no task row exists.
     expect(queryRows(h.db.select().from(cachedRepos)).length).toBe(0)
-    expect(queryRows(h.db.select().from(tasks)).length).toBe(0)
+    expect((await readTaskFixtures(h.db)).length).toBe(0)
   })
 
   test('F3 (parity): a bad ref on a url upload → structured error, no task row', async () => {
@@ -425,9 +425,8 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     const res = await postMultipart(h.app, fd)
     expect(res.status).toBeGreaterThanOrEqual(400)
     expect(res.status).toBeLessThan(500)
-    const { tasks } = tablesOf(h.db)
     // No half-created task.
-    expect(queryRows(h.db.select().from(tasks)).length).toBe(0)
+    expect((await readTaskFixtures(h.db)).length).toBe(0)
   })
 
   test('RFC-199: stale exact version is rejected before cache/worktree/branch materialization', async () => {
@@ -461,8 +460,8 @@ describe('RFC-107 — URL launch + multipart upload', () => {
       code: 'workflow-version-mismatch',
       details: { expectedVersion: before!.version, currentVersion: before!.version + 1 },
     })
-    const { tasks, cachedRepos } = tablesOf(h.db)
-    expect(queryRows(h.db.select().from(tasks))).toHaveLength(0)
+    const { cachedRepos } = tablesOf(h.db)
+    expect(await readTaskFixtures(h.db)).toHaveLength(0)
     expect(queryRows(h.db.select().from(cachedRepos))).toHaveLength(0)
 
     // The captured visible workflow row rejects the stale guard before URL
@@ -530,10 +529,10 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(res.status).toBe(422)
     const body = (await res.json()) as { code: string }
     expect(body.code).toBe('upload-max-count')
-    const { cachedRepos, tasks } = tablesOf(h.db)
+    const { cachedRepos } = tablesOf(h.db)
     // Decisive: the upload was rejected before the repo was resolved/cloned.
     expect(queryRows(h.db.select().from(cachedRepos)).length).toBe(0)
-    expect(queryRows(h.db.select().from(tasks)).length).toBe(0)
+    expect((await readTaskFixtures(h.db)).length).toBe(0)
   })
 
   test('F2: url + upload + workingBranch → worktree is actually on that branch', async () => {
@@ -605,22 +604,19 @@ describe('RFC-107 — URL launch + multipart upload', () => {
     expect(body.id).toBeTruthy()
     expect(body.code).toBeUndefined()
 
-    const { taskRepos, tasks } = tablesOf(h.db)
     // 两份都真的物化了（D14 同仓多份），且上传物落在**任务根**下的固定目录，
     // 不在任何成员仓里——所以它不会变成某个仓的未跟踪改动。
     // 直接读库——这个夹具的 app 只挂了启动路由。
-    const rows = queryRows(
-      h.db
-        .select()
-        .from(taskRepos)
-        .where(eqOp(taskRepos.taskId, body.id))
-        .orderBy(taskRepos.repoIndex),
+    const rows = await readTaskRepoFixtures(
+      h.db,
+      { taskId: body.id },
+      { orderBy: [{ field: 'repoIndex', direction: 'asc' }] },
     )
     expect(rows.map((r) => r.mountPath)).toEqual(['r0', 'r1'])
     // D14: 同一个源仓挂了两份 ⇒ 两条不同的隔离分支（第二份带 `-2` 后缀）。
     expect(new Set(rows.map((r) => r.branch)).size).toBe(2)
 
-    const taskRow = first(h.db.select().from(tasks).where(eqOp(tasks.id, body.id)))
+    const taskRow = (await readTaskFixtures(h.db, { id: body.id }))[0]
     const root = taskRow!.worktreePath
     // 上传物在 `<任务根>/.agent-workflow/inputs/<targetDir>/…` 下（targetDir 由
     // 输入定义给出），这里只断言它确实落在这个保留目录内。

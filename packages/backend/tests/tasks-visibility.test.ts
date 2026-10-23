@@ -17,7 +17,7 @@
 //   - dave (unrelated user) → sees nothing;
 //   - GET /api/tasks/:id is gated by canViewTask (third-party → 403).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -78,8 +78,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
 
   // Seed a workflow + two tasks directly via the DB (PR4 wires the launcher).
   const wfId = 'wf01'
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -89,7 +89,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const bobTaskId = 'task-bob'
   const systemTaskId = 'task-system'
   const now = Date.now()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: bobTaskId,
@@ -120,7 +120,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     // RFC-099: the 'reviewer' role tag is gone — plain collaborator membership.
     { taskId: bobTaskId, userId: carol.id, role: 'collaborator', addedBy: bob.id, addedAt: now },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: systemTaskId,
@@ -293,8 +293,8 @@ describeEachProviderHttpApplication(
       // `owner_user_id IS NULL`（系统发起 / 存量）对 `<>` 不为真：修前这条任务在 carol 的
       // 「我的任务」里有、「与我共享」里没有——两档语义本该是「我参与的」⊇「参与但非我所有」。
       const now = Date.now()
-      const { tasks, taskCollaborators } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      const { taskCollaborators } = tablesOf(h.db)
+      await taskFixture(h.db, {
         name: 'fixture-task',
         id: 'task-null-owner',
         workflowId: 'wf01',

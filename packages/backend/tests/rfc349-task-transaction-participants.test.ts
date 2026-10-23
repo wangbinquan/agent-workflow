@@ -8,13 +8,16 @@
 // concurrent mints of one task abort each other under PostgreSQL SERIALIZABLE.
 // Supersession is derived on read; the mint's transaction holds only the insert.
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  patchNodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
-
-import { eq, sql } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -34,7 +37,7 @@ const TASK_ID = 'rfc349-task-auth'
 
 async function seedTask(db: PersistenceDb) {
   const now = 1_000
-  const { users, tasks, taskCollaborators } = tablesOf(db)
+  const { users, taskCollaborators } = tablesOf(db)
   await db.insert(users).values(
     ['owner', 'member', 'observer', 'outsider'].map((id) => ({
       id,
@@ -45,11 +48,8 @@ async function seedTask(db: PersistenceDb) {
     })),
   )
 
-  await rawExec(
-    db,
-    sql`INSERT INTO workflows (id, name, definition) VALUES ('workflow-1', 'wf', '{}')`,
-  )
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'workflow-1', name: 'wf', definition: '{}' })
+  await taskFixture(db, {
     id: TASK_ID,
     name: 'task auth',
     workflowId: 'workflow-1',
@@ -172,19 +172,21 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
     await databaseSessionFor(db).transaction(async (tx) => {
       const mint = createNodeRunMintParticipantInTx(tx)
       await mint.mint({
+        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'initial' }),
         id: '01RFC349000000000000000001',
         taskId: TASK_ID,
         nodeId: 'review-node',
         status: 'awaiting_review',
         cause: 'initial',
       })
-      const { nodeRuns } = tablesOf(tx)
-      await tx
-        .update(nodeRuns)
-        .set({ mergeState: 'pending-merge' })
-        .where(eq(nodeRuns.id, '01RFC349000000000000000001'))
+      await patchNodeRunFixture(
+        tx,
+        { id: '01RFC349000000000000000001' },
+        { mergeState: 'pending-merge' },
+      )
 
       await mint.mint({
+        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'review-iterate' }),
         id: '01RFC349000000000000000002',
         taskId: TASK_ID,
         nodeId: 'review-node',
@@ -193,12 +195,10 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
       })
     })
 
-    const { nodeRuns } = tablesOf(db)
     expect(
-      await db
-        .select({ id: nodeRuns.id, mergeState: nodeRuns.mergeState })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, TASK_ID)),
+      await readNodeRunFixtures(db, { taskId: TASK_ID }).then((rows) =>
+        rows.map((row) => ({ id: row.id, mergeState: row.mergeState })),
+      ),
     ).toEqual([
       { id: '01RFC349000000000000000001', mergeState: 'pending-merge' },
       { id: '01RFC349000000000000000002', mergeState: null },
@@ -222,6 +222,7 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
 
       await expect(
         createNodeRunMintParticipantInTx(tx).mint({
+          ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'review-iterate' }),
           id: '01RFC349000000000000000002',
           taskId: TASK_ID,
           nodeId: 'review-node',

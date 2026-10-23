@@ -10,10 +10,10 @@ import type { AgentRepository } from '../application/agents/ports'
 import type { AgentOperationContext } from '../public/participants'
 import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
 import {
-  agentFromPersistenceRow,
-  createAgentPersistenceValues,
-  updateAgentPersistenceValues,
-} from './agentPersistence'
+  createAgentReferenceWriteParticipant,
+  prepareAgentReferenceUpdate,
+} from './agentReferenceWrite'
+import { agentFromPersistenceRow, createAgentPersistenceValues } from './agentPersistence'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
@@ -123,10 +123,14 @@ export function createAgentRepository(input: {
       try {
         return await runResourceCatalogTransaction(input.db, async (transaction) => {
           await input.semantics.assertCreateInTransaction(transaction, authority, candidate)
-          const { agents } = tablesOf(transaction)
-          const created = await transaction.insert(agents).values(values).returning()
+          const created = await createAgentReferenceWriteParticipant(transaction).insert({
+            id,
+            agent: canonical,
+            ownerUserId: authority.user.id,
+            now: values.createdAt,
+          })
           if (created.length !== 1) throw new Error('agent insert did not return one row')
-          return agentFromPersistenceRow(created[0]!)
+          return created[0]!
         })
       } catch (error) {
         if (isOwnerNameConflict(error)) {
@@ -140,7 +144,13 @@ export function createAgentRepository(input: {
       if (current === null) throw new NotFoundError('agent-not-found', 'agent not found')
       const patch = await input.semantics.canonicalizeUpdate(authority, current, submitted)
       const updatedAt = monotonicNow(current.updatedAt)
-      const set = updateAgentPersistenceValues(current, patch, updatedAt)
+      const writeUpdate = prepareAgentReferenceUpdate({
+        current,
+        patch,
+        updatedAt,
+        expectedUpdatedAt: fence.expectedUpdatedAt,
+        expectedAclRevision: fence.expectedAclRevision,
+      })
       const { runtime: _currentRuntime, ...currentWithoutRuntime } = current
       const { runtime: submittedRuntime, ...patchWithoutRuntime } = patch
       const runtime = submittedRuntime === null ? undefined : (submittedRuntime ?? current.runtime)
@@ -162,19 +172,9 @@ export function createAgentRepository(input: {
           throw stale(id)
         }
         await input.semantics.assertUpdateInTransaction(transaction, authority, fresh, candidate)
-        const changed = await transaction
-          .update(agents)
-          .set(set)
-          .where(
-            and(
-              eq(agents.id, id),
-              eq(agents.updatedAt, fence.expectedUpdatedAt),
-              eq(agents.aclRevision, fence.expectedAclRevision),
-            ),
-          )
-          .returning()
+        const changed = await writeUpdate(transaction)
         if (changed.length !== 1) throw stale(id)
-        return agentFromPersistenceRow(changed[0]!)
+        return changed[0]!
       })
     },
     async delete(authority, id, fence): Promise<void> {

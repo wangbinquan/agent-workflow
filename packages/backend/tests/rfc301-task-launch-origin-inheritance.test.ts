@@ -5,9 +5,14 @@
 // so a green result proves the new writer itself reads the exact parent inside
 // the initial INSERT transaction, including multi-level and concurrent calls.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec, queryWrite, queryRows } from '@/platform/persistence/queryHelpers'
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { rawExec, queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,8 +41,7 @@ function buildHarness(): Harness {
   const db = createInMemoryDb(MIGRATIONS)
   rawExec(db, sql`DROP TRIGGER trg_tasks_launch_origin_inherit_child`)
   const workflowId = ulid()
-  const { workflows } = tablesOf(db)
-  insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: EMPTY_DEF })
+  workflowFixture(db, { id: workflowId, name: `wf-${workflowId}`, definition: EMPTY_DEF })
   return { db, workflowId, roots: [] }
 }
 
@@ -100,8 +104,7 @@ function seedRunningTask(
   catalogVisibility: TaskCatalogVisibility = 'public',
 ): string {
   const id = ulid()
-  const { tasks } = tablesOf(h.db)
-  insertOne(h.db, tasks, {
+  taskFixture(h.db, {
     id,
     name: `task-${id}`,
     workflowId: h.workflowId,
@@ -127,8 +130,7 @@ function seedRunningTask(
  */
 function seedCallRun(h: Harness, taskId: string, childTaskId: string): string {
   const id = ulid()
-  const { nodeRuns } = tablesOf(h.db)
-  insertOne(h.db, nodeRuns, {
+  nodeRunFixture(h.db, {
     id,
     taskId,
     nodeId: `call-${id}`,
@@ -182,13 +184,7 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
       },
     )
 
-    const { tasks } = tablesOf(h.db)
-    queryWrite(
-      h.db
-        .update(tasks)
-        .set({ status: 'running' })
-        .where(sql`${tasks.id} = ${childId}`),
-    )
+    queryWrite(patchTaskFixture(h.db, { id: childId }, { status: 'running' }))
     const grandchildId = ulid()
     const childRunId = seedCallRun(h, childId, grandchildId)
     await launchTestTask(
@@ -204,15 +200,17 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
     )
 
     const origins = new Map(
-      queryRows(h.db.select({ id: tasks.id, launchOrigin: tasks.launchOrigin }).from(tasks)).map(
-        (row) => [row.id, row.launchOrigin],
-      ),
+      (
+        await readTaskFixtures(h.db).then((rows) =>
+          rows.map((row) => ({ id: row.id, launchOrigin: row.launchOrigin })),
+        )
+      ).map((row) => [row.id, row.launchOrigin]),
     )
     expect(origins.get(rootId)).toBe('webhook')
     expect(origins.get(childId)).toBe('webhook')
     expect(origins.get(grandchildId!)).toBe('webhook')
-    const visibilities = queryRows(
-      h.db.select({ id: tasks.id, catalogVisibility: tasks.catalogVisibility }).from(tasks),
+    const visibilities = await readTaskFixtures(h.db).then((rows) =>
+      rows.map((row) => ({ id: row.id, catalogVisibility: row.catalogVisibility })),
     )
     expect(new Set(visibilities.map((row) => row.catalogVisibility))).toEqual(new Set(['internal']))
   })
@@ -241,9 +239,10 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
       ),
     )
 
-    const { tasks } = tablesOf(h.db)
-    const rows = queryRows(
-      h.db.select({ id: tasks.id, launchOrigin: tasks.launchOrigin }).from(tasks),
+    const rows = (
+      await readTaskFixtures(h.db).then((rows) =>
+        rows.map((row) => ({ id: row.id, launchOrigin: row.launchOrigin })),
+      )
     ).filter((row) => row.id !== rootId)
     expect(rows).toHaveLength(children.length)
     expect(new Set(rows.map((row) => row.launchOrigin))).toEqual(new Set(['scheduled']))

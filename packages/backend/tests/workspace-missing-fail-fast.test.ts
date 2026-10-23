@@ -43,7 +43,7 @@ describe('createNodeIso — missing canonical worktree fails fast (2026-08-04 in
         taskId: 't1',
         nodeRunId: 'r1',
         canonRepos: [
-          { repoPath: deadPath, worktreePath: deadPath, worktreeDirName: '', baseBranch: 'main' },
+          { repoPath: deadPath, worktreePath: deadPath, mountPath: '', baseBranch: 'main' },
         ],
       })
     } catch (err) {
@@ -72,13 +72,13 @@ describe('createNodeIso — missing canonical worktree fails fast (2026-08-04 in
           {
             repoPath: existingNonGit,
             worktreePath: existingNonGit,
-            worktreeDirName: 'a',
+            mountPath: 'a',
             baseBranch: 'main',
           },
           {
             repoPath: missingSecondary,
             worktreePath: missingSecondary,
-            worktreeDirName: 'b',
+            mountPath: 'b',
             baseBranch: 'main',
           },
         ],
@@ -99,7 +99,7 @@ describe('createNodeIso — missing canonical worktree fails fast (2026-08-04 in
       taskId: 't1',
       nodeRunId: 'r1',
       canonRepos: [
-        { repoPath: plainDir, worktreePath: plainDir, worktreeDirName: '', baseBranch: 'main' },
+        { repoPath: plainDir, worktreePath: plainDir, mountPath: '', baseBranch: 'main' },
       ],
     })
     expect(handle.passthrough).toBe(true)

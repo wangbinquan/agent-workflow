@@ -1,3 +1,7 @@
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
 import {
@@ -49,17 +53,14 @@ export async function isTaskClarifySuppressed(
   db: PersistenceDb,
   input: CollaborationClarifySuppressionInput,
 ): Promise<boolean> {
-  const { tasks } = tablesOf(db)
   const row = (
-    await db
-      .select({ config: tasks.workgroupConfigJson })
-      .from(tasks)
-      .where(eq(tasks.id, input.taskId))
-      .limit(1)
+    await createTaskGateQueries(db)
+      .listDispatchContexts([input.taskId])
+      .then((rows) => rows.map((row) => ({ config: row.workgroupConfig })))
   )[0]
   if (row?.config === null || row?.config === undefined) return false
   try {
-    const parsed = JSON.parse(row.config) as { members?: unknown; clarifyBudget?: number }
+    const parsed = row.config.runtime.raw as { members?: unknown; clarifyBudget?: number }
     if (!Array.isArray(parsed.members)) return false
     const members = parsed.members.filter(
       (member): member is { memberType: 'agent' | 'human' } =>
@@ -93,28 +94,20 @@ export async function dismissOpenClarifyParksForAutonomous(
   const resolvedMode =
     input.mode ??
     (await (async () => {
-      const { tasks } = tablesOf(db)
       const row = (
-        await db
-          .select({ config: tasks.workgroupConfigJson })
-          .from(tasks)
-          .where(eq(tasks.id, input.taskId))
-          .limit(1)
+        await createTaskGateQueries(db)
+          .listDispatchContexts([input.taskId])
+          .then((rows) => rows.map((row) => ({ config: row.workgroupConfig })))
       )[0]
       if (row?.config === null || row?.config === undefined) return 'leader_worker'
-      try {
-        const parsed = JSON.parse(row.config) as { mode?: unknown }
-        return typeof parsed.mode === 'string' ? parsed.mode : 'leader_worker'
-      } catch {
-        return 'leader_worker'
-      }
+      return row.config.launch.mode ?? 'leader_worker'
     })())
 
   const result = await databaseSessionFor(db).transaction(async (tx) => {
     let dismissedSessionCount = 0
     const dismissedSessions: Array<{ nodeRunId: string; nodeId: string }> = []
     const requeuedAssignments: Array<{ id: string; to: WorkgroupAssignmentStatus }> = []
-    const { clarifyRounds, nodeRuns, workgroupAssignments } = tablesOf(tx)
+    const { clarifyRounds, workgroupAssignments } = tablesOf(tx)
     const open = await tx
       .select({
         id: clarifyRounds.id,
@@ -133,13 +126,7 @@ export async function dismissOpenClarifyParksForAutonomous(
 
     for (const round of open) {
       dismissedSessionCount += 1
-      const parked = (
-        await tx
-          .select({ status: nodeRuns.status })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, round.nodeRunId))
-          .limit(1)
-      )[0]
+      const parked = await createNodeRunQueries(tx).readFields(round.nodeRunId, ['status'])
       if (parked?.status === 'awaiting_human') {
         await setNodeRunStatusTx({
           tx,
@@ -147,17 +134,23 @@ export async function dismissOpenClarifyParksForAutonomous(
           to: 'canceled',
           allowedFrom: ['awaiting_human'],
           extra: {
-            finishedAt: Date.now(),
-            errorMessage: 'wg-clarify-disabled',
+            identity: {
+              finishedAt: Date.now(),
+              errorMessage: 'wg-clarify-disabled',
+            },
           },
           reason: 'wg-clarify-disabled',
         })
         dismissedSessions.push({ nodeRunId: round.nodeRunId, nodeId: round.nodeId })
       }
-      await tx
-        .update(clarifyRounds)
-        .set({ status: 'canceled' })
-        .where(and(eq(clarifyRounds.id, round.id), eq(clarifyRounds.status, 'awaiting_human')))
+      await createClarifyAnswerWritePort(db).transition(
+        {
+          roundId: round.id,
+          kind: 'cancel',
+          expectedStatus: 'awaiting_human',
+        },
+        tx,
+      )
 
       const shard = round.shardKey
       if (shard === null || parseMsgShardKey(shard) !== null) continue

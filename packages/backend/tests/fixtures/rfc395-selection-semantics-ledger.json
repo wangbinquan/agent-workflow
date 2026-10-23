@@ -1,0 +1,397 @@
+{
+  "version": 1,
+  "stage": "RFC-395 II-a A3",
+  "boundary": "Historical frame-less choices are preserved, not endorsed for II-b. Oracle delegates are excluded. Pre-filtered framed histories are recorded explicitly.",
+  "sites": [
+    {
+      "site": "src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#findOpenDispatchTarget:1",
+      "path": "src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+      "symbol": "findOpenDispatchTarget",
+      "ordinal": 1,
+      "source": "createRunHistorySnapshot( '', inputs.runs.map((row) => ({ ...row, taskId: '' })), ).familyHistory('', { nodeId: target }, { topLevelOnly: true })",
+      "reference": "G4 #60",
+      "today": "同节点所有 iteration/container 的顶层历史，再按 shard 最新者判定活跃义务。",
+      "whyFrameless": "旧派发防重复以 node/shard 为键，未包含 frame。"
+    },
+    {
+      "site": "src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#buildFrontierMintPlan:1",
+      "path": "src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
+      "symbol": "buildFrontierMintPlan",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(targetRuns, { scope: { kind: 'rows' }, }).familyHistory(taskId, { nodeId: targetNodeId, ...(shardKey === undefined ? {} : { shardKey }), })",
+      "reference": "G3 #61",
+      "today": "同 task/node，可选 shard；包含所有 iteration、parent、container；末行继承检查点。",
+      "whyFrameless": "旧 query 仅限 node 与可选 shard，保留跨帧继承。"
+    },
+    {
+      "site": "src/modules/collaboration/infrastructure/clarify/rerunLedger.ts#isTargetNodeConsumed:1",
+      "path": "src/modules/collaboration/infrastructure/clarify/rerunLedger.ts",
+      "symbol": "isTargetNodeConsumed",
+      "ordinal": 1,
+      "source": "createRunHistorySnapshot('', runs).familyHistory( '', { nodeId: targetNodeId, iteration }, { topLevelOnly: true, from: anchor }, )",
+      "reference": "G4 #63",
+      "today": "同节点、iteration、顶层，含 trigger 锚点及其后；done 或被 review supersede 的 canceled 且有输出，host done 无需输出。",
+      "whyFrameless": "旧 ledger 老化没有 shard/container 上界，不改为单 frame。"
+    },
+    {
+      "site": "src/modules/collaboration/infrastructure/review.ts#pickFreshestReviewRun:1",
+      "path": "src/modules/collaboration/infrastructure/review.ts",
+      "symbol": "pickFreshestReviewRun",
+      "ordinal": 1,
+      "source": "selection.familyHistory(taskId, {}, { topLevelOnly: true })",
+      "reference": "G4 #57",
+      "today": "输入已限 task/node/iteration；顶层按 seq，分别取最新任意状态与最新 done。",
+      "whyFrameless": "review 原地重开沿用跨 container 的旧 reuse 候选。"
+    },
+    {
+      "site": "src/modules/collaboration/infrastructure/review.ts#pickFreshestReviewRun:2",
+      "path": "src/modules/collaboration/infrastructure/review.ts",
+      "symbol": "pickFreshestReviewRun",
+      "ordinal": 2,
+      "source": "selection.familyHistory(taskId, {}, { topLevelOnly: true, statusIn: ['done'] })",
+      "reference": "G4 #57",
+      "today": "输入已限 task/node/iteration；顶层按 seq，分别取最新任意状态与最新 done。",
+      "whyFrameless": "review 原地重开沿用跨 container 的旧 reuse 候选。"
+    },
+    {
+      "site": "src/modules/collaboration/infrastructure/review.ts#planRerun:1",
+      "path": "src/modules/collaboration/infrastructure/review.ts",
+      "symbol": "planRerun",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(upRuns, { scope: { kind: 'rows' }, }).familyHistory(dv.taskId, { nodeId, iteration: run.iteration }, { topLevelOnly: true })",
+      "reference": "G3 #59",
+      "today": "同 task/node/iteration、顶层的最新 seq；容器身份由被选行继承。",
+      "whyFrameless": "旧 upstream rerun 查询没有 container 条件；不能改成当前 review 的 frame。"
+    },
+    {
+      "site": "src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#loadUndispatchedParkTargets:1",
+      "path": "src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
+      "symbol": "loadUndispatchedParkTargets",
+      "ordinal": 1,
+      "source": "createRunSelectionReader(db).familyHistory(taskId, {})",
+      "reference": "G4 #66",
+      "today": "整个任务所有历史，再由澄清窗口判定 park 是否已派发。",
+      "whyFrameless": "旧恢复分区基于任务级历史。"
+    },
+    {
+      "site": "src/modules/memory/application/injection/injectMemory.ts#loadInjectedSnapshotFromFirstAttempt:1",
+      "path": "src/modules/memory/application/injection/injectMemory.ts",
+      "symbol": "loadInjectedSnapshotFromFirstAttempt",
+      "ordinal": 1,
+      "source": "createRunHistorySnapshot( ctx.taskId, candidates.map((row) => ({ ...row, nodeId: ctx.nodeId, })), ).familyHistory(ctx.taskId, { nodeId: ctx.nodeId }, { through: anchorKey })",
+      "reference": "G4 #68",
+      "today": "已按节点 iteration/shard/reviewIteration 限定的顶层历史，截至 anchor；首行或前行为 done 开新代。",
+      "whyFrameless": "记忆注入代际沿旧 seq 边界，不新增 container 维度。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode:1",
+      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "symbol": "runCallWorkflowNode",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(callRows, { scope: { kind: 'rows' }, }).familyHistory(taskId, { nodeId: node.id, iteration, })",
+      "reference": "sites-a #30",
+      "today": "同 task/node/iteration 的 prelude 历史；HEAD 的 startedAt 预排序不参与收养，resolver 按当前 frame 的 seq/ID 选 latestExisting。",
+      "whyFrameless": "prelude 保留同节点所有 frame，真正的 child adoption 在 resolveSchedulerRunRow 收窄到当前 frame；不回退查找旧 child。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/nodeMechanics.ts#runCodeHostCallNode:1",
+      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "symbol": "runCodeHostCallNode",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(dispatchRows, { scope: { kind: 'rows' }, }).familyHistory(taskId, { nodeId: node.id, iteration })",
+      "reference": "sites-a #30",
+      "today": "同 task/node/iteration 的 prelude 历史；HEAD 的 startedAt 预排序不参与收养，resolver 按当前 frame 的 seq/ID 选 latestExisting。",
+      "whyFrameless": "prelude 保留同节点所有 frame，真正的 child adoption 在 resolveSchedulerRunRow 收窄到当前 frame；不回退查找旧 child。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/nodeMechanics.ts#runScriptNode:1",
+      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "symbol": "runScriptNode",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(dispatchRows, { scope: { kind: 'rows' }, }).familyHistory(taskId, { nodeId: node.id, iteration })",
+      "reference": "sites-a #30",
+      "today": "同 task/node/iteration 的 prelude 历史；HEAD 的 startedAt 预排序不参与收养，resolver 按当前 frame 的 seq/ID 选 latestExisting。",
+      "whyFrameless": "prelude 保留同节点所有 frame，真正的 child adoption 在 resolveSchedulerRunRow 收窄到当前 frame；不回退查找旧 child。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/nodeMechanics.ts#freshestPriorRunWithOutput:1",
+      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "symbol": "freshestPriorRunWithOutput",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' }, }).familyHistory( run.taskId, { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null }, { before: run, direction: 'desc' }, )",
+      "reference": "G4 #26",
+      "today": "同 node/iteration/shard、早于当前 seq 的所有历史倒序，首个有输出者。",
+      "whyFrameless": "旧输出回填包含 child 与其他 container。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/nodeMechanics.ts#lineageCausesNewestFirst:1",
+      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "symbol": "lineageCausesNewestFirst",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).familyHistory( run.taskId, { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null }, { topLevelOnly: true, through: run, direction: 'desc' }, )",
+      "reference": "G4 #27",
+      "today": "同 node/iteration/shard 顶层至当前行，seq 倒序。",
+      "whyFrameless": "旧 lineage 没有 container 条件。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/nodeMechanics.ts#priorDoneGenerationsForRun:1",
+      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "symbol": "priorDoneGenerationsForRun",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' }, }).familyHistory( run.taskId, { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null }, { topLevelOnly: true, statusIn: ['done'], before: run }, )",
+      "reference": "G4 #28",
+      "today": "同 node/iteration/shard 顶层 done 且早于当前行，seq 升序。",
+      "whyFrameless": "旧 done 代际未按 container 分组。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/nodeMechanics.ts#readPriorAgentSessionId:1",
+      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "symbol": "readPriorAgentSessionId",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' }, }).familyHistory( args.taskId, { nodeId: args.agentNodeId, iteration: args.iteration, shardKey: args.shardKey }, { topLevelOnly: true, statusIn: ['done'], before: args.before, direction: 'desc' }, )",
+      "reference": "G4 #29",
+      "today": "同 node/iteration/shard 顶层 done、早于 anchor，seq 倒序；跳过空 session。",
+      "whyFrameless": "旧 session 复用不含 container 条件。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/wrapperMechanics.ts#priorFanoutConsumed:1",
+      "path": "src/modules/task-execution/composition/wrapperMechanics.ts",
+      "symbol": "priorFanoutConsumed",
+      "ordinal": 1,
+      "source": "selection.familyHistory( state.taskId, { nodeId, iteration, runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id), }, { topLevelOnly: true, consumedOnly: true }, )",
+      "reference": "sites-a",
+      "today": "同节点 iteration 顶层有 consumed 的历史，排除本次 run。",
+      "whyFrameless": "旧 fanout provenance 允许历史代际复用。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectTask:1",
+      "path": "src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "symbol": "inspectTask",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot( outcome.runs.map((run) => ({ ...run, taskId: executionRef })), { scope: { kind: 'rows' } }, ).familyHistory( executionRef, { nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID }, { statusIn: ['done'] }, )",
+      "reference": "sites-a",
+      "today": "数字员工计划 agent 的 done 历史中取最新 seq。",
+      "whyFrameless": "旧产物快照只限节点和状态。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/taskDagScope.ts#resumeInterruptedCommitPush:1",
+      "path": "src/modules/task-execution/composition/taskDagScope.ts",
+      "symbol": "resumeInterruptedCommitPush",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' }, }).familyHistory(state.task.id, {}, { rerunCause: 'commit-push' })",
+      "reference": "G6 #38",
+      "today": "RFC-395 II-a：保持 HEAD 按 commit-push cause 选任务历史末行，不额外按角色过滤，再判断 interrupted。",
+      "whyFrameless": "旧恢复不按 parent owner 分组；不可回退到更早 interrupted 行。"
+    },
+    {
+      "site": "src/modules/task-execution/composition/dagFrontier.ts#freshestUpstreamEvidenceId:1",
+      "path": "src/modules/task-execution/composition/dagFrontier.ts",
+      "symbol": "freshestUpstreamEvidenceId",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot( candidates.map((row) => ({ ...row, taskId: '' })), { scope: { kind: 'rows' } }, ).familyHistory('', {})",
+      "reference": "sites-a",
+      "today": "调用方提供的上游 evidence 候选中取最新 seq。",
+      "whyFrameless": "边界已由旧 frontier 过滤；不新增 frame 限制。"
+    },
+    {
+      "site": "src/modules/task-execution/application/branchTrace.ts#latestSettledPerNode:1",
+      "path": "src/modules/task-execution/application/branchTrace.ts",
+      "symbol": "latestSettledPerNode",
+      "ordinal": 1,
+      "source": "reader .history(taskId, rows) .familyHistory( taskId, {}, { topLevelOnly: true, statusIn: ['done', 'skipped'], order: 'iteration' }, )",
+      "reference": "G4 #76",
+      "today": "顶层 done/skipped，先 iteration 后 seq；每 node 末行。",
+      "whyFrameless": "分支轨迹横跨整个任务的迭代，保持原最高 iteration 优先。"
+    },
+    {
+      "site": "src/modules/task-execution/application/resumeRollbackTargets.ts#selectResumeRollbackTargets:1",
+      "path": "src/modules/task-execution/application/resumeRollbackTargets.ts",
+      "symbol": "selectResumeRollbackTargets",
+      "ordinal": 1,
+      "source": "selection.familyHistory(taskId, { nodeId }, { topLevelOnly: true })",
+      "reference": "sites-a",
+      "today": "同节点顶层最新 seq，随后由既有条件决定恢复回滚目标。",
+      "whyFrameless": "旧恢复选择按节点分组，不包含容器帧。"
+    },
+    {
+      "site": "src/modules/task-execution/application/resolveHandlerRun.ts#resolveHandlerRunHistory:1",
+      "path": "src/modules/task-execution/application/resolveHandlerRun.ts",
+      "symbol": "resolveHandlerRunHistory",
+      "ordinal": 1,
+      "source": "selection.familyHistory(taskId, family, { after: anchor })",
+      "reference": "G4 #10/#62/#67",
+      "today": "同 node/iteration/loopIter，可选 shard；下个 clarify trigger 是开上界（包含 child），窗口内仅顶层，含当前锚点。",
+      "whyFrameless": "旧共享 resolver 不识别 container；child 仍可截断窗口。"
+    },
+    {
+      "site": "src/modules/task-execution/application/resolveHandlerRun.ts#resolveHandlerRunHistory:2",
+      "path": "src/modules/task-execution/application/resolveHandlerRun.ts",
+      "symbol": "resolveHandlerRunHistory",
+      "ordinal": 2,
+      "source": "selection.familyHistory(taskId, family, { from: anchor, topLevelOnly: true, ...(upper === undefined ? {} : { before: upper }), })",
+      "reference": "G4 #10/#62/#67",
+      "today": "同 node/iteration/loopIter，可选 shard；下个 clarify trigger 是开上界（包含 child），窗口内仅顶层，含当前锚点。",
+      "whyFrameless": "旧共享 resolver 不识别 container；child 仍可截断窗口。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#latestCandidate:1",
+      "path": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "symbol": "latestCandidate",
+      "ordinal": 1,
+      "source": "selection.familyHistory(taskId, { runIds: group.map((run) => run.id) })",
+      "reference": "G7 #56 (sites-a migration)",
+      "today": "先保留调用方分组候选，再按 seq 选择修复候选。",
+      "whyFrameless": "修复策略原先针对候选组，而非固定的 frame 槽。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#latestCandidate:2",
+      "path": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "symbol": "latestCandidate",
+      "ordinal": 2,
+      "source": "selection.familyHistory(taskId, { runIds: candidates.map((run) => run.id) })",
+      "reference": "G7 #56 (sites-a migration)",
+      "today": "先保留调用方分组候选，再按 seq 选择修复候选。",
+      "whyFrameless": "修复策略原先针对候选组，而非固定的 frame 槽。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#preflight:1",
+      "path": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "symbol": "preflight",
+      "ordinal": 1,
+      "source": "createRunHistorySnapshot(ctx.task.id, rows).familyHistory( ctx.task.id, {}, { statusIn: ['awaiting_review', 'awaiting_human'] }, )",
+      "reference": "A3 item 9 / diagnosis repair",
+      "today": "U1 在告警给定 ID 集内过滤 awaiting_review/awaiting_human，再按 seq/ID 升序选保留项。",
+      "whyFrameless": "HEAD 的诊断修复针对整个任务，不按 container frame 或 parent 限制。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#preflight:2",
+      "path": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "symbol": "preflight",
+      "ordinal": 2,
+      "source": "createRunHistorySnapshot(ctx.task.id, reviewRows).familyHistory( ctx.task.id, {}, { direction: 'desc' }, )",
+      "reference": "A3 item 9 / diagnosis repair",
+      "today": "S1 过滤工作流 review 节点与 awaiting_review；显式 hinted ID 优先，否则 seq/ID 降序第一行。",
+      "whyFrameless": "HEAD 的诊断修复针对整个任务，不按 container frame 或 parent 限制。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#preflight:3",
+      "path": "src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "symbol": "preflight",
+      "ordinal": 3,
+      "source": "createRunHistorySnapshot(ctx.task.id, rows).familyHistory( ctx.task.id, {}, { statusIn: ['awaiting_human'], direction: 'desc' }, )",
+      "reference": "A3 item 9 / diagnosis repair",
+      "today": "S2 显式 hinted ID 优先；无 hinted 行时在所有 awaiting_human 行中取 seq/ID 最新。",
+      "whyFrameless": "HEAD 的诊断修复针对整个任务，不按 container frame 或 parent 限制。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/runSelection/workgroupProjection.ts#projectWorkgroupRunSelections:1",
+      "path": "src/modules/task-execution/infrastructure/runSelection/workgroupProjection.ts",
+      "symbol": "projectWorkgroupRunSelections",
+      "ordinal": 1,
+      "source": "reader.familyHistory('', {})",
+      "reference": "G5 #70-73/S11",
+      "today": "宿主历史 seq 排序；精确 host 槽区分 null/空 shard，预算旧分组将两者合并；wgRound 仅为属性。",
+      "whyFrameless": "workgroup-host 槽本身不包含 iteration/container/wgRound。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteOperations.ts#failedCode:1",
+      "path": "src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "symbol": "failedCode",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).familyHistory( task.id, { nodeId: task.failedNodeId }, { topLevelOnly: true }, )",
+      "reference": "sites-a",
+      "today": "失败节点顶层最新 seq，再读 failureCode。",
+      "whyFrameless": "旧失败代码快照跨所有 iteration/container。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteOperations.ts#syncRunSummary:1",
+      "path": "src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "symbol": "syncRunSummary",
+      "ordinal": 1,
+      "source": "selection.familyHistory(taskId, { nodeId }, { topLevelOnly: true, statusIn: ['done'] })",
+      "reference": "sites-a",
+      "today": "每节点顶层最新 done，再统计同步摘要。",
+      "whyFrameless": "旧同步摘要不限定 container。"
+    },
+    {
+      "site": "src/modules/task-execution/infrastructure/taskRouteOperations.ts#inheritanceSourceInFrame:1",
+      "path": "src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+      "symbol": "inheritanceSourceInFrame",
+      "ordinal": 1,
+      "source": "selection.familyHistory(candidates[0]?.taskId ?? '', { nodeId }, { topLevelOnly: true })",
+      "reference": "sites-a",
+      "today": "传入候选已按目标 frame 限定；在候选内按 node 顶层最新 seq。",
+      "whyFrameless": "本调用的 frame 已由上游 candidates 限定，保留原 candidate 范围。"
+    },
+    {
+      "site": "src/services/scheduler.ts#maybeRunCommitPush:1",
+      "path": "src/services/scheduler.ts",
+      "symbol": "maybeRunCommitPush",
+      "ordinal": 1,
+      "source": "createRunHistorySnapshot( task.id, parentRows.map((row) => ({ ...row, nodeId: node.id, status: 'done' as const, iteration, })), ).familyHistory(task.id, { nodeId: node.id, iteration }, { topLevelOnly: true })",
+      "reference": "G6 #43",
+      "today": "同节点 iteration 顶层 done 的最新 seq 作为 commit parent。",
+      "whyFrameless": "旧归因 SQL 没有 container 条件。"
+    },
+    {
+      "site": "src/services/execution/outcome.ts#projectOutputNodePorts:1",
+      "path": "src/services/execution/outcome.ts",
+      "symbol": "projectOutputNodePorts",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot( runs.map((row) => ({ ...row, taskId: '' })), { scope: { kind: 'rows' } }, ).familyHistory('', { nodeId }, { topLevelOnly: true, statusIn: ['done', 'skipped'] })",
+      "reference": "sites-a",
+      "today": "按节点的顶层 done/skipped 历史末行提供输出。",
+      "whyFrameless": "旧任务输出汇总不指定 frame。"
+    },
+    {
+      "site": "src/services/dispatchFrontier.ts#wrapperRevivalEvidence:1",
+      "path": "src/services/dispatchFrontier.ts",
+      "symbol": "wrapperRevivalEvidence",
+      "ordinal": 1,
+      "source": "createRunSelectionOracleSnapshot( candidates.map((row) => ({ ...row, taskId: '' })), { scope: { kind: 'rows' } }, ).familyHistory('', {})",
+      "reference": "sites-a",
+      "today": "已过滤 revival evidence 候选内最新 seq。",
+      "whyFrameless": "旧唤醒证据沿既有 frontier 范围。"
+    },
+    {
+      "site": "src/services/lifecycleInvariants.ts#checkT3:1",
+      "path": "src/services/lifecycleInvariants.ts",
+      "symbol": "checkT3",
+      "ordinal": 1,
+      "source": "selection.familyHistory(ctx.taskId, { nodeId }, { topLevelOnly: true })",
+      "reference": "sites-a",
+      "today": "同任务每节点顶层最新 seq 用于生命周期不变量。",
+      "whyFrameless": "旧 T3 以节点聚合而非 frame 聚合。"
+    },
+    {
+      "site": "src/services/task.ts#selectSyncRollbackTargets:1",
+      "path": "src/services/task.ts",
+      "symbol": "selectSyncRollbackTargets",
+      "ordinal": 1,
+      "source": "selection.familyHistory('', { nodeId }, { topLevelOnly: true })",
+      "reference": "sites-a",
+      "today": "同节点顶层最新 seq，保留既有回滚候选集合。",
+      "whyFrameless": "旧 sync 回滚按节点，不增加 frame 条件。"
+    },
+    {
+      "site": "src/services/task.ts#computeWorkflowSyncPreview:1",
+      "path": "src/services/task.ts",
+      "symbol": "computeWorkflowSyncPreview",
+      "ordinal": 1,
+      "source": "selection.familyHistory(task.id, { nodeId }, { topLevelOnly: true, statusIn: ['done'] })",
+      "reference": "sites-a",
+      "today": "每节点顶层最新 done 用于同步预览。",
+      "whyFrameless": "旧预览跨 iteration/container 统计。"
+    },
+    {
+      "site": "src/services/task.ts#loadTaskFailureCodes:1",
+      "path": "src/services/task.ts",
+      "symbol": "loadTaskFailureCodes",
+      "ordinal": 1,
+      "source": "snapshot.familyHistory(t.id, { nodeId: t.failedNodeId! }, { topLevelOnly: true })",
+      "reference": "sites-a",
+      "today": "失败节点顶层最新 seq 的代码。",
+      "whyFrameless": "旧批量失败代码读取没有 frame 条件。"
+    }
+  ]
+}

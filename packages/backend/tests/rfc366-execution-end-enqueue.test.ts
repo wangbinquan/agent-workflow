@@ -6,7 +6,7 @@
 //
 // 覆盖 proposal §7 的 AC-1/2/3/4/5/6/7/8/9/10/11/12/20。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -76,8 +76,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     } = {},
   ): Promise<Fixture> {
     const workflowId = ulid()
-    const { workflows, tasks, nodeRuns } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: `wf-${workflowId}`,
       definition: SNAPSHOT,
@@ -86,7 +85,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
       updatedAt: Date.now(),
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify([
@@ -115,7 +114,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     for (const nodeId of ['agent-a', 'agent-b', 'named-only']) {
       const runId = ulid()
       runIds[nodeId] = runId
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId,
@@ -213,8 +212,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     const keys: string[] = []
     for (const suffix of ['r1', 'r2', 'r3']) {
       const runId = ulid()
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: runId,
         taskId: fx.taskId,
         nodeId: 'agent-a',

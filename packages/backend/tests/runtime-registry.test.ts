@@ -6,6 +6,7 @@
 // config.defaultRuntime reference a row by name; node_runs freeze (protocol,
 // binary) so the registry stays mutable (tested in PR-C).
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -40,8 +41,7 @@ function registryFor(db: PersistenceDb): DrizzleRuntimeRegistryPersistence {
 }
 
 async function insertAgent(db: PersistenceDb, name: string, runtime?: string): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, { id: ulid(), name, ...(runtime ? { runtime } : {}) })
+  await agentFixture(db, { id: ulid(), name, ...(runtime ? { runtime } : {}) })
 }
 
 describeEachProvider('seedBuiltinRuntimes (RFC-112 PR-A)', (harness) => {

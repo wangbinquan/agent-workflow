@@ -31,6 +31,12 @@ function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   // Monotonic id so isFresherNodeRun (pure id-order) picks the last-inserted row.
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -58,14 +64,14 @@ function def(nodes: Array<{ id: string; kind: NodeKind }>): {
 const ups = (m: Record<string, string[]>): Map<string, string[]> => new Map(Object.entries(m))
 
 describe("RFC-076 PR-B — deriveFrontier 'exhausted' bucketing", () => {
-  test('exhausted loop → exhausted[] (not completed/ready/failed), allSettled=false, downstream held', () => {
+  test('exhausted loop → exhausted[] (not completed/ready/failed), allSettled=false, downstream held', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'lw', kind: 'wrapper-loop' },
       { id: 'down', kind: 'agent-single' },
     ])
     // lw hit max_iterations without satisfying exit_condition → terminal failure.
     const rows = [row('lw', 'exhausted', { iteration: 0 })]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -88,7 +94,7 @@ describe("RFC-076 PR-B — deriveFrontier 'exhausted' bucketing", () => {
     expect(f.ready).not.toContain('down')
   })
 
-  test('exhausted loop alongside a done+fresh sibling → sibling completed, exhausted unchanged, allSettled=false', () => {
+  test('exhausted loop alongside a done+fresh sibling → sibling completed, exhausted unchanged, allSettled=false', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'lw', kind: 'wrapper-loop' },
       { id: 'sib', kind: 'agent-single' },
@@ -96,7 +102,7 @@ describe("RFC-076 PR-B — deriveFrontier 'exhausted' bucketing", () => {
     ])
     // sib: done with no consumed-upstream entries → isNodeRunFresh true → completed.
     const rows = [row('lw', 'exhausted', { iteration: 0 }), row('sib', 'done')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,

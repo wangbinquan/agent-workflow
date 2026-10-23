@@ -27,12 +27,16 @@
 //   (incl. the commit container + its session child) is settled — nothing
 //   left 'running'/'pending'.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { mintSequenceRun } from './helpers/rfc374Fixtures'
 import type { CommitPushMeta, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -191,8 +195,7 @@ async function buildHarness(slug: string): Promise<Harness> {
 
 async function seedAgent(db: DbClient, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -230,13 +233,12 @@ async function seedTask(h: Harness): Promise<string> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc098-cp-task',
     id: taskId,
     workflowId,
@@ -331,8 +333,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     const trace = readTrace(h.stateDir)
@@ -361,12 +362,10 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
 
     // The commit landed for real: n1's commit container row is done & pushed,
     // and the remote got the branch tip.
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-    const commitRow = rows.find(
-      (r) => r.nodeId === commitPushNodeId('n1') && r.commitPushJson !== null,
-    )
+    const rows = await readNodeRunFixtures(h.db, { taskId })
+    const commitRow = rows.find((r) => r.nodeId === commitPushNodeId('n1') && r.commitPush !== null)
     expect(commitRow).toBeDefined()
-    const meta = JSON.parse(commitRow!.commitPushJson!) as CommitPushMeta
+    const meta = JSON.parse(commitRow!.commitPush!) as CommitPushMeta
     expect({ status: commitRow!.status, meta }).toMatchObject({
       status: 'done',
       meta: { pushOutcome: 'pushed' },
@@ -418,24 +417,21 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     // synthetic would hang here until the test timeout).
     await runP
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('canceled')
 
     // Drain proof #2: every node_runs row is settled — the canceled exits
     // awaited the commit synthetic before returning, so neither the commit
     // container nor its opencode-session child row is stranded mid-flight
     // past runTask's finally (where the write-lock registry gc runs).
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     expect(rows.length).toBeGreaterThan(0)
     expect(rows.filter((r) => r.status === 'running' || r.status === 'pending')).toEqual([])
 
     // The commit container settled to a terminal status with its meta
     // persisted (the killed message-gen session degrades to the fallback
     // message — never to an abandoned row).
-    const commitRow = rows.find(
-      (r) => r.nodeId === commitPushNodeId('n1') && r.commitPushJson !== null,
-    )
+    const commitRow = rows.find((r) => r.nodeId === commitPushNodeId('n1') && r.commitPush !== null)
     expect(commitRow).toBeDefined()
     expect(['done', 'failed']).toContain(commitRow!.status)
   }, 20_000)
@@ -544,8 +540,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
         (e) => e.agent === COMMIT_AGENT_NAME && e.callIndex > 0 && e.phase === 'start',
       ).length,
     ).toBeGreaterThanOrEqual(1)
-    const { nodeRuns } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     expect(rows.filter((r) => r.status === 'running' || r.status === 'pending')).toEqual([])
   }, 40_000)
 

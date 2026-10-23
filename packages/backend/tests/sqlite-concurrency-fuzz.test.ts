@@ -34,7 +34,7 @@
 //     for catching invariant-violating compositions of operations but not
 //     SQLite engine concurrency bugs (those are the engine's problem).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -126,8 +126,7 @@ async function seedRoot(db: PersistenceDb): Promise<string> {
     edges: [],
     outputs: [],
   })
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'fuzz',
     definition: def,
@@ -135,7 +134,7 @@ async function seedRoot(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fuzz-task',
     workflowId: wfId,
@@ -153,18 +152,17 @@ async function seedRoot(db: PersistenceDb): Promise<string> {
 
 async function applyAction(db: PersistenceDb, taskId: string, a: Action): Promise<void> {
   if (a.kind === 'set_status') {
-    const { tasks } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      {
         status: a.status,
         finishedAt: ['done', 'failed', 'canceled'].includes(a.status) ? Date.now() : null,
-      })
-      .where(eq(tasks.id, taskId))
+      },
+    )
     return
   }
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: `nr_${ulid()}`,
     taskId,
     nodeId: 'agent_1',
@@ -203,9 +201,8 @@ describeEachProvider('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', 
         let nodeRunRetryCounter = 0
         for (const a of actions) {
           if (a.kind === 'add_node_run') {
-            const { nodeRuns } = tablesOf(db)
             // Rewrite with a fresh retry_index so the schema accepts it.
-            await insertOne(db, nodeRuns, {
+            await nodeRunFixture(db, {
               id: `nr_${ulid()}`,
               taskId,
               nodeId: 'agent_1',
@@ -255,8 +252,7 @@ describeEachProvider('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', 
         let nodeRunRetryCounter = 0
         for (const a of actions) {
           if (a.kind === 'add_node_run') {
-            const { nodeRuns } = tablesOf(db)
-            await insertOne(db, nodeRuns, {
+            await nodeRunFixture(db, {
               id: `nr_${ulid()}`,
               taskId,
               nodeId: 'agent_1',
@@ -317,8 +313,7 @@ describeEachProvider('RFC-054 W2-2 — SQLite concurrency / interleaving fuzz', 
     // done node_run" — finding that pattern is exactly what surfaced
     // when this anchor was first written without the out_1 row.
     for (const nodeId of ['agent_1', 'out_1']) {
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: `nr_${ulid()}`,
         taskId,
         nodeId,

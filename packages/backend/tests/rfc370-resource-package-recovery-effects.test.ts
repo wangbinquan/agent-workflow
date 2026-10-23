@@ -1,4 +1,5 @@
 // RFC-370: real AW recovery rules consume logical content references and await close.
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -12,10 +13,7 @@ import type {
   ResourcePackageRecoveryEffects,
   ResourcePackageRecoveryEffectsFactory,
 } from '@/modules/resource-catalog/application/package/recoveryContentEffects'
-import {
-  composePostgresqlResourcePackageApplyMaintenance,
-  composeSqliteResourcePackageApplyMaintenance,
-} from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import {
   selectedResourcePackageRecoveryEffects,
   withResourcePackageRecoveryEffects,
@@ -314,7 +312,7 @@ const CONTENT_HASH = createHash('sha256').update('SKILL.md\x00v2\x00').digest('h
 describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
   const compose = (effectsFactory: ResourcePackageRecoveryEffectsFactory, legacy = false) =>
     harness.capabilities.isolation === 'exclusive' || legacy
-      ? composeSqliteResourcePackageApplyMaintenance({
+      ? composeResourcePackageApplyMaintenance({
           db: harness.db,
           appHome: 'logical:aw-home',
           pluginsDir: 'logical:plugins',
@@ -322,7 +320,7 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
           activitySource: { activeApplyIds: () => [] },
           now: () => NOW,
         })
-      : composePostgresqlResourcePackageApplyMaintenance({
+      : composeResourcePackageApplyMaintenance({
           db: harness.db,
           appHome: 'logical:aw-home',
           pluginsDir: 'logical:plugins',
@@ -432,7 +430,9 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
             createdAt: 0,
             updatedAt: 0,
           })
-          const pending = compose(factory, legacy).command.converge({ activeApplyIds: [] })
+          const pending = createAtomicApplyRecovery([compose(factory, legacy).scene]).converge({
+            'resource-package': [],
+          })
           if (currentVersion === 2) {
             await entered.promise
             expect(isSkillBootVerified(id)).toBe(false)
@@ -499,7 +499,9 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
         createdAt: 0,
         updatedAt: 0,
       })
-      const pending = compose(new LogicalFactory(state)).command.converge({ activeApplyIds: [] })
+      const pending = createAtomicApplyRecovery([
+        compose(new LogicalFactory(state)).scene,
+      ]).converge({ 'resource-package': [] })
       try {
         await entered.promise
         expect(state.calls).toContain('remove:logical:plugins/generation')
@@ -546,14 +548,16 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
       artifacts,
       activitySource: { activeApplyIds: () => [] },
     }
-    const existing = composeSqliteResourcePackageApplyMaintenance(input)
-    expect(await existing.command.converge({ activeApplyIds: [] })).toEqual({
+    const existing = composeResourcePackageApplyMaintenance(input)
+    expect(
+      await createAtomicApplyRecovery([existing.scene]).converge({ 'resource-package': [] }),
+    ).toEqual({
       failed: 0,
       rolledForward: 0,
     })
     expect(calls).toEqual([])
     expect(() =>
-      composeSqliteResourcePackageApplyMaintenance({
+      composeResourcePackageApplyMaintenance({
         db: harness.db,
         appHome: 'logical:home',
         pluginsDir: input.pluginsDir,

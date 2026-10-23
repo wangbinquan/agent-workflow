@@ -9,7 +9,7 @@
 // Codex impl-gate P1-1: a managed selector that resolves to no managed skill is
 // NOT silently demoted to a `project` ref — that would turn a missing managed
 // skill into a self-discovered repo-local skill and change execution semantics.
-// It is kept as an UNRESOLVED managed ref instead (skillId holds the name).
+// RFC-395 II-a A5: unresolved selectors produce no ref; names never occupy skillId.
 
 import { describe, expect, test } from 'bun:test'
 import {
@@ -67,11 +67,11 @@ describe('selector ⇄ ref conversion (resolver-driven)', () => {
     expect(ref).toEqual({ kind: 'managed', skillId: 'sid-lint' })
   })
 
-  test('selector → ref: an unresolved managed name stays UNRESOLVED managed (no silent project demotion — P1-1)', () => {
+  test('selector → ref: an unresolved managed name has no persistent ref (no silent project demotion — P1-1)', () => {
     const ref = skillSelectorToRef({ kind: 'managed', name: 'ghost' }, () => undefined)
     // NOT { kind: 'project', name: 'ghost' } — demoting a missing managed skill to
     // a repo-local project skill would change execution semantics.
-    expect(ref).toEqual({ kind: 'managed', skillId: 'ghost' })
+    expect(ref).toBeUndefined()
   })
 
   test('selector → ref: a resolvable managed name is preferred over the unresolved fallback', () => {
@@ -98,12 +98,19 @@ describe('selector ⇄ ref conversion (resolver-driven)', () => {
     expect(sel).toEqual({ kind: 'project', name: 'local' })
   })
 
+  test('a missing managed id does not become a project selector', () => {
+    expect(
+      skillRefToSelector({ kind: 'managed', skillId: 'gone' }, () => undefined),
+    ).toBeUndefined()
+  })
+
   test('round-trip: ref → selector → ref is stable under a consistent resolver', () => {
     const byId = new Map([['sid-lint', { name: 'lint' }]])
     const byName = new Map([['lint', 'sid-lint']])
     const original: AgentSkillRef = { kind: 'managed', skillId: 'sid-lint' }
     const selector = skillRefToSelector(original, (id) => byId.get(id))
-    const back = skillSelectorToRef(selector, (name) => byName.get(name))
+    expect(selector).toBeDefined()
+    const back = skillSelectorToRef(selector!, (name) => byName.get(name))
     expect(back).toEqual(original)
   })
 })

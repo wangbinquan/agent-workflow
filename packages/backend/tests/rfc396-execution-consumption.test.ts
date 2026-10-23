@@ -1,6 +1,5 @@
 // The graph imports committed Task outputs while the native clarify gate is still waiting.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, nodeRunOutputFixture, taskFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphExecutionContractRegistrations } from '@/modules/development-automation/application/graph-development/toolContracts'
@@ -17,8 +16,7 @@ import { createEmployeeExecutionArtifactQueries } from '@/modules/task-execution
 
 describeEachProvider('RFC-396 committed execution consumption', (harness) => {
   test('the production artifact reader exposes completed node outputs before the human gate completes the Task', async () => {
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       id: 'waiting-task',
       name: 'waiting',
       workflowId: 'fixture-workflow',
@@ -34,7 +32,7 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
       digitalEmployeeCaseId: 'case-a',
       digitalEmployeeRoundId: 'round',
     })
-    await harness.db.insert(nodeRuns).values([
+    await nodeRunFixture(harness.db, [
       {
         id: 'designer',
         seq: 1,
@@ -60,7 +58,7 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
         startedAt: 1,
       },
     ])
-    await harness.db.insert(nodeRunOutputs).values([
+    await nodeRunOutputFixture(harness.db, [
       {
         nodeRunId: 'designer',
         portName: 'design-model',

@@ -3,7 +3,7 @@ import type {
   PlannedRepo,
   PlannedDirectoryNode,
   GitCommitIdentity,
-  StartTask,
+  TaskStartOptions,
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
@@ -37,7 +37,7 @@ export interface TaskRepositoryPreparationBinding {
     ): Promise<void>
 
     prepare(input: {
-      task: StartTask
+      task: TaskStartOptions
       taskId: string
       gitCommitIdentity: GitCommitIdentity | null
       signal?: AbortSignal

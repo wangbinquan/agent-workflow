@@ -25,7 +25,16 @@
 //   4. cross-generation gate: previous FAILED generation's consumed ≠ new →
 //      fresh wrapper generation re-runs every shard (no cross-gen replay).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  consumedProducerIds,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -74,8 +83,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: WORKER_AGENT_ID,
     name,
     description: 'test',
@@ -96,15 +104,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -181,8 +188,7 @@ const DOCS = 'a.md\nb.md'
  * deterministic without running the input dispatch first). */
 async function seedInputRun(h: Harness, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id,
     taskId,
     nodeId: 'inp',
@@ -192,7 +198,7 @@ async function seedInputRun(h: Harness, taskId: string): Promise<string> {
     startedAt: Date.now(),
     finishedAt: Date.now(),
   })
-  await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'docs', content: DOCS })
+  await nodeRunOutputFixture(h.db, { nodeRunId: id, portName: 'docs', content: DOCS })
   return id
 }
 
@@ -209,8 +215,7 @@ async function seedWrapperAndDoneChildren(
   },
 ): Promise<{ wrapperRunId: string; childIds: string[] }> {
   const wrapperRunId = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: wrapperRunId,
     taskId,
     nodeId: 'fan',
@@ -219,7 +224,13 @@ async function seedWrapperAndDoneChildren(
     iteration: 0,
     parentNodeRunId: null,
     shardKey: null,
-    consumedUpstreamRunsJson: over.consumed === null ? null : JSON.stringify(over.consumed),
+    consumedEdges:
+      over.consumed === null
+        ? undefined
+        : Object.entries(over.consumed).map(([producerNodeId, producerRunId]) => ({
+            producerNodeId,
+            producerRunId,
+          })),
     wrapperProgressJson: over.progressJson ?? null,
     startedAt: Date.now(),
     ...(over.wrapperStatus === 'failed' ? { finishedAt: Date.now() } : {}),
@@ -228,7 +239,7 @@ async function seedWrapperAndDoneChildren(
   for (const key of ['a.md', 'b.md']) {
     const id = ulid()
     childIds.push(id)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id,
       taskId,
       nodeId: 'inner',
@@ -241,7 +252,7 @@ async function seedWrapperAndDoneChildren(
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await insertOne(h.db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'OLD' })
+    await nodeRunOutputFixture(h.db, { nodeRunId: id, portName: 'result', content: 'OLD' })
   }
   return { wrapperRunId, childIds }
 }
@@ -293,8 +304,7 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // HEADLINE: both shards re-spawned — done rows were NOT replayed.
@@ -304,9 +314,9 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
 
     // Fresh rows minted under the same (resumed) wrapper; stale done rows
     // remain as history → 2 rows per shardKey.
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapperRunId)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapperRunId,
+    )
     for (const key of ['a.md', 'b.md']) {
       const rows = innerRows.filter((r) => r.shardKey === key)
       expect(rows.length).toBe(2)
@@ -317,9 +327,9 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     // The wrapper's consumed was overwritten to the resolved value, and the
     // persisted gate flag was CLEARED by markWrapperTerminal (kind/phase
     // breadcrumb may remain — only reuseDisabled must be gone).
-    const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, wrapperRunId)))[0]!
+    const wrapper = (await readNodeRunFixtures(h.db, { id: wrapperRunId }))[0]!
     expect(wrapper.status).toBe('done')
-    expect(JSON.parse(wrapper.consumedUpstreamRunsJson ?? 'null')).toEqual({ inp: inputRunId })
+    expect(consumedProducerIds(wrapper.consumedEdges)).toEqual({ inp: inputRunId })
     const progress = decodeWrapperProgress(wrapper.wrapperProgressJson, () => {})
     expect(progress?.reuseDisabled).toBeUndefined()
   }, 60_000)
@@ -344,8 +354,7 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // HEADLINE: matching consumed + matching hashes would replay both shards
@@ -353,9 +362,9 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const invocations = readInvocations(argvCapture)
     expect(invocations.length).toBe(2)
 
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapperRunId)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapperRunId,
+    )
     for (const key of ['a.md', 'b.md']) {
       const rows = innerRows.filter((r) => r.shardKey === key)
       expect(rows.length).toBe(2)
@@ -363,7 +372,7 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     }
 
     // Terminal clears the flag — the NEXT resume/retry may reuse again.
-    const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, wrapperRunId)))[0]!
+    const wrapper = (await readNodeRunFixtures(h.db, { id: wrapperRunId }))[0]!
     expect(wrapper.status).toBe('done')
     const progress = decodeWrapperProgress(wrapper.wrapperProgressJson, () => {})
     expect(progress).not.toBeNull() // breadcrumb retained…
@@ -382,17 +391,16 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // Zero spawns: both done children replayed from their persisted outputs.
     expect(readInvocations(argvCapture).length).toBe(0)
 
     // Row economics: exactly one row per shardKey — the pre-seeded ones.
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapperRunId)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapperRunId,
+    )
     expect(innerRows.map((r) => r.id).sort()).toEqual([...childIds].sort())
   }, 60_000)
 
@@ -413,8 +421,8 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     const argvCapture = join(h.appHome, 'argv.jsonl')
     await runWithMock(h, taskId, argvCapture)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // Both shards re-spawned under the NEW wrapper generation.
@@ -423,9 +431,9 @@ describe('RFC-098 B3 — fanout consumed generation gate (S-20) + persisted reus
     expect(wrapperRows.length).toBe(2)
     const newWrapper = wrapperRows.find((r) => r.id !== oldWrapperId)!
     expect(newWrapper.status).toBe('done')
-    const newChildren = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === newWrapper.id)
+    const newChildren = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === newWrapper.id,
+    )
     expect(newChildren.map((r) => r.shardKey).sort()).toEqual(['a.md', 'b.md'])
     expect(newChildren.every((r) => r.status === 'done')).toBe(true)
     expect(newChildren.every((r) => !childIds.includes(r.id))).toBe(true)

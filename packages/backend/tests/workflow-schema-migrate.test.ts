@@ -13,8 +13,7 @@
 // If this goes red, check packages/backend/src/services/workflow.ts and
 // packages/shared/src/schemas/workflow.ts in lock-step.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readWorkflowFixtures, workflowFixture } from './helpers/model'
 import type { Workflow, WorkflowDefinition } from '@agent-workflow/shared'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
@@ -22,7 +21,6 @@ import { mkdtempSync } from 'node:fs'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { openDb, type DbClient } from '../src/db/client'
 import { ulid } from 'ulid'
 import {
@@ -100,9 +98,8 @@ describe('GET path: legacy row → latest definition returned by getWorkflow', (
   test('legacy v1 row → getWorkflow returns latest-version definition', async () => {
     const id = ulid()
     const now = Date.now()
-    const { workflows } = tablesOf(db)
     // Insert raw v1 row (simulating a workflow stored before RFC-005 shipped).
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id,
       name: 'legacy',
       description: '',
@@ -130,8 +127,7 @@ describe('GET path: legacy row → latest definition returned by getWorkflow', (
   test('on-disk row stays at v1 until next PUT (heal-on-edit pattern)', async () => {
     const id = ulid()
     const now = Date.now()
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id,
       name: 'legacy',
       description: '',
@@ -142,7 +138,7 @@ describe('GET path: legacy row → latest definition returned by getWorkflow', (
     })
     // GET should not modify the DB row.
     await getWorkflow(db, id)
-    const rows = await db.select().from(workflows).where(eq(workflows.id, id))
+    const rows = await readWorkflowFixtures(db, { id })
     const raw = JSON.parse(rows[0]!.definition) as { $schema_version: number }
     expect(raw.$schema_version).toBe(1)
   })
@@ -183,10 +179,9 @@ describe('POST / PUT paths normalize older versions → latest on write', () => 
         edges: [],
       },
     })
-    const { workflows } = tablesOf(db)
     // Returned via getWorkflow which always upgrades, so we read the raw row
     // directly to confirm the on-disk shape lands at the latest version.
-    const rows = await db.select().from(workflows).where(eq(workflows.id, created.id))
+    const rows = await readWorkflowFixtures(db, { id: created.id })
     const raw = JSON.parse(rows[0]!.definition) as { $schema_version: number }
     expect(raw.$schema_version).toBe(WORKFLOW_SCHEMA_VERSION)
   })
@@ -220,8 +215,7 @@ describe('POST / PUT paths normalize older versions → latest on write', () => 
       { kind: 'system', reason: 'workflow-schema-migrate-test' },
     )
 
-    const { workflows } = tablesOf(db)
-    const rows = await db.select().from(workflows).where(eq(workflows.id, created.id))
+    const rows = await readWorkflowFixtures(db, { id: created.id })
     const raw = JSON.parse(rows[0]!.definition) as {
       $schema_version: number
       inputs: Array<{ kind: string; key: string; label: string }>

@@ -23,10 +23,13 @@
 // 的 `cancelTask` 注入口）。这是 plan §5ac 记的「legacy 契约上的 SQLite 绑定」，
 // 随 legacy 那条线解开，不在本次迁移范围内。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { setTaskStatus } from '../src/services/lifecycle'
@@ -43,21 +46,16 @@ async function seedFixture(database: PersistenceDb, lineage: boolean): Promise<v
   db = database
   seedTaskLineage = lineage
   workflowId = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
   })
 }
 
-async function seed(
-  status: string,
-  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-): Promise<string> {
+async function seed(status: string, extra: Partial<TaskFixtureSpec> = {}): Promise<string> {
   const taskId = ulid()
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc207',
     workflowId,
@@ -83,8 +81,7 @@ async function seed(
 }
 
 async function acct(taskId: string): Promise<{ runningMs: number; runningSince: number | null }> {
-  const { tasks } = tablesOf(db)
-  const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+  const row = (await readTaskFixtures(db, { id: taskId }))[0]!
   return { runningMs: row.runningMs, runningSince: row.runningSince }
 }
 
@@ -280,8 +277,7 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     // 12s of running elapsed (> the 10s cap).
     const r = await enforceLimits(legacyDb, T0 + 12_000)
     expect(r.canceled).toContain(id)
-    const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, id)))[0]!.status).toBe('canceled')
+    expect((await readTaskFixtures(db, { id }))[0]!.status).toBe('canceled')
   })
 
   test('a running task whose PARKED time exceeds the cap is NOT canceled — only running time counts', async () => {
@@ -319,7 +315,6 @@ describeEachProvider('RFC-207 记账驱动限额（端到端，双引擎）', (h
     const r = await enforceLimits(legacyDb, unpark + 2_000)
     expect(r.scanned).toBeGreaterThanOrEqual(1) // it WAS examined
     expect(r.canceled).not.toContain(id)
-    const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, id)))[0]!.status).toBe('running')
+    expect((await readTaskFixtures(db, { id }))[0]!.status).toBe('running')
   })
 })

@@ -1,3 +1,4 @@
+// RFC-395 II-a A3: resolveNodeActivation now uses the run-selection port; retire its freshness edge.
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-317 T22–T24 / T26 —— 模块边界三条规则（R1 inbound / R2 outbound / R3 模块形状）。
 //

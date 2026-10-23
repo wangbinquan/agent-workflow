@@ -17,7 +17,15 @@
 //   E. golden-lock — zero manual rows ⇒ the cross-clarify injection block is byte-identical
 //      (no `Manual instruction` contamination).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -98,8 +106,7 @@ function mkQ(id: string, title: string): ClarifyQuestion {
 async function seedTask(db: PersistenceDb, _opts: { deferred?: boolean } = {}): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc120-manual',
     description: '',
@@ -107,7 +114,7 @@ async function seedTask(db: PersistenceDb, _opts: { deferred?: boolean } = {}): 
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -126,7 +133,7 @@ async function seedTask(db: PersistenceDb, _opts: { deferred?: boolean } = {}): 
     startedAt: Date.now(),
   })
   // FIXER prior run (ULID id so freshness/lineage windows order before later mints).
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: FIXER,
@@ -154,9 +161,9 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('create(target=DESIGNER) → reassign(FIXER) → dispatch → inject manual_body+bind → done → confirm', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
-      const { nodeRuns, taskQuestions, nodeRunOutputs } = tablesOf(db)
+      const { taskQuestions } = tablesOf(db)
       // DESIGNER needs a prior run too (the §15 re-gate requires the manual handler to have run).
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -221,8 +228,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect((await listOne(db, taskId))?.phase).toBe('processing') // run still pending
 
       // run finishes done+output → 已处理待确认.
-      await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-      await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'result', content: 'x' })
+      await patchNodeRunFixture(db, { id: runId }, { status: 'done' })
+      await nodeRunOutputFixture(db, { nodeRunId: runId, portName: 'result', content: 'x' })
       expect((await listOne(db, taskId))?.phase).toBe('awaiting_confirm')
 
       // confirm → 完成.
@@ -333,9 +340,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('two manual rows assigned to DIFFERENT nodes dispatch together (synthetic origins ⇒ no round-multi-target)', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
-      const { nodeRuns } = tablesOf(db)
       // DESIGNER also needs a prior run to be a valid frontier mint target.
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -502,13 +508,12 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const scopeIds = new Set(scopeNodes.map((n) => n.id))
       const NONE: ReadonlySet<string> = new Set()
 
-      const { nodeRuns } = tablesOf(db)
       // BEFORE dispatch: FIXER is undispatched → deriveFrontier must NOT complete it (the
       // scheduler keeps the task awaiting_human so it can't finish past the manual question).
-      const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const rows = await new DrizzleNodeExecutionPersistence(db).list({ taskId })
       const deferredBefore = await loadUndispatchedDesignerTargets(db, taskId)
       expect(deferredBefore.has(FIXER)).toBe(true)
-      const fBefore = deriveFrontier(
+      const fBefore = await deriveFrontier(
         rows,
         liveDef(),
         scopeNodes,
@@ -527,10 +532,10 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
 
       // AFTER dispatch: FIXER leaves the set → deriveFrontier no longer parks it (its rerun runs).
       await dispatchTaskQuestions(db, taskId, [id], actor)
-      const rows2 = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const rows2 = await new DrizzleNodeExecutionPersistence(db).list({ taskId })
       const deferredAfter = await loadUndispatchedDesignerTargets(db, taskId)
       expect(deferredAfter.has(FIXER)).toBe(false)
-      const fAfter = deriveFrontier(
+      const fAfter = await deriveFrontier(
         rows2,
         liveDef(),
         scopeNodes,
@@ -591,8 +596,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       test(`create on a ${status} deferred task → rejected task-terminal; nothing inserted`, async () => {
         const db = harness.db
         const taskId = await seedTask(db)
-        const { tasks, taskQuestions } = tablesOf(db)
-        await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+        const { taskQuestions } = tablesOf(db)
+        await patchTaskFixture(db, { id: taskId }, { status })
         let threw: unknown = null
         try {
           await createManualTaskQuestion(
@@ -619,10 +624,10 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           { title: 't', body: 'b', targetNodeId: FIXER },
           actor,
         )
-        const { nodeRuns, tasks, taskQuestions } = tablesOf(db)
+        const { nodeRuns, taskQuestions } = tablesOf(db)
         const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
           .length
-        await db.update(tasks).set({ status }).where(eq(tasks.id, taskId))
+        await patchTaskFixture(db, { id: taskId }, { status })
         let threw: unknown = null
         try {
           await dispatchTaskQuestions(db, taskId, [id], actor)
@@ -642,8 +647,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('control: create + dispatch on a FAILED (resumable) deferred task → allowed (not terminal)', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
-      const { tasks } = tablesOf(db)
-      await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status: 'failed' })
       // failed is resumable (resumeTask resumes it), so manual create + dispatch are allowed.
       const { id } = await createManualTaskQuestion(
         db,
@@ -666,8 +670,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       // Seed a cross-clarify round + answer (deferred) so the designer has a per-node queue.
       const qRunId = ulid()
-      const { nodeRuns, taskQuestions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { taskQuestions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: qRunId,
         taskId,
         nodeId: QUESTIONER,
@@ -675,7 +679,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         retryIndex: 0,
         iteration: 0,
       })
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -763,9 +767,8 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
     test('H1: reassign a manual question to a never-run node → rejected; to a run node → allowed', async () => {
       const db = harness.db
       const taskId = await seedTask(db)
-      const { nodeRuns } = tablesOf(db)
       // DESIGNER gets a run so it is a valid (runnable) re-target; QUESTIONER stays never-run.
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: DESIGNER,
@@ -812,16 +815,15 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
             const origFrom = (builder.from as (t: unknown) => Record<string, unknown>).bind(builder)
             builder.from = (tbl: unknown) => {
               const q = origFrom(tbl)
-              const { nodeRuns, tasks } = tablesOf(db)
+              const { nodeRuns } = tablesOf(db)
               if (tbl === nodeRuns && !fired) {
                 fired = true
                 const origThen = (q.then as (...a: unknown[]) => unknown).bind(q)
                 q.then = (onF: unknown, onR: unknown) => {
-                  return db
-                    .update(tasks)
-                    .set({ status: status as never })
-                    .where(eq(tasks.id, taskId))
-                    .then(() => origThen(onF, onR), onR as never)
+                  return patchTaskFixture(db, { id: taskId }, { status: status as never }).then(
+                    () => origThen(onF, onR),
+                    onR as never,
+                  )
                 }
               }
               return q

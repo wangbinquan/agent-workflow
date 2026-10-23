@@ -15,6 +15,7 @@ import {
   type AgentImportIdentityRow,
 } from './agentImportSnapshot'
 import { ACL_TABLES } from './aclRegistry'
+import { catalogResourcePredicate } from './workflowCatalogPredicate'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
@@ -55,9 +56,13 @@ async function readSnapshot(
         })
         .from(table)
         .where(
-          or(
-            names.length === 0 ? undefined : inArray(table.name, names),
-            ids.length === 0 ? undefined : inArray(table.id, ids),
+          catalogResourcePredicate(
+            type,
+            table.id,
+            or(
+              names.length === 0 ? undefined : inArray(table.name, names),
+              ids.length === 0 ? undefined : inArray(table.id, ids),
+            ),
           ),
         )
       rows.push(...providerRows.map((row) => ({ type, ...row })))

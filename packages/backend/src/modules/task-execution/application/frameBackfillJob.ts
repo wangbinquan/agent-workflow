@@ -20,7 +20,7 @@ import {
   planFrameBackfill,
   type FrameBackfillRunRow,
   type FrameBackfillUpdate,
-} from '../domain/frameBackfill'
+} from '../domain/legacyMigration/frameBackfill'
 
 export const FRAME_BACKFILL_MARKER_KEY = 'rfc354.frame-backfill.v1'
 

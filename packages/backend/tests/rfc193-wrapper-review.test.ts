@@ -12,10 +12,16 @@
 // 占位文案。若未来有人把 review 的读取改回「对某个 worktree join 路径」，
 // 这两条会立刻红。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -103,8 +109,7 @@ async function seedAgent(
   outputKinds: Record<string, string>,
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -159,13 +164,12 @@ function loopReviewDef(
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-rfc193-wr',
     definition: JSON.stringify(definition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc193-wrapper-review',
     id: taskId,
     workflowId,
@@ -207,8 +211,8 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const { tasks, docVersions } = tablesOf(h.db)
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { docVersions } = tablesOf(h.db)
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(taskRow.status).toBe('awaiting_review')
 
     const dvs = await h.db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
@@ -237,8 +241,8 @@ describe('RFC-193 e2e — wrapper 内 review 主回归（AC-1）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const { tasks, docVersions } = tablesOf(h.db)
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { docVersions } = tablesOf(h.db)
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(taskRow.status).toBe('awaiting_review')
 
     const dvs = (await h.db.select().from(docVersions).where(eq(docVersions.taskId, taskId))).sort(
@@ -314,8 +318,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const { nodeRunOutputs, nodeRuns } = tablesOf(h.db)
-    const { and } = await import('drizzle-orm')
+    const { nodeRuns } = tablesOf(h.db)
     const { parseArchiveJson } = await import('@/modules/task-execution/public/queries')
     async function projectedRow(nodeId: string, port: string) {
       const runs = await h.db
@@ -324,10 +327,7 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
       const done = runs.filter((r) => r.status === 'done').at(-1)
       expect(done).toBeDefined()
-      const rows = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(and(eq(nodeRunOutputs.nodeRunId, done!.id), eq(nodeRunOutputs.portName, port)))
+      const rows = await readNodeRunOutputFixtures(h.db, { nodeRunId: done!.id, portName: port })
       return rows[0]
     }
     for (const [nodeId, port] of [
@@ -397,8 +397,8 @@ describe('RFC-193 e2e — 派生投影透传（D16 / case 8b）', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const { tasks, docVersions } = tablesOf(h.db)
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { docVersions } = tablesOf(h.db)
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(taskRow.status).toBe('awaiting_review')
     const dvs = await h.db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
     expect(dvs).toHaveLength(1)

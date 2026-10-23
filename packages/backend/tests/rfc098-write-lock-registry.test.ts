@@ -30,7 +30,14 @@
 //      pre-fix the single-track call was a silent no-op for multi-repo rows
 //      whose `preSnapshot` is NULL by design).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import {
+  nodeRunFixture,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  type RunCheckpointFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
@@ -44,7 +51,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { gcTaskWriteSem, getTaskWriteSem, taskWriteLockCount } from '../src/services/taskWriteLocks'
-import { gitStashSnapshot, runGit } from '../src/util/git'
+import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
 const SRC = (f: string) => resolve(import.meta.dir, '..', 'src', 'services', f)
@@ -227,17 +234,14 @@ async function seedClarifyTask(
   opts: {
     worktreePath: string
     repoPath: string
-    repoCount?: number
-    preSnapshot?: string | null
-    preSnapshotReposJson?: string | null
-    repos?: Array<{ worktreePath: string; worktreeDirName: string }>
+    checkpoints?: RunCheckpointFixture[]
+    repos?: Array<{ worktreePath: string; mountPath: string }>
   },
 ): Promise<SeededClarify> {
   const def = selfClarifyDef()
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  const { workflows, tasks, taskRepos, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'fixture',
     description: '',
@@ -245,7 +249,7 @@ async function seedClarifyTask(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,
@@ -257,10 +261,10 @@ async function seedClarifyTask(
     status: 'running',
     inputs: '{}',
     startedAt: Date.now(),
-    repoCount: opts.repoCount ?? 1,
   })
   if (opts.repos !== undefined) {
-    await db.insert(taskRepos).values(
+    await taskRepoFixture(
+      db,
       opts.repos.map((r, i) => ({
         taskId,
         repoIndex: i,
@@ -268,12 +272,12 @@ async function seedClarifyTask(
         baseBranch: 'main',
         branch: `agent-workflow/${taskId}`,
         worktreePath: r.worktreePath,
-        worktreeDirName: r.worktreeDirName,
+        mountPath: r.mountPath,
       })),
     )
   }
   const agentRunId = `nr_agent_${Math.random().toString(36).slice(2, 8)}`
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: agentRunId,
     taskId,
     nodeId: 'agent_x',
@@ -282,8 +286,7 @@ async function seedClarifyTask(
     iteration: 0,
     startedAt: Date.now(),
     finishedAt: Date.now(),
-    preSnapshot: opts.preSnapshot ?? null,
-    preSnapshotReposJson: opts.preSnapshotReposJson ?? null,
+    checkpoints: opts.checkpoints,
   })
   const sess = await createClarifyRound({
     kind: 'self',
@@ -317,7 +320,7 @@ describeEachProvider(
         // modification so `git stash create` yields a non-empty sha — the same
         // capture the scheduler does for writer nodes).
         writeFileSync(join(repo, 'src.txt'), 'pre-state\n')
-        const sha = await gitStashSnapshot(repo)
+        const sha = await legacyStashSnapshotFixture(repo)
         expect(sha).not.toBe('')
 
         // Simulate the in-flight WRITER's half-done work: a tracked overwrite +
@@ -330,7 +333,7 @@ describeEachProvider(
         const seeded = await seedClarifyTask(db, {
           worktreePath: repo,
           repoPath: repo,
-          preSnapshot: sha,
+          checkpoints: [{ mountPath: '', preSnapshot: sha }],
         })
 
         // Hold the task write lock — the registry hands the SAME instance the
@@ -415,9 +418,9 @@ describeEachProvider(
         // Per-repo pre-snapshots (distinct contents so we can prove EACH repo
         // got ITS OWN sha applied, not just any reset).
         writeFileSync(join(repoA, 'src.txt'), 'pre-a\n')
-        const shaA = await gitStashSnapshot(repoA)
+        const shaA = await legacyStashSnapshotFixture(repoA)
         writeFileSync(join(repoB, 'src.txt'), 'pre-b\n')
-        const shaB = await gitStashSnapshot(repoB)
+        const shaB = await legacyStashSnapshotFixture(repoB)
         expect(shaA).not.toBe('')
         expect(shaB).not.toBe('')
 
@@ -431,14 +434,15 @@ describeEachProvider(
         const seeded = await seedClarifyTask(db, {
           worktreePath: containerDir,
           repoPath: repoA,
-          repoCount: 2,
-          // Multi-repo rows leave `preSnapshot` NULL by design (RFC-066 dual
-          // write) — exactly the shape the pre-B1 single-track gate skipped.
-          preSnapshot: null,
-          preSnapshotReposJson: JSON.stringify({ 'repo-a': shaA, 'repo-b': shaB }),
+          // Multi-repo checkpoints are recorded per mount — exactly the shape
+          // the pre-B1 single-track gate skipped (RFC-066 dual write).
+          checkpoints: [
+            { mountPath: 'repo-a', preSnapshot: shaA },
+            { mountPath: 'repo-b', preSnapshot: shaB },
+          ],
           repos: [
-            { worktreePath: repoA, worktreeDirName: 'repo-a' },
-            { worktreePath: repoB, worktreeDirName: 'repo-b' },
+            { worktreePath: repoA, mountPath: 'repo-a' },
+            { worktreePath: repoB, mountPath: 'repo-b' },
           ],
         })
 

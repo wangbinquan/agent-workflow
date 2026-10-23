@@ -1,6 +1,14 @@
 // RFC-359 W20: the page's legacy reference count changes only its exclusion
 // expression. Real catalogs prove the non-null premise; the old SQL remains
 // the data oracle. These tiny cases make no PostgreSQL performance claim.
+import {
+  patchTaskFixture,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  readTaskFixtures,
+  readTaskRepoFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
@@ -17,7 +25,7 @@ const repoIds = ['w18-repo-a', 'w18-repo-b', 'w18-repo-c'] as const
 
 async function seed(harness: ProviderHarness) {
   const db = harness.db
-  const { users, workflows, tasks, taskRepos, scheduledTasks } = tablesOf(db)
+  const { users, scheduledTasks } = tablesOf(db)
   await insertOne(db, users, {
     id: 'w18-user',
     username: 'w18',
@@ -28,7 +36,7 @@ async function seed(harness: ProviderHarness) {
     createdAt: since,
     updatedAt: since,
   })
-  await insertOne(db, workflows, { id: 'w18-wf', name: 'w18', definition: '{}' })
+  await workflowFixture(db, { id: 'w18-wf', name: 'w18', definition: '{}' })
   const seeds = [
     { id: 'a', status: 'running', cachedRepoId: repoIds[0] },
     { id: 'b', status: 'running', cachedRepoId: repoIds[0] },
@@ -45,7 +53,7 @@ async function seed(harness: ProviderHarness) {
   ] as const
   // Parent a must exist before its child c on both providers.
   for (const item of seeds) {
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       workflowId: 'w18-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -61,7 +69,8 @@ async function seed(harness: ProviderHarness) {
       ...item,
     })
   }
-  await db.insert(taskRepos).values(
+  await taskRepoFixture(
+    db,
     [
       ['b', 0, repoIds[0]],
       ['b', 1, repoIds[0]],
@@ -270,14 +279,14 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       [repoIds[0], 6],
       [repoIds[1], 5],
     ])
-    const { taskRepos, tasks } = tablesOf(harness.db)
+    const { taskRepos } = tablesOf(harness.db)
     await harness.db.delete(taskRepos)
     await compare([
       [repoIds[0], 6],
       [repoIds[1], 4],
       [repoIds[2], 2],
     ])
-    await harness.db.insert(taskRepos).values([
+    await taskRepoFixture(harness.db, [
       {
         taskId: 'b',
         repoIndex: 0,
@@ -301,12 +310,11 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       [repoIds[2], 2],
     ])
     await harness.db.delete(taskRepos)
-    const taskRows = await harness.db
-      .select({ id: tasks.id, cachedRepoId: tasks.cachedRepoId })
-      .from(tasks)
-      .orderBy(tasks.id)
+    const taskRows = await readTaskFixtures(harness.db, undefined, {
+      orderBy: [{ field: 'id', direction: 'asc' }],
+    }).then((rows) => rows.map((row) => ({ id: row.id, cachedRepoId: row.cachedRepoId })))
     for (const row of taskRows) {
-      await insertOne(harness.db, taskRepos, {
+      await taskRepoFixture(harness.db, {
         taskId: row.id,
         repoIndex: 0,
         cachedRepoId: row.cachedRepoId,
@@ -320,16 +328,20 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       [repoIds[1], 4],
       [repoIds[2], 2],
     ])
-    const beforeTasks = await harness.db.select().from(tasks).orderBy(tasks.id)
-    const beforeRepos = await harness.db
-      .select()
-      .from(taskRepos)
-      .orderBy(taskRepos.taskId, taskRepos.repoIndex)
+    const beforeTasks = await readTaskFixtures(harness.db, undefined, {
+      orderBy: [{ field: 'id' }],
+    })
+    const beforeRepos = await readTaskRepoFixtures(harness.db, undefined, {
+      orderBy: [
+        { field: 'taskId', direction: 'asc' },
+        { field: 'repoIndex', direction: 'asc' },
+      ],
+    })
     const interruption = new Error('reference count rollback')
     await expect(
       harness.session.transaction(async (tx) => {
-        const { tasks, taskRepos } = tablesOf(tx)
-        await tx.update(tasks).set({ cachedRepoId: repoIds[2] }).where(eq(tasks.id, 'a'))
+        const { taskRepos } = tablesOf(tx)
+        await patchTaskFixture(tx, { id: 'a' }, { cachedRepoId: repoIds[2] })
         await tx.delete(taskRepos).where(eq(taskRepos.taskId, 'a'))
         await compare(
           [
@@ -342,9 +354,18 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
         throw interruption
       }),
     ).rejects.toBe(interruption)
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(beforeTasks)
     expect(
-      await harness.db.select().from(taskRepos).orderBy(taskRepos.taskId, taskRepos.repoIndex),
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(beforeTasks)
+    expect(
+      await readTaskRepoFixtures(harness.db, undefined, {
+        orderBy: [
+          { field: 'taskId', direction: 'asc' },
+          { field: 'repoIndex', direction: 'asc' },
+        ],
+      }),
     ).toEqual(beforeRepos)
     await compare([
       [repoIds[0], 6],

@@ -21,6 +21,8 @@ function mkRow(opts: {
   status?: string
 }): Row {
   return {
+    seq: null,
+
     id: opts.id,
     taskId: 't',
     nodeId: 'n',

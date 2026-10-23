@@ -38,6 +38,10 @@
 //   - terminatedAs (T9): DTO-level discriminator normalizing the self
 //     'canceled' / cross 'abandoned' terminal statuses.
 
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { decodeLegacyClarifyArray, decodeLegacyClarifyAnswerColumns } from '../clarifyAnswerCodec'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+import { type NodeRunFactSnapshot } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   validateClarifyMindmap,
@@ -136,7 +140,7 @@ export function rowToRound(r: PersistenceTables['clarifyRounds']['$inferSelect']
     targetConsumerNodeId: r.targetConsumerNodeId,
     loopIter: r.loopIter,
     iteration: r.iteration,
-    questions: safeParseArray<ClarifyQuestion>(r.questionsJson) ?? [],
+    questions: decodeLegacyClarifyArray<ClarifyQuestion>(r.questionsJson) ?? [],
     directive: r.directive,
     status: r.status as ClarifyRoundStatus,
     designerRunTriggeredAt: r.designerRunTriggeredAt,
@@ -146,21 +150,11 @@ export function rowToRound(r: PersistenceTables['clarifyRounds']['$inferSelect']
     abandonedAt: r.abandonedAt,
     terminatedAs: terminatedAsForStatus(r.status as ClarifyRoundStatus),
   }
-  const answers = safeParseArray<ClarifyAnswer>(r.answersJson)
+  const answers = decodeLegacyClarifyAnswerColumns(r).optionalAnswers
   if (answers !== undefined) out.answers = answers
-  const warnings = safeParseArray<ClarifyTruncationWarning>(r.truncationWarningsJson)
+  const warnings = decodeLegacyClarifyArray<ClarifyTruncationWarning>(r.truncationWarningsJson)
   if (warnings !== undefined && warnings.length > 0) out.truncationWarnings = warnings
   return out
-}
-
-function safeParseArray<T>(json: string | null): T[] | undefined {
-  if (json === null) return undefined
-  try {
-    const v = JSON.parse(json)
-    return Array.isArray(v) ? (v as T[]) : undefined
-  } catch {
-    return undefined
-  }
 }
 
 const kindIs = (db: object, kind: ClarifyRoundKind) => {
@@ -269,7 +263,7 @@ export async function createClarifyRound(
 
   let iteration: number
   const createdAt = now()
-  let existingRun: PersistenceTables['nodeRuns']['$inferSelect'] | undefined
+  let existingRun: NodeRunFactSnapshot | undefined
 
   if (args.kind === 'self') {
     iteration = args.iteration
@@ -317,17 +311,17 @@ export async function createClarifyRound(
     args.kind === 'self' && args.truncationWarnings && args.truncationWarnings.length > 0
       ? JSON.stringify(args.truncationWarnings)
       : null
-  const { tasks, clarifyRounds } = tablesOf(args.db)
+  const { clarifyRounds } = tablesOf(args.db)
   const taskRow = (
-    await args.db
-      .select({
-        name: tasks.name,
-        workflowSnapshot: tasks.workflowSnapshot,
-        lifecycleEventRevision: tasks.lifecycleEventRevision,
-      })
-      .from(tasks)
-      .where(eq(tasks.id, args.taskId))
-      .limit(1)
+    await createTaskGateQueries(args.db)
+      .listDefinitionContexts([args.taskId])
+      .then((rows) =>
+        rows.map((row) => ({
+          name: row.name,
+          workflowSnapshot: row.workflowSnapshot,
+          lifecycleEventRevision: row.lifecycleEventRevision,
+        })),
+      )
   )[0]
   if (taskRow === undefined) {
     throw new ValidationError('clarify-task-not-found', `task ${args.taskId} not found`)
@@ -436,15 +430,15 @@ export async function createClarifyRound(
   return { round, intermediaryNodeRunId }
 }
 
-async function findSelfGateRunForShard(
+export async function findSelfGateRunForShard(
   db: PersistenceDb,
   taskId: string,
   intermediaryNodeId: string,
   shardKey: string | null,
   iteration: number,
   frame: { readonly containerRunId: string | null; readonly frameIteration: number },
-): Promise<PersistenceTables['nodeRuns']['$inferSelect'] | undefined> {
-  const { clarifyRounds, nodeRuns } = tablesOf(db)
+): Promise<NodeRunFactSnapshot | undefined> {
+  const { clarifyRounds } = tablesOf(db)
   // RFC-074 PR-C: the gate run carries no round counter, so this round's
   // existing run is located via the clarify_rounds row that owns it — keyed
   // by (intermediaryNodeId, askingShardKey, iteration). A re-emit within the
@@ -472,11 +466,10 @@ async function findSelfGateRunForShard(
     )
     .orderBy(asc(clarifyRounds.createdAt))
   for (const roundRow of roundRows) {
-    const runRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, roundRow.intermediaryNodeRunId))
-      .limit(1)
+    const runRows = await createNodeRunQueries(db).list({
+      runIds: [roundRow.intermediaryNodeRunId],
+      limit: 1,
+    })
     const run = runRows[0]
     if (run !== undefined && run.iteration === frame.frameIteration) return run
   }
@@ -672,7 +665,11 @@ export async function dispatchCrossClarifyNode(args: {
         to: 'done',
         allowedFrom: ['pending'],
         reason: 'cross-clarify-persistent-stop',
-        extra: { finishedAt: now },
+        extra: {
+          identity: {
+            finishedAt: now,
+          },
+        },
       })
     })
     return { kind: 'short-circuit-stop' }
@@ -701,21 +698,6 @@ export async function resolveCrossNodeStopped(
 // ---------------------------------------------------------------------------
 // Answer sealing (shared by self quick path, seal path, dispatch path).
 // ---------------------------------------------------------------------------
-
-/** RFC-128 §7 — safe parse of a round's `answers_json` into a ClarifyAnswer[] for the
- *  per-question merge-write. Returns [] for NULL, malformed JSON, or a non-array payload
- *  (some fixtures seed a legacy '{}' placeholder; production seeds NULL). Keeping this
- *  tolerant means the merge boundary never throws on a virgin/legacy round (golden-lock:
- *  empty existing → merge returns the incoming subset unchanged). */
-export function parseAnswersArray(json: string | null): ClarifyAnswer[] {
-  if (json === null) return []
-  try {
-    const v = JSON.parse(json)
-    return Array.isArray(v) ? (v as ClarifyAnswer[]) : []
-  } catch {
-    return []
-  }
-}
 
 /**
  * Rebuild selectedOptionLabels from selectedOptionIndices + question.options.

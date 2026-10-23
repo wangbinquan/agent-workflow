@@ -33,10 +33,9 @@ import { decodeSkillOperationIdentity } from './skillIdentityPaths'
 import { createFileSkillDeletionContentStore } from '../local/fileSkillDeletionContentStore'
 import {
   findAgentsUsingManagedSkill,
-  matchesManagedSkillReference,
   type SkillReferencingAgentRow,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
-import { findAgentsReferencingIdInJsonColumn } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
+import { createAgentSkillReferenceLookup } from '../referenceLookup'
 import { staleConflictError } from '@/util/errors'
 export interface SkillDeleteOpHooks {
   /**
@@ -115,12 +114,7 @@ export async function deleteManagedSkillOp(
       const refs = await findAgentsUsingManagedSkill(
         {
           find: async (skillId) => {
-            const { agents } = tablesOf(tx)
-            return await findAgentsReferencingIdInJsonColumn(tx, {
-              column: agents.skills,
-              id: skillId,
-              matches: matchesManagedSkillReference,
-            })
+            return createAgentSkillReferenceLookup(tx).find(skillId)
           },
         },
         skill.id,

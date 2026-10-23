@@ -52,9 +52,7 @@ describe('RFC-370 isolation native compatibility', () => {
         appHome,
         taskId: 'rfc370-cleanup-decision',
         nodeRunId: 'actual-run',
-        canonRepos: [
-          { repoPath: canon, worktreePath: canon, worktreeDirName: '', baseBranch: 'main' },
-        ],
+        canonRepos: [{ repoPath: canon, worktreePath: canon, mountPath: '', baseBranch: 'main' }],
       })
       const iso = handle.repos[0]!.isoWorktreePath
       expect(handle.passthrough).toBe(false)

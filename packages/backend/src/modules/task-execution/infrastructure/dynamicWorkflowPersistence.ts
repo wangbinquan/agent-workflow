@@ -1,11 +1,12 @@
 // RFC-359 W4-B1 —— 动态工作流状态持久化：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, count, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
-import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { DwStateSchema } from '@agent-workflow/shared'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
 
@@ -16,7 +17,7 @@ export class DrizzleDynamicWorkflowPersistence implements DynamicWorkflowPersist
     const { tasks, workgroupTaskState } = tablesOf(this.db)
     const rows = await this.db
       .select({
-        workgroupConfigJson: tasks.workgroupConfigJson,
+        workgroupConfig: taskWorkgroupConfigSelection(this.db),
         triggerContextJson: tasks.triggerContextJson,
         dwStateJson: workgroupTaskState.dwStateJson,
       })
@@ -28,9 +29,7 @@ export class DrizzleDynamicWorkflowPersistence implements DynamicWorkflowPersist
   }
 
   async loadAgent(agentId: string) {
-    const { agents } = tablesOf(this.db)
-    const rows = await this.db.select().from(agents).where(eq(agents.id, agentId)).limit(1)
-    return rows[0] === undefined ? null : rowToAgent(rows[0])
+    return createAgentExecutionQueries(this.db).read(agentId)
   }
 
   async hasAwaitingConfirmationRun(taskId: string, cause: string): Promise<boolean> {

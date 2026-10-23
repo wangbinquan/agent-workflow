@@ -15,6 +15,7 @@
 //   H7 degraded row repair: partial PUT keeping the broken field → 422
 //      'scheduled-task-needs-repair'; full-field PUT repairs and clears the
 //      rfc165 lastError breadcrumb.
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test, beforeAll } from 'bun:test'
@@ -253,7 +254,7 @@ describeEachProvider('RFC-165 T4 — scheduled payload heal + tolerant repair', 
   })
 
   test('H7 degraded row: partial PUT 422, full-field PUT repairs + clears breadcrumb', async () => {
-    const { users, workflows } = tablesOf(db)
+    const { users } = tablesOf(db)
     await insertOne(db, users, {
       id: 'alice',
       username: 'alice',
@@ -263,7 +264,7 @@ describeEachProvider('RFC-165 T4 — scheduled payload heal + tolerant repair', 
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'wf1',
       name: 'wf',
       definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),

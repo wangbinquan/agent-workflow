@@ -44,7 +44,7 @@ import { createIntentApplyEngine } from '@/modules/intent/infrastructure/intentA
 import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { signPreviewToken } from '@/services/resourcePackage/preview'
 import { encodeZip } from '@/util/zip'
@@ -477,7 +477,7 @@ describeEachProvider('RFC-359 W11 资源包原子导入编排 · 事务边界', 
   async function applyPackage(options: PackageSessionOptions) {
     const box = createSecretBoxFromKey(randomBytes(32))
     const pkg = await parseResourcePackage(packageZip())
-    const operations = createPostgresqlResourcePackageAtomicApplyOperations({
+    const operations = createResourcePackageAtomicApplyOperations({
       db: harness.db as PostgresqlDatabaseClient,
       box,
     })
@@ -546,7 +546,7 @@ describeEachProvider('RFC-359 W11 资源包原子导入编排 · 事务边界', 
   test('认领事务：同一个 importId 第二次进来走回放，不再开第二条 journal', async () => {
     const box = createSecretBoxFromKey(randomBytes(32))
     const pkg = await parseResourcePackage(packageZip())
-    const operations = createPostgresqlResourcePackageAtomicApplyOperations({
+    const operations = createResourcePackageAtomicApplyOperations({
       db: harness.db as PostgresqlDatabaseClient,
       box,
     })

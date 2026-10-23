@@ -4,6 +4,7 @@
 //   ② `expectFencedToAbandoned`：对该行发一次在它当前状态下**本来合法**的迁移，断言被拦成非法迁移、
 //      且 abandoned 确实落库（design §4.2：事务内收尾并提交，事务外才抛）。
 
+import { readNodeRunFixtures } from './model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect } from 'bun:test'
 import { and, eq, inArray } from 'drizzle-orm'
@@ -12,7 +13,7 @@ import { IllegalMergeStateTransition, type MergeStateTransitionEvent } from '@ag
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { SUPERSEDABLE_MERGE_STATES } from '@/modules/task-execution/domain/nodeRunSupersession'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
-import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/nodeRunSupersession'
+import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/runSelection/oracle/supersessionSql'
 
 export async function derivedSupersededIds(db: PersistenceDb, taskId: string): Promise<string[]> {
   const { nodeRuns } = tablesOf(db)
@@ -38,12 +39,10 @@ const LEGAL_FORWARD: Record<(typeof SUPERSEDABLE_MERGE_STATES)[number], MergeSta
   }
 
 export async function expectFencedToAbandoned(db: PersistenceDb, nodeRunId: string): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
   const before = (
-    await db
-      .select({ mergeState: nodeRuns.mergeState })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
+    await readNodeRunFixtures(db, { id: nodeRunId }).then((rows) =>
+      rows.map((row) => ({ mergeState: row.mergeState })),
+    )
   )[0]!.mergeState as (typeof SUPERSEDABLE_MERGE_STATES)[number]
   const event = LEGAL_FORWARD[before]
   expect(event).toBeDefined()
@@ -56,10 +55,9 @@ export async function expectFencedToAbandoned(db: PersistenceDb, nodeRunId: stri
   expect(failure).toBeInstanceOf(IllegalMergeStateTransition)
   expect(String((failure as Error).message)).toContain('RFC-369')
   const after = (
-    await db
-      .select({ mergeState: nodeRuns.mergeState })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
+    await readNodeRunFixtures(db, { id: nodeRunId }).then((rows) =>
+      rows.map((row) => ({ mergeState: row.mergeState })),
+    )
   )[0]!.mergeState
   expect(after).toBe('abandoned')
 }

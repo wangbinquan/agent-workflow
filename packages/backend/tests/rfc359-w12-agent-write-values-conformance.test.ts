@@ -4,12 +4,11 @@
 // the existing RFC-166 / RFC-060 / RFC-014 and intent branch-port SQLite cases;
 // these tests do not claim PostgreSQL can execute that physical InTx mechanism.
 
+import { agentFixture, patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { eq } from 'drizzle-orm'
 import ts from 'typescript'
 import { ZodError } from 'zod'
 import type { CreateAgent } from '@agent-workflow/shared'
@@ -79,8 +78,7 @@ const expectedRow: AgentPersistenceRow = {
 }
 
 async function readRow(db: PersistenceTx, id = expectedRow.id) {
-  const { agents } = tablesOf(db)
-  const row = await first(db.select().from(agents).where(eq(agents.id, id)))
+  const row = (await readAgentFixtures(db, { id }))[0]
   if (row === undefined) throw new Error(`agent values fixture row disappeared: ${id}`)
   return row
 }
@@ -101,10 +99,8 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
 
   async function create(agent = input()) {
     return await harness.session.transaction(async (tx) => {
-      const { agents } = tablesOf(tx)
-      await insertOne(
+      await agentFixture(
         tx,
-        agents,
         createAgentPersistenceValues({ id: expectedRow.id, agent, ownerUserId: OWNER, now: T0 }),
       )
       return await readRow(tx)
@@ -149,17 +145,16 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
   test('a sparse submitted patch still rewrites the complete neutral content projection', async () => {
     await create()
     const rawInputs = '[{"name":"source", "unknown":"old raw bytes"}]'
-    const { agents } = tablesOf(harness.db)
-    await harness.db.update(agents).set({ inputs: rawInputs }).where(eq(agents.id, expectedRow.id))
+    await patchAgentFixture(harness.db, { id: expectedRow.id }, { inputs: rawInputs })
     const original = await readRow(harness.db)
     expect(original.inputs).toBe(rawInputs)
     await harness.session.transaction(async (tx) => {
       const current = agentFromPersistenceRow(await readRow(tx))
-      const { agents } = tablesOf(tx)
-      await tx
-        .update(agents)
-        .set(updateAgentPersistenceValues(current, { description: 'changed' }, T0 + 7))
-        .where(eq(agents.id, current.id))
+      await patchAgentFixture(
+        tx,
+        { id: current.id },
+        updateAgentPersistenceValues(current, { description: 'changed' }, T0 + 7),
+      )
     })
     expect(await readRow(harness.db)).toEqual({
       ...expectedRow,
@@ -173,33 +168,31 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     await create()
     await harness.session.transaction(async (tx) => {
       const current = agentFromPersistenceRow(await readRow(tx))
-      const { agents } = tablesOf(tx)
-      await tx
-        .update(agents)
-        .set(
-          updateAgentPersistenceValues(
-            current,
-            {
-              description: 'cleared',
-              outputs: [],
-              inputs: [],
-              syncOutputsOnIterate: false,
-              runtime: null,
-              skills: [],
-              dependsOn: [],
-              mcp: [],
-              plugins: [],
-              frontmatterExtra: { replacement: true },
-              outputKinds: {},
-              role: 'normal',
-              outputWrapperPortNames: {},
-              branchPorts: [],
-              bodyMd: '',
-            },
-            T0 + 11,
-          ),
-        )
-        .where(eq(agents.id, current.id))
+      await patchAgentFixture(
+        tx,
+        { id: current.id },
+        updateAgentPersistenceValues(
+          current,
+          {
+            description: 'cleared',
+            outputs: [],
+            inputs: [],
+            syncOutputsOnIterate: false,
+            runtime: null,
+            skills: [],
+            dependsOn: [],
+            mcp: [],
+            plugins: [],
+            frontmatterExtra: { replacement: true },
+            outputKinds: {},
+            role: 'normal',
+            outputWrapperPortNames: {},
+            branchPorts: [],
+            bodyMd: '',
+          },
+          T0 + 11,
+        ),
+      )
     })
     expect(await readRow(harness.db)).toEqual({
       ...expectedRow,
@@ -222,10 +215,8 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     const failure = new Error('abort created Agent transaction')
     await expect(
       harness.session.transaction(async (tx) => {
-        const { agents } = tablesOf(tx)
-        await insertOne(
+        await agentFixture(
           tx,
-          agents,
           createAgentPersistenceValues({
             id: expectedRow.id,
             agent: input(),
@@ -234,16 +225,15 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
           }),
         )
         expect(await readRow(tx)).toEqual(expectedRow)
-        await tx
-          .update(agents)
-          .set(
-            updateAgentPersistenceValues(
-              agentFromPersistenceRow(await readRow(tx)),
-              { description: 'transaction only' },
-              T0 + 3,
-            ),
-          )
-          .where(eq(agents.id, expectedRow.id))
+        await patchAgentFixture(
+          tx,
+          { id: expectedRow.id },
+          updateAgentPersistenceValues(
+            agentFromPersistenceRow(await readRow(tx)),
+            { description: 'transaction only' },
+            T0 + 3,
+          ),
+        )
         expect(await readRow(tx)).toEqual({
           ...expectedRow,
           description: 'transaction only',
@@ -252,10 +242,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
         throw failure
       }),
     ).rejects.toBe(failure)
-    const { agents } = tablesOf(harness.db)
-    expect(await first(harness.db.select().from(agents).where(eq(agents.id, expectedRow.id)))).toBe(
-      undefined,
-    )
+    expect((await readAgentFixtures(harness.db, { id: expectedRow.id }))[0]).toBe(undefined)
   })
 
   test('an outer abort preserves all original bytes after a full update', async () => {
@@ -264,11 +251,11 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     await expect(
       harness.session.transaction(async (tx) => {
         const current = agentFromPersistenceRow(await readRow(tx))
-        const { agents } = tablesOf(tx)
-        await tx
-          .update(agents)
-          .set(updateAgentPersistenceValues(current, { inputs: [], runtime: null }, T0 + 5))
-          .where(eq(agents.id, current.id))
+        await patchAgentFixture(
+          tx,
+          { id: current.id },
+          updateAgentPersistenceValues(current, { inputs: [], runtime: null }, T0 + 5),
+        )
         expect((await readRow(tx)).inputs).toBe('[]')
         expect((await readRow(tx)).runtime).toBe(null)
         throw failure
@@ -283,11 +270,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     cycle['self'] = cycle
     await expect(
       harness.session.transaction(async (tx) => {
-        const { agents } = tablesOf(tx)
-        await tx
-          .update(agents)
-          .set({ description: 'not committed' })
-          .where(eq(agents.id, expectedRow.id))
+        await patchAgentFixture(tx, { id: expectedRow.id }, { description: 'not committed' })
         const current = agentFromPersistenceRow(await readRow(tx))
         updateAgentPersistenceValues(
           current,
@@ -318,10 +301,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
       { name: 'duplicate', kind: 'markdown' },
     ]
     await expect(create(agent)).rejects.toBe(failure)
-    const { agents } = tablesOf(harness.db)
-    expect(await first(harness.db.select().from(agents).where(eq(agents.id, expectedRow.id)))).toBe(
-      undefined,
-    )
+    expect((await readAgentFixtures(harness.db, { id: expectedRow.id }))[0]).toBe(undefined)
   })
 })
 

@@ -7,6 +7,14 @@
 // 这些以前是「SQLite 同步一份、PostgreSQL 异步一份」的成对适配器，PostgreSQL 那份从未在真库上
 // 跑过（dual-provider-parity-audit-2026-09-04）。同一段断言现在在两个引擎上都必须绿。
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  patchNodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
@@ -35,8 +43,7 @@ async function seedTask(
   db: PersistenceDb,
   status: 'awaiting_human' | 'running' = 'awaiting_human',
 ): Promise<number> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf_rfc359_atoms',
     name: 'rfc359',
     description: '',
@@ -44,7 +51,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: TASK_ID,
     name: 'rfc359',
     workflowId: 'wf_rfc359_atoms',
@@ -61,9 +68,11 @@ async function seedTask(
       { stableNodeKey: 'task-root', frozenOccurrenceKey: TASK_ID, workflowRevision: null },
     ]),
   })
-  const row = await firstRow(
-    db.select({ revision: tasks.lifecycleEventRevision }).from(tasks).where(eq(tasks.id, TASK_ID)),
-  )
+  const row = (
+    await readTaskFixtures(db, { id: TASK_ID }).then((rows) =>
+      rows.map((row) => ({ revision: row.lifecycleEventRevision })),
+    )
+  )[0]
   if (row === undefined) throw new Error('seed failed')
   return row.revision
 }
@@ -147,18 +156,20 @@ describeEachProvider('RFC-359 T1 —— node_runs 铸造参与者', (harness) =>
     await harness.session.transaction(async (tx) => {
       const mint = createNodeRunMintParticipantInTx(tx)
       await mint.mint({
+        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'initial' }),
         id: '01RFC359000000000000000001',
         taskId: TASK_ID,
         nodeId: 'review-node',
         status: 'awaiting_review',
         cause: 'initial',
       })
-      const { nodeRuns } = tablesOf(tx)
-      await tx
-        .update(nodeRuns)
-        .set({ mergeState: 'pending-merge' })
-        .where(eq(nodeRuns.id, '01RFC359000000000000000001'))
+      await patchNodeRunFixture(
+        tx,
+        { id: '01RFC359000000000000000001' },
+        { mergeState: 'pending-merge' },
+      )
       await mint.mint({
+        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'review-iterate' }),
         id: '01RFC359000000000000000002',
         taskId: TASK_ID,
         nodeId: 'review-node',
@@ -166,13 +177,12 @@ describeEachProvider('RFC-359 T1 —— node_runs 铸造参与者', (harness) =>
         cause: 'review-iterate',
       })
     })
-    const { nodeRuns } = tablesOf(harness.db)
     expect(
-      await harness.db
-        .select({ id: nodeRuns.id, mergeState: nodeRuns.mergeState })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, TASK_ID))
-        .orderBy(nodeRuns.id),
+      await readNodeRunFixtures(
+        harness.db,
+        { taskId: TASK_ID },
+        { orderBy: [{ field: 'id', direction: 'asc' }] },
+      ).then((rows) => rows.map((row) => ({ id: row.id, mergeState: row.mergeState }))),
     ).toEqual([
       { id: '01RFC359000000000000000001', mergeState: 'pending-merge' },
       { id: '01RFC359000000000000000002', mergeState: null },
@@ -201,13 +211,12 @@ describeEachProvider('RFC-359 T1 —— human-gate 决定的接受原子', (harn
     expect(accepted.eventRefs.map((ref) => ref.eventGroupId)).toEqual([
       committedEventGroupId('collaboration', 'op_rfc359'),
     ])
-    const { tasks, taskExecutionIntents } = tablesOf(harness.db)
-    const task = await firstRow(
-      harness.db
-        .select({ status: tasks.status, revision: tasks.lifecycleEventRevision })
-        .from(tasks)
-        .where(eq(tasks.id, TASK_ID)),
-    )
+    const { taskExecutionIntents } = tablesOf(harness.db)
+    const task = (
+      await readTaskFixtures(harness.db, { id: TASK_ID }).then((rows) =>
+        rows.map((row) => ({ status: row.status, revision: row.lifecycleEventRevision })),
+      )
+    )[0]
     // release-human 的目标态由 shared 的 targetForTaskEvent({kind:'resume'}) 决定：回到 pending 交给调度器。
     expect(task).toEqual({ status: 'pending', revision: revision + 1 })
     const intent = await firstRow(
@@ -229,19 +238,17 @@ describeEachProvider('RFC-359 T1 —— human-gate 决定的接受原子', (harn
       )
     expect(error).toBeInstanceOf(ConcurrentTaskTransition)
     expect(error).toBeInstanceOf(ConflictError)
-    const { tasks } = tablesOf(harness.db)
-    const task = await firstRow(
-      harness.db
-        .select({ status: tasks.status, revision: tasks.lifecycleEventRevision })
-        .from(tasks)
-        .where(eq(tasks.id, TASK_ID)),
-    )
+    const task = (
+      await readTaskFixtures(harness.db, { id: TASK_ID }).then((rows) =>
+        rows.map((row) => ({ status: row.status, revision: row.lifecycleEventRevision })),
+      )
+    )[0]
     expect(task).toEqual({ status: 'awaiting_human', revision })
   })
 
   test('准入被已有 pending continuation 拒绝 ⇒ 已写入的状态跃迁与事件一起回滚（跨步原子性）', async () => {
     const revision = await seedTask(harness.db)
-    const { taskExecutionIntents, tasks, committedEvents } = tablesOf(harness.db)
+    const { taskExecutionIntents, committedEvents } = tablesOf(harness.db)
     await insertOne(harness.db, taskExecutionIntents, {
       id: 'intent_pending_rfc359',
       taskId: TASK_ID,
@@ -267,12 +274,11 @@ describeEachProvider('RFC-359 T1 —— human-gate 决定的接受原子', (harn
         async (tx) => await acceptHumanGateDecisionTx(tx, decision(revision)),
       ),
     ).rejects.toThrow(/already has an active continuation/)
-    const task = await firstRow(
-      harness.db
-        .select({ status: tasks.status, revision: tasks.lifecycleEventRevision })
-        .from(tasks)
-        .where(eq(tasks.id, TASK_ID)),
-    )
+    const task = (
+      await readTaskFixtures(harness.db, { id: TASK_ID }).then((rows) =>
+        rows.map((row) => ({ status: row.status, revision: row.lifecycleEventRevision })),
+      )
+    )[0]
     expect(task, '跃迁必须随准入失败一起回滚').toEqual({ status: 'awaiting_human', revision })
     expect(
       await harness.db

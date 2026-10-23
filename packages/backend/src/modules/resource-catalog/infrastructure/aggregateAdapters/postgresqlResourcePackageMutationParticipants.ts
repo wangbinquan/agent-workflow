@@ -1,3 +1,4 @@
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import type {
@@ -309,7 +310,12 @@ async function getResourceById(
     }
     case 'workflow': {
       const { workflows } = tablesOf(transaction)
-      const row = await first(transaction.select().from(workflows).where(eq(workflows.id, id)))
+      const row = await first(
+        transaction
+          .select()
+          .from(workflows)
+          .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id))),
+      )
       return row === undefined
         ? null
         : Object.freeze({
@@ -373,7 +379,12 @@ async function findBuiltinResource(
           transaction
             .select({ id: workflows.id })
             .from(workflows)
-            .where(and(eq(workflows.name, name), eq(workflows.builtin, true))),
+            .where(
+              workflowCatalogPredicate(
+                workflows.id,
+                and(eq(workflows.name, name), eq(workflows.builtin, true)),
+              ),
+            ),
         )
       )?.id
       break

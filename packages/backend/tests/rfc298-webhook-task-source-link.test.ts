@@ -1,5 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -16,8 +15,7 @@ import { getTask } from '../src/services/task'
 function seedWorkflowWrite(db: PersistenceDb) {
   const id = ulid()
   const now = Date.now()
-  const { workflows } = tablesOf(db)
-  const write = insertOne(db, workflows, {
+  const write = workflowFixture(db, {
     id,
     name: 'RFC-298 fixture workflow',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -40,8 +38,7 @@ function seedTaskWrite(
 ) {
   const id = ulid()
   const now = Date.now()
-  const { tasks } = tablesOf(db)
-  const write = insertOne(db, tasks, {
+  const write = taskFixture(db, {
     id,
     name: `RFC-298 task ${id}`,
     workflowId,
@@ -178,8 +175,7 @@ describeEachProvider('RFC-298 getTask webhook source projection', (harness) => {
     const detail = await getTask(db, childTaskId)
     expect(detail?.parentTaskId).toBe(parentTaskId)
     expect(detail?.webhookSourceLink).toEqual({ kind: 'pipeline', url: pipelineUrl })
-    const { tasks } = tablesOf(db)
-    const stored = (await db.select().from(tasks)).find((row) => row.id === childTaskId)
+    const stored = (await readTaskFixtures(db)).find((row) => row.id === childTaskId)
     expect(stored?.webhookTriggerId).toBeNull()
     expect(stored?.webhookFireId).toBeNull()
   })

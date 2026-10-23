@@ -2,6 +2,13 @@
 // the neutral journal; the gate journal keeps receipts and stays the recovery
 // authority. Cleanup is an owner release settled by maintenance, and the
 // collaboration sweep releases the documents of tasks that no longer exist.
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -146,16 +153,8 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     const id = ulid()
     const appHome = `/unavailable/rfc370-review-${id}`
     const bodies = ['# First\n\nreview body', '# Second\n\n审阅正文']
-    const {
-      agents,
-      workflows,
-      tasks,
-      nodeRuns,
-      nodeRunOutputs,
-      docVersions,
-      collaborationGateArtifacts,
-    } = tablesOf(db)
-    await insertOne(db, agents, {
+    const { docVersions, collaborationGateArtifacts } = tablesOf(db)
+    await agentFixture(db, {
       id,
       name: id,
       description: '',
@@ -184,14 +183,14 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
         } as unknown as WorkflowNode,
       ],
     }
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id,
       name: id,
       description: '',
       definition: JSON.stringify(definition),
       version: 1,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id,
       name: id,
       workflowId: id,
@@ -208,7 +207,7 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
         { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
       ]),
     })
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId: id,
       nodeId: 'source',
@@ -217,7 +216,7 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
       startedAt: 1,
       finishedAt: 2,
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: id,
       portName: 'docs',
       content: joinMarkdownDocs(bodies),
@@ -345,17 +344,15 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
   test('the collaboration sweep releases review documents of tasks without gate operations', async () => {
     const { journal, selection } = setup()
     const live = ulid()
-    const { workflows, tasks, collaborationGateOperations, hostedObjectPublications } = tablesOf(
-      harness.db,
-    )
-    await insertOne(harness.db, workflows, {
+    const { collaborationGateOperations, hostedObjectPublications } = tablesOf(harness.db)
+    await workflowFixture(harness.db, {
       id: live,
       name: live,
       description: '',
       definition: '{}',
       version: 1,
     })
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       id: live,
       name: live,
       workflowId: live,

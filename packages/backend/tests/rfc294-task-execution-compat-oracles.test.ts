@@ -13,7 +13,14 @@
 //   4. a route/call/workgroup pre-materialized handoff takes precedence over
 //      JSON deferred repository preparation, including its failure arm.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -102,8 +109,7 @@ async function buildHarness(): Promise<Harness> {
 
   const db = createInMemoryDb(MIGRATIONS)
   const agentId = ulid()
-  const { agents, workflows } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId,
     name: 'rfc294-worker',
     description: 'RFC-294 execution compatibility oracle',
@@ -127,7 +133,7 @@ async function buildHarness(): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc294-execution-oracle',
     definition: JSON.stringify(definition),
@@ -156,8 +162,7 @@ async function seedTask(
   mkdirSync(resolve(worktreePath, '..'), { recursive: true })
   await runGit(harness.sourceRepo, ['worktree', 'add', '-q', '-b', branch, worktreePath, 'main'])
   const head = (await runGit(worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()
-  const { tasks, nodeRuns } = tablesOf(harness.db)
-  await insertOne(harness.db, tasks, {
+  await taskFixture(harness.db, {
     id: taskId,
     name: `rfc294-${status}`,
     workflowId: harness.workflowId,
@@ -179,7 +184,7 @@ async function seedTask(
   if (status === 'pending') return { taskId }
 
   const failedRunId = ulid()
-  await insertOne(harness.db, nodeRuns, {
+  await nodeRunFixture(harness.db, {
     id: failedRunId,
     taskId,
     nodeId: 'work',
@@ -219,8 +224,7 @@ async function waitFor(check: () => boolean | Promise<boolean>, what: string): P
 }
 
 async function taskRow(db: DbClient, taskId: string) {
-  const { tasks } = tablesOf(db)
-  return (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+  return (await readTaskFixtures(db, { id: taskId }))[0]
 }
 
 async function waitForStatus(db: DbClient, taskId: string, status: string) {
@@ -266,8 +270,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
 
     const final = await taskRow(h.db, taskId)
     expect(final?.status).toBe('done')
-    const { nodeRuns } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     const workRows = rows.filter((row) => row.nodeId === 'work')
     expect(workRows).toHaveLength(1)
     expect(workRows[0]?.status).toBe('done')
@@ -304,11 +307,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
 
     await waitFor(() => existsSync(join(h!.ctrlDir, 'slow-started')), 'single slow process')
     expect(spawnLog(h)).toBe('S')
-    const { nodeRuns } = tablesOf(h.db)
-    const beforeCancel = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, seeded.taskId))
+    const beforeCancel = await readNodeRunFixtures(h.db, { taskId: seeded.taskId })
     const indexes = beforeCancel.filter((row) => row.nodeId === 'work').map((row) => row.retryIndex)
     expect(new Set(indexes).size).toBe(indexes.length)
     const placeholders = beforeCancel.filter((row) => row.errorMessage === 'queued for retry')
@@ -361,7 +360,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
       },
     }).resume(started.id)
     expect(resumed.status).toBe('done')
-    const generations = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, started.id)))
+    const generations = (await readNodeRunFixtures(h.db, { taskId: started.id }))
       .filter((row) => row.nodeId === 'work')
       .sort((a, b) => a.retryIndex - b.retryIndex)
     expect(generations.map((row) => [row.retryIndex, row.status])).toEqual([

@@ -3,7 +3,7 @@
 // CURRENT-BEHAVIOR LOCK for the pre-fix defect and has been FLIPPED per its
 // own [FLIP-ON-FIX] markers:
 //
-//   1. `gitStashSnapshot(path, {pinRef})` now pins the stash commit with a
+//   1. `legacyStashSnapshotFixture(path, {pinRef})` now pins the stash commit with a
 //      lightweight ref (`refs/agent-workflow/snapshots/{taskId}/{nodeRunId}`
 //      via `snapshotRefName`) so a user-side `git gc --prune=now` in the
 //      shared source-repo odb can no longer destroy the snapshot object.
@@ -27,11 +27,12 @@
 //   易抖形态（submodule file:// clone / npm / spawn 链），与同形态的
 //   git-snapshot.test.ts 同样不加门控。
 
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gitStashSnapshot, rollbackToSnapshot, runGit, snapshotRefName } from '../src/util/git'
+import { rollbackToSnapshot, runGit, snapshotRefName } from '../src/util/git'
 
 interface Repo {
   path: string
@@ -81,7 +82,7 @@ describe('S-11 fixed (RFC-098 WP-9): pinRef keeps the snapshot alive across gc; 
     // Dirty tracked state at snapshot time → non-empty stash sha, pinned.
     writeFileSync(join(r.path, 'a.txt'), 'SNAPSHOT-STATE\n')
     const pinRef = snapshotRefName('task-1', 'run-1')
-    const sha = await gitStashSnapshot(r.path, { pinRef })
+    const sha = await legacyStashSnapshotFixture(r.path, { pinRef })
     expect(sha).toMatch(/^[a-f0-9]{40}$/)
     expect(await objectExists(r.path, sha)).toBe(true)
 
@@ -95,7 +96,7 @@ describe('S-11 fixed (RFC-098 WP-9): pinRef keeps the snapshot alive across gc; 
     // Contrast: a bare call (no pinRef) over a DIFFERENT dirty state stays a
     // dangling object — the historical gc-bait shape, now opt-out via pinRef.
     writeFileSync(join(r.path, 'a.txt'), 'UNPINNED-STATE\n')
-    const bareSha = await gitStashSnapshot(r.path)
+    const bareSha = await legacyStashSnapshotFixture(r.path)
     expect(bareSha).toMatch(/^[a-f0-9]{40}$/)
     expect(bareSha).not.toBe(sha)
     const refsAfterBare = await runGit(r.path, ['for-each-ref', '--format=%(objectname)'])
@@ -112,7 +113,7 @@ describe('S-11 fixed (RFC-098 WP-9): pinRef keeps the snapshot alive across gc; 
     // 1. Take a real snapshot of a dirty tree (the state we are supposed to be
     //    able to come back to — e.g. a long-parked task being resumed).
     writeFileSync(join(r.path, 'a.txt'), 'SNAPSHOT-STATE\n')
-    const sha = await gitStashSnapshot(r.path)
+    const sha = await legacyStashSnapshotFixture(r.path)
     expect(sha).toMatch(/^[a-f0-9]{40}$/)
 
     // 2. The snapshot object gets pruned (user ran gc in the shared-odb source

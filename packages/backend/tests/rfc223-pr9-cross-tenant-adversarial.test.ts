@@ -10,6 +10,13 @@
 //
 // Existing strong coverage is intentionally not duplicated:
 //   - portable import 0/1/N + stale mapping: rfc223-import-refs.test.ts
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -155,10 +162,11 @@ async function checkedGit(cwd: string, args: string[]): Promise<void> {
 async function waitForTaskTerminal(db: DbClient, taskId: string): Promise<string> {
   const deadline = Date.now() + 10_000
   while (Date.now() < deadline) {
-    const { tasks } = tablesOf(db)
-    const row = await first(
-      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)),
-    )
+    const row = (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({ status: row.status })),
+      )
+    )[0]
     if (row !== undefined && ['done', 'failed', 'canceled', 'interrupted'].includes(row.status)) {
       return row.status
     }
@@ -286,14 +294,13 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
         outputs: [],
       }
       const workflowId = ulid()
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'frozen-id',
         definition: JSON.stringify(definition),
       })
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'frozen-id',
         workflowId,
@@ -429,11 +436,8 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
           changelog: 'A only',
         }),
       )
-      const { tasks, memories } = tablesOf(db)
-      await db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(tasks.id, task!.id))
+      const { memories } = tablesOf(db)
+      await patchTaskFixture(db, { id: task!.id }, { status: 'done', finishedAt: Date.now() })
 
       await reconcileFusion(deps, fusion.id)
       const ready = await getFusion(deps, fusion.id)
@@ -604,14 +608,14 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       outputs: [],
     }
     const workflowId = ulid()
-    const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { docVersions } = tablesOf(db)
+    await workflowFixture(db, {
       id: workflowId,
       name: 'review-id-isolation',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'review-id-isolation',
       workflowId,
@@ -625,7 +629,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       startedAt: Date.now(),
     })
     const reviewNodeRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: reviewNodeRunId,
       taskId,
       nodeId: 'review-proposal',
@@ -690,14 +694,13 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       outputs: [],
     }
     const workflowId = ulid()
-    const { workflows, tasks, nodeRuns } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'borrow-id-isolation',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'borrow-id-isolation',
       workflowId,
@@ -710,7 +713,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       inputs: '{}',
       startedAt: Date.now(),
     })
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: 'home',
@@ -730,8 +733,8 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       definition,
       undefined,
     )
-    expect(plan.input.overrides?.agentOverrideName).toBe('shared-member')
-    expect(plan.input.overrides?.agentOverrideId).toBe(agentB.id)
-    expect(plan.input.overrides?.agentOverrideId).not.toBe(agentA.id)
+    expect(plan.input.overrides?.config?.agentOverrideName).toBe('shared-member')
+    expect(plan.input.overrides?.config?.agentOverrideId).toBe(agentB.id)
+    expect(plan.input.overrides?.config?.agentOverrideId).not.toBe(agentA.id)
   })
 })

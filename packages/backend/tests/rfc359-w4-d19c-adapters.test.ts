@@ -6,7 +6,13 @@
 // 补一条端到端的回合断言：领队一轮派单 → 成员执行 → 领队收敛 done，沿途的房间消息、卡片状态与任务收场
 // 在两边逐字一致。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -73,8 +79,7 @@ function squadConfig(leaderAgentId: string, workerAgentId: string): Record<strin
 
 async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: '',
@@ -91,16 +96,16 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const config = squadConfig(leaderAgentId, workerAgentId)
   // 名册按 agentName 解析，所以配置里的名字要与刚落库的行一致。
   const members = config.members as Array<Record<string, unknown>>
-  const { agents, workflows, tasks } = tablesOf(db)
+  const { agents } = tablesOf(db)
   const leaderRow = (await db.select().from(agents).where(eq(agents.id, leaderAgentId)).limit(1))[0]
   const workerRow = (await db.select().from(agents).where(eq(agents.id, workerAgentId)).limit(1))[0]
   members[0]!.agentName = leaderRow?.name ?? ''
   members[1]!.agentName = workerRow?.name ?? ''
 
   const workflowId = ulid()
-  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  await workflowFixture(db, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'd19c turn task',
     workflowId,
@@ -256,8 +261,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     // 人回答后铸出的那条 pending 续跑，被重启的 reaper 翻成了 interrupted。
     // RFC-374: the interrupted latest continuation has the smaller ID.
     const killedId = 'a-killed-latest'
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: 'z-older',
       seq: -1,
       taskId,
@@ -265,7 +269,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
       status: 'canceled',
       rerunCause: 'initial',
     })
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       seq: 0,
       id: killedId,
       taskId,
@@ -291,7 +295,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     // 复活出来的那条必须**保住澄清血缘**——Q&A 的注入只发生在这种 rerun 上（nodeMechanics 的
     // buildClarifyQueueContext：非 answer 轮拿到空队列）。铸成普通 wg-leader-round 就等于把人的
     // 回答丢了，正是 RFC-187 T13 当初修掉的故障；合一时这条恢复没被带过来，本次补回。
-    const revived = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
+    const revived = (await readNodeRunFixtures(db, { taskId })).filter(
       (run) => run.id !== killedId && run.rerunCause === 'clarify-answer',
     )
     expect(revived).toHaveLength(1)
@@ -339,7 +343,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
       expect(memberRequests[1]?.promptTemplate).not.toContain(
         '## Protocol errors in your previous reply',
       )
-      const { workgroupAssignments, nodeRuns, workgroupMessages } = tablesOf(db)
+      const { workgroupAssignments, workgroupMessages } = tablesOf(db)
       const cards = await db
         .select()
         .from(workgroupAssignments)
@@ -349,7 +353,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
         status: 'done',
         nodeRunId: memberRequests[1]?.nodeRunId,
       })
-      const memberRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+      const memberRuns = (await readNodeRunFixtures(db, { taskId }))
         .filter((run) => run.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID)
         .sort((a, b) => a.retryIndex - b.retryIndex)
       expect(memberRuns.map((run) => [run.retryIndex, run.rerunCause])).toEqual([
@@ -462,13 +466,12 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     // 换进程重来，不是「你上一轮答错了」——不能贴协议重提示。
     expect(requests[1]?.promptTemplate).not.toContain('## Protocol errors in your previous reply')
 
-    const { nodeRuns } = tablesOf(db)
     // 重跑要**自己占一格 retryIndex**、并按 `wg-protocol-retry` 记账。两件事都是用户可见的：
     // 前者是 node_run 的身份（design.md：重试产生按 retry_index 区分的独立 node_runs），撞号会让
     // 血缘/采纳挑错行；后者是**轮次记账的豁免**——free_collab 的 roundBudget 逐条数成员 run、只跳过
     // `wg-protocol-retry`，铸成主 cause 就等于一次流中断白吃掉一整轮，小队会莫名撞上 max_rounds。
     // 按 retryIndex 排——同毫秒铸出的两条 ULID 之间没有稳定序，按 id 排会间歇性翻转。
-    const runs = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).sort(
+    const runs = (await readNodeRunFixtures(db, { taskId })).sort(
       (a, b) => a.retryIndex - b.retryIndex,
     )
     expect(runs.map((run) => [run.retryIndex, run.rerunCause])).toEqual([

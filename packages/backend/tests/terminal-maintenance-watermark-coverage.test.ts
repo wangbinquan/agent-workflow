@@ -18,13 +18,12 @@
 //    making `finalizeClaimedWorkspace` throw at a task-terminal event. The
 //    legacy SQLite path (systemWorkspaceGc.ts) classified it as 'busy'.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { patchTaskFixture, taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { DrizzleTaskExecutionEffectPersistence } from '@/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -54,8 +53,7 @@ async function seedTask(
   taskId: string,
   worktreePath: string,
 ): Promise<void> {
-  const { tasks } = tablesOf(database)
-  await insertOne(database, tasks, {
+  await taskFixture(database, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-watermark-coverage',
@@ -156,8 +154,7 @@ async function settledTwoGenerationTask(
   await settleGeneration(0, { operation: 'first-request' }, 61)
   await settleGeneration(1, { operation: 'second-request' }, 63)
 
-  const { tasks } = tablesOf(database)
-  await database.update(tasks).set({ status: 'done', finishedAt: 65 }).where(eq(tasks.id, taskId))
+  await patchTaskFixture(database, { id: taskId }, { status: 'done', finishedAt: 65 })
   const owner = (await module.ownershipFor(database).read(taskId))!
   await new DrizzleTaskOwnershipPersistence(database).releaseAfterStop({
     token: owned.token,
@@ -252,11 +249,11 @@ describeEachProvider('终态维护保留水位覆盖（双引擎）', (harness) 
         // terminal maintenance store rejects the claim with a transient conflict.
         const owned = await module.claim({ db: database, intentId: intent.intentId, now: 60 })
         module.claimGate.leave(owned.permit)
-        const { tasks } = tablesOf(database)
-        await database
-          .update(tasks)
-          .set({ status: 'done', finishedAt: 65, workspacePruningAt: 66 })
-          .where(eq(tasks.id, taskId))
+        await patchTaskFixture(
+          database,
+          { id: taskId },
+          { status: 'done', finishedAt: 65, workspacePruningAt: 66 },
+        )
 
         const command = createWorkspaceMaintenanceCommand({
           store: new DrizzleWorkspaceMaintenanceStore(database),

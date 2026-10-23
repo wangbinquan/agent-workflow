@@ -18,13 +18,13 @@
 //      defensive "argv simply lacks --session" misuse test is replaced by
 //      the positive assertion).
 
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -71,15 +71,14 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -104,8 +103,7 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 
@@ -209,8 +207,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
         },
       }),
     )
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]
     const prompt = row?.promptText ?? ''
     // Followup prompt body must be present.
     expect(prompt).toContain('Envelope missing — follow-up.')
@@ -250,8 +247,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
         nodeKind: 'agent-single',
       }),
     )
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]
     // inventory_snapshot_json must be NULL on followup runs (we explicitly
     // skipped materialization, so no snapshot path is set / no read attempt
     // is made → column stays NULL).

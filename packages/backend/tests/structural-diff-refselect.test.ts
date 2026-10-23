@@ -2,6 +2,7 @@
 // between N's pre_snapshot and the next write node's pre_snapshot (or worktree
 // for the last writer); readonly nodes (no snapshot) contribute nothing.
 
+import { decodeTaskCheckpoints } from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
 import { describe, expect, test } from 'bun:test'
 import {
   resolveNodeScope,
@@ -10,10 +11,10 @@ import {
 } from '../src/services/structuralDiff/refSelect'
 
 const runs: NodeRunRef[] = [
-  { seq: null, id: 'a', preSnapshot: 'snapA', startedAt: 1 },
-  { seq: null, id: 'r', preSnapshot: null, startedAt: 2 }, // readonly node (no snapshot)
-  { seq: null, id: 'b', preSnapshot: 'snapB', startedAt: 3 },
-  { seq: null, id: 'c', preSnapshot: 'snapC', startedAt: 4 }, // last writer
+  { seq: null, id: 'a', snapshotRef: 'snapA', startedAt: 1 },
+  { seq: null, id: 'r', snapshotRef: null, startedAt: 2 }, // readonly node (no snapshot)
+  { seq: null, id: 'b', snapshotRef: 'snapB', startedAt: 3 },
+  { seq: null, id: 'c', snapshotRef: 'snapC', startedAt: 4 }, // last writer
 ]
 
 describe('resolveNodeScope', () => {
@@ -57,21 +58,39 @@ describe('perRepoNodeRuns', () => {
       seq: null,
       id: 'a',
       startedAt: 1,
-      preSnapshotReposJson: JSON.stringify({ 'repo-x': 'xA', 'repo-y': 'yA' }),
+      checkpoints: Object.entries({ 'repo-x': 'xA', 'repo-y': 'yA' }).map(
+        ([mountPath, preSnapshot]) => ({ mountPath, preSnapshot }),
+      ),
     },
-    { seq: null, id: 'b', startedAt: 2, preSnapshotReposJson: JSON.stringify({ 'repo-x': 'xB' }) }, // wrote repo-x only
-    { seq: null, id: 'c', startedAt: 3, preSnapshotReposJson: null }, // no map at all
-    { seq: null, id: 'd', startedAt: 4, preSnapshotReposJson: '{not json' }, // malformed → null
+    {
+      seq: null,
+      id: 'b',
+      startedAt: 2,
+      checkpoints: Object.entries({ 'repo-x': 'xB' }).map(([mountPath, preSnapshot]) => ({
+        mountPath,
+        preSnapshot,
+      })),
+    }, // wrote repo-x only
+    { seq: null, id: 'c', startedAt: 3, checkpoints: [] }, // no map at all
+    {
+      seq: null,
+      id: 'd',
+      startedAt: 4,
+      checkpoints: decodeTaskCheckpoints({ preSnapshotReposJson: '{not json' }, [
+        'repo-x',
+        'repo-y',
+      ]),
+    }, // malformed → null
   ]
 
   test('projects the per-repo sha; missing/null/malformed → null preSnapshot', () => {
     expect(perRepoNodeRuns(mrows, 'repo-x')).toEqual([
-      { seq: null, id: 'a', preSnapshot: 'xA', startedAt: 1 },
-      { seq: null, id: 'b', preSnapshot: 'xB', startedAt: 2 },
-      { seq: null, id: 'c', preSnapshot: null, startedAt: 3 },
-      { seq: null, id: 'd', preSnapshot: null, startedAt: 4 },
+      { seq: null, id: 'a', snapshotRef: 'xA', startedAt: 1 },
+      { seq: null, id: 'b', snapshotRef: 'xB', startedAt: 2 },
+      { seq: null, id: 'c', snapshotRef: null, startedAt: 3 },
+      { seq: null, id: 'd', snapshotRef: null, startedAt: 4 },
     ])
-    expect(perRepoNodeRuns(mrows, 'repo-y').map((r) => r.preSnapshot)).toEqual([
+    expect(perRepoNodeRuns(mrows, 'repo-y').map((r) => r.snapshotRef)).toEqual([
       'yA',
       null,
       null,

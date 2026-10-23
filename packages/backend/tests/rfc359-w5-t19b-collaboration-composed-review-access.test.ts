@@ -27,6 +27,7 @@
 // 删掉会直接编译失败（必填字段缺失），这正是「让没装配在类型层不可表达」的落点。
 // 计数面的那一半由 `tests/architecture/rfc359-w5-t19b-composition-root-complete.test.ts` 的账本兜。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -74,8 +75,7 @@ function actorFor(userId: string): Actor {
 async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
   const id = `t_t19b_${ulid()}`
   const workflowId = `wf_t19b_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -83,7 +83,7 @@ async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,

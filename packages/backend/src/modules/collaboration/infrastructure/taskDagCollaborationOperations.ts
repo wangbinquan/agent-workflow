@@ -5,6 +5,8 @@
 // 生产上每次 tick 抛 `deferred-question-dispatcher-not-bound`（dual-provider-parity-audit P0-7）。
 // 派发管线（`taskQuestionDispatch.ts`）已跑在 `DatabaseSession` 上，这里直接调用它。
 
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
+import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm'
 
@@ -105,34 +107,20 @@ async function loadUndispatchedParkTargets(
 ): Promise<ReadonlySet<string>> {
   const entries = await loadParkEntries(db, taskId)
   if (entries.length === 0) return new Set()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  const runs = await db
-    .select({
-      id: nodeRuns.id,
-      seq: nodeRuns.seq,
-      nodeId: nodeRuns.nodeId,
-      iteration: nodeRuns.iteration,
-      rerunCause: nodeRuns.rerunCause,
-      status: nodeRuns.status,
-      startedAt: nodeRuns.startedAt,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
-      shardKey: nodeRuns.shardKey,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, taskId))
+
+  const runs = await createRunSelectionReader(db).familyHistory(taskId, {})
   const outputRows =
     runs.length === 0
       ? []
-      : await db
-          .select({ nodeRunId: nodeRunOutputs.nodeRunId })
-          .from(nodeRunOutputs)
-          .where(
-            inArray(
-              nodeRunOutputs.nodeRunId,
-              runs.map((run) => run.id),
-            ),
-          )
-  return partitionTaskDagParkTargets(entries, runs, new Set(outputRows.map((row) => row.nodeRunId)))
+      : await createNodeOutputQueries(db)
+          .runsWithOutput(runs.map((run) => run.id))
+          .then((runIds) => [...runIds].map((nodeRunId) => ({ nodeRunId })))
+          .then((rows) => rows.map((row) => ({ nodeRunId: row.nodeRunId })))
+  return await partitionTaskDagParkTargets(
+    entries,
+    runs,
+    new Set(outputRows.map((row) => row.nodeRunId)),
+  )
 }
 
 export function createTaskDagCollaborationOperations(

@@ -23,10 +23,13 @@
 //   - 若修法是按 running 区间累计：最后一个 test 的 canceled 断言翻红 → 改为
 //     断言任务存活（canceled 为空）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -59,14 +62,10 @@ function buildHarness(): Harness {
 // ever spawning opencode or touching git — keeps this test pure DB-level.
 const EMPTY_DEF = JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] })
 
-async function seedTask(
-  db: DbClient,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
-): Promise<string> {
+async function seedTask(db: DbClient, overrides: Partial<TaskFixtureSpec>): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: EMPTY_DEF,
@@ -77,7 +76,7 @@ async function seedTask(
   // reclaim). This DB-level fixture used a non-existent '/tmp/wt' stub; give it a
   // present dir so the existence pre-flight passes (still no git ops — empty wf).
   const wt = mkdtempSync(join(tmpdir(), 'aw-gap1-wt-'))
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -95,8 +94,7 @@ async function seedTask(
 }
 
 async function readTask(db: DbClient, id: string) {
-  const { tasks } = tablesOf(db)
-  return (await db.select().from(tasks).where(eq(tasks.id, id)))[0]
+  return (await readTaskFixtures(db, { id }))[0]
 }
 
 // resumeTask fire-and-forgets runTask (`void runTask(...)`, task.ts:1028) and

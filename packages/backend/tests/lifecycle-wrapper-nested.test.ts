@@ -10,6 +10,15 @@
 // scheduler-rfc040-wrapper-await.test.ts and friends; this file pins the
 // shape-level invariants the refactor must not break.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -51,8 +60,7 @@ async function buildFixture(harness: ProviderHarness): Promise<Fixture> {
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
   const db = harness.db
-  const { agents, workflows, tasks } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name: 'doc',
     description: '',
@@ -83,13 +91,13 @@ async function buildFixture(harness: ProviderHarness): Promise<Fixture> {
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -131,8 +139,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
     test('W1 iter scope — dispatch at iter=1 ignores iter=0 done rows', async () => {
       // iter=0: full pass done (agent + review approved)
       const iter0Agent = ulid()
-      const { nodeRuns, nodeRunOutputs, tasks, docVersions } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      const { nodeRuns, docVersions } = tablesOf(h.db)
+      await nodeRunFixture(h.db, {
         id: iter0Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -142,13 +150,13 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 1000,
         finishedAt: Date.now() - 900,
       })
-      await insertOne(h.db, nodeRunOutputs, {
+      await nodeRunOutputFixture(h.db, {
         nodeRunId: iter0Agent,
         portName: 'docpath',
         content: '# v0',
       })
       const iter0Review = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: iter0Review,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -162,7 +170,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
 
       // iter=1: agent re-ran with new content; review pending.
       const iter1Agent = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: iter1Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -172,13 +180,13 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await insertOne(h.db, nodeRunOutputs, {
+      await nodeRunOutputFixture(h.db, {
         nodeRunId: iter1Agent,
         portName: 'docpath',
         content: '# v1',
       })
 
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -216,8 +224,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
 
     test('W2 iter scope — iterate at iter=1 mints upstream retry at iter=1, leaves iter=0 alone', async () => {
       const iter0Agent = ulid()
-      const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      const { nodeRuns, docVersions } = tablesOf(h.db)
+      await nodeRunFixture(h.db, {
         id: iter0Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -228,7 +236,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         finishedAt: Date.now() - 900,
       })
       const iter1Agent = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: iter1Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -238,14 +246,14 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await insertOne(h.db, nodeRunOutputs, {
+      await nodeRunOutputFixture(h.db, {
         nodeRunId: iter1Agent,
         portName: 'docpath',
         content: '# v1',
       })
 
       const reviewRunId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: reviewRunId,
         taskId: h.taskId,
         nodeId: 'rev_1',
@@ -294,9 +302,9 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       expect(iter0After.status).toBe('done')
 
       // iter=1 has TWO doc rows now: original (canceled supersede) + retry=1 (pending).
-      const agentRowsIter1 = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'doc'))
-      ).filter((r) => r.iteration === 1)
+      const agentRowsIter1 = (await readNodeRunFixtures(h.db, { nodeId: 'doc' })).filter(
+        (r) => r.iteration === 1,
+      )
       expect(agentRowsIter1.length).toBe(2)
       const fresh = agentRowsIter1.find((r) => r.retryIndex === 1)
       expect(fresh).toBeDefined()
@@ -307,8 +315,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
     test('W3 fan-out child rows are excluded from latestPerNode (parentNodeRunId set)', async () => {
       // Simulate an agent-multi fan-out: parent row done + N children done.
       const parent = ulid()
-      const { nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: parent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -319,7 +326,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         finishedAt: Date.now() - 500,
       })
       for (let i = 0; i < 3; i++) {
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: ulid(),
           taskId: h.taskId,
           nodeId: 'doc',
@@ -333,10 +340,9 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         })
       }
 
-      const rows = await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
+      const rows = await readNodeRunFixtures(h.db, {
+        $and: [{ taskId: h.taskId }, { nodeId: 'doc' }],
+      })
       // Mimic scheduler.runScope latestPerNode logic (parentNodeRunId guard).
       let latest: (typeof rows)[number] | undefined
       for (const r of rows) {
@@ -351,8 +357,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       // Parent done with docpath output; phantom child with retry=99 but
       // parentNodeRunId set. dispatchReviewNode must pick parent.
       const parent = ulid()
-      const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: parent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -362,14 +367,14 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 1000,
         finishedAt: Date.now() - 500,
       })
-      await insertOne(h.db, nodeRunOutputs, {
+      await nodeRunOutputFixture(h.db, {
         nodeRunId: parent,
         portName: 'docpath',
         content: '# parent body',
       })
 
       const child = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: child,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -384,7 +389,7 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       // Child has NO docpath output — only parent does. If dispatch picked
       // child, it would fail with review-source-port-missing.
 
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,
@@ -406,8 +411,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       // Seed: each iter has its own agent done row + review done + approved doc_version.
       for (const iter of [0, 1]) {
         const a = ulid()
-        const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(h.db)
-        await insertOne(h.db, nodeRuns, {
+        const { docVersions } = tablesOf(h.db)
+        await nodeRunFixture(h.db, {
           id: a,
           taskId: h.taskId,
           nodeId: 'doc',
@@ -417,13 +422,13 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
           startedAt: Date.now() - 1000,
           finishedAt: Date.now() - 900,
         })
-        await insertOne(h.db, nodeRunOutputs, {
+        await nodeRunOutputFixture(h.db, {
           nodeRunId: a,
           portName: 'docpath',
           content: `# iter-${iter}`,
         })
         const rv = ulid()
-        await insertOne(h.db, nodeRuns, {
+        await nodeRunFixture(h.db, {
           id: rv,
           taskId: h.taskId,
           nodeId: 'rev_1',
@@ -452,8 +457,8 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       }
       // iter=2: agent done, no review yet
       const iter2Agent = ulid()
-      const { nodeRuns, nodeRunOutputs, tasks, docVersions } = tablesOf(h.db)
-      await insertOne(h.db, nodeRuns, {
+      const { docVersions } = tablesOf(h.db)
+      await nodeRunFixture(h.db, {
         id: iter2Agent,
         taskId: h.taskId,
         nodeId: 'doc',
@@ -463,13 +468,13 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         startedAt: Date.now() - 100,
         finishedAt: Date.now() - 50,
       })
-      await insertOne(h.db, nodeRunOutputs, {
+      await nodeRunOutputFixture(h.db, {
         nodeRunId: iter2Agent,
         portName: 'docpath',
         content: '# iter-2',
       })
 
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+      const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const res = await dispatchReviewNode({
         db: h.db,
         taskId: h.taskId,

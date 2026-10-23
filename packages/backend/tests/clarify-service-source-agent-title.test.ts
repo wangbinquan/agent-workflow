@@ -10,8 +10,7 @@
 // Mirrors the equivalent enrichment review summaries already do for
 // review nodes (see services/review.ts listReviewSummaries).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -47,8 +46,7 @@ async function seedSessionForSnapshot(
   agentNodeId: string,
 ): Promise<{ taskId: string; sessionId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -56,7 +54,7 @@ async function seedSessionForSnapshot(
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -75,7 +73,7 @@ async function seedSessionForSnapshot(
     startedAt: Date.now(),
   })
   const clarifyNodeRunId = `nr_clarify_${taskId}`
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: clarifyNodeRunId,
     taskId,
     nodeId: 'clarify1',

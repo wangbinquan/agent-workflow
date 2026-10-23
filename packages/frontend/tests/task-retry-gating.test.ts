@@ -364,3 +364,16 @@ describe('RFC-287 AC-11 — 准备失败的重试入口（UI 半场）', () => {
     expect(zhCN.tasks.retryRepoPrepPending).not.toBe(zhCN.tasks.retryRepoPrep)
   })
 })
+
+describe('RFC-395 II-a digital-employee host relaunch', () => {
+  test('the relaunch button excludes the employee host as well as internal tasks', () => {
+    const button = DETAIL_SRC.slice(
+      DETAIL_SRC.indexOf('{isTerminal(tk.status) &&'),
+      DETAIL_SRC.indexOf('{showResume &&'),
+    )
+    expect(button).toContain("tk.spaceKind !== 'internal'")
+    expect(button).toContain("subjectKind !== 'digital-employee'")
+    expect(button).toContain('data-testid="task-detail-relaunch"')
+    expect(button).toContain('search={{ relaunchFrom: tk.id }}')
+  })
+})

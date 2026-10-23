@@ -4,8 +4,7 @@
 // Locks: available:true round-trip through zod / available:false for NULL,
 // corrupt JSON and schema-mismatch rows / 404 task / 404 node-run.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
@@ -63,8 +62,7 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -72,7 +70,7 @@ async function seed(
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -88,7 +86,7 @@ async function seed(
     ...(lineage?.(taskId) ?? {}),
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId,

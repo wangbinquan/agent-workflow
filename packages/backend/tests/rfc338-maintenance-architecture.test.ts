@@ -128,7 +128,8 @@ describe('RFC-338 maintenance architecture', () => {
     // RFC-359（§5ea）—— intent 维护装配两个 provider 合成一份，名字不再带引擎前缀。
     // 锁的东西没变：Worker 是**唯一**装配维护命令的地方。
     expect(graph).toContain('composeIntentMaintenanceCommandsForDatabase({')
-    expect(graph).toContain('composePostgresqlResourcePackageApplyMaintenance({')
+    expect(graph).toContain('composeResourcePackageApplyMaintenance({')
+    expect(graph).toContain('createAtomicApplyRecovery([')
     expect(graph).not.toContain('postgresql-maintenance-owner-command-unavailable')
     expect(supervisor).not.toContain('runMaintenanceJob(')
     expect(entries).toContain("? './bootstrap/maintenanceWorker.ts'")

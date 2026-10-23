@@ -1,3 +1,4 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import type { WorkspaceContentParticipant } from '@/modules/source-control/public/participants'
 import type { AuthorizedWorkspaceSnapshotRef } from '@/modules/source-control/public/types'
 import { NotFoundError } from '@/util/errors'
@@ -30,7 +31,7 @@ export async function bindTaskWorkspaceReadScope(
 ): Promise<TaskWorkspaceReadScope> {
   const binding = await input.load(taskId)
   if (binding === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  if (binding.worktreePath === '')
+  if (isTaskWorkspaceUnbound(binding.worktreePath))
     throw new NotFoundError('task-worktree-missing', `task '${taskId}' has no worktree`)
   const content = input.contentScope(binding.worktreePath)
   const capability = createWorkspaceReadCapability()

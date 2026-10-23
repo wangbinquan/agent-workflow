@@ -1,4 +1,5 @@
 // RFC-381: one passive session graph owns all integration state; MR termination stops the selected driver and cleanup failures never stall its stream.
+import { readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
@@ -6,7 +7,6 @@ import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import {
   createProviderTaskExecutionModule,
   taskExecutionModule,
@@ -38,8 +38,8 @@ async function seed(db: PersistenceDb) {
   const slot = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: 1 },
   ])
-  const { tasks, taskExecutionIntents, webhookMrControlEffects } = tablesOf(db)
-  await insertOne(db, tasks, {
+  const { taskExecutionIntents, webhookMrControlEffects } = tablesOf(db)
+  await taskFixture(db, {
     id,
     name: id,
     workflowId: 'rfc381-wf',
@@ -268,10 +268,8 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       expect(controller.signal.aborted).toBe(true)
       await stopped.promise
       expect(stop).toHaveBeenCalled()
-      const { tasks, webhookMrControlEffects, webhookMrControlTargets } = tablesOf(harness.db)
-      expect((await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-        'canceled',
-      )
+      const { webhookMrControlEffects, webhookMrControlTargets } = tablesOf(harness.db)
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]?.status).toBe('canceled')
       expect((await harness.db.select().from(webhookMrControlEffects))[0]).toMatchObject({
         status: 'succeeded',
         lastError: null,
@@ -333,7 +331,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       composeWebhookTerminalWorkspacePrunePolicy({ db: harness.db, enabled: () => true }),
     )
     const graph = integrationBundleFixture(harness.db, home(), { workspaceMaintenance })
-    const { webhookMrControlEffects, tasks } = tablesOf(harness.db)
+    const { webhookMrControlEffects } = tablesOf(harness.db)
     await insertOne(harness.db, webhookMrControlEffects, {
       id: 'rfc381-reopen',
       deliveryId: 'rfc381-reopened',
@@ -353,7 +351,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       const effects = await harness.db.select().from(webhookMrControlEffects)
       expect(effects).toHaveLength(2)
       expect(effects.every((e) => e.status === 'succeeded' && e.lastError === null)).toBe(true)
-      const row = (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const row = (await readTaskFixtures(harness.db, { id: taskId }))[0]!
       expect(row.workspacePruningAt).not.toBeNull()
       expect(row.workspacePrunedAt).toBeNull()
       expect(row.sourceTerminationEffectRev).toBe(3)
@@ -366,7 +364,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       fail = false
       await workspaceMaintenance.finalizeClaimedWorkspace(taskId)
       expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workspacePrunedAt,
+        (await readTaskFixtures(harness.db, { id: taskId }))[0]?.workspacePrunedAt,
       ).not.toBeNull()
     } finally {
       await graph.integrationModules.webhookTerminalControl.stop()

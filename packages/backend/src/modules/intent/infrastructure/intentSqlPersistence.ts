@@ -1,3 +1,4 @@
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, inArray, isNotNull, lt, ne, notInArray, sql, type SQLWrapper } from 'drizzle-orm'
@@ -370,25 +371,6 @@ function builtinRuntime(name: IntentResolvedRuntime['protocol']): IntentResolved
     maxSteps: null,
     isSandbox: false,
     extraArgs: null,
-  }
-}
-
-function portNames(raw: string): readonly string[] {
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed.flatMap((entry) => {
-      if (typeof entry === 'string') return [entry]
-      if (
-        typeof entry === 'object' &&
-        entry !== null &&
-        typeof (entry as { readonly name?: unknown }).name === 'string'
-      )
-        return [(entry as { readonly name: string }).name]
-      return []
-    })
-  } catch {
-    return []
   }
 }
 
@@ -823,32 +805,7 @@ export class IntentSqlPersistence implements IntentPersistence {
   async loadIntentAgentPortNames(
     ids: readonly string[],
   ): Promise<ReadonlyMap<string, IntentAgentPortNames>> {
-    const persistenceDb = this.database
-
-    if (ids.length === 0) return new Map()
-    return await this.runner.read(function* () {
-      const values = sql.join(
-        ids.map((id) => sql`${id}`),
-        sql`, `,
-      )
-      const { agents } = tablesOf(persistenceDb)
-      const rows = yield* allRows<{
-        readonly id: string
-        readonly inputs: string
-        readonly outputs: string
-      }>(sql`
-        SELECT ${agents.id} AS "id", ${agents.inputs} AS "inputs",
-          ${agents.outputs} AS "outputs"
-        FROM ${agents}
-        WHERE ${agents.id} IN (${values})
-      `)
-      return new Map(
-        rows.map(
-          (row) =>
-            [row.id, { inputs: portNames(row.inputs), outputs: portNames(row.outputs) }] as const,
-        ),
-      )
-    })
+    return createAgentExecutionQueries(this.database).portNames(ids)
   }
 
   async findSession(id: string): Promise<IntentSessionRecord | null> {

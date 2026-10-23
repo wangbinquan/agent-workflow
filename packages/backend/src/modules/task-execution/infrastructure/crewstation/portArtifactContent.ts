@@ -1,3 +1,8 @@
+import {
+  legacyHostedPortArchivePath,
+  legacyPortArchiveTask,
+  decodeLegacyPortArchiveFile,
+} from '@/platform/content/legacyPortArchive'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -11,8 +16,6 @@ import type {
   PortArtifactWorkspaceFile,
   PortArtifactLinkTarget,
 } from '../../application/ports/portArtifactContent'
-import { portArchiveRootRel } from '../../application/portArtifacts'
-import { encodePortSegment } from '../../domain/portArtifacts'
 import { HOSTED_TASK_ARTIFACT_OWNER, retainHostedTaskArtifactInTx } from './taskArtifacts'
 import { sha256Hex } from '@/util/hash'
 
@@ -37,7 +40,12 @@ export function createHostedPortArtifactContent(input: {
       await input.db
         .select()
         .from(hostedTaskArtifacts)
-        .where(eq(hostedTaskArtifacts.reference, reference))
+        .where(
+          eq(
+            hostedTaskArtifacts.reference,
+            decodeLegacyPortArchiveFile(reference, 'object').location.value,
+          ),
+        )
         .limit(1)
     )[0]
   }
@@ -73,8 +81,8 @@ export function createHostedPortArtifactContent(input: {
     return Buffer.concat(chunks)
   }
   const write = async (reference: string, bytes: Uint8Array): Promise<void> => {
-    const match = /^runs\/([^/]+)\/ports\//.exec(reference)
-    if (match === null) throw new Error('hosted-port-artifact-reference-invalid')
+    const taskId = legacyPortArchiveTask(reference)
+    if (taskId === null) throw new Error('hosted-port-artifact-reference-invalid')
     const digest = sha256Hex(bytes)
     const existing = await find(reference)
     if (existing !== undefined) {
@@ -82,10 +90,10 @@ export function createHostedPortArtifactContent(input: {
       return
     }
     await input.publications.publish(
-      [{ owner: HOSTED_TASK_ARTIFACT_OWNER, key: reference, scope: match[1]!, bytes }],
+      [{ owner: HOSTED_TASK_ARTIFACT_OWNER, key: reference, scope: taskId, bytes }],
       {
         async commit(tx, [object]) {
-          await retainHostedTaskArtifactInTx(tx, { reference, taskId: match[1]!, object: object! })
+          await retainHostedTaskArtifactInTx(tx, { reference, taskId: taskId, object: object! })
         },
       },
     )
@@ -104,7 +112,13 @@ export function createHostedPortArtifactContent(input: {
   return {
     prepareArchive: async () => undefined,
     reference: (namespace, index, extension) =>
-      `${portArchiveRootRel(namespace.taskId, namespace.nodeRunId).replace(/\\/g, '/')}/${encodePortSegment(namespace.portName)}/item_${index}${extension}`,
+      legacyHostedPortArchivePath(
+        namespace.taskId,
+        namespace.nodeRunId,
+        namespace.portName,
+        index,
+        extension,
+      ),
     size: async (source) => (await info(source)).size,
     copy: async (source, reference) => write(reference, await readSource(source)),
     readPrefix: readSource,

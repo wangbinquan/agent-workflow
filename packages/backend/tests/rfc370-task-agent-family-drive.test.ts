@@ -1,9 +1,15 @@
 // RFC-370: a replacement complete family must be consumed by the actual
 // SQLite and PostgreSQL Task drive, including the original persisted failure.
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -44,7 +50,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
       let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
       const reason = new Error('chosen complete family compilation failed')
       try {
-        const { users, agents, workflows, tasks, nodeRuns } = tablesOf(db)
+        const { users } = tablesOf(db)
         await insertOne(db, users, {
           id: userId,
           username: userId,
@@ -54,7 +60,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
           createdAt: 1,
           updatedAt: 1,
         })
-        await insertOne(db, agents, {
+        await agentFixture(db, {
           id: agentId,
           name: 'family-' + agentId,
           outputs: '["summary"]',
@@ -75,12 +81,12 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
           ],
           edges: [],
         }
-        await insertOne(db, workflows, {
+        await workflowFixture(db, {
           id: workflowId,
           name: workflowId,
           definition: JSON.stringify(definition),
         })
-        await insertOne(db, tasks, {
+        await taskFixture(db, {
           id: taskId,
           executionLineageId: taskId,
           lineageSlotPathJson: JSON.stringify([
@@ -200,7 +206,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
         expect(scopes[0]!.workspaceRef).toBe('memory:workspace:' + createdKey)
         expect(creates[0]!.binding.taskId).toBe(taskId)
         expect(compiles).toBe(1)
-        const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        const rows = await readNodeRunFixtures(db, { taskId })
         expect(rows).toHaveLength(1)
         expect(rows[0]).toMatchObject({
           id: scopes[0]!.nodeRunId,
@@ -209,9 +215,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
           runtime: protocol,
           errorMessage: `spawn ${protocol} failed: chosen complete family compilation failed`,
         })
-        expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-          'failed',
-        )
+        expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('failed')
       } finally {
         await execution?.shutdown()
         rmSync(appHome, { recursive: true, force: true })

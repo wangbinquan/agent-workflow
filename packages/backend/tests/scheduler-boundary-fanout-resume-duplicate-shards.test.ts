@@ -1,5 +1,12 @@
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  patchNodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // Regression: wrapper-fanout RESUME re-mints all shard children (no idempotency).
@@ -76,8 +83,7 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -98,15 +104,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -235,7 +240,7 @@ function registerCases(provider: ProviderHarness) {
     const staleAId = ulid()
     const staleBId = ulid()
     const { nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: staleAId,
       taskId,
       nodeId: 'inner',
@@ -247,7 +252,7 @@ function registerCases(provider: ProviderHarness) {
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: staleBId,
       taskId,
       nodeId: 'inner',
@@ -261,7 +266,7 @@ function registerCases(provider: ProviderHarness) {
     })
 
     const wrapperRunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: wrapperRunId,
       taskId,
       nodeId: 'fan',
@@ -275,14 +280,8 @@ function registerCases(provider: ProviderHarness) {
     })
 
     // Re-parent the stale children to the wrapper row (now that we have its id).
-    await h.db
-      .update(nodeRuns)
-      .set({ parentNodeRunId: wrapperRunId })
-      .where(eq(nodeRuns.id, staleAId))
-    await h.db
-      .update(nodeRuns)
-      .set({ parentNodeRunId: wrapperRunId })
-      .where(eq(nodeRuns.id, staleBId))
+    await patchNodeRunFixture(h.db, { id: staleAId }, { parentNodeRunId: wrapperRunId })
+    await patchNodeRunFixture(h.db, { id: staleBId }, { parentNodeRunId: wrapperRunId })
 
     await catchUpLegacySequenceTask(h.db, taskId)
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ result: 'fresh' }) }, () =>
@@ -301,9 +300,9 @@ function registerCases(provider: ProviderHarness) {
 
     // Collect every inner shard row that hangs off THIS wrapper row, grouped
     // by shardKey.
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapperRunId)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapperRunId,
+    )
     const byKey = new Map<string, number>()
     for (const r of innerRows) {
       const k = r.shardKey ?? '__null__'

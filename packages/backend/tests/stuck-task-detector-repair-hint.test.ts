@@ -8,8 +8,7 @@
 //   - S4 has no repairHint (task-level only)
 //   - missing candidate → no repairHint key (not even `undefined`)
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
@@ -39,9 +38,8 @@ async function seedTask(
     nodes: opts.nodes,
     edges: [],
   }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -64,8 +62,7 @@ async function addRun(
   status: 'awaiting_review' | 'awaiting_human' | 'done' | 'interrupted' | 'failed' | 'canceled',
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,

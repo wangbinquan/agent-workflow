@@ -18,7 +18,13 @@
 // for us to inject a fresh pending row, then completes; the scheduler's
 // next batch must dispatch the injected row.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -35,7 +41,7 @@ import {
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
-import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture' // RFC-074 PR-C: monotonic ids for synchronous test seeding (pure-id freshness)
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -78,8 +84,7 @@ async function buildHarness(provider: ProviderHarness): Promise<Harness> {
 }
 
 async function seedAgent(db: PersistenceDb, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -99,13 +104,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -201,8 +205,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     // if a previous scheduler invocation finished + paused). The
     // rerun-equivalent row sits pending with clarifyIteration=1.
     const firstRunId = ulid()
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    const { nodeRuns } = tablesOf(h.db)
+    await nodeRunFixture(h.db, {
       id: firstRunId,
       taskId,
       nodeId: 'd',
@@ -213,7 +217,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       finishedAt: Date.now() - 1000,
     })
     const rerunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: rerunId,
       taskId,
       nodeId: 'd',
@@ -244,7 +248,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // The rerun row must have been dispatched and completed.
     const rerunRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunId)))[0]
     expect(rerunRow?.status).toBe('done')
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('done')
   })
 
@@ -327,10 +331,10 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // Both sibling branches finished. asker → awaiting_human; crasher → failed.
     // The aggregation contract: awaiting_human outranks failed.
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(taskRow?.status).toBe('awaiting_human')
 
     // Verify each branch ran.

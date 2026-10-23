@@ -71,7 +71,7 @@ import {
   type ResourcePackagePluginArtifactOwner,
   type SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/composition/resourcePackageAtomicApply'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
 import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
@@ -682,7 +682,7 @@ function composeResourcePackageBinding<P extends DatabaseProvider>(
       ? { pluginInstaller: createResourcePackagePluginInstaller() }
       : { pluginArtifacts: input.selections?.resourcePackagePluginArtifacts }),
   })
-  const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+  const atomicApply = createResourcePackageAtomicApplyOperations({
     db: input.db,
     box,
   })

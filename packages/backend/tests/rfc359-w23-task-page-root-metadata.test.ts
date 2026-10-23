@@ -1,11 +1,12 @@
 // RFC-359: keep root ordering over the complete matching set, but compute
 // root match metadata only for the selected families. The oracle restores the
 // exact previous SQL text while retaining every real bound value and snapshot.
+import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
-import { eq, sql, SQL, StringChunk } from 'drizzle-orm'
+import { sql, SQL, StringChunk } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -27,9 +28,11 @@ const VIEWER: TaskListViewer = { userId: 'w21-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
 const GLOBAL_ROOT_STATS = 'MAX(CASE WHEN m.id = m.rid THEN 1 ELSE 0 END) AS is_self'
 const ORIGINAL_SQL_REWRITES: readonly (readonly [string, string])[] = [
+  // RFC-395 II-a A7: the workflow name is now the resource-catalog owner's correlated
+  // expression, so neither the emitter nor the restored text joins `workflows w`.
   [
-    '      JOIN tasks t ON t.id = pr.rid\n      JOIN match_counts mc ON mc.rid = pr.rid\n      LEFT JOIN workflows w ON w.id = t.workflow_id',
-    '      JOIN tasks t ON t.id = pr.rid\n      LEFT JOIN workflows w ON w.id = t.workflow_id',
+    '      JOIN tasks t ON t.id = pr.rid\n      JOIN match_counts mc ON mc.rid = pr.rid\n',
+    '      JOIN tasks t ON t.id = pr.rid\n',
   ],
   [
     '        mc.matching_descendant_count\n      FROM page_roots pr',
@@ -146,7 +149,7 @@ function globalRootStatsOracle(query: SQL): SQL {
 }
 
 async function seed(db: PersistenceDb): Promise<void> {
-  const { users, workflows, tasks, lifecycleAlerts } = tablesOf(db)
+  const { users, lifecycleAlerts } = tablesOf(db)
   await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
@@ -156,7 +159,7 @@ async function seed(db: PersistenceDb): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'w21-workflow',
     name: 'MiXeD workflow',
     definition: '{ "fixture": true }',
@@ -206,7 +209,7 @@ async function seed(db: PersistenceDb): Promise<void> {
         ? []
         : [{ stableNodeKey: 'child-task', frozenOccurrenceKey: row.id, workflowRevision: null }]),
     ]
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: row.id,
       name: row.name,
       workflowId: 'w21-workflow',
@@ -293,8 +296,9 @@ async function compareSql(
 describeEachProvider('RFC-359 W23 selected-family root metadata', (harness) => {
   test('the old SQL and actual emitter keep complete rows, facets and every page on a tied tree', async () => {
     await seed(harness.db)
-    const { tasks } = tablesOf(harness.db)
-    const storedBefore = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const storedBefore = await readTaskFixtures(harness.db, undefined, {
+      orderBy: [{ field: 'id' }],
+    })
     const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
     const cases: readonly TaskOperationsRawQuery[] = [
       { subject: 'workflow', limit: '1' },
@@ -328,21 +332,23 @@ describeEachProvider('RFC-359 W23 selected-family root metadata', (harness) => {
     expect(all.facets).toEqual({ all: 6, active: 3, attention: 3, finished: 3 })
     expect(all.items.find((item) => item.id === 'root-a')?.openAlertCount).toBe(2)
     expect(all.items.map((item) => item.listContext.matchingDescendantCount)).toEqual([1, 1, 1])
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(storedBefore)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(storedBefore)
   })
 
   test('both SQL forms read the transaction row and rollback leaves every stored byte unchanged', async () => {
     await seed(harness.db)
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
     const expected = await compareSql(harness, harness.db, { q: 'transaction only', limit: '3' })
     expect(expected).toHaveLength(1)
     expect(expected[0]?.id).toBeNull()
     const stop = new Error('rollback task-page fixture')
     await expect(
       harness.session.transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        await tx.update(tasks).set({ name: 'transaction only' }).where(eq(tasks.id, 'child-a'))
+        await patchTaskFixture(tx, { id: 'child-a' }, { name: 'transaction only' })
         const changed = await compareSql(harness, tx, { q: 'transaction only', limit: '3' })
         expect(changed.map((row) => row.id)).toEqual(['root-a'])
         expect(changed[0]?.match_kind).toBe('context')
@@ -351,7 +357,11 @@ describeEachProvider('RFC-359 W23 selected-family root metadata', (harness) => {
         throw stop
       }),
     ).rejects.toBe(stop)
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(before)
     expect(await compareSql(harness, harness.db, { q: 'transaction only', limit: '3' })).toEqual(
       expected,
     )

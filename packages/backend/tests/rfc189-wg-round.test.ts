@@ -15,7 +15,7 @@
 // 迁移方式：把 migrations 目录复制到临时目录并截断 journal 至 0094 → 建库插行
 // → 换回完整目录再 migrate（drizzle 按 journal 差量补跑 0095）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
@@ -38,7 +38,8 @@ import {
   runWorkgroupTurns as runWorkgroupEngine,
   type WorkgroupTurnsTestHooks as WorkgroupEngineHooks,
 } from './helpers/workgroupTurns'
-import { buildWorkgroupHostSnapshot } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import { createLogger } from '../src/util/log'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -317,10 +318,10 @@ async function seedEngineTask(db: PersistenceDb, config: WorkgroupRuntimeConfig)
         : member,
     ),
   }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: ulid(), name: `host-${taskId}`, definition: '{}' })
+  const { workflows } = tablesOf(db)
+  await workflowFixture(db, { id: ulid(), name: `host-${taskId}`, definition: '{}' })
   const wf = (await db.select().from(workflows).limit(1))[0]
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'wg-rfc189',
     executionLineageId: taskId,
@@ -434,7 +435,7 @@ describeEachProvider('RFC-189 workgroup round providers', (harness) => {
       // 模拟崩溃残留：引擎外 mint 的 pending leader 行（无 wgRound）。
       const orphanId = ulid()
       const { nodeRuns, workgroupAssignments } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: orphanId,
         taskId,
         nodeId: '__wg_leader__',
@@ -456,10 +457,11 @@ describeEachProvider('RFC-189 workgroup round providers', (harness) => {
       const flipping: WorkgroupEngineHooks = {
         runHostNode: async (req) => {
           const result = await hooks.runHostNode(req)
-          await db
-            .update(nodeRuns)
-            .set({ status: result.status === 'done' ? 'done' : 'failed' })
-            .where(eq(nodeRuns.id, req.nodeRunId))
+          await patchNodeRunFixture(
+            db,
+            { id: req.nodeRunId },
+            { status: result.status === 'done' ? 'done' : 'failed' },
+          )
           return result
         },
       }

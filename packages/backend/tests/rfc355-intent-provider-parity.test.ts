@@ -106,7 +106,7 @@ describe('RFC-355 T10 —— apply 面用户可见错误码的精确清单', () 
       read('modules', 'intent', 'domain', 'storedChangeset.ts'),
       read('modules', 'intent', 'application', 'intentResourcePlan.ts'),
       read('modules', 'intent', 'application', 'applyCommitPlan.ts'),
-      read('modules', 'intent', 'application', 'applyReplay.ts'),
+      read('modules', 'intent', 'infrastructure', 'intentApplyErrors.ts'),
       read('modules', 'intent', 'application', 'resolveChangeset.ts'),
     ].join('\n')
     expect(
@@ -135,8 +135,8 @@ describe('RFC-355 T1 —— 纯判据不许被抄成两份', () => {
     expect(
       /const applyLocks|function withSessionApplyLock|function withSessionLock/.test(apply),
     ).toBe(false)
-    expect(read('modules', 'intent', 'application', 'sessionApplyLock.ts')).toContain(
-      'export function createSessionApplyLock(',
+    expect(read('platform', 'atomic-apply', 'keyedLock.ts')).toContain(
+      'export function createAtomicApplyLock(',
     )
   })
 
@@ -204,3 +204,6 @@ describe('RFC-355 T6 —— intent 深取 resource-catalog 内部实现的账本
     ).toEqual([...DEEP_IMPORT_DEBT[file]!].sort())
   })
 })
+
+// 2026-10-22 RFC-395 II-a A6：上文 sessionApplyLock.ts 为历史依据；当前场景使用
+// platform/atomic-apply/keyedLock.ts 的同一串行算法，journal claim 则由 conflict insert 与 CAS 驱动。

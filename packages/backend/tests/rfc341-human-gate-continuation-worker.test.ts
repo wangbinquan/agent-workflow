@@ -1,3 +1,4 @@
+import { taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -13,8 +14,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 const NOW = 1_789_488_200_000
 
 async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-gate',

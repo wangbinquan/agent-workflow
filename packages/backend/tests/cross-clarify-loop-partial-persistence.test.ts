@@ -31,9 +31,8 @@
 // If any of these go red the wrapper-loop reject persistence vs Q&A
 // reset contract is broken — investigate before relaxing.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -102,8 +101,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = loopDef()
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'loop-persist',
     description: '',
@@ -116,7 +114,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -133,15 +131,14 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
@@ -153,8 +150,7 @@ async function seedQRun(
   loopIter = 0,
 ): Promise<string> {
   const id = `nr_${nodeId}_${loopIter}_${Math.random().toString(36).slice(2, 6)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -167,15 +163,14 @@ async function seedQRun(
 
 async function seedDesignerRun(db: PersistenceDb, taskId: string, loopIter = 0): Promise<string> {
   const id = `nr_d_${loopIter}_${Math.random().toString(36).slice(2, 6)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: loopIter,
-    preSnapshot: 'snap-c5',
+    checkpoints: [{ mountPath: '', preSnapshot: 'snap-c5' }],
   })
   return id
 }
@@ -283,8 +278,8 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
     })
     // Mint a fresh iter-1 pending cross-clarify node_run and dispatch.
     const iter1NodeRunId = `nr_cross1_iter1_${Math.random().toString(36).slice(2, 6)}`
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { clarifyRounds } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: iter1NodeRunId,
       taskId,
       nodeId: 'cross1',

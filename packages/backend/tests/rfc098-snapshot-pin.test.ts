@@ -18,15 +18,15 @@
 //      snapshot is gc-pruned, repo 1 must NOT be touched (the pre-fix
 //      per-repo loop reset+cleaned repo 1 first, then discovered the missing
 //      snapshot — violating the fail-closed promise). failures carry
-//      code='snapshot-missing', attempted stays false, both modes
-//      (resume/retry). With every snapshot present, phase 2 performs the
+//      code='snapshot-missing', attempted stays false, both pre-pass
+//      and execution. With every snapshot present, phase 2 performs the
 //      historical per-repo rollback unchanged.
 //
 // 确定性说明：纯本地 git（init/commit/worktree add/stash create/gc/update-ref），
 //   无网络/clone——不属于 RUN_GIT_NETWORK 门控形态（8859a67）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -38,13 +38,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { rollbackNodeRunWorktrees } from '../src/services/nodeRollback'
 import type { RollbackTarget } from '../src/services/nodeRollback'
-import {
-  createWorktree,
-  gitStashSnapshot,
-  runGit,
-  snapshotRefName,
-  snapshotRefPrefix,
-} from '../src/util/git'
+import { createWorktree, runGit, snapshotRefName, snapshotRefPrefix } from '../src/util/git'
 import { createLogger } from '../src/util/log'
 
 const ulid = monotonicFactory()
@@ -113,7 +107,7 @@ describeEachProvider(
       // the ref lands in the SHARED source-repo odb because snapshot refs are
       // common refs, not per-worktree refs.
       writeFileSync(join(wt.worktreePath, 'data.txt'), 'SNAPSHOT-STATE\n')
-      const sha = await gitStashSnapshot(wt.worktreePath, {
+      const sha = await legacyStashSnapshotFixture(wt.worktreePath, {
         pinRef: snapshotRefName(taskId, nodeRunId),
         log,
       })
@@ -125,10 +119,9 @@ describeEachProvider(
       await gcPruneNow(repoPath)
       expect(await objectExists(repoPath, sha)).toBe(true)
 
-      const { workflows, tasks } = tablesOf(db)
       // Terminal task, old enough for the GC threshold.
-      await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
-      await insertOne(db, tasks, {
+      await workflowFixture(db, { id: workflowId, name: 'wf', definition: '{}' })
+      await taskFixture(db, {
         name: 'fixture-task',
         id: taskId,
         workflowId,
@@ -194,13 +187,13 @@ describe('RFC-098 WP-9 修订#3 — multi-repo rollback is two-phase all-or-noth
     return {
       worktreePath: container,
       repos: [
-        { worktreePath: repoA, worktreeDirName: 'repo-a' },
-        { worktreePath: repoB, worktreeDirName: 'repo-b' },
+        { worktreePath: repoA, mountPath: 'repo-a' },
+        { worktreePath: repoB, mountPath: 'repo-b' },
       ],
     }
   }
 
-  test("repo 2's snapshot missing → snapshot-missing failure, attempted=false, repo 1 NOT touched (both modes); all-present map still rolls back", async () => {
+  test("repo 2's snapshot missing → snapshot-missing failure, attempted=false, repo 1 NOT touched (pre-pass and execution); all-present map still rolls back", async () => {
     const container = join(root, 'container')
     mkdirSync(container, { recursive: true })
     const repoA = join(container, 'repo-a')
@@ -211,25 +204,26 @@ describe('RFC-098 WP-9 修订#3 — multi-repo rollback is two-phase all-or-noth
     // repo-a has a REAL snapshot; repo-b's map entry points at a pruned
     // (never-existing) commit — the second-repo-missing attack from 修订#3.
     writeFileSync(join(repoA, 'data.txt'), 'SNAP-A\n')
-    const shaA = await gitStashSnapshot(repoA)
+    const shaA = await legacyStashSnapshotFixture(repoA)
     expect(shaA).not.toBe('')
     const missingSha = 'deadbeef'.repeat(5)
     dirtyRepo(repoA)
     dirtyRepo(repoB)
     const run = {
       id: ulid(),
-      preSnapshot: null,
-      preSnapshotReposJson: JSON.stringify({ 'repo-a': shaA, 'repo-b': missingSha }),
+      checkpoints: Object.entries({ 'repo-a': shaA, 'repo-b': missingSha }).map(
+        ([mountPath, preSnapshot]) => ({ mountPath, preSnapshot }),
+      ),
     }
 
-    // Phase-1 pre-check fails in BOTH calling modes → zero repos touched.
+    // Phase-1 pre-check fails in both pre-pass and execution → zero repos touched.
     // Pre-fix shape: repo-a was reset+cleaned+stash-applied FIRST, then
     // repo-b's apply blew up — repo-a's failed-attempt dirt was already gone.
-    for (const resetOnEmptySnapshot of [false, true]) {
+    for (const checkOnly of [true, false]) {
       const outcome = await rollbackNodeRunWorktrees(
         multiTarget(container, repoA, repoB),
         run,
-        { resetOnEmptySnapshot },
+        { checkOnly },
         log,
       )
       expect(outcome.attempted).toBe(false)
@@ -246,13 +240,14 @@ describe('RFC-098 WP-9 修订#3 — multi-repo rollback is two-phase all-or-noth
     // rollback executes unchanged.
     const fixedRun = {
       id: ulid(),
-      preSnapshot: null,
-      preSnapshotReposJson: JSON.stringify({ 'repo-a': shaA, 'repo-b': '' }),
+      checkpoints: Object.entries({ 'repo-a': shaA, 'repo-b': '' }).map(
+        ([mountPath, preSnapshot]) => ({ mountPath, preSnapshot }),
+      ),
     }
     const okOutcome = await rollbackNodeRunWorktrees(
       multiTarget(container, repoA, repoB),
       fixedRun,
-      { resetOnEmptySnapshot: false },
+      {},
       log,
     )
     expect(okOutcome.attempted).toBe(true)

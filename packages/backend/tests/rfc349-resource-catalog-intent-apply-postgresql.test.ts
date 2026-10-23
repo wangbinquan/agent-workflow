@@ -50,7 +50,21 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
   test('owns the six PostgreSQL aggregate arms and their revisions', () => {
     const source = readFileSync(portsPath, 'utf8')
 
-    for (const table of ['agents', 'skills', 'mcps', 'plugins', 'workflows', 'workgroups']) {
+    // RFC-395 II-a A5: agents/workflows delegate to their single writers on the same transaction.
+    for (const [table, file, factory] of [
+      ['agents', 'agentReferenceWrite', 'createAgentReferenceWriteParticipant'],
+      ['workflows', 'workflowDefinitionWrite', 'createWorkflowDefinitionWriteParticipant'],
+    ]) {
+      const writer = readFileSync(
+        join(root, `src/modules/resource-catalog/infrastructure/${file}.ts`),
+        'utf8',
+      )
+      expect(source).toContain(`${factory}(transaction).insert(`)
+      expect(source).toContain(`${factory}(transaction).update(`)
+      expect(writer).toContain(`.insert(${table})`)
+      expect(writer).toContain(`.update(${table})`)
+    }
+    for (const table of ['skills', 'mcps', 'plugins', 'workgroups']) {
       expect(source).toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )

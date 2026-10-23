@@ -20,6 +20,7 @@
 //
 // 所以两道复核分开：产物比较用「整行减 ACL 列」，授权复核重新查 grant 跑 `isVisibleRow`。
 
+import { agentFixture, patchAgentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -71,8 +72,7 @@ async function seedAgent(
   owner: string,
   visibility: 'private' | 'public',
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: '',
@@ -89,7 +89,7 @@ async function seedAgent(
     aclRevision: 0,
     createdAt: 1,
     updatedAt: 1,
-  } as never)
+  })
 }
 
 /** reader 拥有的工作流，引用了 owner 的 private agent（reader 靠 grant 才看得见）。 */
@@ -104,7 +104,7 @@ async function seedGrantedClosure(): Promise<{
 
   const childId = ulid()
   await seedAgent(db, childId, 'private-dep', 'owner', 'private')
-  const { resourceGrants, workflows } = tablesOf(db)
+  const { resourceGrants } = tablesOf(db)
   await insertOne(db, resourceGrants, {
     resourceType: 'agent',
     resourceId: childId,
@@ -114,7 +114,7 @@ async function seedGrantedClosure(): Promise<{
   } as never)
 
   const rootId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: rootId,
     name: 'root',
     description: '',
@@ -130,7 +130,7 @@ async function seedGrantedClosure(): Promise<{
     aclRevision: 0,
     createdAt: 1,
     updatedAt: 1,
-  } as never)
+  })
 
   return { appHome, rootId, childId }
 }
@@ -293,12 +293,9 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
         // **version 不动**（ACL 写路径就是这样：只推 aclRevision / updatedAt）。
         // 旧实现在这里完全无感——它比的是 `expectTokenOf`，workflow 只看 version。
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
-          const { resourceGrants, agents } = tablesOf(handle)
+          const { resourceGrants } = tablesOf(handle)
           await handle.delete(resourceGrants).where(eq(resourceGrants.resourceId, childId))
-          await handle
-            .update(agents)
-            .set({ aclRevision: 1, updatedAt: 2 })
-            .where(eq(agents.id, childId))
+          await patchAgentFixture(handle, { id: childId }, { aclRevision: 1, updatedAt: 2 })
         })
 
         expect(
@@ -322,12 +319,13 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       try {
         const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
-          const { resourceGrants, agents } = tablesOf(handle)
+          const { resourceGrants } = tablesOf(handle)
           await handle.delete(resourceGrants).where(eq(resourceGrants.resourceId, childId))
-          await handle
-            .update(agents)
-            .set({ visibility: 'private', ownerUserId: 'owner', aclRevision: 2 })
-            .where(eq(agents.id, childId))
+          await patchAgentFixture(
+            handle,
+            { id: childId },
+            { visibility: 'private', ownerUserId: 'owner', aclRevision: 2 },
+          )
         })
 
         expect(
@@ -357,11 +355,11 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       try {
         const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
-          const { agents } = tablesOf(handle)
-          await handle
-            .update(agents)
-            .set({ visibility: 'public', aclRevision: 3, updatedAt: 5 })
-            .where(eq(agents.id, childId))
+          await patchAgentFixture(
+            handle,
+            { id: childId },
+            { visibility: 'public', aclRevision: 3, updatedAt: 5 },
+          )
         })
 
         const pkg = await exportResourcePackage(
@@ -383,11 +381,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       try {
         const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
-          const { agents } = tablesOf(handle)
-          await handle
-            .update(agents)
-            .set({ bodyMd: 'CHANGED', updatedAt: 7 })
-            .where(eq(agents.id, childId))
+          await patchAgentFixture(handle, { id: childId }, { bodyMd: 'CHANGED', updatedAt: 7 })
         })
 
         expect(
@@ -421,7 +415,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       try {
         await seedUser(db, 'u1')
         const pluginId = ulid()
-        const { plugins, agents } = tablesOf(db)
+        const { plugins } = tablesOf(db)
         await insertOne(db, plugins, {
           id: pluginId,
           name: 'fmt',
@@ -440,10 +434,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
         } as never)
         const agentId = ulid()
         await seedAgent(db, agentId, 'uses-plugin', 'u1', 'private')
-        await db
-          .update(agents)
-          .set({ plugins: JSON.stringify([pluginId]) } as never)
-          .where(eq(agents.id, agentId))
+        await patchAgentFixture(db, { id: agentId }, { plugins: JSON.stringify([pluginId]) })
 
         // 闭包捕获插件行之后、末端复核读它之前，模拟一次正常重装：**只**换安装态三列，
         // `spec` / `enabled` / `description` 一个字都不动。
@@ -520,8 +511,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
         const agentId = ulid()
         await seedAgent(db, agentId, 'worker', 'u1', 'private')
         const childId = ulid()
-        const { workflows } = tablesOf(db)
-        await insertOne(db, workflows, {
+        await workflowFixture(db, {
           id: childId,
           name: 'child',
           description: '',
@@ -531,9 +521,9 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
           version: 1,
           createdAt: 1,
           updatedAt: 1,
-        } as never)
+        })
         const rootId = ulid()
-        await insertOne(db, workflows, {
+        await workflowFixture(db, {
           id: rootId,
           name: 'root',
           description: '',
@@ -551,7 +541,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
           version: 1,
           createdAt: 1,
           updatedAt: 1,
-        } as never)
+        })
 
         const pkg = await exportResourcePackage(
           db,
@@ -572,8 +562,7 @@ describeEachProvider('RFC-271 导出末端双复核（双引擎）', (harness) =
       try {
         const { agents } = tablesOf(db)
         const raced = dbWithMidExportWrite(db, agents, 2, async (handle) => {
-          const { agents } = tablesOf(handle)
-          await handle.update(agents).set({ name: 'renamed' }).where(eq(agents.id, childId))
+          await patchAgentFixture(handle, { id: childId }, { name: 'renamed' })
         })
         // 报的是 `package-root-changed` 而不是 closure：改名会改 slug，root 工作流的
         // `agentRef` wire 随之变化，于是 root 的 op 先不等。这比只发现「成员变了」更强

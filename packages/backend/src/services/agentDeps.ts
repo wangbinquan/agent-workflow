@@ -24,8 +24,9 @@
 //     Reverse index used by compatibility consumers. The injected provider
 //     owns its exact storage predicate and returns closed identity rows.
 
+import { validateAgentDependencies } from '@/modules/resource-catalog/public/queries'
 import type { Agent, RefCallPolicy } from '@agent-workflow/shared'
-import { resourceRefKey, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
+import { agentReferenceIds, resourceRefKey } from '@agent-workflow/shared'
 import { DomainError } from '@/util/errors'
 
 export interface AgentDependencyLookup {
@@ -99,7 +100,7 @@ export async function resolveDependsClosure(
   const visited = new Map<string, Agent>([[keyOf(root.id), root]])
   const order: Agent[] = [root]
   const queue: Array<{ id: string; path: string[] }> = []
-  for (const dep of root.dependsOn) {
+  for (const dep of agentReferenceIds(root, 'agent')) {
     queue.push({ id: dep, path: [root.id] })
   }
   while (queue.length > 0) {
@@ -123,7 +124,7 @@ export async function resolveDependsClosure(
     }
     visited.set(keyOf(id), agent)
     order.push(agent)
-    for (const next of agent.dependsOn) {
+    for (const next of agentReferenceIds(agent, 'agent')) {
       queue.push({ id: next, path: [...path, id] })
     }
   }
@@ -147,73 +148,7 @@ export async function validateDependsOn(
   dependsOn: readonly string[],
 ): Promise<void> {
   if (dependsOn.length === 0) return
-
-  // 1. dedupe with stable order
-  const seen = new Set<string>()
-  const unique: string[] = []
-  for (const n of dependsOn) {
-    if (seen.has(n)) continue
-    seen.add(n)
-    unique.push(n)
-  }
-
-  // 2. self-reference is canonical-id only. Portable import selectors must be
-  //    resolved before entering this ordinary-write validator.
-  if (unique.includes(selfId)) {
-    throw new DomainError('agent-dependency-self', `agent cannot depend on itself`, 400, {
-      id: selfId,
-    })
-  }
-
-  // 3. direct-level existence check — gives a crisper error than the BFS,
-  //    which only reports the first missing dep on its traversal path.
-  const missing: string[] = []
-  for (const n of unique) {
-    const a = await lookup.get(n)
-    if (a === null) missing.push(n)
-  }
-  if (missing.length > 0) {
-    throw new DomainError(
-      'agent-dependency-not-found',
-      `agent dependsOn references unknown agent(s): ${missing.join(', ')}`,
-      400,
-      { notFound: missing },
-    )
-  }
-
-  // 4. closure cycle check via BFS over the synthetic root.
-  const existing = await lookup.get(selfId)
-  const syntheticRoot: Agent = existing
-    ? { ...existing, dependsOn: unique }
-    : ({
-        id: selfId,
-        name: '',
-        description: '',
-        outputs: [],
-        inputs: [], // RFC-166
-        syncOutputsOnIterate: true,
-        permission: {},
-        skills: [],
-        dependsOn: unique,
-        mcp: [],
-        plugins: [],
-        frontmatterExtra: {},
-        bodyMd: '',
-        schemaVersion: 1,
-        createdAt: 0,
-        updatedAt: 0,
-      } satisfies Agent)
-  const closure = await resolveDependsClosure(lookup, syntheticRoot, {
-    call: VALIDATE_CALL_POLICY,
-  })
-  if (closure.ok === false) {
-    throw new DomainError(
-      'agent-dependency-cycle',
-      `agent dependsOn forms a cycle: ${closure.cyclePath.join(' → ')}`,
-      400,
-      { cyclePath: closure.cyclePath },
-    )
-  }
+  await validateAgentDependencies(lookup, selfId, dependsOn)
 }
 
 /**
@@ -232,24 +167,4 @@ export async function findAgentsDependingOn(
   agentId: string,
 ): Promise<Array<{ id: string; name: string }>> {
   return [...(await lookup.findDependents(agentId))]
-}
-
-/** Pure core of findAgentsDependingOn — RFC-165 (F17-r3): the agent
- *  rename/delete guards re-run it inside their owning persistence transaction. Matches
- *  by `agentId` (RFC-223 PR-1) against the id-valued dependsOn column and
- *  returns the exact matching ROWS, preserving stable referencing ids. */
-export function agentsDependingOnIn<T extends { id: string; dependsOn: string }>(
-  rows: readonly T[],
-  agentId: string,
-): T[] {
-  const out: T[] = []
-  for (const row of rows) {
-    try {
-      const parsed = JSON.parse(row.dependsOn) as unknown
-      if (Array.isArray(parsed) && parsed.includes(agentId)) out.push(row)
-    } catch {
-      // malformed column — ignore, agent.ts parser already treats it as []
-    }
-  }
-  return out
 }

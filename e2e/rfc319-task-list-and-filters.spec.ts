@@ -90,6 +90,7 @@
 //     会被淹进分页窗口里。
 //   · TASK-21 / TASK-24 / TASK-45 三条要造**真任务**，排在最后，免得真任务的行混进前面的计数。
 
+import { taskFixtureSql, patchTaskFixtureSql } from './fixtures/model'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -209,10 +210,6 @@ function sqlText(value: string | null): string {
   return value === null ? 'NULL' : `'${value.replaceAll("'", "''")}'`
 }
 
-function sqlNum(value: number | null): string {
-  return value === null ? 'NULL' : String(value)
-}
-
 async function primeAuth(page: Page): Promise<void> {
   await page.addInitScript(
     ({ baseUrl, token }) => {
@@ -323,34 +320,31 @@ function seedTaskStatements(rows: readonly SeedTask[]): string[] {
   const statements: string[] = []
   for (const row of rows) {
     const ownerId = row.owner === 'admin' ? adminUserId : peerUserId
-    const values = [
-      sqlText(row.id),
-      sqlText(row.name),
-      sqlText(`rfc319-taskline-workflow-${row.category}`),
-      sqlText('{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'),
-      sqlText('/tmp/rfc319-taskline/fixture-repo'),
-      sqlText(`/tmp/rfc319-taskline/worktrees/${row.id}`),
-      sqlText('main'),
-      sqlText(`agent-workflow/${row.id}`),
-      sqlText(row.status),
-      sqlText('{}'),
-      String(row.startedAt),
-      sqlNum(TERMINAL.includes(row.status) ? row.startedAt + 30_000 : null),
-      sqlText(ownerId),
-      String(row.branchStartedAt ?? row.startedAt),
-      sqlText(row.parentId ?? row.id),
-      sqlText(row.parentId ?? null),
-      sqlNum(row.parentId === undefined ? 0 : 1),
-      sqlText(row.category === 'agent' ? 'rfc319-taskline-agent' : null),
-      sqlText(row.category === 'agent' ? 'rfc319-taskline-agent-id' : null),
-      sqlText(row.category === 'workgroup' ? 'rfc319-taskline-workgroup-id' : null),
-      sqlText(row.category === 'workgroup' ? '{"workgroupName":"RFC-319 taskline squad"}' : null),
-    ].join(', ')
     statements.push(
-      'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,' +
-        ' base_branch, branch, status, inputs, started_at, finished_at, owner_user_id,' +
-        ' branch_started_at, root_task_id, parent_task_id, invocation_depth, source_agent_name,' +
-        ` source_agent_id, workgroup_id, workgroup_config_json) VALUES (${values});`,
+      taskFixtureSql({
+        id: row.id,
+        name: row.name,
+        workflowId: `rfc319-taskline-workflow-${row.category}`,
+        workflowSnapshot: '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}',
+        repoPath: '/tmp/rfc319-taskline/fixture-repo',
+        worktreePath: `/tmp/rfc319-taskline/worktrees/${row.id}`,
+        baseBranch: 'main',
+        branch: `agent-workflow/${row.id}`,
+        status: row.status,
+        inputs: '{}',
+        startedAt: row.startedAt,
+        finishedAt: TERMINAL.includes(row.status) ? row.startedAt + 30_000 : null,
+        ownerUserId: ownerId,
+        branchStartedAt: row.branchStartedAt ?? row.startedAt,
+        rootTaskId: row.parentId ?? row.id,
+        parentTaskId: row.parentId ?? null,
+        invocationDepth: row.parentId === undefined ? 0 : 1,
+        sourceAgentName: row.category === 'agent' ? 'rfc319-taskline-agent' : null,
+        sourceAgentId: row.category === 'agent' ? 'rfc319-taskline-agent-id' : null,
+        workgroupId: row.category === 'workgroup' ? 'rfc319-taskline-workgroup-id' : null,
+        workgroupConfigJson:
+          row.category === 'workgroup' ? '{"workgroupName":"RFC-319 taskline squad"}' : null,
+      }),
     )
     if (row.adminIsCollaborator === true) {
       statements.push(
@@ -1401,10 +1395,7 @@ test('RFC-319 TASK-45：工作区从 pruning 走到 pruned，详情页自己收�
   // 呈现，不是回收本身的判定**（回收链路另有 backend 的 gc 单测覆盖）。同理，这里只写
   // 墓碑列、不删盘上的目录：目录还在不影响本条要证的东西，而删了反而会把断言绑到
   // 文件系统上。
-  runSqlite(
-    dbPath(),
-    `UPDATE tasks SET workspace_pruning_at = ${Date.now()} WHERE id = ${sqlText(taskId)};`,
-  )
+  runSqlite(dbPath(), patchTaskFixtureSql({ id: taskId }, { workspacePruningAt: Date.now() }))
   // 这一跳需要显式刷新：终态任务在工作区仍可用时**不轮询**
   // （taskDetailRefetchInterval：isTerminal ⇒ false，tasks.detail.tsx:2042-2047），
   // 而 GC 的认领不走 WS。用户真实的动作就是「过一会儿刷新一下这一页」。
@@ -1417,10 +1408,7 @@ test('RFC-319 TASK-45：工作区从 pruning 走到 pruned，详情页自己收�
 
   // 从这里开始**不再刷新**：pruning 期间轮询被显式打开（同一函数的第一分支），
   // 它存在的唯一理由就是让界面自己走完 pruning → pruned 这一跳。
-  runSqlite(
-    dbPath(),
-    `UPDATE tasks SET workspace_pruned_at = ${Date.now()} WHERE id = ${sqlText(taskId)};`,
-  )
+  runSqlite(dbPath(), patchTaskFixtureSql({ id: taskId }, { workspacePrunedAt: Date.now() }))
   await expect(
     page.locator('.task-detail__banner-stack'),
     'pruning 之后界面没有自己收敛到 pruned ⇒ 用户对着「清理中」看到天荒地老，' +

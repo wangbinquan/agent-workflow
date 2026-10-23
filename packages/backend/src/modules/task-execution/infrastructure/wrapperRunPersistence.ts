@@ -1,13 +1,14 @@
 // RFC-359 W4-B1 —— wrapper run 持久化：一份实现，两个 provider 共用。
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { pickFrameSourceRun } from '@/services/freshness'
+import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
+import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
 import type { WrapperRunPersistence } from '../application/ports/wrapperRunPersistence'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
+import { taskCheckpointMountPaths } from './taskCheckpointPersistence'
 import { clearReuseDisabledProgress, wrapperRunSnapshot } from './wrapperRunPersistenceShared'
 
 export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
@@ -24,25 +25,29 @@ export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
         and(
           eq(nodeRuns.taskId, input.taskId),
           eq(nodeRuns.nodeId, input.nodeId),
-          // RFC-354: a generation is keyed by its frame, not by iteration alone.
+          eq(nodeRuns.iteration, input.iteration),
           input.containerRunId === null
             ? isNull(nodeRuns.containerRunId)
             : eq(nodeRuns.containerRunId, input.containerRunId),
-          eq(nodeRuns.iteration, input.iteration),
         ),
       )
-      .orderBy(engineOf(this.db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
+      .orderBy(...runHistoryOrder(this.db, nodeRuns, 'seq', 'desc'))
       .limit(1)
-    const row = rows[0]
-    if (
-      row === undefined ||
-      row.status === 'done' ||
-      row.status === 'failed' ||
-      row.status === 'exhausted'
-    ) {
-      return null
+    const selected = await createRunSelectionOracleSnapshot(rows, {
+      scope: { kind: 'rows' },
+    }).current(input.taskId, {
+      kind: 'container',
+      nodeId: input.nodeId,
+      frame: { containerRunId: input.containerRunId, iteration: input.iteration },
+    })
+    if (selected === null || !selected.resumable) return null
+    const row = rows.find((row) => row.id === selected.id)
+    if (row === undefined) return null
+    return {
+      id: row.id,
+      status: row.status,
+      previous: wrapperRunSnapshot(row, await taskCheckpointMountPaths(this.db, input.taskId)),
     }
-    return { id: row.id, status: row.status, previous: wrapperRunSnapshot(row) }
   }
 
   async resolveConsumed(
@@ -55,7 +60,17 @@ export class DrizzleWrapperRunPersistence implements WrapperRunPersistence {
         .select()
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.nodeId, source.nodeId)))
-      const run = pickFrameSourceRun(rows, source.frame)
+      const run = (
+        await createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).slotHistory(
+          input.taskId,
+          {
+            kind: 'node',
+            nodeId: source.nodeId,
+            frame: source.frame,
+          },
+          { statusIn: ['done', 'skipped'] },
+        )
+      ).at(-1)
       if (run !== undefined) consumed[source.nodeId] = run.id
     }
     return consumed

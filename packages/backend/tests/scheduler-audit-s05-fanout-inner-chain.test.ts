@@ -20,7 +20,15 @@
 //   拓扑序派发）落地时：fixer prompt 应包含 AUDIT-FINDING-SENTINEL，层 1/3
 //   断言按旁注翻转，层 2 的 error 规则届时放开。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -62,8 +70,7 @@ afterAll(() => resetBroadcastersForTests())
 async function seedBareTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_s05_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 's05',
     description: '',
@@ -71,7 +78,7 @@ async function seedBareTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 's05',
     workflowId: wfId,
@@ -102,8 +109,7 @@ async function seedRunWithOutput(
   },
   outputs: Record<string, string>,
 ): Promise<string> {
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: fields.id,
     taskId,
     nodeId,
@@ -114,7 +120,7 @@ async function seedRunWithOutput(
     shardKey: fields.shardKey ?? null,
   })
   for (const [portName, content] of Object.entries(outputs)) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: fields.id, portName, content })
+    await nodeRunOutputFixture(db, { nodeRunId: fields.id, portName, content })
   }
   return fields.id
 }
@@ -133,9 +139,8 @@ describeEachProvider(
     test('upstream output existing ONLY on shard child rows → target port key entirely absent, consumed empty', async () => {
       const db = harness.db
       const taskId = await seedBareTask(db)
-      const { nodeRuns } = tablesOf(db)
       // fanout wrapper 行（child 行的 parent）。
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: '01WRAP',
         taskId,
         nodeId: 'fan',
@@ -346,8 +351,7 @@ function buildHarness(provider: ProviderHarness): Harness {
 }
 
 async function seedAgentRow(db: PersistenceDb, name: string): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: `agent-${name}`,
     name,
     description: 'test',
@@ -368,15 +372,14 @@ async function seedWorkflowAndTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-s05',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 's05-task',
     id: taskId,
     workflowId,
@@ -474,7 +477,7 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     // —— 静默成功的全套外观：任务 done、wrapper done、B 的 shard 行 done。
     const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
     expect(t[0]?.status).toBe('done')
@@ -482,21 +485,18 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect(wrapperRow[0]?.status).toBe('done')
 
     // audit 的 2 个 shard child 行确实带着真实产出落库了（数据存在）。
-    const auditRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'audit'))
-    ).filter((r) => r.parentNodeRunId === wrapperRow[0]!.id)
+    const auditRows = (await readNodeRunFixtures(h.db, { nodeId: 'audit' })).filter(
+      (r) => r.parentNodeRunId === wrapperRow[0]!.id,
+    )
     expect(auditRows.length).toBe(2)
     for (const r of auditRows) {
       expect(r.status).toBe('done')
-      const outs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, r.id))
+      const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: r.id })
       expect(outs.find((o) => o.portName === 'result')?.content).toBe(SENTINEL)
     }
 
     // fix 被 applyAutoPromote 提为 per-shard：2 个 child 行、shardKey 对齐、全 done。
-    const fixRows = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fix'))).filter(
+    const fixRows = (await readNodeRunFixtures(h.db, { nodeId: 'fix' })).filter(
       (r) => r.parentNodeRunId === wrapperRow[0]!.id,
     )
     expect(fixRows.length).toBe(2)

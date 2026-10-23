@@ -1,14 +1,16 @@
 // RFC-359 W4-B5 —— 代码工作区读取：一份实现，两个 provider 共用。
 
+import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
+import { projectStoredTaskRepositorySurface } from '@/platform/persistence/taskRepositorySurface'
+import { projectTaskCheckpoints } from '@/platform/persistence/taskCheckpointCodec'
+import { taskCheckpointMountPaths } from '@/platform/persistence/taskCheckpointMountPaths'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
   CodeNodeRunSnapshot,
   CodeWorkspaceRead,
-  CodeWorkspaceRepository,
   CodeWorkspaceTask,
 } from '../application/ports/codeWorkspaceRead'
 
@@ -17,23 +19,12 @@ function nodeProjection(db: object) {
   const { nodeRuns } = tablesOf(db)
   return {
     id: nodeRuns.id,
+    taskId: nodeRuns.taskId,
     seq: nodeRuns.seq,
     preSnapshot: nodeRuns.preSnapshot,
     preSnapshotReposJson: nodeRuns.preSnapshotReposJson,
     startedAt: nodeRuns.startedAt,
     wrapperProgressJson: nodeRuns.wrapperProgressJson,
-  }
-}
-
-function fallbackRepository(task: {
-  readonly worktreePath: string
-  readonly baseCommit: string | null
-}): CodeWorkspaceRepository {
-  return {
-    mountPath: '',
-    worktreeDirName: '',
-    worktreePath: task.worktreePath,
-    baseCommit: task.baseCommit,
   }
 }
 
@@ -58,7 +49,6 @@ export function createCodeWorkspaceRead(db: PersistenceDb): CodeWorkspaceRead {
       const repos = await db
         .select({
           mountPath: taskRepos.mountPath,
-          worktreeDirName: taskRepos.worktreeDirName,
           worktreePath: taskRepos.worktreePath,
           baseCommit: taskRepos.baseCommit,
         })
@@ -67,21 +57,28 @@ export function createCodeWorkspaceRead(db: PersistenceDb): CodeWorkspaceRead {
         .orderBy(asc(taskRepos.repoIndex))
       return {
         ...task,
-        repos: repos.length > 0 ? repos : [fallbackRepository(task)],
+        repos:
+          repos.length > 0
+            ? repos
+            : projectStoredTaskRepositorySurface(task).repos.map(
+                ({ mountPath, worktreePath, baseCommit }) => ({
+                  mountPath,
+                  worktreePath,
+                  baseCommit,
+                }),
+              ),
       }
     },
     async listNodeRuns(taskId): Promise<readonly CodeNodeRunSnapshot[]> {
       const { nodeRuns } = tablesOf(db)
       // 未启动的 run（started_at NULL）两个引擎都排最前：SQLite 的缺省，PG 须显式 nulls first。
-      return await db
+      const rows = await db
         .select(nodeProjection(db))
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(
-          engineOf(db).ascNullsFirst(nodeRuns.startedAt),
-          engineOf(db).ascNullsFirst(nodeRuns.seq),
-          asc(nodeRuns.id),
-        )
+        .orderBy(...runHistoryOrder(db, nodeRuns, 'api-timeline'))
+      const mounts = await taskCheckpointMountPaths(db, taskId)
+      return rows.map(({ taskId: _taskId, ...row }) => projectTaskCheckpoints(row, mounts))
     },
     async findNodeRun(nodeRunId): Promise<CodeNodeRunSnapshot | null> {
       const { nodeRuns } = tablesOf(db)
@@ -90,7 +87,10 @@ export function createCodeWorkspaceRead(db: PersistenceDb): CodeWorkspaceRead {
         .from(nodeRuns)
         .where(eq(nodeRuns.id, nodeRunId))
         .limit(1)
-      return rows[0] ?? null
+      const row = rows[0]
+      if (row === undefined) return null
+      const { taskId, ...snapshot } = row
+      return projectTaskCheckpoints(snapshot, await taskCheckpointMountPaths(db, taskId))
     },
   }
 }

@@ -3,6 +3,12 @@
 // interrupted verified copy -> resumed restore with owner normalization ->
 // release migrate -> CS RFC-042 verify receipt. Uses only the CI test
 // database, never the local CrewStation deployment.
+import {
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -87,7 +93,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       let reference: string
       try {
         const db = serving.openBootstrapClient()
-        const { hostedExecutionControl, workflows, tasks, hostedExecutionBindings } = tablesOf(db)
+        const { hostedExecutionControl, hostedExecutionBindings } = tablesOf(db)
         await db
           .insert(hostedExecutionControl)
           .values({
@@ -109,13 +115,13 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
               expiresAt: Date.now() + 600_000,
             },
           })
-        await insertOne(db, workflows, {
+        await workflowFixture(db, {
           id: 'retained-workflow',
           name: 'From snapshot',
           // The backup exports workflows through the strict portable codec.
           definition: JSON.stringify({ $schema_version: 7, inputs: [], nodes: [], edges: [] }),
         })
-        await insertOne(db, tasks, {
+        await taskFixture(db, {
           id: TASK,
           name: 'Restored task',
           workflowId: 'retained-workflow',
@@ -280,8 +286,6 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         const db = restored.openBootstrapClient()
         const {
           hostedExecutionControl,
-          workflows,
-          tasks,
           hostedExecutionBindings,
           hostedDatabaseBackups,
           hostedObjectPublications,
@@ -290,10 +294,10 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
           phase: 'frozen',
           expiresAt: 0,
         })
-        expect(
-          (await db.select().from(workflows).where(eq(workflows.id, 'retained-workflow')))[0]!.name,
-        ).toBe('From snapshot')
-        expect((await db.select().from(tasks).where(eq(tasks.id, TASK)))[0]).toMatchObject({
+        expect((await readWorkflowFixtures(db, { id: 'retained-workflow' }))[0]!.name).toBe(
+          'From snapshot',
+        )
+        expect((await readTaskFixtures(db, { id: TASK }))[0]).toMatchObject({
           status: 'interrupted',
           autoRecoverySuspended: true,
         })

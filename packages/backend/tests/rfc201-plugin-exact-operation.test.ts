@@ -1,6 +1,6 @@
 // RFC-201 T10.2 — immutable Plugin generations and full-row publication CAS.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
@@ -259,15 +259,14 @@ describeEachProvider('generation GC safety', (harness) => {
     const workflowId = ulid()
     const taskId = ulid()
     const nodeRunId = ulid()
-    const { workflows, tasks, nodeRuns } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'gc-active-workflow',
       definition: '{}',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'gc-active-task',
       workflowId,
@@ -285,7 +284,7 @@ describeEachProvider('generation GC safety', (harness) => {
         { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
       ]),
     })
-    await insertOne(db, nodeRuns, { id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
+    await nodeRunFixture(db, { id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
 
     const now = Date.now() + 60_000
     const command = composePluginGenerationGcCommand(
@@ -297,7 +296,7 @@ describeEachProvider('generation GC safety', (harness) => {
     ).toEqual([])
     expect(existsSync(orphan)).toBe(true)
 
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, nodeRunId))
+    await patchNodeRunFixture(db, { id: nodeRunId }, { status: 'done' })
     expect(
       await runPluginGenerationGc({ command, executionFence: 'clear', graceMs: 1, now }),
     ).toContain(orphan)

@@ -13,13 +13,14 @@
 // （`createInMemoryDb`），PG 侧那份 `launchAgent` 编排此前**没有任何行为用例**。
 //
 // 合并两份编排（§5hn 批次一）之前，这条必须是绿的——它是「合并没有改变用户可见行为」的基线。
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { readTaskFixtures, readWorkflowFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import { AGENT_HOST_INPUT_KEY, AGENT_HOST_WORKFLOW_ID } from '@/services/agentLaunch'
+import { AGENT_HOST_INPUT_KEY } from '@/services/agentLaunch'
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -152,7 +153,7 @@ describeEachProviderHttpApplication(
       // 先钉住这一侧**本身**确实是「单代理启动」落出来的——否则两个引擎**同样地错**
       // 也会让下面那条相等断言绿掉（相等只证明「一致」，不证明「对」）。
       expect(comparable.workflowId, '单代理启动必须挂在 __agent_host__ 锚上').toBe(
-        AGENT_HOST_WORKFLOW_ID,
+        TASK_DEFINITION_HOSTS.agent.id,
       )
       expect(
         (task['inputs'] as Record<string, unknown> | undefined)?.[AGENT_HOST_INPUT_KEY],
@@ -167,13 +168,8 @@ describeEachProviderHttpApplication(
       )
       expect(comparable.snapshotEdgeCount, '宿主快照边扫成 0 ⇒ 比较面失效').toBeGreaterThan(0)
 
-      const { tasks } = tablesOf(scope.harness.db)
       const row = (
-        await scope.harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, String(task['id'])))
-          .limit(1)
+        await readTaskFixtures(scope.harness.db, { id: String(task['id']) }, { limit: 1 })
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
       expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()
@@ -182,6 +178,10 @@ describeEachProviderHttpApplication(
         comparableTaskRow(row, ['sourceAgentId', 'sourceAgentName', 'name']),
       )
 
+      // RFC-395 II-a A2: the real dual-provider launch never creates a catalog host.
+      for (const host of Object.values(TASK_DEFINITION_HOSTS)) {
+        expect(await readWorkflowFixtures(scope.harness.db, { id: host.id })).toEqual([])
+      }
       launched.set(scope.harness.capabilities.provider, comparable)
       if (launched.size < 2) return
 

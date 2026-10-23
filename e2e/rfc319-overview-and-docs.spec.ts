@@ -82,6 +82,7 @@
 //   · CFG-40 放最后 —— 它会把 publicBaseUrl 写进 config.json（这是产品里唯一的
 //     设置途径，没有 UI），写进去就没有「删掉某个键」的接口能撤销。
 
+import { taskFixtureSql } from './fixtures/model'
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 import { join } from 'node:path'
 
@@ -565,17 +566,23 @@ function seedTasks(ownerUserId: string, specs: readonly SeedTaskSpec[]): void {
   const now = Date.now()
   const rows = specs.map((spec) => {
     const id = seededTaskId(spec.suffix)
-    const finishedAt = spec.finishedOffsetMs === null ? 'NULL' : String(now + spec.finishedOffsetMs)
-    const parent = spec.parentSuffix === undefined ? 'NULL' : `'${seededTaskId(spec.parentSuffix)}'`
-    return (
-      `INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path, ` +
-      `base_branch, branch, status, inputs, started_at, finished_at, owner_user_id, ` +
-      `catalog_visibility, parent_task_id) VALUES (` +
-      `'${id}', 'rfc319-cfg42-${spec.suffix}', 'rfc319-cfg42-workflow', '${EMPTY_DEFINITION}', ` +
-      `'/tmp/rfc319-cfg42', '/tmp/rfc319-cfg42/wt', 'main', 'agent-workflow/${id}', ` +
-      `'${spec.status}', '{}', ${now - 3_600_000}, ${finishedAt}, '${ownerUserId}', ` +
-      `'${spec.catalogVisibility ?? 'public'}', ${parent});`
-    )
+    return taskFixtureSql({
+      id,
+      name: `rfc319-cfg42-${spec.suffix}`,
+      workflowId: 'rfc319-cfg42-workflow',
+      workflowSnapshot: EMPTY_DEFINITION,
+      repoPath: '/tmp/rfc319-cfg42',
+      worktreePath: '/tmp/rfc319-cfg42/wt',
+      baseBranch: 'main',
+      branch: `agent-workflow/${id}`,
+      status: spec.status,
+      inputs: '{}',
+      startedAt: now - 3_600_000,
+      finishedAt: spec.finishedOffsetMs === null ? null : now + spec.finishedOffsetMs,
+      ownerUserId,
+      catalogVisibility: spec.catalogVisibility ?? 'public',
+      parentTaskId: spec.parentSuffix === undefined ? null : seededTaskId(spec.parentSuffix),
+    })
   })
   runSqlite(dbPath(), rows.join('\n'))
 }

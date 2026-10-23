@@ -6,8 +6,7 @@
 // click target) via useTaskSync. A PARTIAL seal keeps the round awaiting_human →
 // no event (canvas nav stays 'awaiting').
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -94,15 +93,14 @@ async function seedSelfRound(
 ): Promise<{ taskId: string; nodeRunId: string }> {
   const taskId = `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(SELF_DEF),
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     ownerUserId,
@@ -117,14 +115,14 @@ async function seedSelfRound(
     startedAt: Date.now(),
   })
   const sourceRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: '',
+    checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
   const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
     kind: 'self',

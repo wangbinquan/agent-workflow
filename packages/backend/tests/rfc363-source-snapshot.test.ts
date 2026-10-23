@@ -1,3 +1,4 @@
+import { readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -128,8 +129,7 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
       'snapshot-scope-ended',
     )
     expect(existsSync(f.repository.localPath)).toBe(false)
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await readTaskFixtures(harness.db)).toEqual([])
   })
 
   test('group snapshot freezes nested versions, repository configuration and empty directories', async () => {
@@ -238,7 +238,6 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
       'release',
     )
     expect(existsSync(input.appHome)).toBe(false)
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await readTaskFixtures(harness.db)).toEqual([])
   })
 })

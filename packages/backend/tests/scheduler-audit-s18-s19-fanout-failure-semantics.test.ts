@@ -40,11 +40,19 @@
 // （串行化同时消除了计数器文件的读写竞争）。不依赖信号量的 FIFO 顺序——
 // 所有断言只数 status / 行数 / 调用次数，不锁定具体哪个 shardKey 失败。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { asc, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -90,8 +98,7 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -113,15 +120,14 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -274,12 +280,12 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // 当前行为：任一 shard 失败 → 整 task failed，失败归因到 wrapper 'fan'，
     // errorSummary 直接写明 "1/3 shards failed"（fail-all 的表层证据：仅 1/3
     // 失败也整体失败）。修复（§7.5 部分容忍）后翻转：status 'done'、
     // failedNodeId null、errorSummary null。
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.failedNodeId).toBe('fan')
     expect(t?.errorSummary ?? '').toContain('1/3 shards failed')
@@ -298,27 +304,21 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect(readFileSync(counterFile, 'utf-8').trim()).toBe('3')
 
     // 3 个 shard 子行：恰好 1 failed + 2 done（串行化 + FAIL_UNTIL=1 保证）。
-    const innerRows = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === wrapper.id)
+    const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === wrapper.id,
+    )
     expect(innerRows.length).toBe(3)
     expect(innerRows.map((r) => r.status).sort()).toEqual(['done', 'done', 'failed'])
 
     // done shard 的输出已经持久化在子行上（成果存在）……
     const doneChildren = innerRows.filter((r) => r.status === 'done')
     for (const child of doneChildren) {
-      const outs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, child.id))
+      const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: child.id })
       expect(outs.find((o) => o.portName === 'result')?.content).toBe('shard-ok')
     }
     // ……失败 shard 没有输出行。
     const failedChild = innerRows.find((r) => r.status === 'failed')!
-    const failedOuts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, failedChild.id))
+    const failedOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: failedChild.id })
     expect(failedOuts.length).toBe(0)
 
     // 聚合未执行：aggNode 一行都没有。
@@ -329,10 +329,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // wrapper 行零输出：既没有聚合 outlet 'final'，也没有设计文档
     // （design/design.md:765 "errors port 即使没有失败 shard 也存在"）承诺的
     // 自动 errors port。修复后翻转：'final' 出现，且 errors port 携带失败清单。
-    const wrapperOuts = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, wrapper.id))
+    const wrapperOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapper.id })
     expect(wrapperOuts.length).toBe(0)
     expect(wrapperOuts.find((o) => o.portName === 'errors')).toBeUndefined()
 
@@ -398,15 +395,15 @@ function registerProviderCases1(provider: ProviderHarness) {
     )
 
     expect(readFileSync(counterFile, 'utf-8').trim()).toBe('2')
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    const { nodeRuns } = tablesOf(h.db)
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
     const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
     const attempts = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(eq(nodeRuns.nodeId, 'inner'))
-        .orderBy(asc(nodeRuns.retryIndex))
+      await readNodeRunFixtures(
+        h.db,
+        { nodeId: 'inner' },
+        { orderBy: [{ field: 'retryIndex', direction: 'asc' }] },
+      )
     ).filter((row) => row.parentNodeRunId === wrapper.id)
     expect(attempts.map((row) => [row.retryIndex, row.status])).toEqual([
       [0, 'failed'],
@@ -489,15 +486,15 @@ function registerProviderCases1(provider: ProviderHarness) {
       .split('\n')
       .map((line) => JSON.parse(line) as { agent: string })
     expect(spawns.map((row) => row.agent)).toEqual(['worker', 'agg', 'agg'])
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('failed')
+    const { nodeRuns } = tablesOf(h.db)
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('failed')
     const wrapper = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan')))[0]!
     const attempts = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(eq(nodeRuns.nodeId, 'aggNode'))
-        .orderBy(asc(nodeRuns.retryIndex))
+      await readNodeRunFixtures(
+        h.db,
+        { nodeId: 'aggNode' },
+        { orderBy: [{ field: 'retryIndex', direction: 'asc' }] },
+      )
     ).filter((row) => row.parentNodeRunId === wrapper.id)
     expect(attempts.map((row) => [row.retryIndex, row.status])).toEqual([
       [0, 'failed'],
@@ -567,8 +564,8 @@ function registerProviderCases1(provider: ProviderHarness) {
     // ---- run 1：1/3 shard 失败 → wrapper + task failed，2 个 shard done。----
     await withEnv(env, () => runTask(runOpts))
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t1 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t1 = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t1?.status).toBe('failed')
     expect(readFileSync(counterFile, 'utf-8').trim()).toBe('3')
 
@@ -576,9 +573,9 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect(wrapperAfterRun1.length).toBe(1)
     const oldWrapper = wrapperAfterRun1[0]!
     expect(oldWrapper.status).toBe('failed')
-    const oldChildren = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
-    ).filter((r) => r.parentNodeRunId === oldWrapper.id)
+    const oldChildren = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
+      (r) => r.parentNodeRunId === oldWrapper.id,
+    )
     expect(oldChildren.length).toBe(3)
     const oldDoneIds = oldChildren.filter((r) => r.status === 'done').map((r) => r.id)
     expect(oldDoneIds.length).toBe(2)
@@ -588,21 +585,22 @@ function registerProviderCases1(provider: ProviderHarness) {
     // 里确定性等待），且其余动作（rollbackNodeRunForResume）对 readonly agent
     // + 无 preSnapshot 的行是 no-op，因此这一复刻在调度器视角与真实 resume
     // 完全等价（dispatchFrontier.ts:139 把 failed 行视为 dispatchable）。----
-    await h.db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      h.db,
+      { id: taskId },
+      {
         status: 'pending',
         finishedAt: null,
         errorSummary: null,
         errorMessage: null,
         failedNodeId: null,
-      })
-      .where(eq(tasks.id, taskId))
+      },
+    )
 
     // ---- run 2：RFC-098 B3 修复后 = 只重跑失败的 1 个 shard。----
     await withEnv(env, () => runTask(runOpts))
 
-    const t2 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t2 = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t2?.status).toBe('done')
 
     // 核心 oracle：mock 总调用数 3(run1) + 1(run2 仅失败 shard) = 4。
@@ -624,7 +622,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // 方案 A：新 wrapper 下只铸 1 个新子行 —— 失败的那个 shardKey；其余
     // 2 个 done 子行留在旧 wrapper 名下被原样回放（不改 parent、不铸行，
     // 历史归属真实）。
-    const allInner = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'inner'))
+    const allInner = await readNodeRunFixtures(h.db, { nodeId: 'inner' })
     const newChildren = allInner.filter((r) => r.parentNodeRunId === newWrapper.id)
     const failedKey = oldChildren.find((r) => r.status === 'failed')!.shardKey!
     expect(newChildren.length).toBe(1)

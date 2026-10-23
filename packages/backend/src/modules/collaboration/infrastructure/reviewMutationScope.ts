@@ -2,8 +2,7 @@
 // 替代 `sqliteReviewMutationScope.ts`（其同步 `findTaskIdSync` 入队捷径随之退役：两个
 // provider 都在 async 查询之后进入同一个 per-task FIFO）。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ReviewMutationScopeResolver } from '../application/ports/reviewMutationScope'
@@ -12,14 +11,7 @@ export class DatabaseReviewMutationScopeResolver implements ReviewMutationScopeR
   constructor(private readonly db: PersistenceDb) {}
 
   async findTaskId(nodeRunId: string): Promise<string | null> {
-    const { nodeRuns } = tablesOf(this.db)
-    const row = (
-      await this.db
-        .select({ taskId: nodeRuns.taskId })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, nodeRunId))
-        .limit(1)
-    )[0]
+    const row = await createNodeRunQueries(this.db).readFields(nodeRunId, ['taskId'])
     return row?.taskId ?? null
   }
 }

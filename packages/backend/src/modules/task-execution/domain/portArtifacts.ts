@@ -1,31 +1,12 @@
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind } from '@agent-workflow/shared'
-import { sha256Hex } from '@/util/hash'
+import { decodeLegacyPortArchive } from '@/platform/content/legacyPortArchive'
 import type { PortArchive, PortArchiveItem } from '../application/ports/portArtifactContent'
 
-export function encodePortSegment(portName: string): string {
-  const sanitized = portName.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 48)
-  const digest = sha256Hex(portName).slice(0, 16)
-  return `${sanitized}_${digest}`
-}
-
+export { legacyPortSegment as encodePortSegment } from '@/platform/content/legacyPortArchive'
 export { repoRelForcedPaths } from '@/modules/source-control/public/queries'
 
 export function parseArchiveJson(raw: string | null | undefined): PortArchive | null {
-  if (raw === null || raw === undefined || raw === '') return null
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (
-      parsed === null ||
-      typeof parsed !== 'object' ||
-      (parsed as { v?: unknown }).v !== 1 ||
-      !Array.isArray((parsed as { items?: unknown }).items)
-    ) {
-      return null
-    }
-    return parsed as PortArchive
-  } catch {
-    return null
-  }
+  return decodeLegacyPortArchive(raw)?.archive ?? null
 }
 
 export function truncationNotice(containerRelPath: string): string {

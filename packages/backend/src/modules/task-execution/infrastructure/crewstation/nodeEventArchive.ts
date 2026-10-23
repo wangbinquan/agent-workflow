@@ -4,6 +4,10 @@
 // `node-event-archive` publication (key = chunk id, scope = task id); marking it
 // ready, recording the object and deleting exactly the source range commit in
 // one transaction. Rows of deleted tasks are released by the task object sweep.
+import {
+  legacyHostedEventArchiveReference,
+  legacyEventArchiveChunkPath,
+} from '@/platform/content/legacyEventArchive'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, gt, gte, lte } from 'drizzle-orm'
@@ -36,7 +40,7 @@ const EventRow = z
   })
   .strict()
 type Row = PersistenceTables['hostedNodeEventArchives']['$inferSelect']
-const reference = (id: string) => `aw-event-archive:${id}`
+const reference = legacyHostedEventArchiveReference
 const objectOf = (row: Row): HostedStoredObject => {
   if (row.objectId === null) throw new Error('hosted-event-archive-not-published')
   return { id: row.objectId, sha256: row.digest, size: row.size }
@@ -291,7 +295,7 @@ export function createHostedNodeEventArchive(input: {
           )
           .orderBy(asc(hostedNodeEventArchives.firstId))
       ).map((row) => ({
-        path: `${row.nodeRunId}.events/${row.firstId}-${row.lastId}.jsonl`,
+        path: legacyEventArchiveChunkPath(row.nodeRunId, row.firstId, row.lastId),
         object: objectOf(row),
       }))
     },

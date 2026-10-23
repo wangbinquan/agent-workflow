@@ -26,13 +26,17 @@
 // retry_index at the same wrapper-loop iteration. If this test goes red,
 // the freshness shield is gone — investigate before relaxing.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
@@ -128,8 +132,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = fixtureDef()
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'designer-retry-index',
     description: '',
@@ -142,7 +145,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -159,15 +162,14 @@ async function seedTask(db: PersistenceDb): Promise<string> {
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
@@ -181,12 +183,11 @@ async function seedRun(
   db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']>,
+  fields: Partial<NodeRunFixtureSpec>,
 ): Promise<string> {
   seedSeq += 1
   const id = `nr_${String(seedSeq).padStart(4, '0')}_${nodeId}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -230,7 +231,7 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     await seedRun(db, taskId, 'designer', {
       status: 'done',
       retryIndex: 9,
-      preSnapshot: 'snap-d',
+      checkpoints: [{ mountPath: '', preSnapshot: 'snap-d' }],
     })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 2 })
 
@@ -256,11 +257,9 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     const disp = await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
     expect(disp.reruns.some((r) => r.targetNodeId === 'designer')).toBe(true)
 
-    const { nodeRuns } = tablesOf(db)
-    const designerRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
+    const designerRows = await readNodeRunFixtures(db, {
+      $and: [{ taskId }, { nodeId: 'designer' }],
+    })
     const designerPending = designerRows.find((r) => r.status === 'pending')
     expect(designerPending, 'a pending designer row must be minted').toBeDefined()
     // RFC-064: cross-clarify submit bumps the unified clarifyIteration to
@@ -278,7 +277,10 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     // contract is invariant w.r.t. the prior retry depth.
     const db = harness.db
     const taskId = await seedTask(db)
-    await seedRun(db, taskId, 'designer', { retryIndex: 0, preSnapshot: 'snap-d' })
+    await seedRun(db, taskId, 'designer', {
+      retryIndex: 0,
+      checkpoints: [{ mountPath: '', preSnapshot: 'snap-d' }],
+    })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 0 })
 
     const sess = await createClarifyRound({
@@ -301,11 +303,9 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
 
-    const { nodeRuns } = tablesOf(db)
-    const designerRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
+    const designerRows = await readNodeRunFixtures(db, {
+      $and: [{ taskId }, { nodeId: 'designer' }],
+    })
     const pending = designerRows.find((r) => r.status === 'pending')
     expect(pending?.retryIndex).toBe(1)
   })
@@ -324,8 +324,8 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     await seedRun(db, taskId, 'designer', {
       iteration: 1,
       retryIndex: 0,
-      preSnapshot: 'snap-d-iter1',
       startedAt: 300,
+      checkpoints: [{ mountPath: '', preSnapshot: 'snap-d-iter1' }],
     })
     const qRun = await seedRun(db, taskId, 'questioner', {
       iteration: 1,
@@ -353,11 +353,9 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     await reassignThenDispatchDesigner(db, taskId, sess.intermediaryNodeRunId)
 
-    const { nodeRuns } = tablesOf(db)
-    const designerRows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'designer')))
+    const designerRows = await readNodeRunFixtures(db, {
+      $and: [{ taskId }, { nodeId: 'designer' }],
+    })
     // The fresh pending is the only row at iteration=1 with status=pending.
     const pending = designerRows.find((r) => r.status === 'pending' && r.iteration === 1)
     expect(pending).toBeDefined()

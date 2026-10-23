@@ -1,5 +1,10 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-154 — per-runtime config-dir injection configurability. Locks in:
 //   (1) validateConfigDirName / validateConfigDirEnv — path-traversal +
@@ -26,7 +31,6 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 
 import { describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -189,15 +193,14 @@ describeEachProvider('RFC-154 resolve — NULL → protocol default, overrides w
 async function seedRun(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -211,7 +214,7 @@ async function seedRun(db: PersistenceDb): Promise<string> {
     startedAt: Date.now(),
   })
   const id = ulid()
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 
@@ -248,8 +251,7 @@ describeEachProvider('RFC-154 freeze — configDir rides the runtime snapshot', 
     })
     const id = await seedRun(db)
     await resolveFrozenRuntime(db, id, 'myfork', null)
-    const { nodeRuns } = tablesOf(db)
-    await db.update(nodeRuns).set({ opencodeSessionId: 'ses_x' }).where(eq(nodeRuns.id, id))
+    await patchNodeRunFixture(db, { id }, { opencodeSessionId: 'ses_x' })
     const frozen = await frozenRuntimeOfSession(db, 'ses_x')
     expect(frozen?.configDir).toEqual({ env: 'MYFORK_CONFIG_DIR', name: '.myfork' })
   })
@@ -257,15 +259,15 @@ describeEachProvider('RFC-154 freeze — configDir rides the runtime snapshot', 
   test('legacy runtime_params_json (no __configDir) reads back as protocol default', async () => {
     const db = harness.db
     const id = await seedRun(db)
-    const { nodeRuns } = tablesOf(db)
     // Hand-freeze a pre-RFC-154 shape: params only, no __configDir key.
-    await db
-      .update(nodeRuns)
-      .set({
+    await patchNodeRunFixture(
+      db,
+      { id },
+      {
         runtime: 'claude-code',
         runtimeParamsJson: JSON.stringify({ model: 'opus' }),
-      })
-      .where(eq(nodeRuns.id, id))
+      },
+    )
     const r = await resolveFrozenRuntime(db, id, null, null)
     expect(r.params.model).toBe('opus')
     expect(r.configDir).toEqual(DEFAULT_CONFIG_DIR_PROFILE['claude-code'])
@@ -277,13 +279,11 @@ describeEachProvider('RFC-154 freeze — configDir rides the runtime snapshot', 
     const id = await seedRun(db)
     const frozen = await resolveFrozenRuntime(db, id, 'opencode', null)
     expect('__configDir' in frozen.params).toBe(false)
-    const { nodeRuns } = tablesOf(db)
     // The persisted JSON carries both faces.
     const row = (
-      await db
-        .select({ json: nodeRuns.runtimeParamsJson })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, id))
+      await readNodeRunFixtures(db, { id }).then((rows) =>
+        rows.map((row) => ({ json: row.runtimeParamsJson })),
+      )
     )[0]
     const parsed = JSON.parse(row?.json ?? '{}') as Record<string, unknown>
     expect(parsed.__configDir).toEqual(DEFAULT_CONFIG_DIR_PROFILE.opencode)

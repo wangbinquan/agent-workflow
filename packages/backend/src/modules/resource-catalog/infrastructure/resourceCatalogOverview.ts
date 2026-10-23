@@ -10,6 +10,7 @@ import type {
 import type { ResourceAclActorProjection } from '../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../domain/resourceKinds'
 import { ACL_TABLES, visibleRowsCondition } from './resourceVisibility'
+import { catalogResourcePredicate } from './workflowCatalogPredicate'
 
 function builtinCondition(
   db: object,
@@ -37,9 +38,13 @@ export function createResourceCatalogOverviewCountPort(
         .select({ total: count() })
         .from(table)
         .where(
-          and(
-            visibleRowsCondition(db, actor, kind, table),
-            builtinCondition(db, kind, options.excludeBuiltin),
+          catalogResourcePredicate(
+            kind,
+            table.id,
+            and(
+              visibleRowsCondition(db, actor, kind, table),
+              builtinCondition(db, kind, options.excludeBuiltin),
+            ),
           ),
         )
       return Number(rows[0]?.total ?? 0)
@@ -64,9 +69,13 @@ export function createResourceCatalogOverviewCountPort(
           .select({ kind: sql<string>`${request.kind}`.as('kind'), total: count().as('total') })
           .from(table)
           .where(
-            and(
-              visibleRowsCondition(db, actor, request.kind, table),
-              builtinCondition(db, request.kind, request.excludeBuiltin),
+            catalogResourcePredicate(
+              request.kind,
+              table.id,
+              and(
+                visibleRowsCondition(db, actor, request.kind, table),
+                builtinCondition(db, request.kind, request.excludeBuiltin),
+              ),
             ),
           )
       }

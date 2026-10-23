@@ -21,6 +21,7 @@
 // 次数**，不是查询本身。这是 AC-11（PG 各端点 P95 不劣于 SQLite）在轻端点上唯一的杠杆。
 //
 // 判据是**语句数**而不是墙钟：确定性、可进每次 PR，不会因为机器忙就假红。
+import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -46,8 +47,7 @@ async function addTask(
   ownerUserId: string | null,
   status: 'running' | 'awaiting_human' | 'canceled',
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId: 'wf',
@@ -69,8 +69,7 @@ async function addRound(
   status: 'awaiting_human' | 'answered',
 ): Promise<void> {
   const runId = ulid()
-  const { nodeRuns, clarifyRounds } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'ask',
@@ -79,7 +78,7 @@ async function addRound(
     iteration: 0,
     startedAt: NOW,
   })
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -87,14 +86,14 @@ async function addRound(
     askingNodeRunId: runId,
     intermediaryNodeId: 'ask',
     intermediaryNodeRunId: runId,
-    questionsJson: '[]',
+    questions: '[]',
     status,
   })
 }
 
 /** 语料同时覆盖：属主可见 / 协作者可见 / 他人不可见 / 终态任务被丢弃 / 已答不计。 */
 async function seed(db: PersistenceDb): Promise<void> {
-  const { users, workflows, taskCollaborators } = tablesOf(db)
+  const { users, taskCollaborators } = tablesOf(db)
   await db.insert(users).values(
     ['admin', 'alice', 'bob', 'carol'].map((id) => ({
       id,
@@ -105,7 +104,7 @@ async function seed(db: PersistenceDb): Promise<void> {
       updatedAt: NOW,
     })),
   )
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -190,8 +189,7 @@ describeEachProvider('RFC-359 AC-11 —— 反问徽标计数的往返数预算'
 /** 一条 task_id 指向不存在任务的 clarify_round——两个引擎都应当拒绝。 */
 async function db_insertOrphan(db: PersistenceDb): Promise<void> {
   const runId = ulid()
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: ulid(),
     taskId: 'ghost-task',
     kind: 'self',
@@ -199,7 +197,7 @@ async function db_insertOrphan(db: PersistenceDb): Promise<void> {
     askingNodeRunId: runId,
     intermediaryNodeId: 'ask',
     intermediaryNodeRunId: runId,
-    questionsJson: '[]',
+    questions: '[]',
     status: 'awaiting_human',
   })
 }

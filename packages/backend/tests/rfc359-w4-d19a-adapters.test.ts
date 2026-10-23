@@ -5,12 +5,18 @@
 // 同一段断言在两个引擎上各跑一遍：反问投影按 asker 聚合并带上 stop 指令、未决自问被 CAS 关闭且回出 park、
 // 无主围栏只对活着的（claimed）owner 拒绝；附源码锁。
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  readClarifyRoundFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -23,14 +29,13 @@ const T0 = 1_700_000_000_000
 async function seedTask(db: PersistenceDb): Promise<string> {
   const taskId = ulid()
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `rfc359-d19a-${workflowId.slice(-8).toLowerCase()}`,
     definition: '{}',
     builtin: true,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc359 d19a room participants',
     workflowId,
@@ -58,8 +63,7 @@ async function seedSelfClarify(
     readonly status: 'awaiting_human' | 'answered'
   },
 ): Promise<void> {
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: input.id,
     taskId: input.taskId,
     kind: 'self',
@@ -68,7 +72,7 @@ async function seedSelfClarify(
     askingShardKey: input.askingShardKey,
     intermediaryNodeId: '__wg_member__',
     intermediaryNodeRunId: input.askingNodeRunId,
-    questionsJson: '[]',
+    questions: '[]',
     status: input.status,
     createdAt: T0,
   })
@@ -79,8 +83,7 @@ async function seedNodeRun(
   db: PersistenceDb,
   input: { readonly taskId: string; readonly id: string; readonly shardKey: string | null },
 ): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: input.id,
     taskId: input.taskId,
     nodeId: '__wg_member__',
@@ -198,11 +201,9 @@ describeEachProvider('RFC-359 W4-D19a —— 任务房事务内参与者', (harn
     )
     expect(dismissed.dismissedSessions).toBe(1)
     expect(dismissed.parks.map((park) => park.nodeRunId)).toEqual(['asking-run-a'])
-    const { clarifyRounds } = tablesOf(harness.db)
-    const rows = await harness.db
-      .select({ id: clarifyRounds.id, status: clarifyRounds.status })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.taskId, taskId))
+    const rows = await readClarifyRoundFixtures(harness.db, { taskId }).then((rows) =>
+      rows.map((row) => ({ id: row.id, status: row.status })),
+    )
     expect(rows.filter((row) => row.status === 'canceled').map((row) => row.id)).toEqual([
       `round-open-${taskId}`,
     ])

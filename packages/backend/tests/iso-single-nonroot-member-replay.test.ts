@@ -1,3 +1,4 @@
+// RFC-395 II-a A2: replay after the NULL scalar node-tree case now crosses list ports.
 // Standalone defect fix approved 2026-10-21: a single non-root group member
 // has repoCount=1 but checkpoints are keyed by its mount (e.g. svc), not ''.
 // Locks ii0-draft.md §12.1–§12.3, especially the four reproductions in §12.2:
@@ -8,7 +9,12 @@
 // Real group fixtures follow rfc248-materialize-group; the crash window and
 // discarded iso follow rfc130-crash-replay. Both DB providers run these cases.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  readTaskFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeAll, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -104,8 +110,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
     } as unknown as TaskMechanicsState
     async function isolate() {
       const runId = ulid()
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, { id: runId, taskId: task.id, nodeId: 'A', status: 'running' })
+      await nodeRunFixture(db, { id: runId, taskId: task.id, nodeId: 'A', status: 'running' })
       const handle = await createIsoUnderLock({
         binding,
         writeSem,
@@ -151,21 +156,19 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           const { runId, handle } = await f.isolate()
           const trees = await snapshotNodeIsoFinal(handle)
           for (const repo of handle.repos) {
-            repo.subBases = { vendor: `base-${repo.worktreeDirName}` }
-            repo.poolDirs = { vendor: join(tmp, 'pool', repo.worktreeDirName) }
+            repo.subBases = { vendor: `base-${repo.mountPath}` }
+            repo.poolDirs = { vendor: join(tmp, 'pool', repo.mountPath) }
           }
           await persistIsoBase(f.binding, runId, handle)
           await persistIsoNodeTree(f.binding, runId, trees, withHandle ? handle : undefined)
           const row = await f.row(runId)
           expect(decodeMap(row.isoNodeTree, row.isoNodeTreeReposJson)).toEqual(trees)
           expect(decodeMap(row.isoBaseSnapshot, row.isoBaseSnapshotReposJson)).toEqual(
-            Object.fromEntries(
-              handle.repos.map((repo) => [repo.worktreeDirName, repo.baseSnapshot]),
-            ),
+            Object.fromEntries(handle.repos.map((repo) => [repo.mountPath, repo.baseSnapshot])),
           )
           const topology = Object.fromEntries(
             handle.repos.map((repo) => [
-              repo.worktreeDirName,
+              repo.mountPath,
               {
                 subBases: repo.subBases,
                 poolDirs: repo.poolDirs,
@@ -196,11 +199,15 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
         const f = await fixture(shape.mounts)
         const { runId, handle } = await f.isolate()
         for (const repo of handle.repos) {
-          repo.subBases = { vendor: `base-${repo.worktreeDirName}` }
-          repo.poolDirs = { vendor: join(tmp, 'pool', repo.worktreeDirName) }
+          repo.subBases = { vendor: `base-${repo.mountPath}` }
+          repo.poolDirs = { vendor: join(tmp, 'pool', repo.mountPath) }
         }
         await persistIsoBase(f.binding, runId, handle)
-        const rebuilt = await createOrRebuildWrapperIso(f.state, runId, await f.row(runId))
+        const rebuilt = await createOrRebuildWrapperIso(
+          f.state,
+          runId,
+          await f.binding.persistence.nodeExecution.read(runId),
+        )
         for (const [index, repo] of handle.repos.entries()) {
           expect(rebuilt.repos[index]!.baseSnapshot).toBe(repo.baseSnapshot)
           expect(rebuilt.repos[index]!.isoWorktreePath).toBe(repo.isoWorktreePath)
@@ -224,12 +231,12 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           runtimeCalls++
           for (const mount of shape.mounts)
             writeFileSync(join(iso.containerPath, mount, 'a.txt'), 'from fake runtime\n')
-          const { nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
-          await harness.db
-            .update(nodeRuns)
-            .set({ status: 'done', finishedAt: Date.now() })
-            .where(eq(nodeRuns.id, runId))
-          await insertOne(harness.db, nodeRunOutputs, {
+          await patchNodeRunFixture(
+            harness.db,
+            { id: runId },
+            { status: 'done', finishedAt: Date.now() },
+          )
+          await nodeRunOutputFixture(harness.db, {
             nodeRunId: runId,
             portName: 'summary',
             content: 'ok',
@@ -263,6 +270,13 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           }),
         ).rejects.toBe(crash)
         expect((await f.row(runId)).mergeState).toBe('pending-merge')
+        const pinned = (await f.binding.persistence.nodeExecution.read(runId))!
+        expect(pinned.checkpoints.map((checkpoint) => checkpoint.mountPath)).toEqual([
+          ...shape.mounts,
+        ])
+        expect(pinned.checkpoints.every((checkpoint) => checkpoint.nodeTree !== undefined)).toBe(
+          true,
+        )
         for (const repo of f.task.repos)
           expect(existsSync(join(repo.worktreePath, 'a.txt'))).toBe(false)
         await discardNodeIso(handle)
@@ -275,8 +289,8 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           appHome,
           defaultNodeRetries: 0,
         })
-        const { tasks, nodeRuns } = tablesOf(harness.db)
-        const task = (await harness.db.select().from(tasks).where(eq(tasks.id, f.task.id)))[0]!
+        const { nodeRuns } = tablesOf(harness.db)
+        const task = (await readTaskFixtures(harness.db, { id: f.task.id }))[0]!
         expect(task.errorMessage).toBeNull()
         expect(task.status).toBe('done')
         expect((await f.row(runId)).status).toBe('done')
@@ -320,7 +334,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
         const topology = shape.scalar
           ? { '': JSON.parse(row.isoSubmodulesJson!) }
           : JSON.parse(row.isoSubmodulesReposJson!)
-        expect(topology?.[repo.worktreeDirName]).toEqual({
+        expect(topology?.[repo.mountPath]).toEqual({
           subBases: { vendor: 'sub-base' },
           poolDirs: { vendor: join(tmp, 'pool') },
           pendingSubResolves: ['vendor'],

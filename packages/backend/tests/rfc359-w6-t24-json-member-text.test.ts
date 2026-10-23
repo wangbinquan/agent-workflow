@@ -41,8 +41,7 @@
 // 矩阵是实测）。而生产里这个表达式作用在 `tasks.workgroup_config_json` 这样的**表列**上，
 // planner 不会预先求值，两种写法都安全。所以语料一律落进一张真表再查。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql, type SQL } from 'drizzle-orm'
@@ -147,9 +146,9 @@ describeEachProvider('RFC-359 W6-T24 —— jsonMemberText', (harness) => {
    * 见头注释「语料必须落在真表的列上」。
    */
   const seed = async (): Promise<void> => {
-    const { workflows, tasks } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, { id: 'wf-t24', name: 'w6t24', definition: '{}' })
-    await harness.db.insert(tasks).values(
+    await workflowFixture(harness.db, { id: 'wf-t24', name: 'w6t24', definition: '{}' })
+    await taskFixture(
+      harness.db,
       CORPUS.map(([label, document], index) => ({
         id: `w6t24-${String(index).padStart(2, '0')}`,
         name: label,

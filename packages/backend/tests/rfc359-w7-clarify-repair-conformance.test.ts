@@ -9,10 +9,14 @@
 // latestClosedForNodeRun（封存态取最新一条、createdAt 相同时按 id 降序、awaiting_human 不入选、
 // 没有封存轮次时为 null）、reopen（CAS 只吃 expectedStatus、清空作答字段、二次落空、不越界）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  readClarifyRoundFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -24,8 +28,7 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_w7c_${ulid()}`
   const workflowId = `wf_w7c_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -33,7 +36,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -51,8 +54,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
 
 async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = `nr_w7c_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: '__wg_clarify__', status: 'awaiting_human' })
+  await nodeRunFixture(db, { id, taskId, nodeId: '__wg_clarify__', status: 'awaiting_human' })
   return id
 }
 
@@ -72,8 +74,7 @@ async function seedRound(
   seed: RoundSeed = {},
 ): Promise<string> {
   const id = seed.id ?? `cr_w7c_${ulid()}`
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id,
     taskId,
     kind: seed.kind ?? 'self',
@@ -84,8 +85,8 @@ async function seedRound(
     intermediaryNodeRunId: nodeRunId,
     loopIter: 0,
     iteration: 0,
-    questionsJson: '[]',
-    answersJson: seed.answersJson === undefined ? '[]' : seed.answersJson,
+    questions: '[]',
+    answers: seed.answersJson === undefined ? '[]' : seed.answersJson,
     status: seed.status ?? 'answered',
     createdAt: seed.createdAt ?? 1,
     answeredAt: seed.answeredAt === undefined ? 2 : seed.answeredAt,
@@ -198,19 +199,17 @@ describeEachProvider('RFC-359 W7 —— 澄清修复参与者：重开', (harnes
     expect(
       await repair.reopen({ taskId, roundId, expectedStatus: 'answered', occurredAt: 3 }),
     ).toBe(true)
-    const { clarifyRounds } = tablesOf(db)
     expect(
       (
-        await db
-          .select({
-            status: clarifyRounds.status,
-            answersJson: clarifyRounds.answersJson,
-            answeredAt: clarifyRounds.answeredAt,
-          })
-          .from(clarifyRounds)
-          .where(eq(clarifyRounds.id, roundId))
+        await readClarifyRoundFixtures(db, { id: roundId }).then((rows) =>
+          rows.map((row) => ({
+            status: row.status,
+            answers: row.answers,
+            answeredAt: row.answeredAt,
+          })),
+        )
       )[0],
-    ).toEqual({ status: 'awaiting_human', answersJson: null, answeredAt: null })
+    ).toEqual({ status: 'awaiting_human', answers: null, answeredAt: null })
 
     // 已经重开过了，同一条 CAS 第二次落空。
     expect(
@@ -244,21 +243,18 @@ describeEachProvider('RFC-359 W7 —— 澄清修复参与者：重开', (harnes
         occurredAt: 3,
       }),
     ).toBe(false)
-    const { clarifyRounds } = tablesOf(db)
     expect(
       (
-        await db
-          .select({ status: clarifyRounds.status })
-          .from(clarifyRounds)
-          .where(eq(clarifyRounds.id, crossRound))
+        await readClarifyRoundFixtures(db, { id: crossRound }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
       )[0],
     ).toEqual({ status: 'answered' })
     expect(
       (
-        await db
-          .select({ status: clarifyRounds.status })
-          .from(clarifyRounds)
-          .where(eq(clarifyRounds.id, selfRound))
+        await readClarifyRoundFixtures(db, { id: selfRound }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
       )[0],
     ).toEqual({ status: 'answered' })
   })

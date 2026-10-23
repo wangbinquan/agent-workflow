@@ -1,3 +1,6 @@
+import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { assertClarifyFollowupIdle } from '../clarifyFollowupActivity'
 // RFC-128 / RFC-349 — SQLite per-question answer seal primitive.
@@ -39,24 +42,28 @@ import { assertClarifyFollowupIdle } from '../clarifyFollowupActivity'
 
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 
-import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
-import { parseAnswersArray, sealAnswersServerSide } from '@/services/clarify/service'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { sealAnswersServerSide } from '@/services/clarify/service'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
 import { wgClarifyAskerKeyForRound } from '@/services/workgroup/askerKey'
 import { setNodeClarifyDirectiveTx } from '@/services/taskClarifyDirective'
-import { freezeAnswerAttributions } from '../clarifyRounds'
+import {
+  classifyClarifyReseal,
+  sealedClarifyQuestionIds,
+  sealClarifyAnswers,
+} from '../../domain/clarifyAnswers'
+import { decodeLegacyClarifyAnswerColumns } from '../clarifyAnswerCodec'
+import { createClarifyAnswerWritePort } from '../clarifyAnswerWrite'
+import type { ClarifySealDecisionParticipantInTx } from '../../application/ports/clarifySealDecisionParticipant'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
   clarifyQuestionSetKey,
   isClarifyAnswerConfirmed,
   isMindmapRound,
-  mergeSealedAnswers,
   type ClarifyAnswer,
-  type ClarifyAnswerAttributions,
   type ClarifyDirective,
-  type ClarifyDraftValue,
   type ClarifyQuestion,
   type TaskActorRole,
 } from '@agent-workflow/shared'
@@ -128,21 +135,6 @@ export interface SealRoundQuestionsArgs {
   now?: () => number
 }
 
-export interface ClarifySealDecisionParticipantInTx {
-  acceptTx(input: {
-    readonly tx: PersistenceTx
-    readonly taskId: string
-    readonly roundId: string
-    readonly originNodeRunId: string
-    readonly roundKind: 'self' | 'cross'
-    readonly answersJson: string
-    readonly directive: ClarifyDirective
-    readonly sealedQuestionIds: readonly string[]
-    readonly roundFullySealed: boolean
-    readonly now: number
-  }): Promise<void>
-}
-
 export interface SealRoundQuestionsResult {
   /** Question ids FRESH-sealed by THIS call (after dropping unknowns + de-dup). RFC-136:
    *  re-sealed (re-answer) ids are NOT in here — see resealedQuestionIds. */
@@ -161,18 +153,6 @@ function parseQuestions(json: string): ClarifyQuestion[] {
     return Array.isArray(v) ? (v as ClarifyQuestion[]) : []
   } catch {
     return []
-  }
-}
-
-function parseJsonRecord<T extends Record<string, unknown>>(json: string | null): T | null {
-  if (json === null) return null
-  try {
-    const value: unknown = JSON.parse(json)
-    return value !== null && typeof value === 'object' && !Array.isArray(value)
-      ? (value as T)
-      : null
-  } catch {
-    return null
   }
 }
 
@@ -203,13 +183,13 @@ export async function sealRoundQuestions(
   )[0]
   const runSealTx = async () => {
     const committed = await databaseSessionFor(args.db).transaction(async (tx) => {
+      const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
       // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发 seal / dispatch 靠任务聚合根行锁串行
       // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。round 缺失时不加锁，让下面抛 NotFound。
       if (taskIdRow !== undefined) {
-        const { tasks } = tablesOf(tx)
-        await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskIdRow.taskId)
+        await taskHumanGate.lockTask(taskIdRow.taskId)
       }
-      const { clarifyRounds, tasks, taskQuestions, nodeRuns } = tablesOf(tx)
+      const { clarifyRounds, taskQuestions } = tablesOf(tx)
       // Re-read the round INSIDE the tx so a concurrent seal's committed answers/status are
       // observed (TOCTOU-free).
       const round = (
@@ -239,11 +219,9 @@ export async function sealRoundQuestions(
       // already done/canceled. Same-tx read keeps it TOCTOU-free. failed /
       // interrupted stay answerable (revivable, design §1).
       const owningTask = (
-        await tx
-          .select({ status: tasks.status })
-          .from(tasks)
-          .where(eq(tasks.id, round.taskId))
-          .limit(1)
+        await createTaskGateQueries(tx)
+          .listContexts([round.taskId])
+          .then((rows) => rows.map((row) => ({ status: row.status })))
       )[0]
       if (
         owningTask !== undefined &&
@@ -295,9 +273,7 @@ export async function sealRoundQuestions(
         })
         .from(taskQuestions)
         .where(eq(taskQuestions.originNodeRunId, args.originNodeRunId))
-      const alreadySealed = new Set<string>()
-      if (round.status === 'answered') for (const q of questions) alreadySealed.add(q.id)
-      for (const e of existingEntries) if (e.sealedAt !== null) alreadySealed.add(e.questionId)
+      const alreadySealed = sealedClarifyQuestionIds(questions, round.status, existingEntries)
       if (isMindmapRound(questions) && args.wholeRound) {
         if (args.questionSetKey !== clarifyQuestionSetKey(questions)) {
           throw new ConflictError(
@@ -318,58 +294,33 @@ export async function sealRoundQuestions(
           }
         }
       }
-      const declaredReseal = new Set(args.allowResealFor ?? [])
-      const resealSet = new Set<string>()
-      for (const id of sealingSet) {
-        if (!alreadySealed.has(id)) continue
-        const rows = existingEntries.filter((e) => e.questionId === id)
-        const resealable =
-          declaredReseal.has(id) &&
-          rows.length > 0 &&
-          rows.every((e) => e.dispatchedAt === null && e.stagedAt === null)
-        if (!resealable) {
-          throw new ConflictError(
-            'clarify-question-already-sealed',
-            `question '${id}' is already sealed; only a 待指派 (pending, un-staged, un-dispatched) question explicitly declared for re-answer can be overwritten`,
-          )
-        }
-        resealSet.add(id)
+      const classification = classifyClarifyReseal(
+        sealingSet,
+        alreadySealed,
+        existingEntries,
+        args.allowResealFor,
+      )
+      if (classification.rejected !== null) {
+        throw new ConflictError(
+          'clarify-question-already-sealed',
+          `question '${classification.rejected}' is already sealed; only a 待指派 (pending, un-staged, un-dispatched) question explicitly declared for re-answer can be overwritten`,
+        )
       }
-      const freshSet = new Set([...sealingSet].filter((id) => !resealSet.has(id)))
-
-      // (1) Merge the sealed subset into the round's answers_json (per-question merge-write).
-      // Fresh ids never overwrite a locked answer (they were unsealed); RFC-136 reseal ids
-      // overwrite their previous value ON PURPOSE (直接覆盖 — D3).
-      const merged = mergeSealedAnswers(parseAnswersArray(round.answersJson), sealedSubset)
-      const mergedJson = JSON.stringify(merged)
-
-      // RFC-162: step (2) per-question scope merge DELETED (scope removed). The round's
-      // `question_scopes_json` column is no longer written (stays whatever it was, unread).
-
-      // (5) Flip the round → answered ONLY when EVERY question is now sealed. RFC-136:
-      // `flipNow` gates every flip side effect (status/answeredAt/directive persist, legacy
-      // dual-write flip, node_run close, stop finalization) to the transition INTO answered —
-      // a re-answer on an already-answered round only rewrites answers_json + entry stamps
-      // (AC-3: no re-flip, answeredAt/answeredBy preserved, no duplicate park/WS side effects).
-      const wasAnswered = round.status === 'answered'
-      const newSealed = new Set<string>([...alreadySealed, ...sealingSet])
-      const fullySealed = questions.every((q) => newSealed.has(q.id))
-      const flipNow = fullySealed && !wasAnswered
-
-      // RFC-128 P2 (Codex P2-2) — round-level directive. Provided wins; else keep the round's
-      // existing value; else default 'continue'. Fed (in-memory) to the reconcile designer gate
-      // and persisted to clarify_rounds + the legacy session ONLY on a FULL seal (see directive
-      // gate below). The 'continue' default is REQUIRED for the §18 designer park:
-      // loadUndispatchedDesignerTargets filters clarify_rounds.directive='continue', so a NULL
-      // directive would leave a fully-sealed designer round un-parked → (with the node-run
-      // closed below) the task would advance past it instead of waiting for board dispatch. A
-      // 'stop' round produces NO designer entries (reconcileDesiredEntries).
-      // RFC-136: an ALREADY-answered round keeps its committed directive — the re-answer body
-      // carries the schema default 'continue', which must NOT re-run reconcile with continue
-      // semantics on a finalized 'stop' round (it would wrongly grow designer entries).
-      const effectiveDirective: ClarifyDirective = wasAnswered
-        ? ((round.directive as ClarifyDirective | null) ?? 'continue')
-        : (args.directive ?? (round.directive as ClarifyDirective | null) ?? 'continue')
+      const resealSet = classification.resealed
+      const freshSet = classification.fresh
+      const transition = sealClarifyAnswers({
+        state: decodeLegacyClarifyAnswerColumns(round).state,
+        questions,
+        status: round.status,
+        alreadySealed,
+        incoming: sealedSubset,
+        directive: round.directive,
+        requestedDirective: args.directive,
+        sealedBy: args.sealedBy,
+        sealedByRole: args.sealedByRole,
+        now: ts,
+      })
+      const { fullySealed, flipNow, directive: effectiveDirective } = transition
 
       // RFC-132 PR-B (universal deferred model, §6) — the RFC-128 P5-0 stranding guard is REMOVED.
       // It rejected a self/questioner FULL seal on a NON-deferred task (no park/dispatch release path
@@ -380,60 +331,7 @@ export async function sealRoundQuestions(
       // the flag audit W0 (design/flag-audit-2026-07-07.md §3); the `deferredQuestionDispatch`
       // flag is no longer read here.
 
-      // RFC-128 P2 (Codex P2-2 follow-up) + RFC-132 T7 — persist the directive ONLY when the
-      // round fully seals; a PARTIAL seal writes it to NEITHER table:
-      //   - stop detection now reads the questioner node's node-level directive
-      //     (task_node_clarify_directives, via resolveCrossNodeStopped). The node-level write
-      //     below (setNodeClarifyDirectiveTx, gated on flipNow) must NOT fire
-      //     on a partial seal, or a 'stop' would be taken as a PERMANENT node stop and
-      //     short-circuit the cross node BEFORE the round is answered. crossClarifySessions.directive
-      //     is audit-only now, but is kept in lockstep (gated the same way) so the two never disagree;
-      //   - clarify_rounds.directive's only scheduling reader (loadUndispatchedDesignerTargets)
-      //     filters status='answered', so a partial round's directive is never consulted.
-      // Deferring both writes to full seal matches "partial seal is pure derived state, changes
-      // nothing schedulable". The reconcile below still uses the IN-MEMORY effectiveDirective (a
-      // partial seal produces no designer entries regardless — P2-4a).
-      const directiveSet = flipNow ? { directive: effectiveDirective } : {}
-      const attributionSet =
-        flipNow && args.sealedBy !== undefined && args.sealedByRole !== undefined
-          ? {
-              submittedByRole: args.sealedByRole,
-              answerAttributionsJson: JSON.stringify(
-                freezeAnswerAttributions({
-                  answers: merged,
-                  draftAnswers: parseJsonRecord<Record<string, ClarifyDraftValue>>(
-                    round.draftAnswersJson,
-                  ),
-                  draftAttributions: parseJsonRecord<ClarifyAnswerAttributions>(
-                    round.answerAttributionsJson,
-                  ),
-                  submitter: { userId: args.sealedBy, role: args.sealedByRole },
-                  now: ts,
-                }),
-              ),
-              draftAnswersJson: null,
-            }
-          : {}
-
-      // Write clarify_rounds (the SoT): merged answers + merged scopes; flip status (+ directive
-      // + answeredAt) only when fully sealed NOW (RFC-136: an answered round being re-answered
-      // keeps its original answeredAt/answeredBy/directive). Keep status 'awaiting_human' on a
-      // partial seal (NEVER a new DB 'partial' status — RFC-128 §2 / RFC-126).
-      await tx
-        .update(clarifyRounds)
-        .set({
-          answersJson: mergedJson,
-          ...directiveSet,
-          ...attributionSet,
-          ...(flipNow
-            ? {
-                status: 'answered' as const,
-                answeredAt: ts,
-                ...(args.sealedBy !== undefined ? { answeredBy: args.sealedBy } : {}),
-              }
-            : {}),
-        })
-        .where(eq(clarifyRounds.id, round.id))
+      await createClarifyAnswerWritePort(args.db).seal(tx, round.id, transition)
 
       // RFC-217 T8（真 T17）—— 双写退役：clarify_rounds 即唯一数据源。
 
@@ -452,11 +350,7 @@ export async function sealRoundQuestions(
       // (RFC-136: flipNow — an answered round's node_run is already closed; the CAS would
       // no-op anyway, the gate just keeps the re-answer path free of flip side effects.)
       if (flipNow) {
-        // rfc053-allow-direct-status-write -- atomic clarify-node close on full seal (mirrors resume-clarify)
-        await tx
-          .update(nodeRuns)
-          .set({ status: 'done', finishedAt: ts })
-          .where(and(eq(nodeRuns.id, args.originNodeRunId), eq(nodeRuns.status, 'awaiting_human')))
+        await taskHumanGate.completeClarifyRun(args.originNodeRunId, ts)
       }
 
       // (3) Reconcile against the EFFECTIVE round (status reflects the writes above). RFC-162:
@@ -466,7 +360,6 @@ export async function sealRoundQuestions(
       await reconcileRoundEntriesTx(tx, {
         ...round,
         status: fullySealed ? 'answered' : round.status,
-        answersJson: mergedJson,
         // RFC-136: keep the committed answeredAt on a re-answer (flipNow only).
         answeredAt: flipNow ? ts : round.answeredAt,
       })
@@ -590,7 +483,6 @@ export async function sealRoundQuestions(
         roundId: round.id,
         originNodeRunId: args.originNodeRunId,
         roundKind: round.kind,
-        answersJson: mergedJson,
         directive: effectiveDirective,
         sealedQuestionIds: [...freshSet],
         roundFullySealed: fullySealed,

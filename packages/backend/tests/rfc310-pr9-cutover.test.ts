@@ -20,6 +20,7 @@
 // / cutover-rollback-after-flip / cutover-adopt-rejected /
 // cutover-repo-binding-missing。
 
+import { readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -287,7 +288,7 @@ describeEachProviderHttpApplication(
         // 退役：T104 后 code-round fire 无论 cutover phase 一律落
         // skipped-trigger-invalid 留痕，绝不启动任务。
         const triggerId = await fireCodeRoundDelivery()
-        const { webhookTriggerFires, tasks } = tablesOf(db)
+        const { webhookTriggerFires } = tablesOf(db)
         const fires = await db
           .select()
           .from(webhookTriggerFires)
@@ -295,7 +296,7 @@ describeEachProviderHttpApplication(
         expect(fires).toHaveLength(1)
         expect(fires[0]!.outcome).toBe('skipped-trigger-invalid')
         expect(fires[0]!.taskId).toBeNull()
-        expect(await db.select().from(tasks)).toHaveLength(0)
+        expect(await readTaskFixtures(db)).toHaveLength(0)
       })
     })
 

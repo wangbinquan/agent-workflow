@@ -4,6 +4,7 @@
 // 可见性与管理权由中立 participant 在同一事务里回答；scope 迁移把两个 participant 与 OCC 收在一个事务里
 // （含测试缝下的回滚）；融合 participant 的选中 / 定序 / provenance 与仓库 scope 的存在性。
 
+import { agentFixture, readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -63,8 +64,7 @@ async function seedUser(db: PersistenceDb, role: 'admin' | 'user' = 'user'): Pro
 
 async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = `agt_d4_${ulid()}`
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name: id,
     description: 'd4',
@@ -83,8 +83,7 @@ async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string
 
 async function seedWorkflow(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = `wf_d4_${ulid()}`
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: id,
     definition: '{"$schema_version":1,"nodes":[],"edges":[]}',
@@ -368,7 +367,7 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
     const workflowId = await seedWorkflow(db, owner)
     await seedGrant(db, 'agent', agentId, reader, 'read', owner)
     const repoId = `repo_d4_${ulid()}`
-    const { cachedRepos, memoryScopeMoveEvents, workflows } = tablesOf(db)
+    const { cachedRepos, memoryScopeMoveEvents } = tablesOf(db)
     await insertOne(db, cachedRepos, {
       id: repoId,
       urlHash: repoId,
@@ -517,7 +516,7 @@ describeEachProvider('RFC-359 W4-D4 —— memory 目录与 participants', (harn
       'memory-scope-target-not-found',
     )
     racedCapture.stop()
-    expect(await db.select().from(workflows).where(eq(workflows.id, workflowId))).toHaveLength(1)
+    expect(await readWorkflowFixtures(db, { id: workflowId })).toHaveLength(1)
     expect((await catalog.queries.getById(raced.id))?.memory).toMatchObject({
       scopeType: 'agent',
       scopeId: agentId,

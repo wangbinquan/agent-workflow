@@ -1,3 +1,4 @@
+import type { SkillTextViewPolicy } from './textView'
 import type { FileNode } from '@agent-workflow/shared'
 
 /** The immutable historical version selected and authorized by AW. */
@@ -6,17 +7,15 @@ export interface SkillVersionReadReference {
   readonly version: number
 }
 
-export type SkillVersionTreeEntry =
-  | { readonly kind: 'text'; readonly content: string }
-  | { readonly kind: 'binary'; readonly hash: string }
+export type SkillVersionTreeEntry = Uint8Array
 
 export interface SkillVersionSnapshotContent {
-  readonly main: string | null
+  readonly main: Uint8Array | null
   readonly files: readonly FileNode[]
 }
 
 /** Snapshot-only reads: a missing historical tree never falls back to live. */
-export interface SkillVersionContentReader {
+export interface SkillVersionContentReader extends SkillTextViewPolicy {
   readSnapshot(
     reference: SkillVersionReadReference,
   ): SkillVersionSnapshotContent | Promise<SkillVersionSnapshotContent>

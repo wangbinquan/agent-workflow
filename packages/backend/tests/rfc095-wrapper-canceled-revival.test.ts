@@ -19,7 +19,13 @@
 // 迭代 1 开头持久化）；第 3 次调用（复活重跑迭代 1）输出 EXIT。全程无 sleep 竞态：
 // 每一步都由文件 marker / DB 终态轮询闸出。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -114,8 +120,7 @@ function buildHarness(): Harness {
 }
 
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
-  const { agents, workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, agents, {
+  await agentFixture(h.db, {
     id: ulid(),
     name: 'worker',
     description: 'test',
@@ -128,12 +133,12 @@ async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): 
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-rfc095-revival',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -162,8 +167,7 @@ async function waitForTerminalTask(
   taskId: string,
 ): Promise<PersistenceTables['tasks']['$inferSelect']> {
   for (let i = 0; i < 400; i++) {
-    const { tasks } = tablesOf(db)
-    const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(db, { id: taskId }))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
     await Bun.sleep(25)
   }
@@ -213,11 +217,10 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     controller.abort()
     await running
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const afterCancel = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const afterCancel = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(afterCancel.status).toBe('canceled')
 
-    const midRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const midRows = await readNodeRunFixtures(h.db, { taskId })
     const lwAfterCancel = midRows.filter((r) => r.nodeId === 'lw')
     expect(lwAfterCancel).toHaveLength(1)
     const wrapperRunId = lwAfterCancel[0]!.id
@@ -268,7 +271,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     const final = await waitForTerminalTask(h.db, taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
-    const after = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const after = await readNodeRunFixtures(h.db, { taskId })
 
     // 续跑而非重启 #1：wrapper 行没有铸新——同一行 id 复用、终态 done。
     const lwRows = after.filter((r) => r.nodeId === 'lw')
@@ -366,7 +369,7 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     const final = await waitForTerminalTask(h.db, taskId)
     expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
 
-    const after = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const after = await readNodeRunFixtures(h.db, { taskId })
 
     // ⑥-11 核心：wrapper 节点全程恒一行（没有 failed 占位行、没有新铸 wrapper
     // 行），同一行 id 终态 done。

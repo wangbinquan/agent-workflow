@@ -1,6 +1,13 @@
 // HTTP coverage for /api/tasks (P-1-14).
 // Uses a real `git init` fixture so startTask's worktree creation works.
 
+import {
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readTaskFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TasksListWsMessage, WorkflowDefinition } from '@agent-workflow/shared'
@@ -70,8 +77,7 @@ async function req(app: Hono, path: string, init: RequestInit = {}): Promise<Res
 
 async function seedWorkflow(db: PersistenceDb, def: WorkflowDefinition): Promise<string> {
   const id = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: 'wf',
     definition: JSON.stringify(def),
@@ -88,13 +94,10 @@ async function seedWorkflow(db: PersistenceDb, def: WorkflowDefinition): Promise
 async function preparedWorktree(db: PersistenceDb, taskId: string): Promise<string> {
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
-    const { tasks } = tablesOf(db)
     const row = (
-      await db
-        .select({ worktreePath: tasks.worktreePath, baseCommit: tasks.baseCommit })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
+      await readTaskFixtures(db, { id: taskId }, { limit: 1 }).then((rows) =>
+        rows.map((row) => ({ worktreePath: row.worktreePath, baseCommit: row.baseCommit })),
+      )
     )[0]
     if (row !== undefined && row.worktreePath !== '' && row.baseCommit !== null) {
       return row.worktreePath
@@ -288,10 +291,9 @@ describeEachProviderHttpApplication(
 
     test('GET /:id roundtrips; GET / lists; status filter narrows', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
-      const { tasks } = tablesOf(h.db)
       // Create three tasks; vary status by direct insert (POST always starts as
       // pending/running so we can't observe filtering on POST alone).
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id: ulid(),
@@ -306,7 +308,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 3000,
         finishedAt: Date.now() - 1000,
       })
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id: ulid(),
@@ -344,8 +346,7 @@ describeEachProviderHttpApplication(
     test('GET / and /:id include the joined workflow name', async () => {
       const wfId = ulid()
       const wfName = 'design-pipeline'
-      const { workflows, tasks } = tablesOf(h.db)
-      await insertOne(h.db, workflows, {
+      await workflowFixture(h.db, {
         id: wfId,
         name: wfName,
         definition: JSON.stringify(EMPTY_DEF),
@@ -353,7 +354,7 @@ describeEachProviderHttpApplication(
         updatedAt: Date.now(),
       })
       const taskId = ulid()
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id: taskId,
@@ -388,8 +389,7 @@ describeEachProviderHttpApplication(
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const taskId = ulid()
       const commentUrl = 'https://gitlab.example/group/repo/-/merge_requests/8#note_99'
-      const { tasks } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'webhook source fixture',
         id: taskId,
         workflowId: wfId,
@@ -450,8 +450,7 @@ describeEachProviderHttpApplication(
     test('POST /:id/cancel on a completed task -> 409 task-not-cancelable', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -482,8 +481,7 @@ describeEachProviderHttpApplication(
       // canceled rather than block forever.
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -595,8 +593,7 @@ describeEachProviderHttpApplication(
       // worktree (repo missing, base ref invalid, etc.).
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -619,8 +616,7 @@ describeEachProviderHttpApplication(
     test('GET /:id/diff when worktree dir is missing -> 410', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -649,8 +645,7 @@ describeEachProviderHttpApplication(
       try {
         const wfId = await seedWorkflow(h.db, EMPTY_DEF)
         const id = ulid()
-        const { tasks } = tablesOf(h.db)
-        await insertOne(h.db, tasks, {
+        await taskFixture(h.db, {
           name: 'fixture-task',
           id,
           workflowId: wfId,
@@ -684,8 +679,7 @@ describeEachProviderHttpApplication(
       try {
         const wfId = await seedWorkflow(h.db, EMPTY_DEF)
         const id = ulid()
-        const { tasks } = tablesOf(h.db)
-        await insertOne(h.db, tasks, {
+        await taskFixture(h.db, {
           name: 'fixture-task',
           id,
           workflowId: wfId,
@@ -712,8 +706,8 @@ describeEachProviderHttpApplication(
     test('GET /:id/node-runs/:nodeRunId/events paginates with ?since', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const taskId = ulid()
-      const { tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      const { nodeRunEvents } = tablesOf(h.db)
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id: taskId,
@@ -728,7 +722,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       const nrId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: nrId,
         taskId,
         nodeId: 'n1',
@@ -763,8 +757,7 @@ describeEachProviderHttpApplication(
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const idA = ulid()
       const idB = ulid()
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      await h.db.insert(tasks).values([
+      await taskFixture(h.db, [
         {
           id: idA,
           name: 'fixture-task',
@@ -793,7 +786,7 @@ describeEachProviderHttpApplication(
         },
       ])
       const nrA = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: nrA,
         taskId: idA,
         nodeId: 'n1',
@@ -808,8 +801,7 @@ describeEachProviderHttpApplication(
     test('POST /:id/resume on a non-failed task → 409', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -831,8 +823,7 @@ describeEachProviderHttpApplication(
     test('POST /:id/nodes/:nrId/retry while task is running → 409', async () => {
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -847,7 +838,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       const nrId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: nrId,
         taskId: id,
         nodeId: 'n1',
@@ -872,8 +863,7 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -895,7 +885,7 @@ describeEachProviderHttpApplication(
         errorSummary: 'boom',
       })
       const nrId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: nrId,
         taskId: id,
         nodeId: 'n1',
@@ -932,8 +922,7 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -963,7 +952,7 @@ describeEachProviderHttpApplication(
       // HEAD 当基线，判据（继承哪些字段）一个字没改，而且不再依赖「那条门没跑」。
       const baseline = (await runGit(h.repoPath, ['rev-parse', 'HEAD'])).stdout.trim()
       const failedRunId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: failedRunId,
         taskId: id,
         nodeId: 'agent1',
@@ -973,15 +962,15 @@ describeEachProviderHttpApplication(
         reviewIteration: 1,
         shardKey: 'shard-a',
         parentNodeRunId: null,
-        preSnapshot: baseline,
         startedAt: Date.now(),
         finishedAt: Date.now(),
+        checkpoints: [{ mountPath: '', preSnapshot: baseline }],
       })
       const res = await req(h.app, `/api/tasks/${id}/nodes/${failedRunId}/retry?cascade=false`, {
         method: 'POST',
       })
       expect(res.status).toBe(200)
-      const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+      const rows = await readNodeRunFixtures(h.db, { taskId: id })
       const fresh = rows.find((r) => r.id !== failedRunId)
       expect(fresh).toBeDefined()
       expect(fresh!.nodeId).toBe('agent1')
@@ -990,7 +979,9 @@ describeEachProviderHttpApplication(
       expect(fresh!.iteration).toBe(2)
       expect(fresh!.reviewIteration).toBe(1)
       expect(fresh!.shardKey).toBe('shard-a')
-      expect(fresh!.preSnapshot).toBe(baseline)
+      expect(
+        fresh!.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null,
+      ).toBe(baseline)
     })
 
     // Boundary: cascade retry of an UPSTREAM node must not pollute the
@@ -1010,8 +1001,8 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      const { nodeRuns } = tablesOf(h.db)
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -1043,7 +1034,7 @@ describeEachProviderHttpApplication(
       })
       // Target (A): failed row at ci=4 — the user explicitly retried this.
       const aFailedId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: aFailedId,
         taskId: id,
         nodeId: 'A',
@@ -1057,7 +1048,7 @@ describeEachProviderHttpApplication(
       // Downstream (B): its own done row at a DIFFERENT ci (=1) — cascade must
       // inherit B's own state, not bleed A's ci=4 into B's fresh row.
       const bDoneId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: bDoneId,
         taskId: id,
         nodeId: 'B',
@@ -1101,8 +1092,7 @@ describeEachProviderHttpApplication(
       // 本意照旧可验，而且两个引擎都验。
       const wfId = await seedWorkflow(h.db, EMPTY_DEF)
       const id = ulid()
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id,
@@ -1125,7 +1115,7 @@ describeEachProviderHttpApplication(
       })
       // Older done row the user wants to retry from: retryIndex=0, ci=2.
       const pickedId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: pickedId,
         taskId: id,
         nodeId: 'agent1',
@@ -1137,7 +1127,7 @@ describeEachProviderHttpApplication(
       })
       // Newer done row at higher retryIndex with DIFFERENT ci — desc(retryIndex)
       // would point retryNode at this row if it confused `prev` with `runRow`.
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: ulid(),
         taskId: id,
         nodeId: 'agent1',
@@ -1151,7 +1141,7 @@ describeEachProviderHttpApplication(
         method: 'POST',
       })
       expect(res.status).toBe(200)
-      const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
+      const rows = await readNodeRunFixtures(h.db, { taskId: id })
       // Fresh row is the one with retryIndex=2 (max+1) — neither of the seeded
       // rows above. Find it by retryIndex.
       const fresh = rows.find((r) => r.nodeId === 'agent1' && r.retryIndex === 2)

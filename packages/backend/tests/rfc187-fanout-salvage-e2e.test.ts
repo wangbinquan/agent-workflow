@@ -11,6 +11,7 @@
 // 复用 rfc187-workgroup-e2e.test.ts 的 scenario-opencode harness（RFC-186 首绿
 // 后的 stub 缝封锁模式）；writeFiles 步骤 mixin 为本 RFC 新增。
 
+import { readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -81,7 +82,7 @@ describe('RFC-187 §4-2 — fan-out 同文件冲突：逐路径救回（真子�
       const leadId = await seedAgent(h.db, 'wg-lead')
       const worker1Id = await seedAgent(h.db, 'wg-w1')
       const worker2Id = await seedAgent(h.db, 'wg-w2')
-      const { users, tasks, workgroupAssignments, workgroupMessages } = tablesOf(h.db)
+      const { users, workgroupAssignments, workgroupMessages } = tablesOf(h.db)
       // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
       // （用户存在、active、有 email、gitName 非空），旧的 `startWorkgroupTask` 不看这些。
       await h.db
@@ -166,7 +167,7 @@ describe('RFC-187 §4-2 — fan-out 同文件冲突：逐路径救回（真子�
         { name: 'e2e-salvage', goal: '双写冲突', scratch: true },
       )
 
-      const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
       expect(final).toBeDefined()
       // 任务收敛（leader 消费失败/成功结果后 done）——不因冲突整体 failed。
       expect(final!.status).toBe('done')

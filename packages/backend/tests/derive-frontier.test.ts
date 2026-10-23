@@ -21,6 +21,12 @@ function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   // Monotonic id so isFresherNodeRun (pure id-order) picks the last-inserted row.
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -49,14 +55,14 @@ type WorkflowNode = WorkflowDefinition['nodes'][number]
 const ups = (m: Record<string, string[]>): Map<string, string[]> => new Map(Object.entries(m))
 
 describe('RFC-076 PR-B — deriveFrontier', () => {
-  test('F1 — chain all done∧fresh → completed all, ready empty, allSettled', () => {
+  test('F1 — chain all done∧fresh → completed all, ready empty, allSettled', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
       { id: 'out', kind: 'output' },
     ])
     const rows = [row('in', 'done'), row('a', 'done'), row('out', 'done')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -72,13 +78,13 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(true)
   })
 
-  test('F2 — out-of-band fresh pending → ready', () => {
+  test('F2 — out-of-band fresh pending → ready', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
     ])
     const rows = [row('in', 'done'), row('a', 'pending')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -93,7 +99,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(false)
   })
 
-  test('C1 — clarify gate with NO row + asker done → READY like any node (RFC-354 D7), never completed without a row', () => {
+  test('C1 — clarify gate with NO row + asker done → READY like any node (RFC-354 D7), never completed without a row', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
@@ -103,7 +109,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     // dependency (port table `dataflow: 'always'`), so the asker is its
     // structural upstream. Before, 'c' "settled without a row" here.
     const rows = [row('in', 'done'), row('a', 'done')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -119,7 +125,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(false)
   })
 
-  test('N6 — clarify gate with an OPEN session and no row yet → neither completed nor ready (window parked)', () => {
+  test('N6 — clarify gate with an OPEN session and no row yet → neither completed nor ready (window parked)', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
@@ -129,7 +135,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     // exists; openClarifyNodeIds is the positive evidence that closes the
     // "asker settled, park row not yet minted" window on the gate itself.
     const rows = [row('in', 'done'), row('a', 'done')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -146,13 +152,13 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(false)
   })
 
-  test('C2 — parked clarify (awaiting_human row) → awaitingHuman bucket, not ready', () => {
+  test('C2 — parked clarify (awaiting_human row) → awaitingHuman bucket, not ready', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'a', kind: 'agent-single' },
       { id: 'c', kind: 'clarify' },
     ])
     const rows = [row('a', 'done'), row('c', 'awaiting_human')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -168,7 +174,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(false)
   })
 
-  test('asking-run park (S12): a done agent run in askingRunIds is NOT completed, parks awaitingHuman', () => {
+  test('asking-run park (S12): a done agent run in askingRunIds is NOT completed, parks awaitingHuman', async () => {
     // designer → builder. designer emitted <workflow-clarify>: the runner marked
     // designer's OWN run `done`, but it is mid-conversation (open clarify
     // session). It must NOT complete (else builder runs prematurely on a
@@ -182,7 +188,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     const designer = row('designer', 'done')
     const rows = [row('in', 'done'), designer, row('builder', 'pending')]
     const askingRunIds = new Set([designer.id])
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -201,13 +207,13 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(false)
   })
 
-  test('N1 — failed agent with upstream done → READY (resume re-mint), not in failed bucket', () => {
+  test('N1 — failed agent with upstream done → READY (resume re-mint), not in failed bucket', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
     ])
     const rows = [row('in', 'done'), row('a', 'failed')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -222,13 +228,13 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.failed).toEqual([])
   })
 
-  test('failed agent with upstream NOT done → failed bucket, not ready', () => {
+  test('failed agent with upstream NOT done → failed bucket, not ready', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'up', kind: 'agent-single' },
       { id: 'a', kind: 'agent-single' },
     ])
     const rows = [row('up', 'pending'), row('a', 'failed')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -246,13 +252,13 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.failed).toEqual(['a'])
   })
 
-  test('N3 — dispatchedThisInvocation excludes an otherwise-ready node', () => {
+  test('N3 — dispatchedThisInvocation excludes an otherwise-ready node', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'in', kind: 'input' },
       { id: 'a', kind: 'agent-single' },
     ])
     const rows = [row('in', 'done'), row('a', 'failed')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -266,7 +272,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.ready).toEqual([])
   })
 
-  test('fix-A window — designer re-running (pending) → designer ready, rev1 stale, questioner held', () => {
+  test('fix-A window — designer re-running (pending) → designer ready, rev1 stale, questioner held', async () => {
     // in → designer → rev1 → questioner. designer has a fresh pending rerun;
     // rev1 done but consumed the OLD designer run → stale; questioner held.
     const { definition, scopeNodes, scopeIds } = def([
@@ -284,7 +290,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
       consumedUpstreamRunsJson: JSON.stringify({ rev1: rev1.id }),
     })
     const rows = [row('in', 'done'), designerOld, designerNew, rev1, questioner]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -305,7 +311,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     expect(f.allSettled).toBe(false)
   })
 
-  test('wrapper-loop parked with fresh inner pending at i≥1 → ready (N2/HIGH-1)', () => {
+  test('wrapper-loop parked with fresh inner pending at i≥1 → ready (N2/HIGH-1)', async () => {
     // This test builds defWithInner inline (the wrapper needs a nodeIds inner set),
     // so the generic def() helper isn't used here.
     // The wrapper's own row at iteration 0; mark progress iteration 2.
@@ -325,7 +331,7 @@ describe('RFC-076 PR-B — deriveFrontier', () => {
     } as unknown as WorkflowDefinition
     const innerPending = row('inner', 'pending', { iteration: 2, containerRunId: wrapperRow.id })
     const rows = [wrapperRow, innerPending]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       defWithInner,
       [{ id: 'lw', kind: 'wrapper-loop' }] as unknown as WorkflowNode[],

@@ -1,3 +1,4 @@
+// RFC-395 II-a A1: these deliberate NULL-seq/allocator corruption rows remain epoch-1 fixtures until II-b retires the backfill.
 // RFC-374 AC-3/7: legacy catch-up preserves causal choices, resumes after failure and retains the identity high-water row.
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -7,7 +8,7 @@ import { asc, eq, max } from 'drizzle-orm'
 import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
 import { planNodeRunSeqBackfill } from '@/modules/task-execution/domain/nodeRunSeqBackfill'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
+import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import { pickLatestRunInFrame, pickReusableShardRun } from '@/services/freshness'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedSequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'

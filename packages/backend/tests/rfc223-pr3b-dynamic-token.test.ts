@@ -20,6 +20,13 @@
 // case: two owners, one shared name, and two distinct frozen ids/runtime
 // profiles crossing generate → execute without a name-based mis-selection.
 
+import {
+  patchTaskFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
@@ -307,14 +314,14 @@ async function seedTask(
   ownerUserId?: string,
 ): Promise<string> {
   const taskId = ulid()
-  const { workflows, tasks, workgroupTaskState } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { workgroupTaskState } = tablesOf(db)
+  await workflowFixture(db, {
     id: `wf-anchor-${taskId}`,
     name: `dw-anchor-${taskId}`,
     definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
     builtin: true,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'dw-task',
     workflowId: `wf-anchor-${taskId}`,
@@ -439,7 +446,7 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
       { status: 'done', outputs: { [ORCHESTRATOR_WORKFLOW_PORT]: JSON.stringify(TWO_NODE_GEN) } },
     ])
     await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
-    const { nodeRuns, workflows } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     // (a gate holder exists — sanity: awaiting_review invariant held)
     const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
       (r) => r.rerunCause === DW_GATE_CAUSE,
@@ -453,7 +460,7 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
     })
     expect(res.status).toBe(201)
     const body = (await res.json()) as { id: string }
-    const wf = (await db.select().from(workflows).where(eq(workflows.id, body.id)))[0]
+    const wf = (await readWorkflowFixtures(db, { id: body.id }))[0]
     const savedDef = JSON.parse(wf?.definition ?? '{}') as { nodes: Array<Record<string, unknown>> }
     // the persisted workflow is id-canonical — every agent node has agentId, and
     // no opaque token survived into the reusable workflow.
@@ -494,7 +501,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
         role: 'user',
         password: 'longEnoughPasswordB',
       })
-      const { runtimes, tasks, nodeRuns } = tablesOf(db)
+      const { runtimes, nodeRuns } = tablesOf(db)
       await db.insert(runtimes).values([
         {
           id: ulid(),
@@ -594,7 +601,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
       }
 
       const taskId = await seedTask(db, config, initialDwState(), ownerA.id)
-      await db.update(tasks).set({ repoPath, worktreePath: repoPath }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { repoPath, worktreePath: repoPath })
 
       const { hooks } = scriptedHooks([
         {
@@ -655,7 +662,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
           ),
       )
 
-      const finalTask = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const finalTask = (await readTaskFixtures(db, { id: taskId }))[0]
       expect(finalTask?.status).toBe('done')
 
       const configRows = readFileSync(configCapturePath, 'utf-8')

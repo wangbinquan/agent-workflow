@@ -12,6 +12,7 @@
 // DIRECTLY and never imports services/skill.ts. skill.ts imports THIS — one
 // direction only.
 
+import { skillTextView, skillTreeTextView } from '../../application/skills/textView'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
@@ -52,10 +53,7 @@ import {
   createFileSkillVersionContentStore,
 } from '../local/fileSkillVersionContentStore'
 
-import type {
-  SkillVersionContentReader,
-  SkillVersionTreeEntry as TreeEntry,
-} from '../../application/skills/versionContentReader'
+import type { SkillVersionContentReader } from '../../application/skills/versionContentReader'
 import { createFileSkillVersionContentReader } from '../local/fileSkillVersionContentReader'
 
 import type { SkillLifecycleContentStore } from '../../application/skills/lifecycleContentStore'
@@ -115,7 +113,8 @@ import {
   skillVersionCompositeFenceRequested,
 } from '../../domain/skillVersionCommit'
 
-export type { SkillVersionTreeEntry as TreeEntry } from '../../application/skills/versionContentReader'
+import type { SkillVersionTextEntry as TreeEntry } from '../../application/skills/textView'
+export type { SkillVersionTextEntry as TreeEntry } from '../../application/skills/textView'
 
 function sameEntry(a: TreeEntry | undefined, b: TreeEntry | undefined): boolean {
   if (a === undefined || b === undefined) return false
@@ -757,7 +756,7 @@ export async function getSkillVersionContent(
   const snapshot = await reader.readSnapshot({ skillId, version: v })
   let content: SkillContent
   if (snapshot.main !== null) {
-    const parsed = parseFrontmatter(snapshot.main)
+    const parsed = parseFrontmatter(skillTextView(snapshot.main, reader))
     const { name: _n, description: descRaw, ...rest } = parsed.data
     content = {
       name: skill.name,
@@ -787,7 +786,11 @@ export async function diffSkillVersions(
   const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
   const a = await reader.readTree({ skillId, version: from })
   const b = await reader.readTree({ skillId, version: to })
-  return { from, to, diff: gitStyleDirDiff(a, b) }
+  return {
+    from,
+    to,
+    diff: gitStyleDirDiff(skillTreeTextView(a, reader), skillTreeTextView(b, reader)),
+  }
 }
 
 // --- restore ---------------------------------------------------------------
@@ -850,8 +853,9 @@ export async function restoreSkillVersion(
   let unfusedMemoryIds: string[] = []
   // The restored SKILL.md becomes current, and so does the description it declares.
   const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
+  const restoredMain = (await reader.readSnapshot({ skillId, version: target })).main
   const restoredDescription = skillMainDescription(
-    (await reader.readSnapshot({ skillId, version: target })).main,
+    restoredMain === null ? null : skillTextView(restoredMain, reader),
   )
   const version = await commitSkillVersion(
     db,

@@ -16,6 +16,7 @@
 //         resource's resolved name (no name/existence oracle); the closure
 //         endpoint likewise never discloses an invisible dependency's name.
 
+import { patchAgentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -242,8 +243,7 @@ describeEachProviderHttpApplication(
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'dep' })
       expect(depRes.status).toBe(201)
       const dep = (await depRes.json()) as AgentDto
-      const { agents } = tablesOf(h.db)
-      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'public' })
       const aRes = await createAgentHttp(h, h.bob.token, {
         name: 'consumer',
         dependsOn: [dep.id],
@@ -253,7 +253,7 @@ describeEachProviderHttpApplication(
       expect(consumer.dependsOn).toEqual([dep.id])
 
       // alice makes `dep` private — bob can no longer view it, but it is grandfathered.
-      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'private' })
       expect((await req(h.app, h.bob.token, `/api/agents/${dep.id}`)).status).toBe(404)
 
       // Bob re-saves the same canonical id. The diff recognizes it as an
@@ -495,20 +495,14 @@ describeEachProviderHttpApplication(
       // alice owns a PUBLIC agent `hidden-dep`; bob depends on it, then alice hides it.
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-dep' })
       const dep = (await depRes.json()) as AgentDto
-      await h.db
-        .update(tablesOf(h.db).agents)
-        .set({ visibility: 'public' })
-        .where(eq(tablesOf(h.db).agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'public' })
       const parentRes = await createAgentHttp(h, h.bob.token, {
         name: 'parent',
         dependsOn: [dep.id],
       })
       expect(parentRes.status).toBe(201)
       const parentAgent = (await parentRes.json()) as AgentDto
-      await h.db
-        .update(tablesOf(h.db).agents)
-        .set({ visibility: 'private' })
-        .where(eq(tablesOf(h.db).agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'private' })
 
       const closure = await req(h.app, h.bob.token, `/api/agents/${parentAgent.id}/closure`)
       expect(closure.status).toBe(200)
@@ -542,22 +536,20 @@ describeEachProviderHttpApplication(
     test('dangling refs behind a masked dependency are not re-exposed as missing rows', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'hidden-corrupt-dep' })
       const dep = (await depRes.json()) as AgentDto
-      await h.db
-        .update(tablesOf(h.db).agents)
-        .set({ visibility: 'public' })
-        .where(eq(tablesOf(h.db).agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'public' })
       const parentRes = await createAgentHttp(h, h.bob.token, {
         name: 'parent-with-masked-child',
         dependsOn: [dep.id],
       })
       const parent = (await parentRes.json()) as AgentDto
-      await h.db
-        .update(tablesOf(h.db).agents)
-        .set({
+      await patchAgentFixture(
+        h.db,
+        { id: dep.id },
+        {
           dependsOn: JSON.stringify(['secret-dangling-ref']),
           visibility: 'private',
-        })
-        .where(eq(tablesOf(h.db).agents.id, dep.id))
+        },
+      )
 
       const closure = await req(h.app, h.bob.token, `/api/agents/${parent.id}/closure`)
       expect(closure.status).toBe(200)
@@ -596,10 +588,7 @@ describeEachProviderHttpApplication(
         description: 'preview secret description',
       })
       const dep = (await depRes.json()) as AgentDto
-      await h.db
-        .update(tablesOf(h.db).agents)
-        .set({ visibility: 'private' })
-        .where(eq(tablesOf(h.db).agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'private' })
 
       const preview = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
         method: 'POST',
@@ -626,8 +615,7 @@ describeEachProviderHttpApplication(
     test('a private existing draft id is indistinguishable from a missing one', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'preview-private-root' })
       const dep = (await depRes.json()) as AgentDto
-      const { agents } = tablesOf(h.db)
-      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'private' })
 
       const hidden = await req(h.app, h.bob.token, '/api/agents/closure-preview', {
         method: 'POST',
@@ -662,8 +650,7 @@ describeEachProviderHttpApplication(
     test('a workgroup member referencing a private agent → 422 acl-missing-refs (id NOT persisted)', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-secret' })
       const dep = (await depRes.json()) as AgentDto
-      const { agents } = tablesOf(h.db)
-      await h.db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'private' })
       const res = await req(h.app, h.bob.token, '/api/workgroups', {
         method: 'POST',
         body: JSON.stringify({
@@ -680,8 +667,7 @@ describeEachProviderHttpApplication(
     test('a public agent member is stored by resolved id', async () => {
       const depRes = await createAgentHttp(h, h.alice.token, { name: 'wg-public' })
       const dep = (await depRes.json()) as AgentDto
-      const { agents } = tablesOf(h.db)
-      await h.db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, dep.id))
+      await patchAgentFixture(h.db, { id: dep.id }, { visibility: 'public' })
       const res = await req(h.app, h.bob.token, '/api/workgroups', {
         method: 'POST',
         body: JSON.stringify({

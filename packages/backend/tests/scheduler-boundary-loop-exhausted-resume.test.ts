@@ -19,7 +19,7 @@
 // as a completed/ok node on resume (i.e. the task must stay failed/exhausted).
 //
 // describe() title makes the locked regression obvious.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -65,8 +65,7 @@ async function seedAgent(
   outputs: string[],
   extra: Record<string, unknown> = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -87,15 +86,14 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -183,8 +181,8 @@ function registerCases(provider: ProviderHarness) {
     // so it exhausts maxIterations. This documents the correct starting state.
     await withEnv(env, () => runTask({ taskId, db: h.db, appHome: h.appHome, binaryOverride }))
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const afterRun1 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { nodeRuns } = tablesOf(h.db)
+    const afterRun1 = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(afterRun1.status).toBe('failed')
 
     const loopRowAfterRun1 = (
@@ -200,7 +198,7 @@ function registerCases(provider: ProviderHarness) {
     await reenterScheduler(h.db, taskId)
     await withEnv(env, () => runTask({ taskId, db: h.db, appHome: h.appHome, binaryOverride }))
 
-    const afterRun2 = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const afterRun2 = (await readTaskFixtures(h.db, { id: taskId }))[0]!
 
     // HEADLINE RED ASSERTION: a workflow that exhausted its loop must not report
     // success on resume. Today the exhausted wrapper row is treated as completed

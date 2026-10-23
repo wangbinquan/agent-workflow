@@ -10,7 +10,7 @@
 // runs inside runner.ts before render. Companion source-text lock in
 // scheduler-wrapper-fanout-routing.test.ts (D.T7 section).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -58,13 +58,12 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   const db = __db
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -88,8 +87,7 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
 
 async function insertPendingNodeRun(db: PersistenceDb, taskId: string): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'sample-agent', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'sample-agent', status: 'pending' })
   return id
 }
 

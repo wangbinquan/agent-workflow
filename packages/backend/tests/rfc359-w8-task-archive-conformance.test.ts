@@ -10,6 +10,7 @@
 // 它是 bootstrap 真正用的那条选择路径（providerRuntime.ts），对拍因此打在**产品装配**上，
 // 换实现不用改测试。
 
+import { nodeRunFixture, taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -56,7 +57,7 @@ function options(dirs: Dirs, now: number = NOW): TaskArchiveMaintenanceOptions {
 }
 
 async function seedBase(db: PersistenceDb): Promise<void> {
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -65,7 +66,7 @@ async function seedBase(db: PersistenceDb): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 interface TaskSeed {
@@ -76,8 +77,7 @@ interface TaskSeed {
 }
 
 async function addTask(db: PersistenceDb, seed: TaskSeed): Promise<void> {
-  const { tasks, taskRepos } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -96,7 +96,7 @@ async function addTask(db: PersistenceDb, seed: TaskSeed): Promise<void> {
     parentTaskId: seed.parentTaskId ?? null,
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
   })
-  await insertOne(db, taskRepos, {
+  await taskRepoFixture(db, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -111,8 +111,8 @@ async function addRunWithEvents(
   runId: string,
   events: number,
 ): Promise<void> {
-  const { nodeRuns, nodeRunEvents } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  const { nodeRunEvents } = tablesOf(db)
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'n1',

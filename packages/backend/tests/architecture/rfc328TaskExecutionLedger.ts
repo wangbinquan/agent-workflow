@@ -195,6 +195,33 @@ export function classifyTaskExecutionAuthority(input: {
   'authorityKind' | 'controlSubtype' | 'revisionPredicate' | 'requiredBrandedProof'
 > | null {
   const value = `${input.file}#${input.callable}`
+  // RFC-395 II-a A7：只重定向迁入 owner 的既有写点，未知函数仍不放行。
+  if (
+    input.file ===
+    `${MODULE_PREFIX}task-execution/infrastructure/humanGatePersistenceParticipant.ts`
+  ) {
+    if (['cancelClarifyRunInTx', 'cancelTaskGateRunsInTx'].includes(input.callable)) {
+      return classifyTaskExecutionAuthority({
+        file: `${MODULE_PREFIX}collaboration/infrastructure/humanGateTerminalSweep.ts`,
+        callable: input.callable,
+      })
+    }
+    if (['completeClarifyRunInTx', 'writeReviewOutputInTx'].includes(input.callable)) {
+      return classifyTaskExecutionAuthority({
+        file: `${MODULE_PREFIX}collaboration/infrastructure/reviewRepairParticipant.ts`,
+        callable: input.callable,
+      })
+    }
+    if (input.callable === 'transferTaskOwnerInTx') {
+      return {
+        authorityKind: 'control-revision',
+        controlSubtype: 'membership-control',
+        revisionPredicate: 'task-member-plan-and-caller-owned-membership-transaction',
+        requiredBrandedProof: 'AuthorizedTaskMembersReplacement',
+      }
+    }
+    return null
+  }
   if (input.file === `${MODULE_PREFIX}task-execution/infrastructure/crewstation/bootRecovery.ts`) {
     return {
       authorityKind: 'recovery-proof',
@@ -233,6 +260,8 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
+    (input.file === `${MODULE_PREFIX}task-execution/infrastructure/taskDeletionParticipant.ts` &&
+      ['deleteRoot', 'recomputeAncestors'].includes(input.callable)) ||
     /sqliteTerminalMaintenance|terminalMaintenanceClaim|terminalMaintenancePersistence|taskArchive|taskDelete|services\/eventsArchive\.ts|services\/gc\.ts|services\/lifecycleRepair\//.test(
       value,
     )
@@ -273,7 +302,9 @@ export function classifyTaskExecutionAuthority(input: {
   // `maintenance_state` completion marker — no task is claimed or driven.
   // RFC-374: the resumable sequence catch-up is boot recovery, before any execution.
   if (
-    /modules\/task-execution\/infrastructure\/nodeRunSeqBackfillStore\.ts#backfillTask$/.test(value)
+    /modules\/task-execution\/infrastructure\/legacyMigration\/nodeRunSeqBackfillStore\.ts#backfillTask$/.test(
+      value,
+    )
   ) {
     return {
       authorityKind: 'recovery-proof',
@@ -282,7 +313,9 @@ export function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'ExclusiveDaemonLockProof(boot-before-scheduler)',
     }
   }
-  if (/modules\/task-execution\/infrastructure\/frameBackfillStore\.ts/.test(value)) {
+  if (
+    /modules\/task-execution\/infrastructure\/legacyMigration\/frameBackfillStore\.ts/.test(value)
+  ) {
     return {
       authorityKind: 'recovery-proof',
       controlSubtype: null,
@@ -347,6 +380,11 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
+    // RFC-395 II-a A3: review dispatch's consumed-edge write moved into this exact method.
+    (input.file === `${MODULE_PREFIX}task-execution/infrastructure/consumedInputsParticipant.ts` &&
+      input.callable === 'record') ||
+    (input.file === `${MODULE_PREFIX}task-execution/infrastructure/taskPreparationParticipant.ts` &&
+      input.callable === 'writeWorkspace') ||
     /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/humanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpen|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
       value,
     )
@@ -494,7 +532,7 @@ export function classifyTaskExecutionAuthority(input: {
   // RFC-359 W16 moves both physical task-status CAS bodies into this exact
   // shared program; the original native/async entries still own their transaction.
   if (
-    /modules\/task-execution\/infrastructure\/taskLifecycleWriteSequence\.ts#taskLifecycleWriteSequence$/.test(
+    /modules\/task-execution\/infrastructure\/(?:taskLifecycleWriteSequence\.ts#taskLifecycleWriteSequence|taskDefinitionWriteParticipant\.ts#transitionLifecycle)$/.test(
       value,
     )
   ) {
@@ -542,11 +580,13 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|fusionEngineTaskOperations|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget|taskRouteLaunchOperations|childExecutionLaunchOperations|childTaskLifecycleParticipant|taskRouteWorkspaceParticipant|taskRouteRepairOperations|taskRouteOperations)/.test(
+    /modules\/task-execution\/infrastructure\/(?:(?:postgresql|sqlite)(?:TaskExecutionIntentPersistence|TaskExecutionIntentTerminalPersistence|TaskRouteLaunchOperations|ChildExecutionLaunchOperations|ChildTaskLifecycleParticipant|FusionEngineTaskOperations|SourceTerminationParticipant|TaskExecutionShutdownOperations|TaskRouteOperations|TaskRuntimeLifecyclePersistence|WorkgroupTaskRoomTaskParticipant)|fusionEngineTaskOperations|taskExecutionIntentPersistence|taskExecutionIntentTerminalPersistence|taskExecutionShutdownOperations|taskRuntimeLifecyclePersistence|workgroupTaskRoomTaskParticipant|sourceTerminationTarget|taskRouteLaunchOperations|childExecutionLaunchOperations|childTaskLifecycleParticipant|taskRouteWorkspaceParticipant|taskRouteRepairOperations|taskRouteOperations|taskDefinitionWriteParticipant)/.test(
       value,
     )
   ) {
-    const membership = /replaceTaskMembers|replaceConfig/.test(input.callable)
+    const membership = /replaceTaskMembers|replaceConfig|replaceWorkgroupRuntimeConfig/.test(
+      input.callable,
+    )
     const terminal =
       /terminalize|cancel|failTask|deleteTask|interruptSurvivor|SourceTermination|sourceTerminationTarget/.test(
         value,

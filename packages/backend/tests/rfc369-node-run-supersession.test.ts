@@ -10,23 +10,27 @@
 //   ④ 入口重放的 `excludeSuperseded`；
 //   ⑤ AC-7 收紧情形（ULID 不单调的晚提交行、遗留行）与 AC-8 调度器跳过已被取代的 pending 行。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  isStructurallySuperseded,
+  type SupersessionRow,
+} from '@/modules/task-execution/infrastructure/runSelection/oracle/supersession'
+import {
+  createRunSelectionOracleSnapshot,
+  createRunSelectionReader,
+} from '@/modules/task-execution/public/queries'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { IllegalMergeStateTransition, type MergeStateOrNull } from '@agent-workflow/shared'
 import type { NodeRunStatus } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  isStructurallySuperseded,
-  isSupersedableMergeState,
-  type SupersessionRow,
-} from '@/modules/task-execution/domain/nodeRunSupersession'
+import { isSupersedableMergeState } from '@/modules/task-execution/domain/nodeRunSupersession'
 import {
   resolveSchedulerRunRow,
-  supersededPendingRows,
   type SchedulerRunRowCandidate,
 } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import type { NodeExecutionPersistence } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
@@ -38,7 +42,7 @@ import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
-import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/nodeRunSupersession'
+import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/runSelection/oracle/supersessionSql'
 import {
   withTaskExecutionSerializable,
   withTaskExecutionWrite,
@@ -134,10 +138,9 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: SNAPSHOT })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: SNAPSHOT })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -160,7 +163,7 @@ async function seedRun(
   opts: { mergeState?: MergeStateOrNull; status?: NodeRunStatus; isoNodeTree?: string } = {},
 ): Promise<string> {
   const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await db.insert(nodeRuns).values({
     id: r.id,
     seq: r.seq,
     taskId,
@@ -256,6 +259,7 @@ describeEachProvider('RFC-369 AC-2 —— 同任务并发铸造不再互相中�
       await withTaskExecutionSerializable(db, async (tx) => {
         bodyRuns[nodeId] += 1
         await createNodeRunMintParticipantInTx(tx).mint({
+          ...deriveNodeRunRole({ nodeId: nodeId, rerunCause: 'initial' }),
           id,
           taskId,
           nodeId,
@@ -278,16 +282,18 @@ describeEachProvider('RFC-369 AC-2 —— 同任务并发铸造不再互相中�
       await mintIn('b', mkId(11))
     }
     expect(bodyRuns).toEqual({ a: 1, b: 1 })
-    const { nodeRuns } = tablesOf(db)
-    const allocated = await db
-      .select({ seq: nodeRuns.seq })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.id, [mkId(10), mkId(11)])))
+    const allocated = await readNodeRunFixtures(db, {
+      taskId,
+      id: [mkId(10), mkId(11)],
+    }).then((rows) => rows.map((row) => ({ seq: row.seq })))
     expect(allocated.every((run) => run.seq !== null)).toBe(true)
     expect(new Set(allocated.map((run) => run.seq)).size).toBe(2)
     expect(
-      (await db.select({ id: nodeRuns.id }).from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
-        .length,
+      (
+        await readNodeRunFixtures(db, { taskId }).then((rows) =>
+          rows.map((row) => ({ id: row.id })),
+        )
+      ).length,
     ).toBe(6)
   })
 })
@@ -305,7 +311,11 @@ describeEachProvider('RFC-369 AC-4 —— 迁移围栏：被取代即收成 aban
       .transition({
         nodeRunId: old,
         event: { kind: 'mark-pending-merge' },
-        extra: { isoNodeTree: 'stale-tree' },
+        extra: {
+          checkpoint: {
+            checkpoints: [{ mountPath: '', nodeTree: 'stale-tree' }],
+          },
+        },
       })
       .then(
         () => null,
@@ -475,7 +485,7 @@ function candidate(
     reviewIteration: 0,
     shardKey: opts.shardKey ?? null,
     parentNodeRunId: opts.parent === undefined ? null : mkId(opts.parent),
-    ...(opts.containerRunId === undefined ? {} : { containerRunId: opts.containerRunId }),
+    containerRunId: opts.containerRunId ?? null,
   }
 }
 
@@ -526,6 +536,10 @@ async function resolveWith(
   const result = await resolveSchedulerRunRow({
     lifecycle: f.lifecycle,
     projections: f.projections,
+    selection: createRunSelectionOracleSnapshot(
+      rows.map((row) => ({ ...row, taskId: 't', nodeId: 'n', iteration: 0 })),
+      { scope: { kind: 'node', taskId: 't', nodeId: 'n', iteration: 0 } },
+    ),
     taskId: 't',
     nodeId: 'n',
     containerRunId,
@@ -581,7 +595,7 @@ describe('RFC-369 AC-8 —— 调度器跳过已被同帧更新一代取代的 p
     expect(result.nodeRunId).toBe(mkId(1))
   })
 
-  test('反向：另一帧（container 不同）的更新行不取代；containerRunId 缺省按 NULL', async () => {
+  test('反向：另一帧（container 不同）的更新行不取代；containerRunId 显式 NULL', async () => {
     const { result, calls } = await resolveWith([
       candidate(1, 'pending'),
       candidate(2, 'failed', { containerRunId: 'other-frame' }),
@@ -619,14 +633,15 @@ describe('RFC-369 AC-8 —— 调度器跳过已被同帧更新一代取代的 p
     expect(calls.mints[0]!.cause).toBe('revival')
   })
 
-  test('比较集合是全部行：子行（非顶层）作为更新一代同样取代较老的顶层 pending 行', () => {
-    expect([
-      ...supersededPendingRows({
-        nodeId: 'n',
-        iteration: 0,
-        rows: [candidate(1, 'pending'), candidate(2, 'done', { parent: 5 })],
-      }),
-    ]).toEqual([mkId(1)])
+  test('比较集合是全部行：子行（非顶层）作为更新一代同样取代较老的顶层 pending 行', async () => {
+    const { calls } = await resolveWith([
+      candidate(1, 'pending'),
+      candidate(2, 'done', { parent: 5 }),
+    ])
+    expect(calls.transitions).toEqual([{ nodeRunId: mkId(1), kind: 'cancel-by-supersede' }])
+    expect(calls.canceled).toEqual([mkId(1)])
+    expect(calls.patches).toEqual([])
+    expect(calls.mints).toHaveLength(1)
   })
 })
 
@@ -646,6 +661,7 @@ describeEachProvider(
         const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
         const projections = new DrizzleNodeExecutionPersistence(db)
         const minted = await lifecycle.mint({
+          ...deriveNodeRunRole({ nodeId: 'n', rerunCause: cause }),
           taskId,
           nodeId: 'n',
           status: 'pending',
@@ -658,6 +674,7 @@ describeEachProvider(
         const result = await resolveSchedulerRunRow({
           lifecycle,
           projections,
+          selection: createRunSelectionReader(db),
           taskId,
           nodeId: 'n',
           containerRunId: null,
@@ -701,6 +718,7 @@ describeEachProvider(
       const result = await resolveSchedulerRunRow({
         lifecycle,
         projections,
+        selection: createRunSelectionReader(db),
         taskId,
         nodeId: 'n',
         containerRunId: null,

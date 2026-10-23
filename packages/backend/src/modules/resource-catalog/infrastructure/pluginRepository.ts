@@ -1,6 +1,7 @@
+import { createAgentPluginReferenceLookup } from './referenceLookup'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Plugin } from '@agent-workflow/shared'
-import { and, eq, isNull, like, ne } from 'drizzle-orm'
+import { and, eq, isNull, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
@@ -10,7 +11,6 @@ import type {
   PluginRepository,
 } from '../application/plugins/ports'
 import {
-  collectPluginAgentReferences,
   fullPluginRowWhere,
   insertPluginRowInTx,
   publishPluginRowInTx,
@@ -27,17 +27,6 @@ import {
 export interface PluginRepositoryBundle {
   readonly repository: PluginRepository
   readonly projection: PluginProjection
-}
-
-const referenceSelect = (db: object) => {
-  const { agents } = tablesOf(db)
-  return {
-    id: agents.id,
-    name: agents.name,
-    raw: agents.plugins,
-    ownerUserId: agents.ownerUserId,
-    visibility: agents.visibility,
-  }
 }
 
 function ownerScopedNameWhere(
@@ -80,20 +69,6 @@ async function selectPluginRowById(
 ): Promise<PluginPersistenceRow | null> {
   const { plugins } = tablesOf(transaction)
   return (await transaction.select().from(plugins).where(eq(plugins.id, id)).limit(1))[0] ?? null
-}
-
-async function findAgentReferencesInTransaction(
-  transaction: ResourceCatalogTransaction,
-  pluginId: string,
-): Promise<PluginAgentReference[]> {
-  const { agents } = tablesOf(transaction)
-  return collectPluginAgentReferences(
-    await transaction
-      .select(referenceSelect(transaction))
-      .from(agents)
-      .where(like(agents.plugins, `%"${pluginId}"%`)),
-    pluginId,
-  )
 }
 
 function requireChangedRow(
@@ -214,14 +189,7 @@ export function createPluginRepository(deps: {
       }
     },
     async findAgentReferences(id): Promise<readonly PluginAgentReference[]> {
-      const { agents } = tablesOf(db)
-      return collectPluginAgentReferences(
-        await db
-          .select(referenceSelect(db))
-          .from(agents)
-          .where(like(agents.plugins, `%"${id}"%`)),
-        id,
-      )
+      return createAgentPluginReferenceLookup(deps.db).find(id)
     },
     async delete(deletion): Promise<readonly PluginAgentReference[]> {
       return runResourceCatalogTransaction(db, async (transaction) => {
@@ -230,7 +198,7 @@ export function createPluginRepository(deps: {
           throw new NotFoundError('plugin-not-found', `plugin '${deletion.id}' not found`)
         }
         assertExpectedHash(row, deletion.expectedConfigHash, 'delete')
-        const references = await findAgentReferencesInTransaction(transaction, deletion.id)
+        const references = await createAgentPluginReferenceLookup(transaction).find(deletion.id)
         if (references.length > 0) return references
         const { plugins } = tablesOf(transaction)
         const deleted = await transaction

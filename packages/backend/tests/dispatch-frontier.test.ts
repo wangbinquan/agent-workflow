@@ -27,6 +27,12 @@ type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 function run(over: Partial<Row>): Row {
   return {
+    seq: null,
+    parentNodeRunId: null,
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
     id: '01R',
     nodeId: 'n',
     iteration: 0,
@@ -42,7 +48,18 @@ function run(over: Partial<Row>): Row {
   } as unknown as Row
 }
 function doneRow(id: string): Row {
-  return { id, status: 'done' } as unknown as Row
+  return {
+    seq: null,
+    parentNodeRunId: null,
+    containerRunId: null,
+    shardKey: null,
+    consumedUpstreamRunsJson: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+    id,
+    status: 'done',
+  } as unknown as Row
 }
 const NO_FRESH = new Map<string, Row>()
 // A row whose consumed map is empty is ALWAYS fresh (isNodeRunFresh B1).
@@ -62,46 +79,48 @@ function def(nodes: Array<{ id: string; kind: NodeKind; nodeIds?: string[] }>): 
 describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
   const emptyDef = def([{ id: 'n', kind: 'agent-single' }])
 
-  test('never-ran (undefined) → dispatchable', () => {
-    expect(isDispatchable(undefined, 'agent-single', NO_FRESH, [], emptyDef)).toBe(true)
+  test('never-ran (undefined) → dispatchable', async () => {
+    expect(await isDispatchable(undefined, 'agent-single', NO_FRESH, [], emptyDef)).toBe(true)
   })
-  test('pending → dispatchable (out-of-band mint / placeholder)', () => {
-    expect(isDispatchable(run({ status: 'pending' }), 'agent-single', NO_FRESH, [], emptyDef)).toBe(
+  test('pending → dispatchable (out-of-band mint / placeholder)', async () => {
+    expect(
+      await isDispatchable(run({ status: 'pending' }), 'agent-single', NO_FRESH, [], emptyDef),
+    ).toBe(true)
+  })
+  test('done ∧ fresh → NOT dispatchable', async () => {
+    expect(await isDispatchable(FRESH_DONE, 'agent-single', NO_FRESH, [], emptyDef)).toBe(false)
+  })
+  test('done ∧ stale → dispatchable (stale-done re-run)', async () => {
+    expect(await isDispatchable(STALE_DONE, 'agent-single', STALE_FRESHEST, [], emptyDef)).toBe(
       true,
     )
-  })
-  test('done ∧ fresh → NOT dispatchable', () => {
-    expect(isDispatchable(FRESH_DONE, 'agent-single', NO_FRESH, [], emptyDef)).toBe(false)
-  })
-  test('done ∧ stale → dispatchable (stale-done re-run)', () => {
-    expect(isDispatchable(STALE_DONE, 'agent-single', STALE_FRESHEST, [], emptyDef)).toBe(true)
   })
 
   // N1 — the critical reversal: failed/interrupted are the resume/retry signal.
-  test('failed → dispatchable (resume/retry re-mint signal, N1)', () => {
-    expect(isDispatchable(run({ status: 'failed' }), 'agent-single', NO_FRESH, [], emptyDef)).toBe(
-      true,
-    )
-  })
-  test('interrupted → dispatchable (daemon-restart resume, N1)', () => {
+  test('failed → dispatchable (resume/retry re-mint signal, N1)', async () => {
     expect(
-      isDispatchable(run({ status: 'interrupted' }), 'agent-single', NO_FRESH, [], emptyDef),
+      await isDispatchable(run({ status: 'failed' }), 'agent-single', NO_FRESH, [], emptyDef),
+    ).toBe(true)
+  })
+  test('interrupted → dispatchable (daemon-restart resume, N1)', async () => {
+    expect(
+      await isDispatchable(run({ status: 'interrupted' }), 'agent-single', NO_FRESH, [], emptyDef),
     ).toBe(true)
   })
 
   // HIGH-2 — exhausted (loop-max) is a true terminal, NOT dispatchable.
-  test('exhausted → NOT dispatchable (loop-max true terminal, HIGH-2)', () => {
+  test('exhausted → NOT dispatchable (loop-max true terminal, HIGH-2)', async () => {
     expect(
-      isDispatchable(run({ status: 'exhausted' }), 'wrapper-loop', NO_FRESH, [], emptyDef),
+      await isDispatchable(run({ status: 'exhausted' }), 'wrapper-loop', NO_FRESH, [], emptyDef),
     ).toBe(false)
   })
   // RFC-095 (audit S-22) — the canceled flip: a plain canceled row joins the
   // N1 revival class (failed/interrupted). Execution was externally cut short;
   // retryNode→runTask on a canceled task must be able to re-mint the sibling
   // canceled rows instead of stranding them in the S-12 no-bucket black hole.
-  test('canceled WITHOUT supersede marker → dispatchable (revival signal, RFC-095 S-22)', () => {
+  test('canceled WITHOUT supersede marker → dispatchable (revival signal, RFC-095 S-22)', async () => {
     expect(
-      isDispatchable(
+      await isDispatchable(
         run({ status: 'canceled', errorMessage: null }),
         'agent-single',
         NO_FRESH,
@@ -112,7 +131,7 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
     // 'aborted by signal' is what the runner stamps on a task-cancel kill —
     // an ordinary cancellation, NOT a supersede marker.
     expect(
-      isDispatchable(
+      await isDispatchable(
         run({ status: 'canceled', errorMessage: 'aborted by signal' }),
         'agent-single',
         NO_FRESH,
@@ -126,9 +145,9 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
   // pending rerun — dispatching the marker row there would run the agent
   // without its review context. The marker row stays parked forever; the rerun
   // row (fresh ULID) carries the revival.
-  test('canceled WITH review-supersede marker → NOT dispatchable (supersede window stays parked)', () => {
+  test('canceled WITH review-supersede marker → NOT dispatchable (supersede window stays parked)', async () => {
     expect(
-      isDispatchable(
+      await isDispatchable(
         run({
           status: 'canceled',
           supersededByReview: 'iterated',
@@ -141,22 +160,22 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
       ),
     ).toBe(false)
   })
-  test('running → NOT dispatchable (in flight)', () => {
-    expect(isDispatchable(run({ status: 'running' }), 'agent-single', NO_FRESH, [], emptyDef)).toBe(
-      false,
-    )
+  test('running → NOT dispatchable (in flight)', async () => {
+    expect(
+      await isDispatchable(run({ status: 'running' }), 'agent-single', NO_FRESH, [], emptyDef),
+    ).toBe(false)
   })
 
   // C2 — a FRESH leaf parked node never re-dispatches (the round-1 busy-loop
   // fix); the `run` helper defaults consumed=null ⇒ always fresh.
-  test('FRESH leaf awaiting_human (clarify) → NOT dispatchable (C2)', () => {
+  test('FRESH leaf awaiting_human (clarify) → NOT dispatchable (C2)', async () => {
     expect(
-      isDispatchable(run({ status: 'awaiting_human' }), 'clarify', NO_FRESH, [], emptyDef),
+      await isDispatchable(run({ status: 'awaiting_human' }), 'clarify', NO_FRESH, [], emptyDef),
     ).toBe(false)
   })
-  test('FRESH leaf awaiting_review (review) → NOT dispatchable (C2)', () => {
+  test('FRESH leaf awaiting_review (review) → NOT dispatchable (C2)', async () => {
     expect(
-      isDispatchable(run({ status: 'awaiting_review' }), 'review', NO_FRESH, [], emptyDef),
+      await isDispatchable(run({ status: 'awaiting_review' }), 'review', NO_FRESH, [], emptyDef),
     ).toBe(false)
   })
 
@@ -164,23 +183,23 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
   // since advanced) MUST re-dispatch, symmetric with stale `done`. Otherwise
   // approving a review built on an obsolete upstream re-reviews on next entry.
   // `dispatchedThisInvocation` (N3, in deriveFrontier) bounds the re-run to once.
-  test('STALE leaf awaiting_review → dispatchable (re-park against fresh upstream, S8/S11)', () => {
+  test('STALE leaf awaiting_review → dispatchable (re-park against fresh upstream, S8/S11)', async () => {
     const staleParked = run({
       status: 'awaiting_review',
       consumedUpstreamRunsJson: JSON.stringify({ up: '01OLD' }),
     })
-    expect(isDispatchable(staleParked, 'review', STALE_FRESHEST, [], emptyDef)).toBe(true)
+    expect(await isDispatchable(staleParked, 'review', STALE_FRESHEST, [], emptyDef)).toBe(true)
   })
-  test('STALE leaf awaiting_human → dispatchable (symmetry with stale done)', () => {
+  test('STALE leaf awaiting_human → dispatchable (symmetry with stale done)', async () => {
     const staleParked = run({
       status: 'awaiting_human',
       consumedUpstreamRunsJson: JSON.stringify({ up: '01OLD' }),
     })
-    expect(isDispatchable(staleParked, 'clarify', STALE_FRESHEST, [], emptyDef)).toBe(true)
+    expect(await isDispatchable(staleParked, 'clarify', STALE_FRESHEST, [], emptyDef)).toBe(true)
   })
 
   // N2 — wrapper awaiting_* is a resume anchor, dispatchable iff inner has fresh work.
-  test('wrapper-loop awaiting_human WITH fresh inner pending → dispatchable (N2)', () => {
+  test('wrapper-loop awaiting_human WITH fresh inner pending → dispatchable (N2)', async () => {
     const wrapDef = def([
       { id: 'lw', kind: 'wrapper-loop', nodeIds: ['inner_agent'] },
       { id: 'inner_agent', kind: 'agent-single' },
@@ -203,9 +222,9 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
         containerRunId: wrapperRow.id,
       }),
     ]
-    expect(isDispatchable(wrapperRow, 'wrapper-loop', NO_FRESH, rows, wrapDef)).toBe(true)
+    expect(await isDispatchable(wrapperRow, 'wrapper-loop', NO_FRESH, rows, wrapDef)).toBe(true)
   })
-  test('wrapper-loop awaiting_human WITHOUT fresh inner → NOT dispatchable (stay parked)', () => {
+  test('wrapper-loop awaiting_human WITHOUT fresh inner → NOT dispatchable (stay parked)', async () => {
     const wrapDef = def([
       { id: 'lw', kind: 'wrapper-loop', nodeIds: ['inner_agent'] },
       { id: 'inner_agent', kind: 'agent-single' },
@@ -227,7 +246,7 @@ describe('RFC-076 PR-A — isDispatchable (trim-B status gate)', () => {
         containerRunId: wrapperRow.id,
       }),
     ]
-    expect(isDispatchable(wrapperRow, 'wrapper-loop', NO_FRESH, rows, wrapDef)).toBe(false)
+    expect(await isDispatchable(wrapperRow, 'wrapper-loop', NO_FRESH, rows, wrapDef)).toBe(false)
   })
 })
 
@@ -249,7 +268,7 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
       wrapperProgressJson: encodeWrapperProgress({ kind: 'loop', iteration: 2, phase: 'awaiting' }),
     })
 
-  test('loop: an inner pending counts only in the round the loop parked on (progress.iteration)', () => {
+  test('loop: an inner pending counts only in the round the loop parked on (progress.iteration)', async () => {
     // Rounds 0 / 1 are settled history of this generation: on revival the
     // loop re-drives round 2 only, so evidence there would park it forever
     // (audit S-3 runaway). The S-3 lock lives in
@@ -266,29 +285,29 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
           containerRunId: wrapperRow.id,
         }),
       ]
-      expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(iteration === 2)
+      expect(await wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(iteration === 2)
     }
   })
 
-  test('loop: an inner pending that belongs to ANOTHER generation of the same wrapper → false', () => {
+  test('loop: an inner pending that belongs to ANOTHER generation of the same wrapper → false', async () => {
     const wrapperRow = parkedLoop()
     const rows = [
       wrapperRow,
       run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 2, containerRunId: 'OTHER_GEN' }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(false)
   })
 
-  test('loop: no inner pending anywhere → false', () => {
+  test('loop: no inner pending anywhere → false', async () => {
     const wrapperRow = parkedLoop()
     const rows = [
       wrapperRow,
       run({ id: '01D', nodeId: 'a', status: 'done', iteration: 2, containerRunId: wrapperRow.id }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, rows, loopDef)).toBe(false)
   })
 
-  test('loop: absent / malformed progress means round 0', () => {
+  test('loop: absent / malformed progress means round 0', async () => {
     const wrapperRow = run({
       nodeId: 'lw',
       iteration: 0,
@@ -305,11 +324,11 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
         containerRunId: wrapperRow.id,
       }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, pendingAt(0), loopDef)).toBe(true)
-    expect(wrapperHasFreshInnerWork(wrapperRow, pendingAt(2), loopDef)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, pendingAt(0), loopDef)).toBe(true)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, pendingAt(2), loopDef)).toBe(false)
   })
 
-  test("git: the body runs at the wrapper row's own iteration — a pending there → true; another round or generation → false", () => {
+  test("git: the body runs at the wrapper row's own iteration — a pending there → true; another round or generation → false", async () => {
     const gitDef = def([
       { id: 'gw', kind: 'wrapper-git', nodeIds: ['a'] },
       { id: 'a', kind: 'agent-single' },
@@ -325,7 +344,7 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
         containerRunId: wrapperRow.id,
       }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, rows, gitDef)).toBe(true)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, rows, gitDef)).toBe(true)
     const wrongRound = [
       wrapperRow,
       run({
@@ -336,17 +355,17 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
         containerRunId: wrapperRow.id,
       }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, wrongRound, gitDef)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, wrongRound, gitDef)).toBe(false)
     const wrong = [
       wrapperRow,
       run({ id: '01P', nodeId: 'a', status: 'pending', iteration: 3, containerRunId: 'OTHER_GEN' }),
     ]
-    expect(wrapperHasFreshInnerWork(wrapperRow, wrong, gitDef)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(wrapperRow, wrong, gitDef)).toBe(false)
   })
 
   // The depth-1 blind spot (RFC-098 §B3 revision #8) is closed: evidence born
   // inside a NESTED loop's own generation still releases the outer wrapper.
-  test('nested: a pending inside the inner loop generation releases the OUTER wrapper', () => {
+  test('nested: a pending inside the inner loop generation releases the OUTER wrapper', async () => {
     const nestedDef = def([
       { id: 'outer', kind: 'wrapper-loop', nodeIds: ['inner'] },
       { id: 'inner', kind: 'wrapper-loop', nodeIds: ['a'] },
@@ -377,16 +396,16 @@ describe('RFC-076 PR-A / RFC-354 — wrapperHasFreshInnerWork (generation member
       status: 'pending',
       containerRunId: '01IN',
     })
-    expect(wrapperHasFreshInnerWork(outerRow, [outerRow, innerGen, deepPending], nestedDef)).toBe(
-      true,
-    )
-    expect(wrapperHasFreshInnerWork(innerGen, [outerRow, innerGen, deepPending], nestedDef)).toBe(
-      true,
-    )
+    expect(
+      await wrapperHasFreshInnerWork(outerRow, [outerRow, innerGen, deepPending], nestedDef),
+    ).toBe(true)
+    expect(
+      await wrapperHasFreshInnerWork(innerGen, [outerRow, innerGen, deepPending], nestedDef),
+    ).toBe(true)
     // An inner generation opened in an EARLIER outer round is settled history.
     const staleInnerGen = { ...innerGen, iteration: 0 }
     expect(
-      wrapperHasFreshInnerWork(outerRow, [outerRow, staleInnerGen, deepPending], nestedDef),
+      await wrapperHasFreshInnerWork(outerRow, [outerRow, staleInnerGen, deepPending], nestedDef),
     ).toBe(false)
   })
 })
@@ -419,25 +438,28 @@ describe('RFC-098 B3 — wrapperRevivalEvidence (review done∧fresh extension)'
     return run({ parentNodeRunId: null, containerRunId: '01W', ...over } as Partial<Row>)
   }
 
-  test('正例：窗口内 review done∧fresh 行即证据 → 谓词放行（approve 形态）', () => {
+  test('正例：窗口内 review done∧fresh 行即证据 → 谓词放行（approve 形态）', async () => {
     const rows = [
       parked,
       top({ id: '01A', nodeId: 'worker', status: 'done', iteration: 1 }),
       top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 1 }),
     ]
-    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toEqual({ rowId: '01B', nodeId: 'rev' })
-    expect(wrapperHasFreshInnerWork(parked, rows, loopDef)).toBe(true)
-    expect(isDispatchable(parked, 'wrapper-loop', NO_FRESH, rows, loopDef)).toBe(true)
+    expect(await wrapperRevivalEvidence(parked, rows, loopDef)).toEqual({
+      rowId: '01B',
+      nodeId: 'rev',
+    })
+    expect(await wrapperHasFreshInnerWork(parked, rows, loopDef)).toBe(true)
+    expect(await isDispatchable(parked, 'wrapper-loop', NO_FRESH, rows, loopDef)).toBe(true)
   })
 
-  test('负例：非 review 的 inner done（agent）不是证据 → 不解锁（clarify park 不受影响）', () => {
+  test('负例：非 review 的 inner done（agent）不是证据 → 不解锁（clarify park 不受影响）', async () => {
     const rows = [parked, top({ id: '01A', nodeId: 'worker', status: 'done', iteration: 1 })]
-    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
-    expect(wrapperHasFreshInnerWork(parked, rows, loopDef)).toBe(false)
-    expect(isDispatchable(parked, 'wrapper-loop', NO_FRESH, rows, loopDef)).toBe(false)
+    expect(await wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
+    expect(await wrapperHasFreshInnerWork(parked, rows, loopDef)).toBe(false)
+    expect(await isDispatchable(parked, 'wrapper-loop', NO_FRESH, rows, loopDef)).toBe(false)
   })
 
-  test('负例：review done 但 stale（消费的 inner 上游已推进）→ 不是证据', () => {
+  test('负例：review done 但 stale（消费的 inner 上游已推进）→ 不是证据', async () => {
     const rows = [
       parked,
       top({ id: '01A', nodeId: 'worker', status: 'done', iteration: 1 }),
@@ -449,25 +471,25 @@ describe('RFC-098 B3 — wrapperRevivalEvidence (review done∧fresh extension)'
         consumedUpstreamRunsJson: JSON.stringify({ worker: '01OLD' }),
       }),
     ]
-    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
+    expect(await wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
   })
 
-  test('成员规则对 review done 同样生效：属于另一代际的 review done 不解锁', () => {
+  test('成员规则对 review done 同样生效：属于另一代际的 review done 不解锁', async () => {
     const rows = [
       parked,
       // review done inside ANOTHER generation of the same wrapper — not a member.
       top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 1, containerRunId: 'OTHER_GEN' }),
     ]
-    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
+    expect(await wrapperRevivalEvidence(parked, rows, loopDef)).toBeNull()
   })
 
-  test('证据选取 max-id：pending 与 review-done 并存时取 id 最大的行', () => {
+  test('证据选取 max-id：pending 与 review-done 并存时取 id 最大的行', async () => {
     const rows = [
       parked,
       top({ id: '01B', nodeId: 'rev', status: 'done', iteration: 1 }),
       top({ id: '01C', nodeId: 'worker', status: 'pending', iteration: 1 }),
     ]
-    expect(wrapperRevivalEvidence(parked, rows, loopDef)).toEqual({
+    expect(await wrapperRevivalEvidence(parked, rows, loopDef)).toEqual({
       rowId: '01C',
       nodeId: 'worker',
     })

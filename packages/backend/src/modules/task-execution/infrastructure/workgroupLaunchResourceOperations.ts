@@ -1,11 +1,9 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { inArray } from 'drizzle-orm'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { canViewResource } from '@/modules/resource-catalog/composition/resourceAcl'
 import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
-import { ensureWorkgroupHostWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import type { WorkgroupRouteLaunchResources } from './taskRouteLaunchOperations'
 
@@ -50,11 +48,8 @@ export function createWorkgroupLaunchResourceOperations(input: {
     async loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]> {
       const unique = [...new Set(agentIds)]
       if (unique.length === 0) return []
-      const { agents } = tablesOf(db)
-      const rows = await db.select({ id: agents.id }).from(agents).where(inArray(agents.id, unique))
-      return rows.map((row) => row.id)
+      return createAgentExecutionQueries(db).existingIds(unique)
     },
-    ensureHostWorkflow: () => ensureWorkgroupHostWorkflow(db),
     integrity: input.integrity,
   })
 }

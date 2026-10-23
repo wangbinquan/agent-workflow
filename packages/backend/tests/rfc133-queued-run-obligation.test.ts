@@ -31,6 +31,13 @@ const TARGET = 'agent_target'
 
 function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
   return {
+    containerRunId: null,
+    shardKey: null,
+    consumedUpstreamRunsJson: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+
     seq: null,
     id: 'run',
     nodeId: TARGET,
@@ -78,45 +85,47 @@ function queued(over: Partial<EntryPick> = {}): EntryPick {
 const NO_LINEAGE: RunLineageView[] = []
 
 describe('RFC-133 queued run-obligation matrix — isDispatchedEntryConsumed (in-flight)', () => {
-  test('case 1: target has ZERO runs (never-run downstream) → consumed (released); revivable stays open', () => {
-    expect(isDispatchedEntryConsumed(queued(), [], NO_LINEAGE, 'in-flight')).toBe(true)
-    expect(isDispatchedEntryConsumed(queued(), [], NO_LINEAGE, 'revivable')).toBe(false)
+  test('case 1: target has ZERO runs (never-run downstream) → consumed (released); revivable stays open', async () => {
+    expect(await isDispatchedEntryConsumed(queued(), [], NO_LINEAGE, 'in-flight')).toBe(true)
+    expect(await isDispatchedEntryConsumed(queued(), [], NO_LINEAGE, 'revivable')).toBe(false)
   })
 
-  test('case 2: target all top-level runs done (with and without output) → released', () => {
+  test('case 2: target all top-level runs done (with and without output) → released', async () => {
     const doneNoOutput = [mkRun({ id: 'r1', status: 'done' })]
-    expect(isDispatchedEntryConsumed(queued(), doneNoOutput, NO_LINEAGE, 'in-flight')).toBe(true)
+    expect(await isDispatchedEntryConsumed(queued(), doneNoOutput, NO_LINEAGE, 'in-flight')).toBe(
+      true,
+    )
     // output presence is irrelevant to the queued branch (it keys on run STATUS only) — the
     // done-run case releases either way; multi-done history too.
     const multiDone = [mkRun({ id: 'r1' }), mkRun({ id: 'r2' })]
-    expect(isDispatchedEntryConsumed(queued(), multiDone, NO_LINEAGE, 'in-flight')).toBe(true)
+    expect(await isDispatchedEntryConsumed(queued(), multiDone, NO_LINEAGE, 'in-flight')).toBe(true)
   })
 
-  test('case 3: target has a pending / running top-level run → still open (double-mint guard)', () => {
+  test('case 3: target has a pending / running top-level run → still open (double-mint guard)', async () => {
     for (const status of ['pending', 'running'] as const) {
       const runs = [mkRun({ id: 'r1', status: 'done' }), mkRun({ id: 'r2', status })]
-      expect(isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(false)
+      expect(await isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(false)
     }
   })
 
-  test('case 4: target has a failed / canceled / interrupted run → still open (revivable rerun)', () => {
+  test('case 4: target has a failed / canceled / interrupted run → still open (revivable rerun)', async () => {
     for (const status of ['failed', 'canceled', 'interrupted'] as const) {
       const runs = [mkRun({ id: 'r1', status })]
-      expect(isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(false)
+      expect(await isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(false)
     }
   })
 
-  test('case 5: only a WRAPPER CHILD run (parentNodeRunId set) is non-done → released (top-level only)', () => {
+  test('case 5: only a WRAPPER CHILD run (parentNodeRunId set) is non-done → released (top-level only)', async () => {
     const runs = [
       mkRun({ id: 'parent', status: 'done' }),
       mkRun({ id: 'child', status: 'running', parentNodeRunId: 'parent' }),
     ]
-    expect(isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(true)
+    expect(await isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(true)
   })
 
-  test('case 5b: a non-done run on ANOTHER node does not block this target', () => {
+  test('case 5b: a non-done run on ANOTHER node does not block this target', async () => {
     const runs = [mkRun({ id: 'other', nodeId: 'agent_other', status: 'running' })]
-    expect(isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(true)
+    expect(await isDispatchedEntryConsumed(queued(), runs, NO_LINEAGE, 'in-flight')).toBe(true)
   })
 
   // RFC-172 (route 2, S1): the optional shardKey scopes the run-obligation scan. Concurrent
@@ -124,13 +133,15 @@ describe('RFC-133 queued run-obligation matrix — isDispatchedEntryConsumed (in
   // node_runs.shard_key — a SIBLING shard's in-flight run must not keep THIS shard's queued entry
   // open (P1-2). The param MUST default to undefined = node-wide (golden-lock; cases 1–5b above
   // call without it and stay green).
-  test('RFC-172 case 6: shardKey scopes run-obligation — sibling shard does not obligate, same shard does', () => {
+  test('RFC-172 case 6: shardKey scopes run-obligation — sibling shard does not obligate, same shard does', async () => {
     const siblingRunning = [mkRun({ id: 'r-b', status: 'running', shardKey: 'shard-B' })]
     // node-wide (no shardKey arg): the running run obligates → open (today's behavior)
-    expect(isDispatchedEntryConsumed(queued(), siblingRunning, NO_LINEAGE, 'in-flight')).toBe(false)
+    expect(await isDispatchedEntryConsumed(queued(), siblingRunning, NO_LINEAGE, 'in-flight')).toBe(
+      false,
+    )
     // scoped to shard-A: the sibling shard-B run is filtered out → no obligation → consumed
     expect(
-      isDispatchedEntryConsumed(
+      await isDispatchedEntryConsumed(
         queued(),
         siblingRunning,
         NO_LINEAGE,
@@ -142,7 +153,7 @@ describe('RFC-133 queued run-obligation matrix — isDispatchedEntryConsumed (in
     // scoped to shard-A: a SAME-shard running run still obligates → open
     const sameRunning = [mkRun({ id: 'r-a', status: 'running', shardKey: 'shard-A' })]
     expect(
-      isDispatchedEntryConsumed(
+      await isDispatchedEntryConsumed(
         queued(),
         sameRunning,
         NO_LINEAGE,
@@ -153,60 +164,74 @@ describe('RFC-133 queued run-obligation matrix — isDispatchedEntryConsumed (in
     ).toBe(false)
   })
 
-  test('case 6: effective target NULL (data anomaly) → conservative open', () => {
+  test('case 6: effective target NULL (data anomaly) → conservative open', async () => {
     const e = queued({ defaultTargetNodeId: null, overrideTargetNodeId: null })
-    expect(isDispatchedEntryConsumed(e, [], NO_LINEAGE, 'in-flight')).toBe(false)
+    expect(await isDispatchedEntryConsumed(e, [], NO_LINEAGE, 'in-flight')).toBe(false)
   })
 
-  test('case 6b: override target wins — obligation is scanned on the OVERRIDE node', () => {
+  test('case 6b: override target wins — obligation is scanned on the OVERRIDE node', async () => {
     const e = queued({ defaultTargetNodeId: 'agent_origin', overrideTargetNodeId: TARGET })
     const busyOverride = [mkRun({ id: 'r1', status: 'running' })]
-    expect(isDispatchedEntryConsumed(e, busyOverride, NO_LINEAGE, 'in-flight')).toBe(false)
+    expect(await isDispatchedEntryConsumed(e, busyOverride, NO_LINEAGE, 'in-flight')).toBe(false)
     const busyOriginOnly = [mkRun({ id: 'r1', nodeId: 'agent_origin', status: 'running' })]
-    expect(isDispatchedEntryConsumed(e, busyOriginOnly, NO_LINEAGE, 'in-flight')).toBe(true)
+    expect(await isDispatchedEntryConsumed(e, busyOriginOnly, NO_LINEAGE, 'in-flight')).toBe(true)
   })
 
-  test('case 7 (Codex P2): alien mintCause blocks a queued entry even with no run obligation; same cause rides', () => {
+  test('case 7 (Codex P2): alien mintCause blocks a queued entry even with no run obligation; same cause rides', async () => {
     // designer entry, caller mints 'clarify-answer' → alien → open.
     const designer = queued({ roleKind: 'designer' })
-    expect(isDispatchedEntryConsumed(designer, [], NO_LINEAGE, 'in-flight', 'clarify-answer')).toBe(
-      false,
-    )
+    expect(
+      await isDispatchedEntryConsumed(designer, [], NO_LINEAGE, 'in-flight', 'clarify-answer'),
+    ).toBe(false)
     // self entry, caller mints 'clarify-answer' → same cause → released (rides the mint).
-    expect(isDispatchedEntryConsumed(queued(), [], NO_LINEAGE, 'in-flight', 'clarify-answer')).toBe(
-      true,
-    )
+    expect(
+      await isDispatchedEntryConsumed(queued(), [], NO_LINEAGE, 'in-flight', 'clarify-answer'),
+    ).toBe(true)
     // questioner entry vs designer mint → alien → open.
     const questioner = queued({ roleKind: 'questioner' })
     expect(
-      isDispatchedEntryConsumed(questioner, [], NO_LINEAGE, 'in-flight', 'cross-clarify-answer'),
+      await isDispatchedEntryConsumed(
+        questioner,
+        [],
+        NO_LINEAGE,
+        'in-flight',
+        'cross-clarify-answer',
+      ),
     ).toBe(false)
     // revivable ignores mintCause entirely (borrow unchanged).
-    expect(isDispatchedEntryConsumed(designer, [], NO_LINEAGE, 'revivable', 'clarify-answer')).toBe(
-      false,
-    )
+    expect(
+      await isDispatchedEntryConsumed(designer, [], NO_LINEAGE, 'revivable', 'clarify-answer'),
+    ).toBe(false)
   })
 
-  test('case 8: bound branches — done±output consumed in BOTH modes (RFC-139) / failed handler / GC anchor ignore mintCause', () => {
+  test('case 8: bound branches — done±output consumed in BOTH modes (RFC-139) / failed handler / GC anchor ignore mintCause', async () => {
     const bound: EntryPick = { ...queued(), triggerRunId: 'h1' }
     const doneRuns = [mkRun({ id: 'h1', rerunCause: 'clarify-answer', status: 'done' })]
     const doneNoOut = [mkLineage({ id: 'h1', hasOutput: false })]
     expect(
-      isDispatchedEntryConsumed(bound, doneRuns, doneNoOut, 'in-flight', 'cross-clarify-answer'),
+      await isDispatchedEntryConsumed(
+        bound,
+        doneRuns,
+        doneNoOut,
+        'in-flight',
+        'cross-clarify-answer',
+      ),
     ).toBe(true)
     // RFC-139 flip: done-no-output = consumed in 'revivable' too. The old `false` locked the
     // RFC-127 "keeps borrowing the same handler" relic — consumerless since RFC-131 T4 de-borrow;
     // keeping it open made the ledger permanent (a clarify-ask never becomes done+output) and
     // deterministically killed the next round's rerun on task-question-borrow-ledger-conflict
     // (task QMGP5). Full matrix: rfc139-clarify-ask-closes-ledger.test.ts.
-    expect(isDispatchedEntryConsumed(bound, doneRuns, doneNoOut, 'revivable')).toBe(true)
+    expect(await isDispatchedEntryConsumed(bound, doneRuns, doneNoOut, 'revivable')).toBe(true)
     const doneOut = [mkLineage({ id: 'h1', hasOutput: true })]
-    expect(isDispatchedEntryConsumed(bound, doneRuns, doneOut, 'revivable')).toBe(true)
+    expect(await isDispatchedEntryConsumed(bound, doneRuns, doneOut, 'revivable')).toBe(true)
     const failedRuns = [mkRun({ id: 'h1', rerunCause: 'clarify-answer', status: 'failed' })]
     const failedLineage = [mkLineage({ id: 'h1', status: 'failed' })]
-    expect(isDispatchedEntryConsumed(bound, failedRuns, failedLineage, 'in-flight')).toBe(false)
+    expect(await isDispatchedEntryConsumed(bound, failedRuns, failedLineage, 'in-flight')).toBe(
+      false,
+    )
     const gone: EntryPick = { ...queued(), triggerRunId: 'gone' }
-    expect(isDispatchedEntryConsumed(gone, doneRuns, doneNoOut, 'in-flight')).toBe(false)
+    expect(await isDispatchedEntryConsumed(gone, doneRuns, doneNoOut, 'in-flight')).toBe(false)
   })
 })
 

@@ -5,7 +5,14 @@
 // runner set OPENCODE_CONFIG_DIR / OPENCODE_CONFIG_CONTENT correctly, then
 // emits configurable JSON events + envelope. The DB is in-memory.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first, rawExec } from '@/platform/persistence/queryHelpers'
 import type { Agent } from '@agent-workflow/shared'
@@ -60,16 +67,15 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   mkdirSync(worktreePath, { recursive: true })
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
   // Seed workflow + task so the FK from node_runs.task_id stays satisfied.
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -95,8 +101,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
 
 async function insertNodeRun(db: PersistenceDb, taskId: string, nodeId = 'node1'): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -222,8 +227,7 @@ describeEachProvider('runNode', (harness) => {
       })
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'accepted' }) }, async () => {
       expect((await invoke()).status).toBe('done')
-      const { nodeRuns } = tablesOf(h.db)
-      await h.db.update(nodeRuns).set({ status: 'pending' }).where(eq(nodeRuns.id, nodeRunId))
+      await patchNodeRunFixture(h.db, { id: nodeRunId }, { status: 'pending' })
       expect((await invoke()).status).toBe('done')
     })
     expect(accepted).toHaveLength(2)
@@ -280,10 +284,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.status).toBe('failed')
     expect(existsSync(marker)).toBe(false)
     expect(finished).toEqual([])
-    const { nodeRuns } = tablesOf(h.db)
-    expect(
-      (await first(h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))))?.pid,
-    ).toBeNull()
+    expect((await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]?.pid).toBeNull()
   })
 
   // RFC-371 v2 §4: the stream meter de-duplicates steps by id; the final write
@@ -383,9 +384,9 @@ describeEachProvider('runNode', (harness) => {
     expect(result.outputs.findings).toBe('none')
     expect(result.prompt).toContain('<workflow-output>')
 
-    const { nodeRuns, nodeRunOutputs, nodeRunEvents } = tablesOf(h.db)
+    const { nodeRunEvents } = tablesOf(h.db)
     // DB side-effects
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))
+    const rows = await readNodeRunFixtures(h.db, { id: nodeRunId })
     const row = rows[0]
     expect(row?.status).toBe('done')
     expect(row?.exitCode).toBe(0)
@@ -393,10 +394,7 @@ describeEachProvider('runNode', (harness) => {
     expect(typeof row?.startedAt).toBe('number')
     expect(typeof row?.finishedAt).toBe('number')
 
-    const outputRows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const outputRows = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     expect(outputRows.length).toBe(2)
     expect(outputRows.find((r) => r.portName === 'summary')?.content).toBe('all good')
 
@@ -444,11 +442,7 @@ describeEachProvider('runNode', (harness) => {
 
     expect(result.status).toBe('done')
     expect(result.outputs.done_signal).toBe('')
-    const { nodeRunOutputs } = tablesOf(h.db)
-    const outputRows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const outputRows = await readNodeRunOutputFixtures(h.db, { nodeRunId })
     expect(outputRows).toHaveLength(1)
     expect(outputRows[0]?.kind).toBe('signal')
     expect(outputRows[0]?.content).toBe('')
@@ -770,8 +764,7 @@ describeEachProvider('runNode', (harness) => {
     expect(result.status).toBe('done')
     expect(result.sessionId).toBe('session-busy-retry')
     expect(transactionAttempts).toBeGreaterThanOrEqual(2)
-    const { nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]
+    const row = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]
     expect(row?.opencodeSessionId).toBe('session-busy-retry')
   })
 
@@ -876,11 +869,8 @@ describeEachProvider('runNode', (harness) => {
     expect(result.outputs).toEqual({})
     expect(result.errorMessage).toContain('runtime-output-persistence-failed')
     expect(result.errorMessage).toContain('forced findings output persistence failure')
-    const { nodeRunOutputs, nodeRuns } = tablesOf(h.db)
-    const outputRows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+    const { nodeRuns } = tablesOf(h.db)
+    const outputRows = await readNodeRunOutputFixtures(h.db, { nodeRunId })
 
     expect(outputRows).toEqual([])
     const row = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]

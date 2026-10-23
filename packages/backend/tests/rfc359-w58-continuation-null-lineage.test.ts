@@ -14,7 +14,7 @@
 //
 // 判据现在只有一个来源：`canonicalTaskLineageScope`，两侧都从它取。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -98,8 +98,7 @@ describe('RFC-359 W58 —— 准入与派生共用同一个函数（源代码层
 async function seedTaskWithoutLineage(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -107,7 +106,7 @@ async function seedTaskWithoutLineage(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -128,10 +127,14 @@ async function seedTaskWithoutLineage(db: PersistenceDb): Promise<string> {
   //（同一条推理见迁移 0224 对 `node_runs` 同名触发器的退役说明）。于是同一条 INSERT
   // 在两个引擎上落出的行不同：SQLite 有值、PostgreSQL 是 null。这里显式 UPDATE 回 null
   //（触发器只挂 AFTER INSERT），让两个引擎都真的处在「lineage 列为空」这个被测状态。
-  await db
-    .update(tasks)
-    .set({ executionLineageId: null, lineageSlotPathJson: null })
-    .where(eq(tasks.id, id))
+  await patchTaskFixture(
+    db,
+    { id },
+    {
+      executionLineageId: null,
+      lineageSlotPathJson: null,
+    },
+  )
   return id
 }
 

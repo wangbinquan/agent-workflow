@@ -1,5 +1,21 @@
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
+import {
+  createNodeRunQueries,
+  createNodeOutputQueries,
+} from '@/modules/task-execution/public/queries'
+import type {
+  NodeRunFactSnapshot,
+  NodeRunCheckpointSnapshot,
+} from '@/modules/task-execution/public/queries'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
+import {
+  createTaskDetailQueries,
+  createTaskPreparationQueries,
+  createTaskTriggerQueries,
+} from '@/modules/task-execution/public/queries'
+import { createTaskPreparationParticipantInTx } from '@/modules/task-execution/public/participants'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   type MaterializedRepo,
   type MaterializedSpace,
@@ -16,7 +32,6 @@ import type { WorkspacePresenceQueries } from '@/modules/source-control/public/q
 // Task service — continuation and retained read projections.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
-import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import {
@@ -27,21 +42,16 @@ import {
 import type {
   ScriptLanguage,
   GitCommitIdentity,
-  PlannedDirectoryNode,
   FailureCode,
   StartTask,
   Task,
-  TaskRepo,
-  WebhookTaskSourceLink,
 } from '@agent-workflow/shared'
 import type { DwState } from '@agent-workflow/shared'
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
 import {
   isRetryableGitFailure,
   DAEMON_SHUTDOWN_ABORT_REASON,
   isDaemonInterruptionAbortReason,
   REPO_PREP_NODE_ID,
-  mountDepth,
   WorkflowDefinitionSchema,
   allowedFromForTaskEvent,
   diffWorkflowForSync,
@@ -49,7 +59,6 @@ import {
   migrateWorkflowDefinitionToLatest,
   planCanonicalWorkflowLayout,
   parseTriggerContextJson,
-  webhookTaskSourceLinkOf,
 } from '@agent-workflow/shared'
 import type {
   Language,
@@ -62,12 +71,7 @@ import type {
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 import {
-  and,
-  asc,
-  desc,
   eq,
-  inArray,
-  isNotNull,
   type LegacySqliteTaskDatabase,
   type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
@@ -82,7 +86,7 @@ import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
 import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
-import type { RollbackOutcome } from '@/services/nodeRollback'
+import type { RollbackOutcome, RollbackRunRow } from '@/services/nodeRollback'
 import { killStaleRunProcessTree } from '@/util/process'
 import type { StaleRunKillOutcome } from '@/util/process'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
@@ -109,7 +113,7 @@ import {
 } from '@/modules/task-execution/public/participants'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
-import { pickFreshestRun } from '@/services/freshness'
+import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
 import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import { redactGitUrl } from '@agent-workflow/shared'
@@ -140,7 +144,7 @@ import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infra
 import { collectExecutionRefs } from '@agent-workflow/shared'
 import {} from '@/services/taskAuthorization'
 import { composeAgentRunDistillObserver } from '@/modules/task-execution/composition/agentRunDistillObserver'
-import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
+import { selectResumeRollbackTargets as selectResumeRollbackTargetsWithSelection } from '@/modules/task-execution/application/resumeRollbackTargets'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
 
 type WorkspacePreparationRepositoryProjection = Parameters<
@@ -531,7 +535,25 @@ function requireTaskRecoveryOperations(deps: TaskContinuationDependencies): Task
 // RFC-359 AC-1（第 10 刀）：实现搬到 `modules/task-execution/application/resumeRollbackTargets.ts`
 // ——那里是全仓唯一一份（PostgreSQL 的 resume 参与者原来有一份逐字相同的副本）。
 // 这里保留同名再导出，本文件既有的三条调用路与外部导入面一个字不用改。
-export { selectResumeRollbackTargets }
+export function selectResumeRollbackTargets<
+  R extends {
+    id: string
+    seq: number | null
+    nodeId: string
+    parentNodeRunId: string | null
+    status: string
+    childTaskId?: string | null
+  },
+>(runs: readonly R[]): Promise<R[]> {
+  return selectResumeRollbackTargetsWithSelection(
+    runs,
+    createRunSelectionOracleSnapshot(
+      runs.map((row) => ({ ...row, taskId: '' })),
+      { scope: { kind: 'rows' } },
+    ),
+    '',
+  )
+}
 
 /**
  * RFC-109 (Codex design-gate F4) — generalized rollback-target selector for the
@@ -549,7 +571,7 @@ export { selectResumeRollbackTargets }
  * iteration, git keeps its baseline) — rolling it back would undo completed inner
  * work. resume never hits this branch (no canceled in its status set).
  */
-export function selectSyncRollbackTargets<
+export async function selectSyncRollbackTargets<
   R extends {
     id: string
     seq: number | null
@@ -561,12 +583,18 @@ export function selectSyncRollbackTargets<
   runs: readonly R[],
   statuses: readonly string[],
   isWrapperNode: (nodeId: string) => boolean,
-): R[] {
+): Promise<R[]> {
   const latestPerNode = new Map<string, R>()
-  for (const r of runs) {
-    if (r.parentNodeRunId !== null) continue
-    const prev = latestPerNode.get(r.nodeId)
-    if (prev === undefined || compareNodeRunMintOrder(r, prev) > 0) latestPerNode.set(r.nodeId, r)
+  const selection = createRunSelectionOracleSnapshot(
+    runs.map((row) => ({ ...row, taskId: '' })),
+    { scope: { kind: 'rows' } },
+  )
+  for (const nodeId of new Set(
+    runs.filter((run) => run.parentNodeRunId === null).map((run) => run.nodeId),
+  )) {
+    const selected = (await selection.familyHistory('', { nodeId }, { topLevelOnly: true })).at(-1)
+    const run = runs.find((row) => row.id === selected?.id)
+    if (run !== undefined) latestPerNode.set(nodeId, run)
   }
   return [...latestPerNode.values()].filter((r) => {
     if (!statuses.includes(r.status)) return false
@@ -810,31 +838,7 @@ function createPersistedRepositoryPreparationStep(input: {
 }): taskDriveComposition.PersistedRepositoryPreparationStep {
   const reader: RepositoryPreparationDescriptorReader = {
     async read(taskId) {
-      const { tasks, nodeRuns } = tablesOf(input.deps.db)
-      // RFC-359 AC-1（plan §5ft 同一条）：中立读法。`.all()` 是 bun:sqlite 专属的同步
-      // 终结符，在中立句柄上取到的是 Promise——这两处是本步骤仅存的两条 provider 绑定。
-      const row = (
-        await input.deps.db
-          .select({
-            id: tasks.id,
-            status: tasks.status,
-            workflowId: tasks.workflowId,
-            name: tasks.name,
-            repoGroupId: tasks.repoGroupId,
-            cachedRepoId: tasks.cachedRepoId,
-            workingBranch: tasks.workingBranch,
-            baseBranch: tasks.baseBranch,
-            spaceKind: tasks.spaceKind,
-            gitUserName: tasks.gitUserName,
-            gitUserEmail: tasks.gitUserEmail,
-            worktreePath: tasks.worktreePath,
-            workspacePruningAt: tasks.workspacePruningAt,
-            workspacePrunedAt: tasks.workspacePrunedAt,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .limit(1)
-      )[0]
+      const row = await createTaskPreparationQueries(input.deps.db).context(taskId)
       if (row === undefined) return { kind: 'terminal-won' }
       if (
         (row.status !== 'pending' && row.status !== 'running') ||
@@ -843,24 +847,25 @@ function createPersistedRepositoryPreparationStep(input: {
       ) {
         return { kind: 'terminal-won' }
       }
-      if (row.worktreePath !== '') return { kind: 'ready' }
-      const latestPrep = (
-        await input.deps.db
-          .select({ id: nodeRuns.id })
-          .from(nodeRuns)
-          .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
-          .orderBy(
-            desc(nodeRuns.retryIndex),
-            engineOf(input.deps.db).descNullsLast(nodeRuns.seq),
-            desc(nodeRuns.id),
+      if (!isTaskWorkspaceUnbound(row.worktreePath)) return { kind: 'ready' }
+      const latestPrep =
+        (
+          await createNodeRunQueries(input.deps.db).listFields(
+            {
+              taskId,
+              nodeId: REPO_PREP_NODE_ID,
+              order: 'retry-desc',
+              limit: 1,
+            },
+            ['id'],
           )
-          .limit(1)
-      )[0]
+        )[0] ?? null
+      const requestedSource = row.requestedSource
       const source =
-        row.repoGroupId !== null && row.repoGroupId.length > 0
-          ? ({ kind: 'repo-group', repoGroupId: row.repoGroupId } as const)
-          : row.cachedRepoId !== null && row.cachedRepoId.length > 0
-            ? ({ kind: 'cached-repo', cachedRepoId: row.cachedRepoId } as const)
+        requestedSource.repoGroupId !== null && requestedSource.repoGroupId.length > 0
+          ? ({ kind: 'repo-group', repoGroupId: requestedSource.repoGroupId } as const)
+          : requestedSource.cachedRepoId !== null && requestedSource.cachedRepoId.length > 0
+            ? ({ kind: 'cached-repo', cachedRepoId: requestedSource.cachedRepoId } as const)
             : null
       if (source === null) {
         throw new ConflictError(
@@ -877,13 +882,15 @@ function createPersistedRepositoryPreparationStep(input: {
           source,
           workingBranch: row.workingBranch,
           requestedRef:
-            source.kind === 'cached-repo' && row.baseBranch !== '' ? row.baseBranch : null,
+            source.kind === 'cached-repo' && requestedSource.requestedRef !== ''
+              ? requestedSource.requestedRef
+              : null,
           spaceKind: row.spaceKind,
           gitCommitIdentity:
             row.gitUserName !== null && row.gitUserEmail !== null
               ? { name: row.gitUserName, email: row.gitUserEmail }
               : null,
-          hasPriorAttempt: latestPrep !== undefined,
+          hasPriorAttempt: latestPrep !== null,
         },
       }
     },
@@ -965,19 +972,6 @@ function createPersistedRepositoryPreparationStep(input: {
   })
 }
 
-/** Old task snapshots only have repo mounts. Rebuild the smallest provable tree. */
-function minimalNodePaths(mountPaths: readonly string[]): string[] {
-  const paths = new Map<string, string>([['', '']])
-  for (const mountPath of mountPaths) {
-    let current = ''
-    for (const segment of mountPath.split('/').filter(Boolean)) {
-      current = current === '' ? segment : `${current}/${segment}`
-      paths.set(current.toLowerCase(), current)
-    }
-  }
-  return [...paths.values()].sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
-}
-
 // RFC-359 AC-6：句柄放宽到中立、函数转 async。它读的两张表（`task_repos` / `task_space_nodes`）
 // 都是普通 drizzle 查询，零方言；钉在 bun:sqlite 上的只有那两个 `.all()` 同步终结子。
 // 三个调用点本来就在 `async (sourceTaskId) => …` 里，加一个 await 即可。
@@ -985,51 +979,7 @@ async function loadFrozenSpaceLayout(
   db: LegacyProviderNeutralDatabase,
   sourceTaskId: string,
 ): Promise<PlannedSpaceLayout> {
-  const { taskRepos, taskSpaceNodes } = tablesOf(db)
-  const rows = await db
-    .select()
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, sourceTaskId))
-    .orderBy(taskRepos.repoIndex)
-
-  if (rows.length === 0) {
-    throw new ValidationError(
-      'source-task-not-replayable',
-      `task '${sourceTaskId}' has no frozen repo snapshot to relaunch from`,
-    )
-  }
-  const missing = rows.filter((r) => (r.cachedRepoId ?? '') === '')
-  if (missing.length > 0) {
-    throw new ValidationError(
-      'source-task-not-replayable',
-      `task '${sourceTaskId}' has ${missing.length} repo(s) with no cached mirror id; ` +
-        'its space cannot be replayed (relaunch by picking a repo or repo group instead)',
-    )
-  }
-  const repos = rows.map((r) => ({
-    cachedRepoId: r.cachedRepoId as string,
-    repoUrlRedacted: r.repoUrl ?? '',
-    ref: r.baseBranch,
-    subdir: r.subdir,
-    mountPath: r.mountPath,
-    readonly: r.readonly,
-    viaGroups: [],
-  }))
-  const frozenNodes = await db
-    .select({ path: taskSpaceNodes.nodePath })
-    .from(taskSpaceNodes)
-    .where(eq(taskSpaceNodes.taskId, sourceTaskId))
-
-  const nodePaths =
-    frozenNodes.length > 0
-      ? frozenNodes
-          .map((row) => row.path)
-          .sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
-      : minimalNodePaths(repos.map((repo) => repo.mountPath))
-  return {
-    repos,
-    nodes: nodePaths.map((path) => ({ path, origins: [] })),
-  }
+  return createTaskPreparationQueries(db).frozenLayout(sourceTaskId)
 }
 
 interface RepositoryPreparationOwnership {
@@ -1107,7 +1057,7 @@ function taskRepoRowsFor(
     workingBranch,
     baseCommit: r.baseCommit,
     worktreePath: r.worktreePath,
-    worktreeDirName: r.worktreeDirName,
+    worktreeDirName: r.mountPath,
     mountPath: r.mountPath,
     subdir: r.subdir,
     readonly: r.readonly,
@@ -1131,8 +1081,8 @@ function taskRepoRowsFor(
  * RFC-066 PR-B T13: roll back the worktree state before a node_run for the
  * resume / single-node-retry paths. RFC-092 T1: thin shell over the shared
  * `rollbackNodeRunWorktrees` (services/nodeRollback.ts) — the single authority
- * for snapshot rollback, also used by the scheduler's in-process retry path
- * (audit S-2). Resume semantics (`resetOnEmptySnapshot: false`) are preserved
+ * for historical snapshot rollback. Fresh-session retry uses isolated worktrees;
+ * historical resume semantics are preserved
  * exactly: empty/missing shas are skipped, a multi-repo row whose
  * `preSnapshotReposJson` is NULL (predates PR-B) falls through to the legacy
  * single-string rollback, and an unparseable map degrades to a per-repo no-op
@@ -1142,7 +1092,7 @@ function taskRepoRowsFor(
 async function rollbackNodeRunForResume(
   db: LegacyProviderNeutralDatabase,
   task: Task,
-  run: { id: string; preSnapshot: string | null; preSnapshotReposJson: string | null },
+  run: RollbackRunRow,
   log: ReturnType<typeof createLogger>,
   opts?: { checkOnly?: boolean },
 ): Promise<RollbackOutcome> {
@@ -1154,7 +1104,7 @@ async function rollbackNodeRunForResume(
       repos: task.repos,
     },
     run,
-    { resetOnEmptySnapshot: false, ...(opts?.checkOnly ? { checkOnly: true } : {}) },
+    { ...(opts?.checkOnly ? { checkOnly: true } : {}) },
     log,
   )
 }
@@ -1272,13 +1222,7 @@ async function reapRunBeforeWorktreeReset(
   deps: TaskContinuationDependencies,
   log: Logger,
 ): Promise<void> {
-  const { runtimeSessionLeases } = tablesOf(db)
-  const heldNativeLease = await first(
-    db
-      .select({ sessionId: runtimeSessionLeases.sessionId })
-      .from(runtimeSessionLeases)
-      .where(eq(runtimeSessionLeases.leaseNodeRunId, run.id)),
-  )
+  const heldNativeLease = await createNodeRunQueries(db).heldSession(run.id)
   const killOutcome = await (deps.killStaleRunProcessTree ?? killStaleRunProcessTree)(run)
   const recovery = requireTaskRecoveryOperations(deps)
   if (killOutcome === 'killed') {
@@ -1315,25 +1259,10 @@ async function reapHeldRuntimeSessionOwnersForTask(
   deps: TaskContinuationDependencies,
   log: Logger,
 ): Promise<void> {
-  const { runtimeSessionLeases, nodeRuns } = tablesOf(db)
-  const ownerIds = [
-    ...new Set(
-      (
-        await db
-          .select({ nodeRunId: runtimeSessionLeases.leaseNodeRunId })
-          .from(runtimeSessionLeases)
-          .where(
-            and(
-              eq(runtimeSessionLeases.taskId, taskId),
-              isNotNull(runtimeSessionLeases.leaseNodeRunId),
-            ),
-          )
-      ).flatMap((row) => (row.nodeRunId === null ? [] : [row.nodeRunId])),
-    ),
-  ]
+  const ownerIds = await createNodeRunQueries(db).heldSessionRunIds(taskId)
   for (const nodeRunId of ownerIds) {
-    const run = await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))
-    if (run === undefined) {
+    const run = await createNodeRunQueries(db).read(nodeRunId)
+    if (run === null) {
       await escalateLiveChildSurvived(
         db,
         requireTaskRecoveryOperations(deps),
@@ -1430,8 +1359,8 @@ async function resumeKick(
     event: TaskTransitionEvent
     extra?: TaskStatusUpdateExtra
     selectRollback: (
-      runs: Array<PersistenceTables['nodeRuns']['$inferSelect']>,
-    ) => Array<PersistenceTables['nodeRuns']['$inferSelect']>
+      runs: readonly NodeRunCheckpointSnapshot[],
+    ) => Promise<readonly NodeRunCheckpointSnapshot[]>
     reason: 'resumeTask' | 'syncTaskWorkflow'
     conflictCode: string
     verb: string
@@ -1564,7 +1493,6 @@ async function resumeKick(
       // held native-session owner for the task before any rollback or fresh kick.
       await reapHeldRuntimeSessionOwnersForTask(db, id, opts.reason, deps, log)
 
-      const { nodeRuns } = tablesOf(db)
       // Collect the latest non-done run per nodeId — those need rollback + a fresh
       // attempt. Freshness is ULID id-order, matching the scheduler's authority
       // (isFresherNodeRun). retryIndex ordering was wrong: a clarify-driven rerun is
@@ -1572,8 +1500,11 @@ async function resumeKick(
       // higher retryIndex would shadow it and resume would roll the worktree back to
       // the wrong row's pre_snapshot. See
       // scheduler-boundary-resume-retryindex-vs-id.test.ts.
-      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id))
-      const toRollback = opts.selectRollback(runs)
+      const runs = await createNodeRunQueries(db).listResumeRuns(
+        id,
+        task.repos.map((repo) => repo.mountPath),
+      )
+      const toRollback = await opts.selectRollback(runs)
 
       // RFC-108 T7 (AR-17): cross-node-run all-or-nothing pre-pass. The within-row
       // rollback is fail-closed, but the reset loop below touches rows one at a
@@ -1582,7 +1513,7 @@ async function resumeKick(
       // half-rolled-back worktree. Verify EVERY row's snapshot still resolves to a
       // commit (side-effect-free `checkOnly`) BEFORE killing/resetting anything.
       for (const r of toRollback) {
-        const probe = await rollbackNodeRunForResume(db, task, r, log, { checkOnly: true })
+        const probe = await rollbackNodeRunForResume(db, task, r.rollback, log, { checkOnly: true })
         if (probe.failures.some((f) => f.code === 'snapshot-missing')) {
           await escalateSnapshotLost(
             db,
@@ -1609,7 +1540,7 @@ async function resumeKick(
       }
 
       for (const r of toRollback) {
-        const outcome = await rollbackNodeRunForResume(db, task, r, log)
+        const outcome = await rollbackNodeRunForResume(db, task, r.rollback, log)
         // RFC-098 WP-9: a gc-pruned pre-snapshot is NOT warn-and-continue — the
         // fail-closed rollback touched nothing, but the baseline is gone forever;
         // flip the task failed (errorSummary='snapshot-lost') and surface a 409.
@@ -1690,7 +1621,10 @@ const WRAPPER_BREADCRUMB_TERMINAL: ReadonlySet<string> = new Set(['done', 'faile
  * only acts on `differs` + `blockers`, neither of which reads producedPorts.
  */
 export function buildSyncRunSummary(
-  runs: ReadonlyArray<PersistenceTables['nodeRuns']['$inferSelect']>,
+  runs: readonly Pick<
+    NodeRunFactSnapshot,
+    'id' | 'nodeId' | 'parentNodeRunId' | 'status' | 'wrapperProgressJson'
+  >[],
   producedPortsByNode?: ReadonlyMap<string, ReadonlySet<string>>,
 ): Map<string, NodeRunSyncSummary> {
   const runIdToNode = new Map(runs.map((r) => [r.id, r.nodeId]))
@@ -1771,27 +1705,26 @@ export async function computeWorkflowSyncPreview(
       message: error instanceof Error ? error.message : String(error),
     })
   }
-  const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+  const runs = await createNodeRunQueries(db).list({ taskId: task.id })
 
   // The freshest done top-level run per node + the output ports it produced —
   // the basis for the `dangling-input-port` warning (Codex F2).
   const freshestDoneRunIdByNode = new Map<string, string>()
-  const runsByNode = new Map<string, Array<PersistenceTables['nodeRuns']['$inferSelect']>>()
+  const runsByNode = new Map<string, NodeRunFactSnapshot[]>()
   for (const r of runs) {
     const list = runsByNode.get(r.nodeId)
     if (list === undefined) runsByNode.set(r.nodeId, [r])
     else list.push(r)
   }
-  for (const [nodeId, rows] of runsByNode) {
-    const fresh = pickFreshestRun(rows, { topLevelOnly: true, statusIn: ['done'] })
+  const selection = createRunSelectionOracleSnapshot(runs, { scope: { kind: 'rows' } })
+  for (const nodeId of runsByNode.keys()) {
+    const fresh = (
+      await selection.familyHistory(task.id, { nodeId }, { topLevelOnly: true, statusIn: ['done'] })
+    ).at(-1)
     if (fresh !== undefined) freshestDoneRunIdByNode.set(nodeId, fresh.id)
   }
   const runIds = [...freshestDoneRunIdByNode.values()]
-  const outRows =
-    runIds.length > 0
-      ? await db.select().from(nodeRunOutputs).where(inArray(nodeRunOutputs.nodeRunId, runIds))
-      : []
+  const outRows = await createNodeOutputQueries(db).listProducedPorts(runIds)
   const portsByRun = new Map<string, Set<string>>()
   for (const o of outRows) {
     const set = portsByRun.get(o.nodeRunId)
@@ -1817,17 +1750,11 @@ export async function computeWorkflowSyncPreview(
     : validation.issues
         .filter((i) => (i.severity ?? 'error') === 'error')
         .map((i) => ({ code: i.code, message: i.message }))
-  const contextRow = (
-    await db
-      .select({ triggerContextJson: tasks.triggerContextJson })
-      .from(tasks)
-      .where(eq(tasks.id, task.id))
-      .limit(1)
-  )[0]
+  const triggerContextJson = await createTaskTriggerQueries(db).frozenContext(task.id)
   const triggerIssue = triggerPreflightIssue({
     root: newDef,
     closureJson: candidateClosureJson,
-    source: parseTriggerContextJson(contextRow?.triggerContextJson),
+    source: parseTriggerContextJson(triggerContextJson),
   })
   const triggerIssues =
     triggerIssue === null
@@ -1848,7 +1775,7 @@ export async function computeWorkflowSyncPreview(
   // RFC-359: 判据落在共用 domain 里，PostgreSQL 的预览用同一条。
   const reason = workflowSyncGateReason({
     status: task.status,
-    worktreeMissing: task.worktreePath === '',
+    worktreeMissing: isTaskWorkspaceUnbound(task.worktreePath),
   })
   const syncable = reason === 'ok'
 
@@ -1890,11 +1817,8 @@ async function assertChildTaskDrivable(
 ): Promise<void> {
   const callRowId = task.parentNodeRunId ?? null
   if ((task.parentTaskId ?? null) === null || callRowId === null) return
-  const { nodeRuns } = tablesOf(db)
-  const row = await first(
-    db.select({ status: nodeRuns.status }).from(nodeRuns).where(eq(nodeRuns.id, callRowId)),
-  )
-  if (row === undefined) return
+  const row = await createNodeRunQueries(db).readFields(callRowId, ['status'])
+  if (row === null) return
   if (isTerminalNodeRunStatus(row.status as NodeRunStatus)) {
     throw new ConflictError(
       'call-row-finalized',
@@ -1922,15 +1846,19 @@ async function reclaimStalePrepArtifacts(
   appHome: string,
   task: Task,
 ): Promise<void> {
+  const requestedSource = decodeRequestedSource(task)
   // ① 候选镜像:单仓来自 tasks.cached_repo_id;组来自成员的 cachedRepoId。
   const mirrorIds = new Set<string>()
-  if (typeof task.cachedRepoId === 'string' && task.cachedRepoId.length > 0) {
-    mirrorIds.add(task.cachedRepoId)
+  if (typeof requestedSource.cachedRepoId === 'string' && requestedSource.cachedRepoId.length > 0) {
+    mirrorIds.add(requestedSource.cachedRepoId)
   }
-  if (typeof task.repoGroupId === 'string' && task.repoGroupId.length > 0) {
+  if (typeof requestedSource.repoGroupId === 'string' && requestedSource.repoGroupId.length > 0) {
     try {
       for (const m of (
-        await resolveRepoGroupLayout(composeSqliteRepositoryWorkspaceStore(db), task.repoGroupId)
+        await resolveRepoGroupLayout(
+          composeSqliteRepositoryWorkspaceStore(db),
+          requestedSource.repoGroupId,
+        )
       ).repos) {
         if (m.cachedRepoId.length > 0) mirrorIds.add(m.cachedRepoId)
       }
@@ -2144,7 +2072,6 @@ async function runDeferredRepoPreparation(args: {
     (await taskDriveComposition.hasDurableRepositoryPreparation(deps.db, taskId))
   )
     throw new Error('journaled-repository-preparation-binding-missing')
-  const { nodeRuns, tasks } = tablesOf(deps.db)
   // 第 0 步：仓库准备。失败不抛给 HTTP（此刻请求早已返回），而是把任务转
   // `failed` 并把 git 原文留在行上——这正是 G7 要的「失败可见」。
   //
@@ -2160,12 +2087,16 @@ async function runDeferredRepoPreparation(args: {
   // 「第 0 次、首次」，API 原样吐出这两列、UI 的「重试」列连着显示 0——执行是对的，
   // 但历史永久记成假事实，审计、诊断与按 retryIndex 排序的调用方全被打乱。
   // `topLevelOnly` 不需要：准备行没有父行；同理 iteration 恒 0。
-  const priorPrepRuns = await deps.db
-    .select({ retryIndex: nodeRuns.retryIndex })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+  const priorPrepRuns = await createNodeRunQueries(deps.db).listFields(
+    { taskId, nodeId: REPO_PREP_NODE_ID },
+    ['retryIndex'],
+  )
   const prepRetryIndex = nextRetryIndex(priorPrepRuns)
   const prepRunId = await mintNodeRun(deps.db, {
+    ...deriveNodeRunRole({
+      nodeId: REPO_PREP_NODE_ID,
+      rerunCause: prepRetryIndex === 0 ? 'initial' : 'retry-node',
+    }),
     taskId,
     nodeId: REPO_PREP_NODE_ID,
     status: 'pending',
@@ -2331,7 +2262,11 @@ async function runDeferredRepoPreparation(args: {
         to: daemonShutdown ? 'interrupted' : 'canceled',
         allowedFrom: ['running'],
         reason: daemonShutdown ? 'repo-prep-daemon-shutdown' : 'repo-prep-canceled',
-        extra: { finishedAt: Date.now() },
+        extra: {
+          identity: {
+            finishedAt: Date.now(),
+          },
+        },
       })
     } catch (err) {
       log.warn('repo-prep row already terminal when recording cancel', {
@@ -2339,9 +2274,7 @@ async function runDeferredRepoPreparation(args: {
         error: err instanceof Error ? err.message : String(err),
       })
     }
-    const cur = (
-      await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
-    )[0]
+    const cur = await createTaskPreparationQueries(deps.db).status(taskId)
     return {
       ok: false,
       preparedTask: {
@@ -2370,7 +2303,12 @@ async function runDeferredRepoPreparation(args: {
         to: 'failed',
         allowedFrom: ['running'],
         reason: 'repo-prep-failed',
-        extra: { finishedAt: Date.now(), errorMessage: prepared.earlyError },
+        extra: {
+          identity: {
+            finishedAt: Date.now(),
+            errorMessage: prepared.earlyError,
+          },
+        },
       })
     } catch (err) {
       // 取消路径已经把这条合成行终结过了——不是错误，记一笔即可。
@@ -2398,9 +2336,7 @@ async function runDeferredRepoPreparation(args: {
     } catch (err) {
       // 取消赢了这场竞速：任务已是 canceled，不得被准备失败改写成 failed。
       // 回给调用方的状态也必须是库里的真值，不能一律报 failed。
-      const cur = (
-        await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
-      )[0]
+      const cur = await createTaskPreparationQueries(deps.db).status(taskId)
       finalStatus = (cur?.status as TaskStatus | undefined) ?? 'failed'
       log.warn('task left prep window before failure could be recorded; keeping current status', {
         taskId,
@@ -2429,9 +2365,7 @@ async function runDeferredRepoPreparation(args: {
   //
   // 复检发现任务已离开 pending 时：物化产物必须**当场清理**（它已经建出了工作树，
   // 但再也不会有任务行锚定它——不清就是孤儿目录），然后按当前真实状态收场。
-  const stillPending = (
-    await deps.db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
-  )[0]?.status
+  const stillPending = (await createTaskPreparationQueries(deps.db).status(taskId))?.status
   // ⚠️ 判据必须**同时**看信号，不能只看任务状态（四轮门 Codex 并发面实测）。
   //
   // `cancelTask` 是「先 abort、最多等 5 秒、再写 canceled」。若物化恰好在这段窗口里
@@ -2493,7 +2427,11 @@ async function runDeferredRepoPreparation(args: {
         to: leftStatus,
         allowedFrom: ['running'],
         reason: 'repo-prep-task-left-window',
-        extra: { finishedAt: Date.now() },
+        extra: {
+          identity: {
+            finishedAt: Date.now(),
+          },
+        },
       })
     } catch (err) {
       log.warn('repo-prep row already terminal when task left the prep window', {
@@ -2516,7 +2454,7 @@ async function runDeferredRepoPreparation(args: {
   // 物化成功后必须换成 materializeSpace 产出的那份，否则清理/回滚协议管不到
   // 刚建出来的工作树——任务删除时会留下孤儿目录。
   ownership.cleanup = prepared.cleanup
-  // 回填：占位落行时 `task_repos` / `task_space_nodes` 是空的（那时还没物化）。
+  // 回填：占位落行时仓库尚未物化，目录只有根；准备结算补齐成员目录。
   // 与任务行的路径回写放进**同一个事务**——多仓任务的 repos 与 tasks.worktreePath
   // 必须同时可见，否则一个恰好落在中间的读者（诊断接口、structural diff、前端
   // 详情页）会看到「有工作树但没有成员仓」这种不存在的状态。
@@ -2534,36 +2472,23 @@ async function runDeferredRepoPreparation(args: {
   // 语句要么落在事务外、要么根本不发，而两边都不会抛。
   const persistPreparedProjection = async (tx: PersistenceTx): Promise<void> => {
     await taskDriveComposition.acceptDurableRepositoryWorkspace(tx, taskId)
-    const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
-    await tx
-      .update(tasks)
-      .set({
-        worktreePath: prepared.worktreePath,
-        branch: prepared.branch,
-        baseCommit: prepared.baseCommit,
-        repoPath: preparedHead?.repoPath ?? '',
-        repoUrl:
-          preparedHead?.repoUrl !== null && preparedHead?.repoUrl !== undefined
-            ? redactGitUrl(preparedHead.repoUrl)
-            : null,
-        cachedRepoId: preparedHead?.cachedRepoId ?? null,
-        baseBranch: preparedHead?.baseBranch ?? '',
-        repoCount: Math.max(1, prepared.repos.length),
-        spaceKind: prepared.spaceKind,
-      })
-      .where(eq(tasks.id, taskId))
-    if (prepared.repos.length > 0) {
-      await tx.insert(taskRepos).values(preparedRepoRows)
-    }
-    if (prepared.nodePaths.length > 0) {
-      await tx.insert(taskSpaceNodes).values(
-        prepared.nodePaths.map((nodePath) => ({
-          taskId,
-          nodePath,
-          schemaVersion: 1,
-        })),
-      )
-    }
+    await createTaskPreparationParticipantInTx(tx).writeWorkspace({
+      taskId,
+      worktreePath: prepared.worktreePath,
+      branch: prepared.branch,
+      baseCommit: prepared.baseCommit,
+      spaceKind: prepared.spaceKind,
+      repositories: preparedRepoRows.map(
+        ({
+          taskId: _taskId,
+          repoIndex,
+          worktreeDirName: _directory,
+          schemaVersion: _version,
+          ...mount
+        }) => ({ ...mount, ordinal: repoIndex }),
+      ),
+      nodePaths: prepared.nodePaths,
+    })
     // 准备行置 done **并入同一事务**（五轮门 Codex 数据完整性面 F2，用户拍板）。
     //
     // 原先它是事务外的下一次 await，于是「三张投影表已提交、prep 行还是 running」
@@ -2579,7 +2504,11 @@ async function runDeferredRepoPreparation(args: {
       to: 'done',
       allowedFrom: ['running'],
       reason: 'repo-prep-done',
-      extra: { finishedAt: preparedFinishedAt },
+      extra: {
+        identity: {
+          finishedAt: preparedFinishedAt,
+        },
+      },
     })
   }
   const preparationReceipt = {
@@ -2619,57 +2548,19 @@ async function runDeferredRepoPreparation(args: {
 }
 
 export async function getTask(db: LegacyProviderNeutralDatabase, id: string): Promise<Task | null> {
-  const { tasks, workflows, taskRepos, taskSpaceNodes } = tablesOf(db)
-  const rows = await db
-    .select({
-      task: tasks,
-      workflowName: workflows.name,
-      workflowBuiltin: workflows.builtin,
-    })
-    .from(tasks)
-    .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
-    .where(eq(tasks.id, id))
-    .limit(1)
-  const row = rows[0]
-  if (!row) return null
-  // RFC-066: hydrate per-repo metadata. Defensive fallback when task_repos is
-  // empty (legacy rows that landed before migration 0034 backfill, or the
-  // ultra-rare mid-migration crash): synthesize a single repo entry from the
-  // legacy `tasks.*` mirror columns so callers always see at least one entry.
-  const repoRows = await db
-    .select()
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, id))
-    .orderBy(asc(taskRepos.repoIndex))
-  const repos: TaskRepo[] =
-    repoRows.length > 0 ? repoRows.map(mapTaskRepoRow) : [synthesizeRepoFromTaskRow(row.task)]
-  const frozenNodeRows = await db
-    .select({ path: taskSpaceNodes.nodePath })
-    .from(taskSpaceNodes)
-    .where(eq(taskSpaceNodes.taskId, id))
-  const nodePaths =
-    frozenNodeRows.length > 0
-      ? frozenNodeRows
-          .map((node) => node.path)
-          .sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
-      : minimalNodePaths(repos.map((repo) => repo.mountPath))
-  const spaceNodes: PlannedDirectoryNode[] = nodePaths.map((path) => ({ path, origins: [] }))
-  const parsedTriggerContext = parseTriggerContextJson(row.task.triggerContextJson)
-  const webhookSourceLink =
-    parsedTriggerContext.kind === 'ok' ? webhookTaskSourceLinkOf(parsedTriggerContext.value) : null
-  const task = rowToTask(
-    row.task,
-    row.workflowName,
-    row.workflowBuiltin === true,
-    repos,
-    spaceNodes,
-    webhookSourceLink,
-  )
-  // RFC-203 T4: task-level failure-code projection (failed-run oracle).
+  const detail = await createTaskDetailQueries(db).read(id)
+  if (detail === null) return null
+  const task = {
+    ...detail.task,
+    workflowSnapshot: projectWorkflowSnapshotForRead(
+      detail.task.workflowSnapshot,
+      detail.definitionOrigin === 'platform',
+    ),
+  }
   const codes = await loadTaskFailureCodes(db, [
-    { id: row.task.id, status: row.task.status, failedNodeId: row.task.failedNodeId },
+    { id: task.id, status: task.status, failedNodeId: task.failedNodeId },
   ])
-  const failureCode = codes.get(row.task.id)
+  const failureCode = codes.get(task.id)
   return failureCode !== undefined ? { ...task, failureCode } : task
 }
 
@@ -2694,257 +2585,23 @@ export async function loadTaskFailureCodes(
   const out = new Map<string, FailureCode | null>()
   const wanted = rows.filter((r) => r.status === 'failed' && r.failedNodeId !== null)
   if (wanted.length === 0) return out
-  const { nodeRuns } = tablesOf(db)
-  const runRows = await db
-    .select({
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      id: nodeRuns.id,
-      seq: nodeRuns.seq,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
-      status: nodeRuns.status,
-      failureCode: nodeRuns.failureCode,
-    })
-    .from(nodeRuns)
-    .where(
-      inArray(
-        nodeRuns.taskId,
-        wanted.map((r) => r.id),
-      ),
-    )
+  const runRows = await createNodeRunQueries(db).listFields({ taskIds: wanted.map((r) => r.id) }, [
+    'taskId',
+    'nodeId',
+    'id',
+    'seq',
+    'parentNodeRunId',
+    'status',
+    'failureCode',
+  ])
+  const snapshot = createRunSelectionOracleSnapshot(runRows, { scope: { kind: 'rows' } })
+  const runsById = new Map(runRows.map((row) => [row.id, row]))
   for (const t of wanted) {
-    const candidates = runRows.filter((r) => r.taskId === t.id && r.nodeId === t.failedNodeId)
-    const fresh = pickFreshestRun(candidates, { topLevelOnly: true })
+    const selected = (
+      await snapshot.familyHistory(t.id, { nodeId: t.failedNodeId! }, { topLevelOnly: true })
+    ).at(-1)
+    const fresh = selected === undefined ? undefined : runsById.get(selected.id)
     out.set(t.id, (fresh?.failureCode ?? null) as FailureCode | null)
   }
   return out
-}
-
-function rowToTask(
-  row: PersistenceTables['tasks']['$inferSelect'],
-  workflowName: string | null,
-  workflowBuiltin: boolean,
-  repos: TaskRepo[],
-  spaceNodes: PlannedDirectoryNode[],
-  webhookSourceLink: WebhookTaskSourceLink | null,
-): Task {
-  let snapshot: unknown
-  try {
-    snapshot = JSON.parse(row.workflowSnapshot)
-  } catch {
-    snapshot = null
-  }
-  let inputs: Record<string, string> = {}
-  try {
-    inputs = JSON.parse(row.inputs) as Record<string, string>
-  } catch {
-    inputs = {}
-  }
-  return {
-    id: row.id,
-    name: row.name, // RFC-037
-    workflowId: row.workflowId,
-    workflowName,
-    workflowSnapshot: projectWorkflowSnapshotForRead(snapshot, workflowBuiltin),
-    workflowVersion: row.workflowVersion ?? null, // RFC-109
-
-    repoPath: row.repoPath,
-    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
-    // StartTaskSchema only rejects them in the QUERY STRING, so a
-    // `https://user:token@host/repo.git` launch URL is accepted and stored.
-    // Sibling paths in this file already redact (see `:1194`); these four
-    // `rowToTask` sites did not, so every task read handed the credential back.
-    // Redacted for ALL channels, not just tokens: this is an existing leak
-    // being closed, not a new token-only gate.
-    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
-    cachedRepoId: row.cachedRepoId ?? null,
-    worktreePath: row.worktreePath,
-    workspaceState:
-      row.workspacePrunedAt !== null
-        ? 'pruned'
-        : row.workspacePruningAt !== null
-          ? 'pruning'
-          : 'available',
-    baseBranch: row.baseBranch,
-    branch: row.branch,
-    baseCommit: row.baseCommit,
-    status: row.status,
-    inputs,
-    maxDurationMs: row.maxDurationMs,
-    maxTotalTokens: row.maxTotalTokens,
-    startedAt: row.startedAt,
-    finishedAt: row.finishedAt,
-    errorSummary: row.errorSummary,
-    errorMessage: row.errorMessage,
-    failedNodeId: row.failedNodeId,
-    expiresAt: row.expiresAt,
-    deletedAt: row.deletedAt,
-    schemaVersion: row.schemaVersion,
-    // RFC-067: per-task Git commit identity (NULL = no override → daemon default).
-    gitUserName: row.gitUserName ?? null,
-    gitUserEmail: row.gitUserEmail ?? null,
-    // RFC-075: working branch (NULL → isolation branch) + auto commit&push.
-    workingBranch: row.workingBranch ?? null,
-    autoCommitPush: row.autoCommitPush,
-    // RFC-066: per-task repo metadata. `repoCount` is sourced from the
-    // denormalized column on `tasks` (cheap for list queries); `repos[]` is
-    // hydrated by the caller from `task_repos` ordered by `repo_index`.
-    repoCount: row.repoCount,
-    // RFC-248: 组溯源。名字是快照——组删掉后详情页仍渲染名字（设计门 G5）。
-    repoGroupId: row.repoGroupId ?? null,
-    repoGroupName: row.repoGroupName ?? null,
-    // RFC-159: link back to the scheduled_tasks row that launched this (NULL = manual).
-    scheduledTaskId: row.scheduledTaskId ?? null,
-    workgroupId: row.workgroupId ?? null,
-    // RFC-164/RFC-223: frozen group name from the task's own config (same
-    // source as rowToSummary) is display-only; the detail page links by the
-    // frozen workgroupId instead of leaking the `__workgroup_host__` anchor.
-    // NULL for non-groups.
-    workgroupName: frozenWorkgroupName(row.workgroupConfigJson),
-    // RFC-175 (§2): frozen goal from the task's own config (same task-scoped,
-    // RFC-099-safe source as workgroupName). NULL for non-groups. Powers relaunch.
-    goal: frozenWorkgroupGoal(row.workgroupConfigJson),
-    // RFC-165: execution-space kind + single-agent soft link.
-    spaceKind: row.spaceKind,
-    // RFC-243: parent linkage for node-invoked child executions.
-    parentTaskId: row.parentTaskId ?? null,
-    parentNodeRunId: row.parentNodeRunId ?? null,
-    invocationDepth: row.invocationDepth ?? 0,
-    sourceAgentName: row.sourceAgentName ?? null,
-    // RFC-304: code-capability round link — the subject discriminator, so it
-    // must reach both the detail and the list projections.
-    codeRoundId: row.codeRoundId ?? null,
-    // RFC-310: task-owned soft provenance avoids a live cross-context join and
-    // survives a direct/reloaded TaskEngine detail URL.
-    digitalEmployeeCaseId: row.digitalEmployeeCaseId ?? null,
-    // RFC-175 (§2e): stable agent id (NULL for non-agent + pre-0091 tasks).
-    sourceAgentId: row.sourceAgentId ?? null,
-    // RFC-298: getTask derives this from the frozen context before entering
-    // the generic row mapper. Never expose or parse the frozen source JSON here.
-    webhookSourceLink,
-    repos,
-    spaceNodes,
-  }
-}
-
-/**
- * RFC-164 follow-up: the owning group's display name for the /tasks list, read
- * from the task's OWN frozen `workgroup_config_json` — the SAME task-scoped
- * source the room serves (routes/workgroupTasks.ts `loadVisibleWorkgroupTask`),
- * NOT a live join on the `workgroups` resource. This keeps the name inside the
- * task's membership ACL (RFC-099): a task member already sees it in the room,
- * and we never surface live resource state (e.g. a post-launch rename) to a
- * collaborator without workgroup visibility. NULL for non-workgroup tasks and
- * for a corrupt/absent config (the list cell degrades to badge-only). The
- * label remains the launch-time name after a rename, while the destination is
- * the immutable `workgroup_id`; authorization still decides whether it opens.
- */
-function frozenWorkgroupName(configJson: string | null): string | null {
-  if (configJson === null || configJson === '') return null
-  try {
-    const parsed: unknown = JSON.parse(configJson)
-    if (parsed !== null && typeof parsed === 'object' && 'workgroupName' in parsed) {
-      const n = (parsed as { workgroupName?: unknown }).workgroupName
-      return typeof n === 'string' && n.length > 0 ? n : null
-    }
-  } catch {
-    // Corrupt frozen config must never 5xx the whole list; degrade to null.
-  }
-  return null
-}
-
-/**
- * RFC-175 (§2): the workgroup task's frozen `goal`, read from the task's OWN
- * `workgroup_config_json` — the SAME task-scoped, RFC-099-safe source as
- * `frozenWorkgroupName` (never a live join). NULL for non-workgroup tasks and
- * corrupt/absent config. Powers relaunch pre-filling the workgroup prompt.
- */
-function frozenWorkgroupGoal(configJson: string | null): string | null {
-  if (configJson === null || configJson === '') return null
-  try {
-    const parsed: unknown = JSON.parse(configJson)
-    if (parsed !== null && typeof parsed === 'object' && 'goal' in parsed) {
-      const g = (parsed as { goal?: unknown }).goal
-      return typeof g === 'string' && g.length > 0 ? g : null
-    }
-  } catch {
-    // Corrupt frozen config must never 5xx; degrade to null.
-  }
-  return null
-}
-
-/**
- * RFC-066: project a `task_repos` row into the wire `TaskRepo` shape. Boolean
- * columns are stored as 0/1 integers in SQLite; drizzle's `mode: 'boolean'`
- * surfaces them as JS booleans, but we coerce nullable booleans defensively.
- */
-function mapTaskRepoRow(row: PersistenceTables['taskRepos']['$inferSelect']): TaskRepo {
-  return {
-    repoIndex: row.repoIndex,
-    repoPath: row.repoPath,
-    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
-    // StartTaskSchema only rejects them in the QUERY STRING, so a
-    // `https://user:token@host/repo.git` launch URL is accepted and stored.
-    // Sibling paths in this file already redact (see `:1194`); these four
-    // `rowToTask` sites did not, so every task read handed the credential back.
-    // Redacted for ALL channels, not just tokens: this is an existing leak
-    // being closed, not a new token-only gate.
-    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
-    cachedRepoId: row.cachedRepoId ?? null,
-    baseBranch: row.baseBranch,
-    branch: row.branch,
-    // RFC-075: per-repo working-branch mirror (NULL → isolation branch).
-    workingBranch: row.workingBranch ?? null,
-    baseCommit: row.baseCommit ?? null,
-    worktreePath: row.worktreePath,
-    worktreeDirName: row.worktreeDirName,
-    // RFC-248: 读 DB 真值。写死 '' 会让**每一个**多仓任务的 diff 分段头退化成
-    // `.`、结构化 diff 前缀丢失、`?repo=` 查不到——由 task-diff-multi-repo 的
-    // 既有断言抓出来。
-    mountPath: row.mountPath,
-    subdir: row.subdir,
-    readonly: row.readonly,
-    // RFC-248 AC-19: 只读成员被丢弃的改动处数（null = 从未检查）。
-    readonlyDirtyCount: row.readonlyDirtyCount ?? null,
-    hasSubmodules: row.hasSubmodules ?? null,
-    submoduleInitOk: row.submoduleInitOk ?? null,
-    submoduleInitError: row.submoduleInitError ?? null,
-  }
-}
-
-/**
- * RFC-066: defensive fallback when `getTask` finds zero `task_repos` rows
- * (only reachable for ultra-rare mid-migration crashes — every existing
- * task got a row backfilled by migration 0034 INSERT FROM ... SELECT).
- * Synthesizes a single entry from the legacy `tasks.*` mirror columns so
- * downstream consumers always see at least one repo.
- */
-function synthesizeRepoFromTaskRow(row: PersistenceTables['tasks']['$inferSelect']): TaskRepo {
-  return {
-    repoIndex: 0,
-    repoPath: row.repoPath,
-    // RFC-247 (design gate): `tasks.repo_url` can embed credentials —
-    // StartTaskSchema only rejects them in the QUERY STRING, so a
-    // `https://user:token@host/repo.git` launch URL is accepted and stored.
-    // Sibling paths in this file already redact (see `:1194`); these four
-    // `rowToTask` sites did not, so every task read handed the credential back.
-    // Redacted for ALL channels, not just tokens: this is an existing leak
-    // being closed, not a new token-only gate.
-    repoUrl: row.repoUrl !== null && row.repoUrl !== undefined ? redactGitUrl(row.repoUrl) : null,
-    cachedRepoId: row.cachedRepoId ?? null,
-    baseBranch: row.baseBranch,
-    branch: row.branch,
-    // RFC-075: mirror the task-level working branch onto the synthesized repo.
-    workingBranch: row.workingBranch ?? null,
-    baseCommit: row.baseCommit ?? null,
-    worktreePath: row.worktreePath,
-    worktreeDirName: '',
-    mountPath: '',
-    subdir: '',
-    readonly: false,
-    readonlyDirtyCount: null,
-    hasSubmodules: null,
-    submoduleInitOk: null,
-    submoduleInitError: null,
-  }
 }

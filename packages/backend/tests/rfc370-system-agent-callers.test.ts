@@ -1,6 +1,7 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: the actual Intent and Memory algorithms must consume the selected
 // System family and opaque runtime/content references on both database engines.
+import { workflowFixture, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -356,13 +357,13 @@ describeEachProvider('RFC-370 selected System family through actual callers', (h
       taskId = ulid(),
       workflowId = ulid(),
       feedbackId = ulid()
-    const { workflows, tasks, taskFeedback, memoryDistillJobs } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    const { taskFeedback, memoryDistillJobs } = tablesOf(harness.db)
+    await workflowFixture(harness.db, {
       id: workflowId,
       name: 'Selected memory',
       definition: '{"nodes":[],"edges":[]}',
     })
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       id: taskId,
       name: 'Selected memory task',
       workflowId,

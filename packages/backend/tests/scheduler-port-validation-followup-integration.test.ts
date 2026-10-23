@@ -12,7 +12,13 @@
 // per-port repair prompt content is covered separately in the runner unit
 // + shared followup-prompt suites.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -58,8 +64,7 @@ function buildHarness(provider: ProviderHarness): Harness {
 
 async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'rfc-049',
@@ -77,15 +82,14 @@ async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<{ taskId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -186,12 +190,12 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
+    const { nodeRunEvents } = tablesOf(h.db)
     // Task ends failed (both attempts hit the same missing-file failure).
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
 
-    const runRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runRows = await readNodeRunFixtures(h.db, { taskId })
     expect(runRows.length).toBe(2)
     const attempt0 = runRows.find((r) => r.retryIndex === 0)
     const attempt1 = runRows.find((r) => r.retryIndex === 1)
@@ -202,8 +206,8 @@ function registerCases(provider: ProviderHarness) {
     expect(attempt0!.status).toBe('failed')
     // RFC-080 (D2): markdown_file folds to path<md> → namespace is `path`.
     expect(attempt0!.errorMessage).toContain('port-validation-path-missing-file')
-    expect(attempt0!.portValidationFailuresJson).not.toBeNull()
-    const parsed = JSON.parse(attempt0!.portValidationFailuresJson!) as Array<{
+    expect(attempt0!.portValidationFailures).not.toBeNull()
+    const parsed = JSON.parse(attempt0!.portValidationFailures!) as Array<{
       port: string
       kind: string
       subReason: string

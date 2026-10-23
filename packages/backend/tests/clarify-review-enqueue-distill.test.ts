@@ -1,6 +1,5 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-041 — verify that completing a clarify session and submitting a
 // review decision both enqueue a `memory_distill_jobs` row (best-effort,
@@ -25,8 +24,7 @@ async function seedFixture(db: PersistenceDb): Promise<{
   clarifySessionId: string
 }> {
   const wfId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({
@@ -48,7 +46,7 @@ async function seedFixture(db: PersistenceDb): Promise<{
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -72,18 +70,17 @@ async function seedFixture(db: PersistenceDb): Promise<{
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   const sourceRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'agent-1',
@@ -106,7 +103,7 @@ async function seedFixture(db: PersistenceDb): Promise<{
     targetConsumerNodeId: null,
     iteration: 0,
     loopIter: 0,
-    questionsJson: JSON.stringify([{ id: 'q1', title: 'what?', kind: 'open' }]),
+    questions: JSON.stringify([{ id: 'q1', title: 'what?', kind: 'open' }]),
     status: 'awaiting_human',
   })
   return {

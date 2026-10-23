@@ -12,12 +12,16 @@
 //          不丢已 seal 的 scope（P2-2/P2-3）。旧「一次性 seal == legacy 整轮 submit 逐字一致」
 //          对比锁随 legacy immediate 路径一起删除（RFC-132 §8——有意行为变更，非回归）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  patchClarifyRoundFixture,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
@@ -87,8 +91,7 @@ function crossDef(): WorkflowDefinition {
 async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ taskId: string }> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -96,7 +99,7 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ t
     version: 1,
     schemaVersion: def.$schema_version,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     executionLineageId: taskId,
@@ -123,15 +126,14 @@ async function seedSelfRound(
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, selfDef())
   const sourceRunId = `nr_src_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: '',
+    checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
   const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
     kind: 'self',
@@ -154,8 +156,7 @@ async function seedCrossRound(
 ): Promise<{ taskId: string; originNodeRunId: string }> {
   const { taskId } = await seedTask(db, crossDef())
   const questionerRunId = `nr_q_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     { id: questionerRunId, taskId, nodeId: 'questioner', status: 'done', iteration: 0 },
     {
       id: `nr_d_${Math.random().toString(36).slice(2, 8)}`,
@@ -163,7 +164,7 @@ async function seedCrossRound(
       nodeId: 'designer',
       status: 'done',
       iteration: 0,
-      preSnapshot: 'stub',
+      checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
   const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
@@ -181,8 +182,7 @@ async function seedCrossRound(
 }
 
 function roundOf(db: PersistenceDb, taskId: string) {
-  const { clarifyRounds } = tablesOf(db)
-  return db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+  return readClarifyRoundFixtures(db, { taskId })
 }
 
 // ---------------------------------------------------------------------------
@@ -201,7 +201,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
 
       const [round] = await roundOf(db, taskId)
       expect(round?.status).toBe('awaiting_human') // 轮不翻（partial 派生态）
-      const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+      const answers = JSON.parse(round?.answers ?? '[]') as ClarifyAnswer[]
       expect(answers.map((a) => a.questionId)).toEqual(['q1'])
       expect(answers[0]?.selectedOptionIndices).toEqual([1])
     })
@@ -218,7 +218,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const [round] = await roundOf(db, taskId)
       expect(round?.status).toBe('answered')
       // merge 保留 q1 + 追加 q2（per-question merge，非覆盖）。
-      const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+      const answers = JSON.parse(round?.answers ?? '[]') as ClarifyAnswer[]
       expect(answers.map((a) => a.questionId).sort()).toEqual(['q1', 'q2'])
       expect(answers.find((a) => a.questionId === 'q1')?.selectedOptionIndices).toEqual([0])
       expect(answers.find((a) => a.questionId === 'q2')?.selectedOptionIndices).toEqual([1])
@@ -261,11 +261,10 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const [round] = await roundOf(db, taskId)
       expect(round?.status).toBe('answered')
       expect(round?.answeredAt).not.toBeNull()
-      const { clarifyRounds } = tablesOf(db)
       // dual-write: legacy clarify_sessions 同步翻 answered + 同一 answers_json。
-      const [legacy] = await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, round!.id))
+      const [legacy] = await readClarifyRoundFixtures(db, { id: round!.id })
       expect(legacy?.status).toBe('answered')
-      expect(legacy?.answersJson).toBe(round?.answersJson)
+      expect(legacy?.answers).toBe(round?.answers)
     })
   })
 
@@ -367,7 +366,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       ])
 
       const [round] = await roundOf(db, taskId)
-      const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+      const answers = JSON.parse(round?.answers ?? '[]') as ClarifyAnswer[]
       expect(answers.map((a) => a.questionId).sort()).toEqual(['q1', 'q2']) // no lost-update
       // Torn-state invariant: all sealed ⟺ round answered (never "all sealed but awaiting").
       expect(round?.status).toBe('answered')
@@ -376,17 +375,13 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
     test('seal 失败（terminal round）整体回滚——answers_json 不被部分写入', async () => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
-      const { clarifyRounds } = tablesOf(db)
       // Force the round terminal so the in-tx guard throws AFTER nothing has committed.
-      await db
-        .update(clarifyRounds)
-        .set({ status: 'canceled' })
-        .where(eq(clarifyRounds.taskId, taskId))
+      await patchClarifyRoundFixture(db, { taskId }, { status: 'canceled' })
       await expect(
         sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] }),
       ).rejects.toThrow('cannot seal')
       const [round] = await roundOf(db, taskId)
-      expect(round?.answersJson ?? null).toBeNull() // nothing written
+      expect(round?.answers ?? null).toBeNull() // nothing written
     })
   })
 
@@ -413,7 +408,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       })
 
       const [round] = await roundOf(db, taskId)
-      const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+      const answers = JSON.parse(round?.answers ?? '[]') as ClarifyAnswer[]
       // q1 KEEPS its locked (sealed) value 0, NOT the posted 1; q2 takes the posted 1.
       expect(answers.find((a) => a.questionId === 'q1')?.selectedOptionIndices).toEqual([0])
       expect(answers.find((a) => a.questionId === 'q2')?.selectedOptionIndices).toEqual([1])
@@ -431,7 +426,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
         actor,
       })
       const [round] = await roundOf(db, taskId)
-      const answers = JSON.parse(round?.answersJson ?? '[]') as ClarifyAnswer[]
+      const answers = JSON.parse(round?.answers ?? '[]') as ClarifyAnswer[]
       expect(answers.find((a) => a.questionId === 'q1')?.selectedOptionIndices).toEqual([1])
       expect(answers.find((a) => a.questionId === 'q2')?.selectedOptionIndices).toEqual([0])
     })

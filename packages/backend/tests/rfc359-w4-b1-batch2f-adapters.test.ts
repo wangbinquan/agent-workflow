@@ -1,8 +1,15 @@
 // RFC-359 W4-B1 批 2f —— 三对合一，两个引擎各跑一遍：node run 执行投影（产品里最热的写路径：统一写事务 +
 // owner 围栏 + 能力矩阵的聚合根行锁）、任务列表页的客户端绑定、任务目录源装配（两对薄壳）。
 
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -40,7 +47,7 @@ const OWNER = 'u_b2f_owner'
 async function seedTask(db: PersistenceDb): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await db
     .insert(users)
     .values({
@@ -53,7 +60,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
       updatedAt: 1,
     })
     .onConflictDoNothing()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -61,7 +68,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -81,11 +88,10 @@ async function seedTask(db: PersistenceDb): Promise<string> {
 async function seedRun(
   db: PersistenceDb,
   taskId: string,
-  over: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  over: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n',
@@ -167,10 +173,26 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harne
     const runId = await seedRun(db, taskId)
     const persistence = new DrizzleNodeExecutionPersistence(db)
     // 无 owner 行：无主写入放行；不存在的 run：patch false、其余静默。
-    expect(await persistence.patch({ nodeRunId: runId, values: { errorMessage: 'e0' } })).toBe(true)
-    expect(await persistence.patch({ nodeRunId: 'missing', values: { errorMessage: 'e0' } })).toBe(
-      false,
-    )
+    expect(
+      await persistence.patch({
+        nodeRunId: runId,
+        values: {
+          identity: {
+            errorMessage: 'e0',
+          },
+        },
+      }),
+    ).toBe(true)
+    expect(
+      await persistence.patch({
+        nodeRunId: 'missing',
+        values: {
+          identity: {
+            errorMessage: 'e0',
+          },
+        },
+      }),
+    ).toBe(false)
     await persistence.upsertOutputs({
       nodeRunId: runId,
       outputs: [
@@ -206,7 +228,7 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harne
       logicalSessionId: 'logical',
       supersededSessionIds: ['old-1'],
     })
-    const { nodeRunEvents, nodeRunOutputs } = tablesOf(db)
+    const { nodeRunEvents } = tablesOf(db)
     const events = await db
       .select({ sessionId: nodeRunEvents.sessionId, parent: nodeRunEvents.parentSessionId })
       .from(nodeRunEvents)
@@ -220,7 +242,14 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harne
 
     const { context } = await seedClaimedOwner(db, taskId)
     await expect(
-      persistence.patch({ nodeRunId: runId, values: { errorMessage: 'e1' } }),
+      persistence.patch({
+        nodeRunId: runId,
+        values: {
+          identity: {
+            errorMessage: 'e1',
+          },
+        },
+      }),
     ).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
     await expect(
       persistence.appendEvent({ nodeRunId: runId, ts: 9, kind: 'text', payload: 'x' }),
@@ -228,7 +257,11 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harne
     expect(
       await persistence.patch({
         nodeRunId: runId,
-        values: { errorMessage: 'e1' },
+        values: {
+          identity: {
+            errorMessage: 'e1',
+          },
+        },
         executionContext: context,
       }),
     ).toBe(true)
@@ -237,10 +270,9 @@ describeEachProvider('RFC-359 W4-B1 批 2f —— node run 执行投影', (harne
     )
     expect((await persistence.read(runId))?.errorMessage).toBe('e1')
     expect(await persistence.countAgentTextEvents(runId, '[rfc-audit]')).toBe(3)
-    const outputs = await db
-      .select({ portName: nodeRunOutputs.portName })
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, runId))
+    const outputs = await readNodeRunOutputFixtures(db, { nodeRunId: runId }).then((rows) =>
+      rows.map((row) => ({ portName: row.portName })),
+    )
     expect(outputs).toEqual([{ portName: 'c' }])
   })
 })

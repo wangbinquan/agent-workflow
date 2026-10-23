@@ -26,7 +26,15 @@
 // 集成 harness 仿 scheduler-clarify-dispatch.test.ts（createInMemoryDb +
 // 真实临时 git worktree + fixtures/mock-opencode.ts）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readStoredConsumedInputsFixture } from './helpers/model/checkpoint'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  consumedProducerIds,
+} from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -62,6 +70,13 @@ type Row = PersistenceTables['nodeRuns']['$inferSelect']
 describe('S-7 纯函数层 — 谓词对照组：consumed=NULL（legacy 形态）恒 fresh；落 consumed 即可判 stale', () => {
   function row(over: Partial<Row>): Row {
     return {
+      seq: null,
+      parentNodeRunId: null,
+      containerRunId: null,
+      shardKey: null,
+      supersededByReview: null,
+      mergeState: null,
+
       id: '01R',
       nodeId: 'lw',
       iteration: 0,
@@ -81,20 +96,22 @@ describe('S-7 纯函数层 — 谓词对照组：consumed=NULL（legacy 形态�
   // 上游 up 已推进出新的 done 行（如 clarify 答复后的 rerun）。
   const upstreamAdvanced = new Map<string, Row>([['up', row({ id: '01NEW', nodeId: 'up' })]])
 
-  test('[S-7 对照组] legacy 形态（consumed=NULL）：上游推进后 wrapper 仍 fresh、不可重派', () => {
+  test('[S-7 对照组] legacy 形态（consumed=NULL）：上游推进后 wrapper 仍 fresh、不可重派', async () => {
     const loopDone = row({ consumedUpstreamRunsJson: null })
-    expect(isNodeRunFresh(loopDone, upstreamAdvanced)).toBe(true)
+    expect(await isNodeRunFresh(loopDone, upstreamAdvanced)).toBe(true)
     // done ∧ fresh → 不重派。S-7 修复后生产 fresh-mint 不再产出 consumed=NULL
     // 的 wrapper 行（恒写，最少 '{}'），但 null→fresh 的谓词契约必须保持
     // （freshness.test.ts B1 同款 legacy/降级兜底）。
-    expect(isDispatchable(loopDone, 'wrapper-loop', upstreamAdvanced, [loopDone], def)).toBe(false)
+    expect(await isDispatchable(loopDone, 'wrapper-loop', upstreamAdvanced, [loopDone], def)).toBe(
+      false,
+    )
   })
 
-  test('对照组：若 wrapper 行像 fanout 一样落了 consumed → 上游推进即判 stale 可重派', () => {
+  test('对照组：若 wrapper 行像 fanout 一样落了 consumed → 上游推进即判 stale 可重派', async () => {
     const withProvenance = row({ consumedUpstreamRunsJson: JSON.stringify({ up: '01OLD' }) })
-    expect(isNodeRunFresh(withProvenance, upstreamAdvanced)).toBe(false)
+    expect(await isNodeRunFresh(withProvenance, upstreamAdvanced)).toBe(false)
     expect(
-      isDispatchable(withProvenance, 'wrapper-loop', upstreamAdvanced, [withProvenance], def),
+      await isDispatchable(withProvenance, 'wrapper-loop', upstreamAdvanced, [withProvenance], def),
     ).toBe(true)
   })
 })
@@ -142,8 +159,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedReadonlyAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -165,15 +181,14 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -264,29 +279,23 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
     )
     unsub()
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
-    const loopRows = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'loop')))
+    const loopRows = await readNodeRunFixtures(h.db, { taskId, nodeId: 'loop' })
     expect(loopRows.length).toBe(1)
     expect(loopRows[0]?.status).toBe('done')
     // [S-7 LOCK·已翻转] runLoopWrapperNode fresh-mint 写 consumed（RFC-098
     // B3）。本 def 无任何外部上游 → 精确等于 '{}'（与 agent 行对照组同款
     // "零上游也恒写"语义）。
-    expect(loopRows[0]?.consumedUpstreamRunsJson).not.toBeNull()
-    expect(JSON.parse(loopRows[0]?.consumedUpstreamRunsJson ?? 'null')).toEqual({})
+    expect(loopRows[0]?.consumedEdges).toEqual([])
+    expect(await readStoredConsumedInputsFixture(h.db, loopRows[0]!.id)).toBe('{}')
 
     // 对照组：agent 行哪怕零上游也恒写 '{}'（scheduler.ts:1357 JSON.stringify）。
-    const auditRows = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'audit')))
+    const auditRows = await readNodeRunFixtures(h.db, { taskId, nodeId: 'audit' })
     expect(auditRows.length).toBe(1)
-    expect(auditRows[0]?.consumedUpstreamRunsJson).toBe('{}')
+    expect(auditRows[0]?.consumedEdges).toEqual([])
+    expect(await readStoredConsumedInputsFixture(h.db, auditRows[0]!.id)).toBe('{}')
 
     // [S-28 LOCK·已翻转] WS 广播序 running → done，且每次广播瞬间 DB 行持有
     // 同一状态（fresh-mint 后 mark-running CAS 先于广播）。
@@ -319,20 +328,16 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
     )
     unsub()
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
-    const wgRows = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'wg')))
+    const wgRows = await readNodeRunFixtures(h.db, { taskId, nodeId: 'wg' })
     expect(wgRows.length).toBe(1)
     expect(wgRows[0]?.status).toBe('done')
     // [S-7 LOCK·已翻转] runGitWrapperNode fresh-mint 写 consumed（RFC-098
     // B3）；无外部上游 → '{}'。
-    expect(wgRows[0]?.consumedUpstreamRunsJson).not.toBeNull()
-    expect(JSON.parse(wgRows[0]?.consumedUpstreamRunsJson ?? 'null')).toEqual({})
+    expect(wgRows[0]?.consumedEdges).toEqual([])
+    expect(await readStoredConsumedInputsFixture(h.db, wgRows[0]!.id)).toBe('{}')
 
     // [S-28 LOCK·已翻转] git wrapper fresh-mint 同型——mark-running 先于广播。
     expect(pairs.map((p) => p.ws)).toEqual(['running', 'done'])
@@ -376,14 +381,13 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
     })
     unsub()
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
-    const fanRows = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'fan')))
+    const fanRows = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId }, { nodeId: 'fan' }],
+    })
     expect(fanRows.length).toBe(1)
     expect(fanRows[0]?.status).toBe('done')
     // fanout wrapper 行带 provenance：精确等于 {inp: 上游 input 节点 done 行的
@@ -395,10 +399,7 @@ describe('S-7 / S-28 集成层 — loop/git wrapper 行 consumed 恒写；DB 与
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'inp')))
     expect(inpRows.length).toBe(1)
     expect(inpRows[0]?.status).toBe('done')
-    const consumed = JSON.parse(fanRows[0]?.consumedUpstreamRunsJson ?? 'null') as Record<
-      string,
-      string
-    > | null
+    const consumed = consumedProducerIds(fanRows[0]?.consumedEdges) as Record<string, string> | null
     expect(consumed).toEqual({ inp: inpRows[0]!.id })
 
     // [S-28 LOCK·已翻转] fanout fresh-mint 同型——三处 mint 点都补了

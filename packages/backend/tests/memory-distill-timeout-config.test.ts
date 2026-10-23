@@ -1,5 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { distillTick, runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -34,6 +33,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillRuntimeResolver } from '../src/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 /** 用户指定的新默认值：1 小时。 */
 const ONE_HOUR_MS = 3_600_000
@@ -43,7 +43,7 @@ function createContext(db: PersistenceDb) {
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-timeout-'))
   process.env.AGENT_WORKFLOW_HOME = root
   return {
-    store: new DrizzleMemoryDistillWorkStore(db),
+    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
@@ -62,8 +62,7 @@ type Context = ReturnType<typeof createContext>
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -72,7 +71,7 @@ async function seedTask(db: PersistenceDb): Promise<string> {
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId: wfId,

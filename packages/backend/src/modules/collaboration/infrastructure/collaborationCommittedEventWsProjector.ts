@@ -18,9 +18,11 @@
 // 评审门挑「哪一份待审文档」的 `item_index ASC`（NULL = RFC-079 单文档判别位）与澄清决定
 // 回落读模型时的 `dispatched_at DESC`（NULL = 尚未下发）。两条都在对拍里带变异验证。
 
+import type { TaskGateDefinitionContext } from '@/modules/task-execution/public/queries'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import { decodeLegacyClarifyArray, decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
-  ClarifyAnswer,
   ClarifyQuestion,
   ClarifySession,
   ClarifySessionSummary,
@@ -42,16 +44,6 @@ import {
 } from '../domain/collaborationCommittedEvent'
 import type { CollaborationCommittedEventProjection } from '../application/ports/collaborationCommittedEventProjection'
 
-function parseArray<T>(value: string | null): T[] | undefined {
-  if (value === null) return undefined
-  try {
-    const parsed: unknown = JSON.parse(value)
-    return Array.isArray(parsed) ? (parsed as T[]) : undefined
-  } catch {
-    return undefined
-  }
-}
-
 function nodeTitle(snapshot: string, nodeId: string): string | null {
   try {
     const workflow = JSON.parse(snapshot) as WorkflowDefinition
@@ -64,7 +56,7 @@ function nodeTitle(snapshot: string, nodeId: string): string | null {
 
 function selfSummary(
   round: PersistenceTables['clarifyRounds']['$inferSelect'],
-  task: Pick<PersistenceTables['tasks']['$inferSelect'], 'name' | 'workflowSnapshot'>,
+  task: Pick<TaskGateDefinitionContext, 'name' | 'workflowSnapshot'>,
 ): ClarifySessionSummary {
   return {
     id: round.id,
@@ -77,7 +69,7 @@ function selfSummary(
     clarifyNodeTitle: nodeTitle(task.workflowSnapshot, round.intermediaryNodeId),
     clarifyNodeRunId: round.intermediaryNodeRunId,
     iterationIndex: round.iteration,
-    questionCount: parseArray<ClarifyQuestion>(round.questionsJson)?.length ?? 0,
+    questionCount: decodeLegacyClarifyArray<ClarifyQuestion>(round.questionsJson)?.length ?? 0,
     status: round.status as ClarifySessionSummary['status'],
     createdAt: round.createdAt,
     answeredAt: round.answeredAt,
@@ -94,16 +86,16 @@ function selfSession(round: PersistenceTables['clarifyRounds']['$inferSelect']):
     clarifyNodeId: round.intermediaryNodeId,
     clarifyNodeRunId: round.intermediaryNodeRunId,
     iterationIndex: round.iteration,
-    questions: parseArray<ClarifyQuestion>(round.questionsJson) ?? [],
+    questions: decodeLegacyClarifyArray<ClarifyQuestion>(round.questionsJson) ?? [],
     status: round.status as ClarifySession['status'],
     createdAt: round.createdAt,
     answeredAt: round.answeredAt,
     answeredBy: round.answeredBy,
     directive: round.directive,
   }
-  const answers = parseArray<ClarifyAnswer>(round.answersJson)
+  const answers = decodeLegacyClarifyAnswerColumns(round).optionalAnswers
   if (answers !== undefined) session.answers = answers
-  const warnings = parseArray<ClarifyTruncationWarning>(round.truncationWarningsJson)
+  const warnings = decodeLegacyClarifyArray<ClarifyTruncationWarning>(round.truncationWarningsJson)
   if (warnings !== undefined && warnings.length > 0) session.truncationWarnings = warnings
   return session
 }
@@ -140,7 +132,7 @@ async function openFrames(
     ]
   }
   if (event.family !== 'clarify') return []
-  const { clarifyRounds, tasks } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   const round = (
     await db
       .select()
@@ -164,11 +156,11 @@ async function openFrames(
     ]
   }
   const task = (
-    await db
-      .select({ name: tasks.name, workflowSnapshot: tasks.workflowSnapshot })
-      .from(tasks)
-      .where(eq(tasks.id, round.taskId))
-      .limit(1)
+    await createTaskGateQueries(db)
+      .listDefinitionContexts([round.taskId])
+      .then((rows) =>
+        rows.map((row) => ({ name: row.name, workflowSnapshot: row.workflowSnapshot })),
+      )
   )[0]
   if (task === undefined) return []
   return [

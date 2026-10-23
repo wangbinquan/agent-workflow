@@ -8,10 +8,12 @@
 // 测试给的就是生产同一份装配，不是 stub——否则这些用例会退化成「只验 fusion 表」。
 // RFC-359 W4-D5 起两个 provider 同一份 tx-bound 工厂；旧的 provider 命名常量留作别名。
 
+import { composeFusionResourceSeedParticipant } from '../../src/modules/resource-catalog/composition/fusionResourceSeed'
 import { composeSkillMemoryFusionParticipantFactory } from '../../src/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '../../src/modules/resource-catalog/composition/skillVersionCommit'
 
 export const TEST_FUSION_PARTICIPANTS = Object.freeze({
+  resourceSeed: composeFusionResourceSeedParticipant(),
   memoryMembership: composeSkillMemoryFusionParticipantFactory(),
   skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
 })

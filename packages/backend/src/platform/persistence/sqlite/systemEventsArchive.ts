@@ -14,6 +14,10 @@
 // its closed receipts through the compatibility surface.
 
 import {
+  legacyEventArchivePath,
+  legacyEventAppendJournal,
+} from '@/platform/content/legacyEventArchive'
+import {
   closeSync,
   existsSync,
   fsyncSync,
@@ -27,7 +31,7 @@ import {
   unlinkSync,
   writeSync,
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
@@ -415,7 +419,7 @@ async function archiveOldestForNode(
 }
 
 function archiveJournalPath(file: string): string {
-  return `${file}.append-journal.json`
+  return legacyEventAppendJournal(file)
 }
 
 function writeArchiveJournal(file: string, journal: ArchiveAppendJournalV1): void {
@@ -591,5 +595,5 @@ function finalizeArchiveJournal(file: string): void {
 }
 
 function jsonlPath(logsDir: string, taskId: string, nodeRunId: string): string {
-  return join(logsDir, taskId, `${nodeRunId}.jsonl`)
+  return legacyEventArchivePath(logsDir, taskId, nodeRunId)
 }

@@ -298,6 +298,16 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
       if (!('run' in statement)) throw new Error('expected the plain node-run insert')
       return statement.run()
     },
+    taskCheckpointProjectionPatch(value: Record<string, unknown>, mounts: readonly string[]) {
+      expect(mounts).toEqual([''])
+      return value
+    },
+    consumedInputColumns() {
+      return {}
+    },
+    selectMintedRunInTx() {
+      return []
+    },
     transactionStep,
     driveAsyncProgram,
     driveSyncProgram,

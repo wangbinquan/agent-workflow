@@ -6,10 +6,18 @@
 //  a stale fence or an in-tx crash yields ZERO visible resources with staged
 //  side effects compensated (P0-5); a post-commit crash converges forward.
 
+import {
+  agentFixture,
+  workflowFixture,
+  readAgentFixtures,
+  type AgentFixtureSpec,
+  type WorkflowFixtureSpec,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
-import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
+import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createHash } from 'node:crypto'
@@ -102,8 +110,7 @@ async function seedUser(id: string, username: string): Promise<void> {
 async function seedAgent(name: string): Promise<{ id: string; updatedAt: number }> {
   const id = ulid()
   const now = Date.now()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'existing',
@@ -112,7 +119,7 @@ async function seedAgent(name: string): Promise<{ id: string; updatedAt: number 
     visibility: 'private',
     createdAt: now,
     updatedAt: now,
-  } as PersistenceTables['agents']['$inferInsert'])
+  } as AgentFixtureSpec)
   return { id, updatedAt: now }
 }
 
@@ -321,7 +328,6 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         skills,
         mcps,
         plugins,
-        agents,
         workflows,
         workgroups,
         intentProvenance,
@@ -357,12 +363,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       )
       expect(pluginRow?.sourceKind).toBe('file')
 
-      const agentRow = await firstRow(
-        db
-          .select()
-          .from(agents)
-          .where(eq(agents.id, byOp.get('op-4')?.resourceId ?? '')),
-      )
+      const agentRow = (await readAgentFixtures(db, { id: byOp.get('op-4')?.resourceId ?? '' }))[0]
       expect(JSON.parse(agentRow?.mcp ?? '[]')).toEqual([byOp.get('op-2')?.resourceId])
       expect(JSON.parse(agentRow?.plugins ?? '[]')).toEqual([byOp.get('op-3')?.resourceId])
       expect(JSON.parse(agentRow?.skills ?? '[]')).toEqual([
@@ -674,11 +675,13 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         .set({ updatedAt: Date.now() - 11 * 60 * 1000 })
         .where(eq(intentApplyJournal.id, pending.id))
       expect(
-        await composeIntentApplyConvergence({
-          db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
-        }).converge({ activeJournalIds: [] }),
+        await createAtomicApplyRecovery([
+          composeIntentApplyRecoveryScene({
+            db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
+        ]).converge({ intent: [] }),
       ).toEqual({
         failed: 1,
         rolledForward: 0,
@@ -711,19 +714,23 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('committed')
       expect((await db.select().from(skills)).length).toBe(1)
       // …and convergence replays the idempotent tail.
-      const converged = await composeIntentApplyConvergence({
-        db,
-        appHome,
-        pluginsDir: join(appHome, 'plugins'),
-      }).converge({ activeJournalIds: [] })
+      const converged = await createAtomicApplyRecovery([
+        composeIntentApplyRecoveryScene({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }),
+      ]).converge({ intent: [] })
       expect(converged.rolledForward).toBe(1)
       expect(converged.failed).toBe(0)
       // Second convergence is a no-op replay, not an error.
-      const again = await composeIntentApplyConvergence({
-        db,
-        appHome,
-        pluginsDir: join(appHome, 'plugins'),
-      }).converge({ activeJournalIds: [] })
+      const again = await createAtomicApplyRecovery([
+        composeIntentApplyRecoveryScene({
+          db,
+          appHome,
+          pluginsDir: join(appHome, 'plugins'),
+        }),
+      ]).converge({ intent: [] })
       expect(again.rolledForward).toBe(1)
     })
 
@@ -773,8 +780,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     test('foreign-owner update: modify forbidden, copy lands a new resource', async () => {
       const foreignId = ulid()
       const now = Date.now()
-      const { agents } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: foreignId,
         name: 'foreign-agent',
         description: 'someone else owns this',
@@ -783,7 +789,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         visibility: 'public',
         createdAt: now,
         updatedAt: now,
-      } as PersistenceTables['agents']['$inferInsert'])
+      } as AgentFixtureSpec)
+      const { agents } = tablesOf(db)
       const { session } = await createIntentSession(db, actor, { message: 'x' })
       const changeset = {
         $schema_version: 1,
@@ -1031,8 +1038,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     ): Promise<string> {
       const id = ulid()
       const now = Date.now()
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id,
         name,
         description: '',
@@ -1048,7 +1054,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         builtin: false,
         createdAt: now,
         updatedAt: now,
-      } as PersistenceTables['workflows']['$inferInsert'])
+      } as WorkflowFixtureSpec)
       return id
     }
 
@@ -1187,7 +1193,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
     const OTHER2 = 'user_other2_apply_00000000'
 
     async function seedForeignPrivateWorkflow(name: string): Promise<void> {
-      const { users, workflows } = tablesOf(db)
+      const { users } = tablesOf(db)
       await insertOne(db, users, {
         id: OTHER2,
         username: 'other2',
@@ -1197,7 +1203,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         createdAt: Date.now(),
         updatedAt: Date.now(),
       } as PersistenceTables['users']['$inferInsert'])
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: ulid(),
         name,
         description: '',
@@ -1213,7 +1219,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         builtin: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as PersistenceTables['workflows']['$inferInsert'])
+      } as WorkflowFixtureSpec)
     }
 
     /** Two creates: a caller referencing `child-flow` by name, and `child-flow`
@@ -1459,8 +1465,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
 
     async function seedPrivateWorkflow(name: string, ownerUserId: string): Promise<string> {
       const id = ulid()
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id,
         name,
         description: '',
@@ -1476,7 +1481,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         builtin: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-      } as PersistenceTables['workflows']['$inferInsert'])
+      } as WorkflowFixtureSpec)
       return id
     }
 

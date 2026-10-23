@@ -10,6 +10,7 @@
 //   - 领队内部错误：房间补一条内部错误消息、任务失败。
 // 注入手段：包一层 `createWorkgroupTurnsPersistence`（与 rfc185-leader-fanout 同一接缝）。
 
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -108,8 +109,8 @@ const mintsMember = (
   )
 
 async function rowsOf(db: PersistenceDb, taskId: string) {
-  const { nodeRuns, workgroupAssignments, workgroupMessages } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const { workgroupAssignments, workgroupMessages } = tablesOf(db)
+  const runs = await readNodeRunFixtures(db, { taskId })
   const cards = await db
     .select()
     .from(workgroupAssignments)
@@ -154,10 +155,9 @@ async function seedAgentRow(db: PersistenceDb, name: string): Promise<string> {
 
 async function seedTaskRow(db: PersistenceDb, config: WorkgroupRuntimeConfig): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  await workflowFixture(db, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc369 internal error',
     workflowId,
@@ -427,9 +427,8 @@ async function seedFreeCollabTask(db: PersistenceDb): Promise<string> {
       },
     ],
   })
-  const { nodeRuns } = tablesOf(db)
   // 预置一条 done 的成员行，跳过 fc 初始规划轮（与 rfc215-batch-engine 同形）。
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -515,8 +514,7 @@ describeEachProvider('RFC-369 AC-5 —— free_collab 批量认领 / 采纳变�
       const taskId = await seedFreeCollabTask(db)
       const cardId = await seedCard(db, taskId, status, 1)
       const adoptedId = ulid()
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: adoptedId,
         taskId,
         nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -656,8 +654,7 @@ describeEachProvider('RFC-369 §4.4 —— fail-host-run 宿主账本操作', (h
       [pendingId, 'pending'],
       [doneId, 'done'],
     ] as const) {
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id,
         taskId,
         nodeId: WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -682,13 +679,7 @@ describeEachProvider('RFC-369 §4.4 —— fail-host-run 宿主账本操作', (h
         }),
     )
     expect(receipt).toEqual({ committed: true, mintedRuns: [], failedRunIds: [pendingId] })
-    const { nodeRuns } = tablesOf(db)
-    const byId = new Map(
-      (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).map((run) => [
-        run.id,
-        run,
-      ]),
-    )
+    const byId = new Map((await readNodeRunFixtures(db, { taskId })).map((run) => [run.id, run]))
     expect(byId.get(pendingId)).toMatchObject({
       status: 'failed',
       failureCode: null,

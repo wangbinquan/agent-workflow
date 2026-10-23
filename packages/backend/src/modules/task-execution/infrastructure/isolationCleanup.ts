@@ -1,4 +1,5 @@
 // Task-owned cleanup receipt; physical Git/worktree/ref operations remain native.
+import { isolationCleanupRequest } from './isolationEffectRequest'
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 // The cleanup receipt is taken for the SQLite daemon's contexts only. Its
 // `workspace:` fence is acquired before the discard waits for the task's write
@@ -35,15 +36,7 @@ export async function discardNodeIso(
           kind: 'workspace-cleanup',
           stableActionOrdinal: 'isolation-cleanup',
           candidateId: 'node-isolation-discard',
-          request: {
-            v: 1,
-            dbNodeRunId: handle.dbNodeRunId,
-            isoKey: handle.nodeRunId,
-            repos: handle.repos.map((repo) => ({
-              worktreeDirName: repo.worktreeDirName,
-              isoWorktreePathDigest: sha256Hex(repo.isoWorktreePath),
-            })),
-          },
+          request: isolationCleanupRequest(handle.dbNodeRunId, handle.nodeRunId, handle.repos),
           resourceKeys: [
             `isolation:${handle.taskId}:${handle.nodeRunId}`,
             ...handle.repos.map((repo) => `workspace:${sha256Hex(repo.canonWorktreePath)}`),

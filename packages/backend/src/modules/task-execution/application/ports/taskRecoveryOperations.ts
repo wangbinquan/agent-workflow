@@ -1,4 +1,6 @@
-import { resolveHandlerRun, type RunLineageView, type TaskStatus } from '@agent-workflow/shared'
+import type { TaskWorkgroupConfig } from '../../domain/taskWorkgroupConfig'
+import { type RunLineageView, type TaskStatus } from '@agent-workflow/shared'
+import type { TaskSubject } from '../../domain/taskSubject'
 
 export type TaskRecoveryEventKind =
   | 'boot-reap'
@@ -86,7 +88,7 @@ export interface TaskRecoveryBootSnapshot {
 export interface TaskRecoveryAutoResumeCandidate {
   readonly id: string
   readonly workgroupId: string | null
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
   readonly worktreePath: string
   readonly workspacePruningAt: number | null
   readonly workspacePrunedAt: number | null
@@ -113,6 +115,7 @@ export interface TaskRecoveryStuckRunSnapshot {
 }
 
 export interface TaskRecoveryStuckTaskSnapshot {
+  readonly subject: TaskSubject
   readonly taskId: string
   readonly parentTaskId: string | null
   readonly status: string
@@ -204,47 +207,6 @@ export interface TaskRecoveryQuestionParkEntry {
 
 export interface TaskRecoveryQuestionRunLineage extends RunLineageView {
   readonly shardKey: string | null
-}
-
-/** Exact RFC-120 designer-park evidence used by stuck detection. Keeping the
- * lineage partition pure lets both provider adapters expose the same closed
- * boolean without importing Collaboration infrastructure across contexts. */
-export function hasUndispatchedDesignerRecoveryEvidence(input: {
-  readonly entries: readonly TaskRecoveryQuestionParkEntry[]
-  readonly runs: readonly TaskRecoveryQuestionRunLineage[]
-}): boolean {
-  const hasUndispatched = new Set<string>()
-  const hasInFlight = new Set<string>()
-  for (const entry of input.entries) {
-    const target = entry.overrideTargetNodeId ?? entry.defaultTargetNodeId
-    if (target === null || target === '') continue
-    if (entry.dispatchedAt === null) {
-      hasUndispatched.add(target)
-      continue
-    }
-    if (entry.triggerRunId === null) {
-      hasInFlight.add(target)
-      continue
-    }
-    const anchor = input.runs.find((run) => run.id === entry.triggerRunId)
-    if (anchor === undefined) {
-      hasInFlight.add(target)
-      continue
-    }
-    const handler = resolveHandlerRun({
-      effectiveTargetNodeId: anchor.nodeId,
-      iteration: anchor.iteration,
-      loopIter: anchor.loopIter,
-      triggerRunId: entry.triggerRunId,
-      runs: [...input.runs],
-      ...(anchor.shardKey === null ? {} : { shardKey: anchor.shardKey }),
-    })
-    if (handler === null || handler.status !== 'done') hasInFlight.add(target)
-  }
-  for (const target of hasUndispatched) {
-    if (!hasInFlight.has(target)) return true
-  }
-  return false
 }
 
 /**

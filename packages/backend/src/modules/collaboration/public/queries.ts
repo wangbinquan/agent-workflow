@@ -144,3 +144,6 @@ export function listCollaborationClarifyDirectives(
 ): Promise<readonly Readonly<{ nodeId: string; directive: ClarifyDirective }>[]> {
   return requireClarifyDirectiveStore(context).listNodeDirectives(taskId)
 }
+
+export type { ClarifyAnswerQueries } from '../application/ports/clarifyAnswerQueries'
+export { clarifyAnswerContentForPrompt } from '../domain/clarifyAnswerContent'

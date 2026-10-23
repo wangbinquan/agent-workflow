@@ -22,8 +22,13 @@
 // 工作流刻意取最小形态 input → output（零 agent 节点，opencode 不会真被
 // spawn），因此本测试只行使 runTask 的入口路径 + frontier 终结路径，确定性 100%。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -110,18 +115,17 @@ function minimalDef(): WorkflowDefinition {
 async function seedTaskWithStatus(
   h: Harness,
   status: 'pending' | 'canceled' | 'done' | 'running',
-  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  extra: Partial<TaskFixtureSpec> = {},
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
   const def = minimalDef()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'audit-s08-task',
     workflowId,
@@ -178,8 +182,8 @@ function registerNativeCases1() {
 
     await invokeRunTask(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const row = (await readTaskFixtures(h.db, { id: taskId }))[0]
     // 终态设防：runTask 入口 CAS from={pending} 失败 → log + return。
     expect(row?.status).toBe('canceled')
     // 终结写没有重新发生：finishedAt / errorSummary 保持取消时代原值。
@@ -197,8 +201,8 @@ function registerNativeCases1() {
 
     await invokeRunTask(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const row = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(row?.status).toBe('done')
     expect(row?.finishedAt).toBe(staleFinishedAt)
 
@@ -213,8 +217,8 @@ function registerNativeCases1() {
 
     await invokeRunTask(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const row = (await readTaskFixtures(h.db, { id: taskId }))[0]
     // 状态仍归第一实例所有；本次调用零副作用（不翻状态、不终结）。
     expect(row?.status).toBe('running')
     expect(row?.finishedAt).toBeNull()
@@ -261,8 +265,8 @@ function registerProviderCases2(provider: ProviderHarness) {
 
     await invokeRunTask(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const row = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const row = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(row?.status).toBe('done')
     expect(row?.finishedAt ?? 0).toBeGreaterThan(0)
 

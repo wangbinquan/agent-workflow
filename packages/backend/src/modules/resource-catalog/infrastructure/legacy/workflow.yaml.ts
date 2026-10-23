@@ -10,6 +10,7 @@
 //     to the same full-snapshot save service as editor autosave
 //   - new: discards an incoming id and inserts a fresh workflow
 
+import { assertWorkflowCatalogIdWritable } from '../workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   ImportRefSelection,
@@ -259,6 +260,8 @@ export async function importWorkflowYaml(
     throw new ValidationError('workflow-yaml-empty', 'empty YAML body')
   }
   const preview = previewWorkflowYaml(request.yamlText)
+  assertWorkflowCatalogIdWritable(preview.id)
+  if (request.mode === 'overwrite') assertWorkflowCatalogIdWritable(request.overwrite.workflowId)
   // RFC-223 (PR-2): resolve each agent-single node's canonical agentId from its
   // portable name+owner selector against THIS install's agents; RFC-243 (§5.5)
   // rides the same pass for call-workflow nodes' `workflowName` selectors

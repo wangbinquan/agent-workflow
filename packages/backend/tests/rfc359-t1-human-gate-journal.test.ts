@@ -7,7 +7,7 @@
 // 不移植的一条：SQLite 触发器 `human-gate-committed-receipt-immutable`（receipt 不可改）——触发器
 // 还没投影到 PostgreSQL（RFC-359 W3-T16b），留在 SQLite 黄金锁里。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
@@ -24,8 +24,7 @@ const NOW = 1_788_969_612_066
 const TASK_ID = 'task-359-journal'
 
 async function seedTask(db: PersistenceDb, taskId = TASK_ID): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: taskId,
     description: '',
@@ -33,7 +32,7 @@ async function seedTask(db: PersistenceDb, taskId = TASK_ID): Promise<void> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,

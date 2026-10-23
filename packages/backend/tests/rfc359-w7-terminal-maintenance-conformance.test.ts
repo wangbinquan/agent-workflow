@@ -16,8 +16,14 @@
 // 其余用例覆盖三个 assert* 的主要判据（open effect / 水位覆盖 / replay 决策 / owner 必须 released /
 // intents-attempts-holds 三查 / ledger digest 比对）与认领行的 CAS，两个引擎各跑一遍。
 
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -37,8 +43,7 @@ function id(prefix: string): string {
 }
 
 async function seedWorkflow(db: PersistenceDb, workflowId: string): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -53,10 +58,9 @@ async function seedTask(
   db: PersistenceDb,
   taskId: string,
   workflowId: string,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  over: Partial<TaskFixtureSpec> = {},
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -359,8 +363,7 @@ describeEachProvider('RFC-359 W7 —— 认领前的静止判据', (harness) => 
     const db = harness.db
     const taskId = await claimableTask(db)
     const members = await store(db).snapshotMembers([taskId])
-    const { tasks } = tablesOf(db)
-    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'running' })
 
     const error = await conflictCode(async () => await claimWorkspaceGc(db, taskId, members))
     expect(error.message).toMatch(/changed before terminal maintenance claim/)

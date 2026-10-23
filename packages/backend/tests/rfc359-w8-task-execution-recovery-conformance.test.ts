@@ -19,6 +19,15 @@
 // 装配形状本身曾是分叉的一部分，所以取 provider 中立的组合根 `createTaskExecutionPersistence(db)`
 // ——测试体拿不到 provider 名，只能按能力矩阵分叉（这里一条都不需要）。
 
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readNodeRunFixtures,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -83,8 +92,7 @@ async function crashPreviousDaemon(
   persistence: TaskExecutionPersistence,
   taskId: string,
 ): Promise<CrashedTask> {
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: `rfc359-w8-${taskId}`,
     description: '',
@@ -92,7 +100,7 @@ async function crashPreviousDaemon(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -109,7 +117,7 @@ async function crashPreviousDaemon(
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const nodeRunId = `${taskId}-run`
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'code-host-node',
@@ -131,12 +139,12 @@ async function crashPreviousDaemon(
 
 /** 孤儿收割屏障已跑完的形状：任务 / node_run 都翻成 interrupted。 */
 async function reapOrphans(db: PersistenceDb, crashed: CrashedTask): Promise<void> {
-  const { tasks, nodeRuns } = tablesOf(db)
-  await db.update(tasks).set({ status: 'interrupted' }).where(eq(tasks.id, crashed.taskId))
-  await db
-    .update(nodeRuns)
-    .set({ status: 'interrupted', finishedAt: 202 })
-    .where(eq(nodeRuns.id, crashed.nodeRunId))
+  await patchTaskFixture(db, { id: crashed.taskId }, { status: 'interrupted' })
+  await patchNodeRunFixture(
+    db,
+    { id: crashed.nodeRunId },
+    { status: 'interrupted', finishedAt: 202 },
+  )
 }
 
 interface SeededCodeHostEffect {
@@ -434,8 +442,7 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
     expect(finalized.recoveredCodeHostEffectIds).toEqual([appliedEffect.effectId])
     expect(finalized.retryAuthorizedCodeHostEffectIds).toEqual([retriedEffect.effectId])
 
-    const { taskExecutionEffects, nodeRuns, nodeRunOutputs, taskExecutionEffectAttempts } =
-      tablesOf(harness.db)
+    const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(harness.db)
     expect(
       (
         await harness.db
@@ -446,18 +453,16 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
     ).toBe('succeeded')
     expect(
       (
-        await harness.db
-          .select({ status: nodeRuns.status })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, applied.nodeRunId))
+        await readNodeRunFixtures(harness.db, { id: applied.nodeRunId }).then((rows) =>
+          rows.map((row) => ({ status: row.status })),
+        )
       )[0]?.status,
     ).toBe('done')
     expect(
       (
-        await harness.db
-          .select({ port: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, applied.nodeRunId))
+        await readNodeRunOutputFixtures(harness.db, { nodeRunId: applied.nodeRunId }).then((rows) =>
+          rows.map((row) => ({ port: row.portName, content: row.content })),
+        )
       )
         .map((row) => ({ ...row }))
         .sort((left, right) => left.port.localeCompare(right.port)),

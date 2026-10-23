@@ -9,7 +9,7 @@
 // deadlocked: a merge-back held the window waiting for the fence while the
 // discard held the fence waiting for the window. Until the discard owns its
 // write window the receipt is recorded for SQLite daemon contexts only.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -62,8 +62,7 @@ function launch(taskId: string): CanonicalContinuationRequest {
 async function seedClaimedTask(db: PersistenceDb) {
   const taskId = `t370iso_${ulid()}`
   const snapshot = '{"$schema_version":6,"inputs":[],"nodes":[],"edges":[]}'
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc370-iso-cleanup',
     description: '',
@@ -71,7 +70,7 @@ async function seedClaimedTask(db: PersistenceDb) {
     version: 1,
     schemaVersion: 6,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -88,7 +87,7 @@ async function seedClaimedTask(db: PersistenceDb) {
     lineageSlotPathJson: canonicalJson(rootPath(taskId)),
   })
   const runId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'writer',

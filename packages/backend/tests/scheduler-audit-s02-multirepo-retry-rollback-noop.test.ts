@@ -27,11 +27,16 @@
 //   decideEnvelopeFollowup 走 fresh-session 重试而非 same-session follow-up；
 //   attempt 2 先落盘「重试起点的脏文件存在性清单」再输出合法 envelope 成功）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -145,8 +150,7 @@ async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
 
 async function seedWriterAgent(db: PersistenceDb, name: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -177,15 +181,14 @@ async function seedMultiRepoTask(h: Harness, agentId: string): Promise<string> {
     ],
     edges: [],
   }
-  const { workflows, tasks, taskRepos } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(def),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -200,7 +203,6 @@ async function seedMultiRepoTask(h: Harness, agentId: string): Promise<string> {
     status: 'pending',
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
-    repoCount: 2,
     ...(h.postgresql
       ? {
           executionLineageId: taskId,
@@ -210,7 +212,7 @@ async function seedMultiRepoTask(h: Harness, agentId: string): Promise<string> {
         }
       : {}),
   })
-  await h.db.insert(taskRepos).values([
+  await taskRepoFixture(h.db, [
     {
       taskId,
       repoIndex: 0,
@@ -218,7 +220,7 @@ async function seedMultiRepoTask(h: Harness, agentId: string): Promise<string> {
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
       worktreePath: h.repoA,
-      worktreeDirName: 'repo-a',
+      mountPath: 'repo-a',
     },
     {
       taskId,
@@ -227,7 +229,7 @@ async function seedMultiRepoTask(h: Harness, agentId: string): Promise<string> {
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
       worktreePath: h.repoB,
-      worktreeDirName: 'repo-b',
+      mountPath: 'repo-b',
     },
   ])
   return taskId
@@ -304,14 +306,13 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
     // The retry (attempt 2) succeeded → task done (unchanged by the fix; the
     // observable difference is what the retry inherited on disk, below).
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     // Two attempts: retryIndex 0 failed, retryIndex 1 done.
-    const runs = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+    const runs = (await readNodeRunFixtures(h.db, { taskId }))
       .filter((r) => r.nodeId === 'a1')
       .sort((a, b) => a.retryIndex - b.retryIndex)
     expect(runs.length).toBe(2)
@@ -320,10 +321,9 @@ function registerProviderCases1(provider: ProviderHarness) {
 
     // ── RFC-130: the iso model no longer writes pre-snapshot columns — a failed
     // attempt ran entirely in its ISO (never touched the canonical sub-repos), so
-    // there is nothing to roll back. Both columns stay NULL on both rows.
+    // there is nothing to roll back. Neither attempt records a pre-snapshot for any mount.
     for (const r of runs) {
-      expect(r?.preSnapshot).toBeNull()
-      expect(r?.preSnapshotReposJson).toBeNull()
+      expect(r?.checkpoints.some((checkpoint) => checkpoint.preSnapshot !== undefined)).toBe(false)
     }
 
     // The container dir is a PLAIN mkdir (task.ts multi-repo layout), not a git

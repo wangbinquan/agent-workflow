@@ -32,6 +32,10 @@
 //   · 站点消失 / 行号漂移 ⇒ 也红（账本跟着改，让每次变动留下署名）。
 // 行号一起钉：`insert(tasks)` 是低频写入面，行号漂移本身就值得看一眼。
 
+// RFC-395 II-a A2 update (the original rationale above is retained as history):
+// RFC-395 II-a A2：仅 taskCreationParticipant 写 tasks，且必须显式提供 lineage 与 launch origin。
+// SQLite 的历史触发器仍在；PostgreSQL 无此兜底，新增写点或漏列都必须失败。
+
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
@@ -45,49 +49,8 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 /** 这三列缺一列，两个引擎就会对同一份代码给出不同结果。 */
 const REQUIRED_COLUMNS = ['executionLineageId', 'lineageSlotPathJson', 'launchOrigin'] as const
 
-/**
- * 实测存量：四个站点、三列齐全。**这份账本的正确状态是「每一行都三列齐全」**——
- * 出现 `-` 就是上面说的那条静默分叉，不要把它登记进来了事，去把那一列补上。
- */
-/**
- * 已知的摩擦：本账本按 `file:line` 钉站点，于是**插入点上方的任何编辑**都会让它漂
- * （2026-09-07 一天内漂了两次：`services/task.ts` 3482→3509、PG 侧 585→579，
- * 两次三个血缘列都齐备，纯粹是行号动了）。
- *
- * 改进方向：把键从 `file:line` 换成 `file#外层函数名` —— 行号只是定位信息，
- * 真正要钉的是「哪个铸行点」。换掉之后同文件内的无关编辑不再制造 diff，
- * 而站点被**挪进另一个函数**这件事仍然会红（那正是该被看见的）。
- * 没在本波做是因为它要改 AST 遍历的键并重新做一次变异验证，而落盘时的改动面已经很大。
- */
 const TASK_INSERT_SITES: readonly string[] = [
-  // RFC-359 W11：行号从 579 挪到 580——同文件里祖先链的分支时间戳回填改调能力矩阵的
-  // `greatest()`，多了一行 import。站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
-  // RFC-386: 561 → 501; coordinator construction moved to the session factory. All three columns remain.
-  // RFC-395 I-b: 496 → 503; the transaction's session table destructuring sits above the unchanged site.
-  'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts:503 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  // RFC-370 v2 P1: the host write selection is gone; the site keeps all three columns.
-  // RFC-370 §10 V20: 121 → 129 — the workspace lane's imports, dependency and the
-  // prepared-workspace parameter sit above it; the site and its three columns are unchanged.
-  'modules/task-execution/infrastructure/fusionEngineTaskOperations.ts:99 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 788 → 813——延后仓库准备的判据与注释加在
-  // `workspace.prepare` 之前，站点本身与它写的三列一格未动（同 §改进方向 说的那类无关 diff）。
-  // RFC-359 AC-1（plan §5hn 批次二 ①②）：行号 813 → 826——`resourceAuthorityFor` 从两条臂的
-  // 依赖面挪到路由面时加了注释与一个新接口，站点本身与它写的三列一格未动。
-  // RFC-370 M2: the input-file launch dependency moved this unchanged site three lines.
-  // RFC-395 I-b: 858 → 865; the transaction's session table destructuring sits above the unchanged site.
-  'modules/task-execution/infrastructure/taskRouteLaunchOperations.ts:865 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
-  // RFC-359 W10：行号从 3509 挪到 3530——铸行事务从 `dbTxSync` 换成 `withTaskExecutionWrite`
-  // 时在事务开头加了注释，站点本身与它写的三列一格未动（正是上面 §改进方向 说的那类无关 diff）。
-  // RFC-359 AC-1（plan §5hn 批次二 ①）：行号 3538 → 3590——延后准备的依赖面拆成中立形状时
-  // 在本文件上方加了注释与一段类型，站点本身与它写的三列一格未动。
-  // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 / 3 刀）：3590 → 3580 → 3567。站点与它写的
-  // 三列一直没变，是上面删掉的纯读三件与列表三件让整份文件不断变短。
-  // **行号键的账本就是这么被动的**——任何同文件的增删都要重跑它
-  //（`docs/dev-gotchas.md` 的「半径盲区」第 5 条）。
-  // 2026-09-19：3548 → 3570。`createTaskDriveCoordinator` 的运行期配置改成每次 drive 现读
-  // （长驻协调器不能把 17 个旋钮冻在 boot，见 `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`），
-  // 解析体加注释与一个局部变量，本文件变长；站点与它写的三列一格未动。
-  // RFC-370 v2 P1: 2537 → 2504 with the Task host binding removed; the site and its three columns remain.
+  'modules/task-execution/infrastructure/taskCreationParticipant.ts:21 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {
@@ -182,8 +145,23 @@ describe('RFC-359 W7 —— insert(tasks) 的血缘 / 启动来源三列完整�
         '**少写一列**：SQLite 有兜底触发器会悄悄补上、PostgreSQL 没有任何触发器（活库实测 0 个），' +
         '于是子任务在 PG 上拿到自己的 execution_lineage_id 而不是父的血缘、launch_origin 也不再继承——' +
         '同一份代码两个引擎给出不同结果且不报错。把那一列补上，别把 `-` 登记进账本。' +
-        '**新增站点**：显式加进账本，顺带确认这三列都写了。',
+        '**新增站点**：移到唯一 taskCreationParticipant，不能扩张账本。',
     ).toEqual([...TASK_INSERT_SITES])
+  })
+
+  test('唯一 participant 承接根启动、子任务和 fusion', () => {
+    expect(TASK_INSERT_SITES).toHaveLength(1)
+    for (const file of [
+      'taskRouteLaunchOperations',
+      'childExecutionLaunchOperations',
+      'fusionEngineTaskOperations',
+    ]) {
+      const source = readFileSync(
+        join(SRC, 'modules/task-execution/infrastructure', `${file}.ts`),
+        'utf8',
+      )
+      expect(source).toMatch(/createTaskCreationParticipantInTx\(\s*tx,?\s*\)\.create\(/)
+    }
   })
 
   test('账本自身：每一行都必须三列齐全（`-` 出现即为上面那条静默分叉）', () => {

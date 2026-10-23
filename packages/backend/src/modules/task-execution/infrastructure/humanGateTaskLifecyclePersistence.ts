@@ -30,6 +30,7 @@ import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventR
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
+import { createConsumedInputsParticipantInTx } from './consumedInputsParticipant'
 import {
   assertTaskOwnerTx,
   assertTaskOwnerlessTx,
@@ -88,6 +89,7 @@ function gatesIn(tx: TaskExecutionTransaction): DatabaseHumanGateOpenParticipant
     journal,
     createNodeRunMintParticipantInTx(tx),
     createNodeRunLifecycleParticipantInTx(tx),
+    createConsumedInputsParticipantInTx(),
   )
 }
 

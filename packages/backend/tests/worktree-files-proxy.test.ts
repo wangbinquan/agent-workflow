@@ -8,8 +8,7 @@
 // 五个注册面合并成一个：每个 `describeEachProvider` 注册面都要现建一个 PostgreSQL 库并跑
 // 完整迁移（beforeAll，本机 ~1.5s），合并后这份开销只付一次。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -59,8 +58,7 @@ async function buildHarness(
   const taskId = ulid()
   // Pre-create a workflow row (foreign key target).
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -70,7 +68,7 @@ async function buildHarness(
     updatedAt: Date.now(),
   })
 
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,

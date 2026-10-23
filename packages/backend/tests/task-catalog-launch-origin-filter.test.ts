@@ -20,6 +20,7 @@
 // 修法：来源→存储值的映射进 domain（`taskListOriginMatches`，单一事实源），两个
 // provider 的列表查询都按它下推到 SQL；目录源只做校验与透传。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
@@ -67,7 +68,7 @@ type Db = PersistenceDb
  * 猜不对的那一行。
  */
 async function seed(db: Db): Promise<void> {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
@@ -77,7 +78,7 @@ async function seed(db: Db): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -98,7 +99,7 @@ async function seed(db: Db): Promise<void> {
   let startedAt = 1_788_278_400_000
   for (const row of rows) {
     startedAt += 1
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: row.id,
       name: row.id,
       workflowId: 'wf1',

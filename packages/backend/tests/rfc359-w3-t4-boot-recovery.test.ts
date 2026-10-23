@@ -1,4 +1,10 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
@@ -58,8 +64,7 @@ function continuation(taskId: string): CanonicalContinuationRequest {
 
 async function seedRunningTask(db: PersistenceDb, taskId: string): Promise<string> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-w3-t4',
     description: '',
@@ -67,7 +72,7 @@ async function seedRunningTask(db: PersistenceDb, taskId: string): Promise<strin
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -85,7 +90,7 @@ async function seedRunningTask(db: PersistenceDb, taskId: string): Promise<strin
   })
   const runId = ulid()
   // 上一代 daemon 的子进程已随它一起死了：pid 为空 ⇒ 收割器判 no-pid，直接翻 interrupted。
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'worker',
@@ -137,8 +142,8 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     })
     const recoveredOwner = await persistence.ownership.read(taskId)
     expect(recoveredOwner?.state).toBe('released')
-    const { tasks, nodeRuns, taskExecutionIntents } = tablesOf(db)
-    const recoveredTask = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { nodeRuns, taskExecutionIntents } = tablesOf(db)
+    const recoveredTask = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect(recoveredTask.status).toBe('interrupted')
     expect((await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]?.status).toBe(
       'interrupted',
@@ -169,8 +174,8 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     const taskId = `w3t4_${ulid()}`
     const runId = await seedRunningTask(db, taskId)
     const { persistence } = await crashPreviousDaemon(db, taskId)
-    const { nodeRuns, tasks } = tablesOf(db)
-    await db.update(nodeRuns).set({ pid: 999 }).where(eq(nodeRuns.id, runId))
+    await patchNodeRunFixture(db, { id: runId }, { pid: 999 })
+    const { nodeRuns } = tablesOf(db)
     // Only prepare runs: the actual previous owner becomes revoked while the
     // old running task/run are left for the periodic recovery command itself.
     await persistence.recovery.prepare({
@@ -191,7 +196,7 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
     const state = {
       reapedRuns: result.reapedRuns,
       reapedTasks: result.reapedTasks,
-      taskStatus: (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status,
+      taskStatus: (await readTaskFixtures(db, { id: taskId }))[0]?.status,
       runStatus: (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]?.status,
       ownerState: (await persistence.ownership.read(taskId))?.state,
     }
@@ -233,8 +238,8 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
 
     const owner = await persistence.ownership.read(taskId)
     expect(owner?.state).toBe('released')
-    const { tasks, nodeRuns, taskExecutionIntents, taskExecutionOwners } = tablesOf(db)
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { nodeRuns, taskExecutionIntents, taskExecutionOwners } = tablesOf(db)
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect(task.status).toBe('interrupted')
     expect(task.errorSummary).toBe('daemon-restart')
     const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!

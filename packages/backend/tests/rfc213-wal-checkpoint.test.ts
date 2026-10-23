@@ -4,8 +4,7 @@
 // growth. MUTATION CHECK (manually verified): change TRUNCATE to PASSIVE in
 // checkpointWal → the -wal file is not truncated → the shrink assertion reds.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
@@ -34,8 +33,7 @@ describe('RFC-213 checkpointWal', () => {
     const db: DbClient = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
     // Grow the WAL without checkpointing.
     for (let i = 0; i < 50; i++) {
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: ulid(),
         name: `wf-${i}`,
         definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),

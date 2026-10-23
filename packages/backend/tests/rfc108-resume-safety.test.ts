@@ -14,8 +14,8 @@
 // 确定性：纯本地 git（init/commit/stash create/gc/reset），无网络/clone（同
 // scheduler-audit-s11 不加 RUN_GIT_NETWORK 门控）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,7 +27,7 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { getTask } from '../src/services/task'
-import { gitStashSnapshot, runGit, snapshotRefName } from '../src/util/git'
+import { runGit, snapshotRefName } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
 
@@ -66,14 +66,13 @@ async function buildHarness(): Promise<Harness> {
     edges: [],
   }
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -109,8 +108,7 @@ async function insertFailedRun(
   id: string,
   preSnapshot: string | null,
 ): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -118,9 +116,9 @@ async function insertFailedRun(
     retryIndex: 0,
     reviewIteration: 0,
     status: 'failed',
-    preSnapshot,
     startedAt: Date.now(),
     finishedAt: Date.now(),
+    checkpoints: [{ mountPath: '', preSnapshot: preSnapshot ?? undefined }],
   })
 }
 
@@ -220,10 +218,12 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
     const runB = ulid()
     // Row A snapshot: PINNED so gc keeps it (RFC-098 snapshot pin).
     writeFileSync(join(h.repoPath, 'a.txt'), 'snapshot-A\n')
-    const shaA = await gitStashSnapshot(h.repoPath, { pinRef: snapshotRefName(h.taskId, runA) })
+    const shaA = await legacyStashSnapshotFixture(h.repoPath, {
+      pinRef: snapshotRefName(h.taskId, runA),
+    })
     // Row B snapshot: UNPINNED → gc-bait.
     writeFileSync(join(h.repoPath, 'a.txt'), 'snapshot-B\n')
-    const shaB = await gitStashSnapshot(h.repoPath)
+    const shaB = await legacyStashSnapshotFixture(h.repoPath)
 
     // The shared source-repo odb gets gc'd: shaA (pinned) survives, shaB pruned.
     await gcPruneNow(h.repoPath)
@@ -269,7 +269,9 @@ describe('RFC-108 T7 (AR-17) — cross-node-run all-or-nothing rollback', () => 
 
     const runA = ulid()
     writeFileSync(join(h.repoPath, 'a.txt'), 'snapshot-A\n')
-    const shaA = await gitStashSnapshot(h.repoPath, { pinRef: snapshotRefName(h.taskId, runA) })
+    const shaA = await legacyStashSnapshotFixture(h.repoPath, {
+      pinRef: snapshotRefName(h.taskId, runA),
+    })
     writeFileSync(join(h.repoPath, 'a.txt'), 'FAILED-LEFTOVER\n')
     await insertFailedRun(h.db, h.taskId, 'a', runA, shaA)
 

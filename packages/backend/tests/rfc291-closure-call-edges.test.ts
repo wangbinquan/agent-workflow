@@ -10,6 +10,7 @@
 // 各自内部自洽、下游无从发现。RFC-291 把裁决收进 `pickCallTarget` 单点，这里用
 // **同一份 DB 夹具**对拍两侧结果。
 
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -75,8 +76,7 @@ async function createFixture<TDb extends PersistenceDb>(
   async function seedAgent(name: string): Promise<string> {
     const id = ulid()
     const now = Date.now()
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id,
       name,
       description: name,
@@ -85,7 +85,7 @@ async function createFixture<TDb extends PersistenceDb>(
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as PersistenceTables['agents']['$inferInsert'])
+    })
     return id
   }
 
@@ -96,8 +96,7 @@ async function createFixture<TDb extends PersistenceDb>(
   ): Promise<string> {
     const id = forcedId ?? ulid()
     const now = Date.now()
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id,
       name,
       description: '',
@@ -107,7 +106,7 @@ async function createFixture<TDb extends PersistenceDb>(
       visibility: 'private',
       createdAt: now,
       updatedAt: now,
-    } as PersistenceTables['workflows']['$inferInsert'])
+    })
     return id
   }
 

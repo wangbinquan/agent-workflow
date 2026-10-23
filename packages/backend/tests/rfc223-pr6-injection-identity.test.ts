@@ -7,6 +7,7 @@
 // runtime stages files or builds a subprocess. Project skills are deliberately
 // outside this managed set; disabled MCPs are not injected and must not block.
 
+import { patchAgentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -224,8 +225,7 @@ describeEachProvider('RFC-223 PR-6 scheduler wiring is shared by both runtimes',
     // RFC-359 AC-6：DDL 走夹具面（PostgreSQL 的业务客户端明确拒绝 DDL——
     // `postgresql-ddl-through-business-client`），改名走 drizzle 类型化 update。
     await harness.executeFixtureDdl('DROP INDEX IF EXISTS agents_name_unique')
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ name: 'dep-one' }).where(eq(agents.id, depTwo.id))
+    await patchAgentFixture(db, { id: depTwo.id }, { name: 'dep-one' })
 
     for (const root of roots) {
       expectDuplicateFailure(await prepareRoot(db, root.id), 'agent', 'dep-one')

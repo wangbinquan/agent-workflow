@@ -1,12 +1,19 @@
 // RFC-359 W18: the original count queries keep their rows and statement
 // boundaries when the two additive covering indexes are present. This tiny
 // fixture proves results and plans; the original full HTTP gate owns latency.
+import {
+  patchTaskFixture,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+  readTaskFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
-import { eq, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 import { buildActor } from '@/auth/actor'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
@@ -30,7 +37,7 @@ const actor = buildActor({
 
 async function seed(harness: ProviderHarness) {
   const db = harness.db
-  const { users, workflows, tasks, taskRepos, scheduledTasks } = tablesOf(db)
+  const { users, scheduledTasks } = tablesOf(db)
   await insertOne(db, users, {
     id: 'w18-user',
     username: 'w18',
@@ -41,7 +48,7 @@ async function seed(harness: ProviderHarness) {
     createdAt: since,
     updatedAt: since,
   })
-  await insertOne(db, workflows, { id: 'w18-wf', name: 'w18', definition: '{}' })
+  await workflowFixture(db, { id: 'w18-wf', name: 'w18', definition: '{}' })
   const seeds = [
     { id: 'a', status: 'running', cachedRepoId: repoIds[0] },
     { id: 'b', status: 'running', cachedRepoId: repoIds[0] },
@@ -58,7 +65,7 @@ async function seed(harness: ProviderHarness) {
   ] as const
   // Parent a must exist before its child c on both providers.
   for (const item of seeds) {
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       workflowId: 'w18-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -74,7 +81,8 @@ async function seed(harness: ProviderHarness) {
       ...item,
     })
   }
-  await db.insert(taskRepos).values(
+  await taskRepoFixture(
+    db,
     [
       ['b', 0, repoIds[0]],
       ['b', 1, repoIds[0]],
@@ -219,8 +227,7 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
       failed7d: 0,
     })
     await seed(harness)
-    const { tasks } = tablesOf(harness.db)
-    const beforeRows = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const beforeRows = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
     const withIndexes = await counts(harness)
     expect(withIndexes.overview).toEqual({ running: 3, awaiting: 2, done7d: 1, failed7d: 1 })
     expect(withIndexes.references).toEqual([
@@ -261,15 +268,18 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
       expect(countStatementContract(original.statements)).toEqual(
         countStatementContract(withIndexes.statements),
       )
-      expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(beforeRows)
+      expect(
+        await readTaskFixtures(harness.db, undefined, {
+          orderBy: [{ field: 'id', direction: 'asc' }],
+        }),
+      ).toEqual(beforeRows)
     } finally {
       for (const statement of recreate.slice(0, removed)) await harness.executeFixtureDdl(statement)
     }
     const interruption = new Error('count mutation rollback')
     await expect(
       harness.session.transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        await tx.update(tasks).set({ status: 'done', finishedAt: since }).where(eq(tasks.id, 'a'))
+        await patchTaskFixture(tx, { id: 'a' }, { status: 'done', finishedAt: since })
         expect(await createTaskOverviewQuery(tx).load({ actor, since })).toEqual({
           running: 2,
           awaiting: 2,
@@ -279,7 +289,11 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
         throw interruption
       }),
     ).rejects.toBe(interruption)
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(beforeRows)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(beforeRows)
     expect((await counts(harness)).overview).toEqual(withIndexes.overview)
     expect(await composeRepositoryWorkspaceStore(harness.db).cachedRepoReferenceCounts([])).toEqual(
       new Map(),

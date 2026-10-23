@@ -12,7 +12,15 @@
 // final-iteration output, and downstream rows must record the wrapper run as
 // consumed provenance.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  consumedProducerIds,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -82,8 +90,7 @@ async function seedAgent(
     outputWrapperPortNames?: Record<string, string>
   } = {},
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId(name),
     name,
     description: 'wrapper scope regression agent',
@@ -104,15 +111,14 @@ async function seedTask(
 ): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: `wrapper-scope-${taskId}`,
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: `wrapper-scope-${taskId}`,
     workflowId,
@@ -284,14 +290,11 @@ function registerCases(provider: ProviderHarness) {
       }
 
       expect(innerStartedBeforeUpstreamCompleted).toBe(false)
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const { nodeRuns } = tablesOf(h.db)
+      const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
       expect(task?.status).toBe('done')
       const innerRun = (
-        await h.db
-          .select()
-          .from(nodeRuns)
-          .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'inner')))
+        await readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId: 'inner' }] })
       )[0]
       expect(innerRun?.promptText).toContain('UPSTREAM-DOC')
       const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -336,8 +339,8 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorSummary).toBe('wrapper-containment-invalid')
     expect(existsSync(join(h.stateDir, 'count-inner'))).toBe(false)
@@ -418,8 +421,7 @@ function registerCases(provider: ProviderHarness) {
     }
 
     expect(innerStartedBeforeUpstreamCompleted).toBe(false)
-    const { nodeRuns } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     const wrapperRun = rows.find((row) => row.nodeId === 'fan')
     const children = rows.filter(
       (row) => row.nodeId === 'inner' && row.parentNodeRunId === wrapperRun?.id,
@@ -488,8 +490,8 @@ function registerCases(provider: ProviderHarness) {
     }
 
     expect(loopStartedBeforeUpstreamCompleted).toBe(false)
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('done')
     const loopRun = (
       await h.db
@@ -498,10 +500,7 @@ function registerCases(provider: ProviderHarness) {
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'loop')))
     )[0]
     const final = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(and(eq(nodeRunOutputs.nodeRunId, loopRun!.id), eq(nodeRunOutputs.portName, 'final')))
+      await readNodeRunOutputFixtures(h.db, { nodeRunId: loopRun!.id, portName: 'final' })
     )[0]
     expect(final?.content).toBe('LATE-DOC')
   }, 30_000)
@@ -575,8 +574,7 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     const loopRun = rows.find((row) => row.nodeId === 'loop' && row.status === 'done')
     const sinkRun = rows.find((row) => row.nodeId === 'sink' && row.status === 'done')
     const outputRun = rows.find((row) => row.nodeId === 'out' && row.status === 'done')
@@ -584,19 +582,14 @@ function registerCases(provider: ProviderHarness) {
     expect(sinkRun).toBeDefined()
     expect(outputRun).toBeDefined()
     expect(sinkRun?.promptText).toContain('ITERATION-1')
-    expect(JSON.parse(sinkRun?.consumedUpstreamRunsJson ?? '{}')).toEqual({
+    expect(consumedProducerIds(sinkRun?.consumedEdges)).toEqual({
       loop: loopRun!.id,
     })
     const output = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(eq(nodeRunOutputs.nodeRunId, outputRun!.id), eq(nodeRunOutputs.portName, 'direct')),
-        )
+      await readNodeRunOutputFixtures(h.db, { nodeRunId: outputRun!.id, portName: 'direct' })
     )[0]
     expect(output?.content).toBe('ITERATION-1')
-    expect(JSON.parse(outputRun?.consumedUpstreamRunsJson ?? '{}')).toEqual({
+    expect(consumedProducerIds(outputRun?.consumedEdges)).toEqual({
       loop: loopRun!.id,
     })
     expect(rows.filter((row) => row.nodeId === 'worker' && row.status === 'done')).toHaveLength(2)
@@ -661,13 +654,12 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     const gitRun = rows.find((row) => row.nodeId === 'git' && row.status === 'done')
     const sinkRun = rows.find((row) => row.nodeId === 'sink' && row.status === 'done')
     expect(gitRun).toBeDefined()
     expect(sinkRun?.promptText).toContain('git-wrapper-change.txt')
-    expect(JSON.parse(sinkRun?.consumedUpstreamRunsJson ?? '{}')).toEqual({ git: gitRun!.id })
+    expect(consumedProducerIds(sinkRun?.consumedEdges)).toEqual({ git: gitRun!.id })
     expect(rows.filter((row) => row.nodeId === 'editor' && row.status === 'done')).toHaveLength(1)
     expect(rows.filter((row) => row.nodeId === 'git' && row.status === 'done')).toHaveLength(1)
     expect(rows.filter((row) => row.nodeId === 'sink' && row.status === 'done')).toHaveLength(1)
@@ -771,13 +763,12 @@ function registerCases(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     const fanRun = rows.find((row) => row.nodeId === 'fan' && row.status === 'done')
     const sinkRun = rows.find((row) => row.nodeId === 'sink' && row.status === 'done')
     expect(fanRun).toBeDefined()
     expect(sinkRun?.promptText).toContain('AGGREGATED')
-    expect(JSON.parse(sinkRun?.consumedUpstreamRunsJson ?? '{}')).toEqual({ fan: fanRun!.id })
+    expect(consumedProducerIds(sinkRun?.consumedEdges)).toEqual({ fan: fanRun!.id })
     expect(
       rows.filter((row) => row.nodeId === 'worker' && row.parentNodeRunId === fanRun!.id),
     ).toHaveLength(2)
@@ -876,15 +867,14 @@ function registerCases(provider: ProviderHarness) {
     }
 
     expect(editorStartedBeforeUpstreamCompleted).toBe(false)
-    const { nodeRuns } = tablesOf(h.db)
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     const loopRun = rows.find((row) => row.nodeId === 'loop' && row.status === 'done')
     const editorRun = rows.find((row) => row.nodeId === 'editor' && row.status === 'done')
     const sinkRun = rows.find((row) => row.nodeId === 'sink' && row.status === 'done')
     expect(loopRun).toBeDefined()
     expect(editorRun?.promptText).toContain('NESTED-INPUT')
     expect(sinkRun?.promptText).toContain('nested-wrapper-change.txt')
-    expect(JSON.parse(sinkRun?.consumedUpstreamRunsJson ?? '{}')).toEqual({ loop: loopRun!.id })
+    expect(consumedProducerIds(sinkRun?.consumedEdges)).toEqual({ loop: loopRun!.id })
     expect(rows.filter((row) => row.nodeId === 'upstream')).toHaveLength(1)
     expect(rows.filter((row) => row.nodeId === 'loop')).toHaveLength(1)
     expect(rows.filter((row) => row.nodeId === 'git')).toHaveLength(1)

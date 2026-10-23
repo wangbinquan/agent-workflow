@@ -1,5 +1,10 @@
 // RFC-223 PR-5 — the single boot/restore barrier for skill identity migration.
 
+import {
+  legacyNamedSkillFiles,
+  legacyNamedSkillVersion,
+  legacySkillIdentitySpelling,
+} from '@/platform/content/legacySkill'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -298,7 +303,7 @@ async function assertOperationContentAuthority(
     const expectedPath =
       identity.legacyName === undefined
         ? skillVersionRelPath(op.skillId, 1)
-        : `skills/${identity.legacyName}/versions/v1/files`
+        : legacyNamedSkillVersion(identity.legacyName, 1)
     if (
       versionRow === undefined ||
       versionRow.filesPath !== expectedPath ||
@@ -390,11 +395,12 @@ async function assertOperationDbAuthority(
               version.filesPath === skillVersionRelPath(op.skillId, version.versionIndex),
           )
         : row.name === identity.legacyName &&
-          row.managedPath?.replace(/\/+$/, '') === `skills/${identity.legacyName}/files` &&
+          (row.managedPath == null ? undefined : legacySkillIdentitySpelling(row.managedPath)) ===
+            legacyNamedSkillFiles(identity.legacyName) &&
           versionRows.every(
             (version) =>
-              version.filesPath.replace(/\/+$/, '') ===
-              `skills/${identity.legacyName}/versions/v${version.versionIndex}/files`,
+              legacySkillIdentitySpelling(version.filesPath) ===
+              legacyNamedSkillVersion(identity.legacyName, version.versionIndex),
           )
     if (!matchesGeneration) {
       throw new ValidationError(
@@ -440,10 +446,11 @@ async function assertOperationDbAuthority(
       const expectedManagedPath =
         identity.legacyName === undefined
           ? skillFilesRel(op.skillId)
-          : `skills/${identity.legacyName}/files`
+          : legacyNamedSkillFiles(identity.legacyName)
       if (
         row.versionState !== 'snapshot-authoritative' ||
-        row.managedPath?.replace(/\/+$/, '') !== expectedManagedPath
+        (row.managedPath == null ? undefined : legacySkillIdentitySpelling(row.managedPath)) !==
+          expectedManagedPath
       ) {
         throw new ValidationError(
           'skill-migration-operation-authority-invalid',
@@ -505,7 +512,7 @@ async function assertOperationDbAuthority(
     const identity = decodeMigratePrecondition(op)
     const canonical =
       row.managedPath === skillFilesRel(op.skillId) && (await versionPathsCanonical(db, op.skillId))
-    const legacyManagedPath = `skills/${identity.legacyName}/files`
+    const legacyManagedPath = legacyNamedSkillFiles(identity.legacyName)
     const legacyVersions = (
       await db
         .select({
@@ -516,10 +523,12 @@ async function assertOperationDbAuthority(
         .where(eq(skillVersions.skillId, op.skillId))
     ).every(
       (version) =>
-        version.filesPath.replace(/\/+$/, '') ===
-        `skills/${identity.legacyName}/versions/v${version.versionIndex}/files`,
+        legacySkillIdentitySpelling(version.filesPath) ===
+        legacyNamedSkillVersion(identity.legacyName, version.versionIndex),
     )
-    const legacy = row.managedPath?.replace(/\/+$/, '') === legacyManagedPath && legacyVersions
+    const legacy =
+      (row.managedPath == null ? undefined : legacySkillIdentitySpelling(row.managedPath)) ===
+        legacyManagedPath && legacyVersions
     if (row.name !== identity.legacyName || (direction === 'rollback' ? !legacy : !canonical)) {
       throw new ValidationError(
         'skill-migration-operation-authority-invalid',

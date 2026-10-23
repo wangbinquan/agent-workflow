@@ -15,6 +15,13 @@
 //      the leader aggregation barrier waits for terminal states only
 //      (awaiting_human does NOT block it — design.md §D3-3).
 
+import {
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -34,12 +41,15 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/services/agent'
 import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   buildWorkgroupHostSnapshot,
   buildWorkgroupRuntimeConfig,
+} from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
+import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 import {
   createWorkgroup,
   getWorkgroupById,
@@ -70,8 +80,8 @@ import {
 import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
-function deriveWake(input: WakeInput) {
-  const { snapshot, inflight } = wakeSnapshotOf(input)
+async function deriveWake(input: WakeInput) {
+  const { snapshot, inflight } = await wakeSnapshotOf(input)
   return deriveWakeSet(snapshot, inflight)
 }
 
@@ -361,9 +371,9 @@ describe('RFC-185 — parseWgAssignmentsPort keeps same-member fan-out entries',
 // ---------------------------------------------------------------------------
 
 describe('RFC-185 — wake set fans out; leader barrier is terminal-state only', () => {
-  test('three dispatched assignments for the SAME member all wake concurrently', () => {
+  test('three dispatched assignments for the SAME member all wake concurrently', async () => {
     const assignments = [asg(), asg(), asg()]
-    const wake = deriveWake(wakeInput({ assignments }))
+    const wake = await deriveWake(wakeInput({ assignments }))
     const woken = wake.items.filter((i) => i.kind === 'assignment')
     expect(woken.map((i) => (i.kind === 'assignment' ? i.assignmentId : ''))).toEqual(
       assignments.map((a) => a.id),
@@ -371,33 +381,33 @@ describe('RFC-185 — wake set fans out; leader barrier is terminal-state only',
     expect(wake.items.some((i) => i.kind === 'leader')).toBe(false)
   })
 
-  test('leader stays asleep while ANY sibling instance is still running', () => {
+  test('leader stays asleep while ANY sibling instance is still running', async () => {
     const assignments = [
       asg({ status: 'running' }),
       asg({ status: 'running' }),
       asg({ status: 'done' }),
     ]
-    const wake = deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
+    const wake = await deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
     expect(wake.items).toEqual([])
   })
 
-  test('leader wakes to aggregate once ALL instances are terminal', () => {
+  test('leader wakes to aggregate once ALL instances are terminal', async () => {
     const assignments = [
       asg({ status: 'done' }),
       asg({ status: 'failed' }),
       asg({ status: 'done' }),
     ]
-    const wake = deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
+    const wake = await deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
     expect(wake.items).toEqual([{ kind: 'leader', reason: 'new-content' }])
   })
 
-  test('awaiting_human does NOT block the aggregation barrier (design §D3-3)', () => {
+  test('awaiting_human does NOT block the aggregation barrier (design §D3-3)', async () => {
     const assignments = [
       asg({ status: 'awaiting_human' }),
       asg({ status: 'done' }),
       asg({ status: 'done' }),
     ]
-    const wake = deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
+    const wake = await deriveWake(wakeInput({ ...freshContentForLeader(), assignments }))
     expect(wake.items).toEqual([{ kind: 'leader', reason: 'new-content' }])
   })
 })
@@ -415,15 +425,15 @@ async function seedEngineTask(
 ): Promise<{ taskId: string }> {
   const taskId = ulid()
   const snapshot = buildWorkgroupHostSnapshot(config)
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { workflows } = tablesOf(db)
+  await workflowFixture(db, {
     id: ulid(),
     name: `host-anchor-${taskId}`,
     definition: '{}',
     builtin: true,
   })
   const workflowRow = (await db.select().from(workflows).limit(1))[0]
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'wg-fanout-task',
     workflowId: workflowRow?.id ?? ulid(),
@@ -533,7 +543,7 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
     expect(result.kind, JSON.stringify(result)).toBe('ok')
 
-    const { workgroupAssignments, workgroupMessages, nodeRuns } = tablesOf(db)
+    const { workgroupAssignments, workgroupMessages } = tablesOf(db)
     const assignments = await db
       .select()
       .from(workgroupAssignments)
@@ -542,10 +552,7 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
       .select()
       .from(workgroupMessages)
       .where(eq(workgroupMessages.taskId, taskId))
-    const memberRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(eq(nodeRuns.nodeId, WG_MEMBER_NODE_ID))
+    const memberRuns = await readNodeRunFixtures(db, { nodeId: WG_MEMBER_NODE_ID })
     // CI 36665459531: distinguish an internal startup failure from a missed
     // wake without removing the three-member execution/aggregation contract.
     const diagnostics = JSON.stringify({
@@ -770,9 +777,8 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     return messageId
   }
   const memberLedger = async (taskId: string): Promise<Array<[number, string | null]>> => {
-    const { nodeRuns } = tablesOf(db)
     return (
-      (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+      (await readNodeRunFixtures(db, { taskId }))
         .filter((run) => run.nodeId === WG_MEMBER_NODE_ID)
         // 按 retryIndex 排——同毫秒铸出的 ULID 之间没有稳定序。
         .sort((a, b) => a.retryIndex - b.retryIndex)
@@ -1000,18 +1006,17 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     const hooks: WorkgroupEngineHooks = {
       runHostNode: async (req) => {
         requests.push(req)
-        const { tasks } = tablesOf(db)
         const row = (
-          await db
-            .select({ workgroupConfigJson: tasks.workgroupConfigJson })
-            .from(tasks)
-            .where(eq(tasks.id, taskId))
+          await readTaskFixtures(db, { id: taskId }).then((rows) =>
+            rows.map((row) => ({ workgroupConfigJson: row.workgroupConfigJson })),
+          )
         )[0]
         const current = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-        await db
-          .update(tasks)
-          .set({ workgroupConfigJson: JSON.stringify({ ...current, fanOut: true }) })
-          .where(eq(tasks.id, taskId))
+        await patchTaskFixture(
+          db,
+          { id: taskId },
+          { workgroupConfigJson: JSON.stringify({ ...current, fanOut: true }) },
+        )
         return {
           status: 'done',
           outputs: { wg_decision: JSON.stringify({ action: 'done', summary: 'nothing to do' }) },
@@ -1023,12 +1028,10 @@ describeEachProvider('RFC-185 T6 — engine hard guarantees (Codex P1/P2)', (har
     expect(result.kind).toBe('ok')
     expect(requests).toHaveLength(1)
 
-    const { tasks } = tablesOf(db)
     const row = (
-      await db
-        .select({ workgroupConfigJson: tasks.workgroupConfigJson })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({ workgroupConfigJson: row.workgroupConfigJson })),
+      )
     )[0]
     const final = JSON.parse(row?.workgroupConfigJson ?? '{}') as { fanOut?: boolean }
     // RFC-217 T2 — the gate landed in workgroup_task_state AND the concurrent

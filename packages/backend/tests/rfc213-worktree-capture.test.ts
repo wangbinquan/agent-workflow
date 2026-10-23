@@ -1,5 +1,6 @@
 // RFC-213 G4a (AC-8) — same-machine worktree capture + reconstruction.
 //
+// RFC-395 II-a: await target-model fixture writes before capture and teardown.
 // Backup captures non-terminal tasks' worktree working state (tracked changes +
 // untracked, excl .git); restore reconstructs a worktree that is now MISSING so
 // the user's in-flight work returns. Terminal tasks are not captured; an existing
@@ -8,8 +9,7 @@
 // MUTATION CHECK (manually verified): widen captureWorktrees' status filter to
 // all statuses → the terminal task gets captured → "terminal not captured" reds.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
@@ -84,17 +84,16 @@ async function setup(
   return { repoPath, worktreePath }
 }
 
-function seedTask(
+async function seedTask(
   db: DbClient,
   wfId: string,
   status: string,
   repoPath: string,
   worktreePath: string,
   branch: string,
-): string {
+): Promise<string> {
   const id = ulid()
-  const { tasks } = tablesOf(db)
-  insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: 't',
     workflowId: wfId,
@@ -121,13 +120,12 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
 
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows } = tablesOf(db)
-    insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
     })
-    const taskId = seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
+    const taskId = await seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
 
     const staging = tmp()
     const cap = await captureWorktrees(db, staging)
@@ -151,13 +149,12 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const { repoPath, worktreePath } = await setup(appHome, branch)
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows } = tablesOf(db)
-    insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
     })
-    const doneId = seedTask(db, wfId, 'done', repoPath, worktreePath, branch)
+    const doneId = await seedTask(db, wfId, 'done', repoPath, worktreePath, branch)
 
     const staging = tmp()
     const cap = await captureWorktrees(db, staging)
@@ -173,13 +170,12 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     writeFileSync(join(worktreePath, 'file.txt'), 'CAPTURED\n')
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows } = tablesOf(db)
-    insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
     })
-    const taskId = seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
+    const taskId = await seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
     const staging = tmp()
     await captureWorktrees(db, staging)
 
@@ -201,13 +197,12 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const { repoPath, worktreePath } = await setup(appHome, branch)
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows } = tablesOf(db)
-    insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
     })
-    const taskId = seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
+    const taskId = await seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
     const staging = tmp()
     // Cap of 1 byte → the worktree (has file.txt) exceeds it.
     const cap = await captureWorktrees(db, staging, { maxBytes: 1 })
@@ -227,13 +222,12 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     writeFileSync(join(worktreePath, 'untracked.txt'), 'x\n')
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows } = tablesOf(db)
-    insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
     })
-    const taskId = seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
+    const taskId = await seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
 
     const { createBackup } = await import('../src/services/backup')
     const { extractTarGz } = await import('../src/util/archive')
@@ -267,13 +261,12 @@ describe('impl-gate P0-2 — reconstruct trusts the DB row path, not the archive
     writeFileSync(join(worktreePath, 'file.txt'), 'REAL\n')
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows } = tablesOf(db)
-    insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
     })
-    const taskId = seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
+    const taskId = await seedTask(db, wfId, 'running', repoPath, worktreePath, branch)
     const staging = tmp()
     await captureWorktrees(db, staging)
     rmSync(worktreePath, { recursive: true, force: true })
@@ -321,8 +314,7 @@ describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => 
     const appHome = tmp()
     const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
     const wfId = ulid()
-    const { workflows } = tablesOf(db)
-    insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}',
@@ -334,8 +326,8 @@ describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => 
     // bytes, so it also clears the cap check and reaches the tar branch.
     const badWt = join(appHome, 'worktrees', 'aw_bad-task')
     writeFileSync(badWt, 'this worktree path is not a directory\n')
-    const okId = seedTask(db, wfId, 'running', a.repoPath, a.worktreePath, 'aw/ok-task')
-    const badId = seedTask(db, wfId, 'running', a.repoPath, badWt, 'aw/bad-task')
+    const okId = await seedTask(db, wfId, 'running', a.repoPath, a.worktreePath, 'aw/ok-task')
+    const badId = await seedTask(db, wfId, 'running', a.repoPath, badWt, 'aw/bad-task')
 
     const staging = tmp()
     const cap = await captureWorktrees(db, staging)

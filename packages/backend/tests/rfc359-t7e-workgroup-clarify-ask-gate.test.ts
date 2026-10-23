@@ -6,6 +6,13 @@
 // （RFC-207 §3.7.2：预算 / 已问次数 / per-asker stop）归 collaboration 一份实现，legacy SQLite
 // 路径只是转发。
 
+import {
+  agentFixture,
+  clarifyRoundFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -58,8 +65,7 @@ async function seedWorkgroupTurnTask(db: PersistenceDb): Promise<string> {
   const workerId = ulid()
   const leaderName = `t7e-leader-${leaderId.toLowerCase()}`
   const workerName = `t7e-worker-${workerId.toLowerCase()}`
-  const { agents, tasks } = tablesOf(db)
-  await db.insert(agents).values([
+  await agentFixture(db, [
     { id: leaderId, name: leaderName, description: '', bodyMd: 'Coordinate the work.' },
     { id: workerId, name: workerName, description: '', bodyMd: 'Complete the assignment.' },
   ])
@@ -104,14 +110,15 @@ async function seedWorkgroupTurnTask(db: PersistenceDb): Promise<string> {
       },
     ],
   }
-  await db
-    .update(tasks)
-    .set({
+  await patchTaskFixture(
+    db,
+    { id: taskId },
+    {
       status: 'running',
       workgroupId: config.workgroupId,
       workgroupConfigJson: JSON.stringify(config),
-    })
-    .where(eq(tasks.id, taskId))
+    },
+  )
   return taskId
 }
 
@@ -139,8 +146,7 @@ async function seedSelfAsk(
 ): Promise<void> {
   const askingRunId = await seedRun(db, taskId, nodeId, { status: 'awaiting_human' })
   const intRunId = await seedRun(db, taskId, CL, { status: 'awaiting_human' })
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: ulid(),
     taskId,
     kind: 'self',
@@ -151,8 +157,8 @@ async function seedSelfAsk(
     intermediaryNodeRunId: intRunId,
     targetConsumerNodeId: null,
     iteration: 0,
-    questionsJson: '[]',
-    answersJson: '[]',
+    questions: '[]',
+    answers: '[]',
     directive: 'continue',
     status: 'awaiting_human',
   })
@@ -257,7 +263,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     expect(worker.workgroupProtocolBlock).toContain('<workflow-clarify>')
     expect(worker.workgroupProtocolBlock).toContain('"questions"')
     const run = await expectPersistedHostNonce(db, worker)
-    const { workgroupAssignments, workgroupTaskState, clarifyRounds } = tablesOf(db)
+    const { workgroupAssignments, workgroupTaskState } = tablesOf(db)
     const assignments = await db
       .select()
       .from(workgroupAssignments)
@@ -277,16 +283,14 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
       .where(eq(workgroupTaskState.taskId, taskId))
     expect(state?.pauseReason).toBe('clarify-or-delivery')
     // The driver persists the waiting assignment, not the host's question.
-    expect(await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))).toEqual(
-      [],
-    )
+    expect(await readClarifyRoundFixtures(db, { taskId })).toEqual([])
   })
 
   test('P0-12 实际回合：同 assignment 已问满预算，worker 不再收到反问邀请且仍能交付', async () => {
     const db = harness.db
     const taskId = await seedWorkgroupTurnTask(db)
     const assignmentId = ulid()
-    const { workgroupAssignments, nodeRuns, clarifyRounds } = tablesOf(db)
+    const { workgroupAssignments } = tablesOf(db)
     await insertOne(db, workgroupAssignments, {
       id: assignmentId,
       taskId,
@@ -299,7 +303,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     })
     const askingRunId = await seedRun(db, taskId, WORKGROUP_TURN_MEMBER_NODE_ID)
     const originRunId = await seedRun(db, taskId, CL)
-    await db.update(nodeRuns).set({ shardKey: assignmentId }).where(eq(nodeRuns.id, askingRunId))
+    await patchNodeRunFixture(db, { id: askingRunId }, { shardKey: assignmentId })
     const roundId = ulid()
     const questionsJson = JSON.stringify([mkQ('previous-target')])
     const answersJson = JSON.stringify([
@@ -310,7 +314,7 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
         customText: '',
       },
     ])
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -321,8 +325,8 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
       intermediaryNodeRunId: originRunId,
       targetConsumerNodeId: null,
       iteration: 0,
-      questionsJson,
-      answersJson,
+      questions: questionsJson,
+      answers: answersJson,
       directive: 'continue',
       status: 'answered',
       answeredAt: Date.now(),
@@ -365,9 +369,15 @@ describeEachProvider('RFC-359 T7e —— 工作组反问许可（clarify ask gat
     expect(assignment?.status).toBe('done')
     expect(assignment?.resultMessageId).not.toBeNull()
     expect(assignment?.nodeRunId).toBe(worker.nodeRunId)
-    const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    const rounds = await readClarifyRoundFixtures(db, { taskId })
     expect(rounds).toHaveLength(1)
-    expect(rounds[0]).toMatchObject({ id: roundId, status: 'answered', questionsJson, answersJson })
+    // RFC-395 II-a A1: fixture projections use target field names; retain exact payload bytes.
+    expect(rounds[0]).toMatchObject({
+      id: roundId,
+      status: 'answered',
+      questions: questionsJson,
+      answers: answersJson,
+    })
   })
 })
 

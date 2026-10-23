@@ -16,7 +16,7 @@ import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '../../sr
 import { AuthorityClaimRegistry } from '../../src/modules/identity-access/application/operationContext'
 import { createMcpTransactionLifecycle } from '../../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composePostgresqlResourcePackageProvider } from '../../src/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '../../src/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '../../src/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import type { BundleReceipt } from '../../src/services/bundle/provider'
 import { createResourcePackagePluginInstaller } from '../../src/services/resourcePackage/pluginInstallerAdapter'
 import type { ParsedPackage } from '../../src/services/resourcePackage/parse'
@@ -63,7 +63,7 @@ export async function commitResourcePackageForTest(
     ...(deps.id === undefined ? {} : { id: deps.id }),
     ...(deps.now === undefined ? {} : { now: deps.now }),
   })
-  const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
+  const atomicApply = createResourcePackageAtomicApplyOperations({
     db: deps.db,
     box: deps.box,
     ...(deps.id === undefined ? {} : { id: deps.id }),

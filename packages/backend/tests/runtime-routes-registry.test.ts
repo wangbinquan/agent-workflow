@@ -5,8 +5,7 @@
 // binary (full smoke coverage lives in runtime-smoke.test.ts); CRUD cases use
 // probe:false to stay fast and not spawn.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -336,8 +335,7 @@ describeEachProviderHttpApplication(
         name: 'used-rt',
         protocol: 'opencode',
       })
-      const { agents } = tablesOf(h.db)
-      await insertOne(h.db, agents, { id: ulid(), name: 'auditor', runtime: 'used-rt' })
+      await agentFixture(h.db, { id: ulid(), name: 'auditor', runtime: 'used-rt' })
       const inUse = await reqAs(h.app, DAEMON_TOKEN, '/api/runtimes/used-rt', { method: 'DELETE' })
       expect(inUse.status).toBe(409)
       expect(((await inUse.json()) as { code: string }).code).toBe('runtime-in-use')

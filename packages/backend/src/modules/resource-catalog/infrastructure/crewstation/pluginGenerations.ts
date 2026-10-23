@@ -6,6 +6,14 @@
 // a shared JSON document). Retirement releases the whole scope in the same
 // transaction that marks the generation retired; physical unpin is deferred to
 // the hosted object maintenance job.
+import {
+  isLegacyHostedPluginReference,
+  legacyPluginGenerationReference as generationReference,
+  parseLegacyPluginReference as parseReference,
+  legacyPluginFileKey as fileKey,
+  legacyPluginManifestKey as manifestKey,
+  legacyPluginCachedReference as cachedReference,
+} from '@/platform/content/legacyPlugin'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -76,25 +84,6 @@ const Manifest = Installed.omit({ root: true, files: true }).extend({
 })
 export type HostedPluginManifest = z.infer<typeof Manifest>
 const TASK = 'resource:plugins'
-const generationReference = (pluginId: string, generationId: string) => {
-  if (![pluginId, generationId].every((id) => /^[A-Za-z0-9_-]+$/.test(id)))
-    throw new Error('hosted-plugin-identity-invalid')
-  return `cs-plugin:${pluginId}/${generationId}`
-}
-function parseReference(reference: string) {
-  const match = /^cs-plugin:([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)(?:\/([^/]+))?$/.exec(reference)
-  if (!match) throw new Error('hosted-plugin-reference-invalid')
-  return {
-    pluginId: match[1]!,
-    generationId: match[2]!,
-    root: generationReference(match[1]!, match[2]!),
-    entry: match[3] === undefined ? null : decodeURIComponent(match[3]),
-  }
-}
-const fileKey = (reference: string, path: string) => `${reference}/file/${sha256Hex(path)}`
-const manifestKey = (reference: string) => `${reference}/manifest`
-const cachedReference = (reference: string, entry: string) =>
-  `${reference}/${encodeURIComponent(entry)}`
 type Row = PersistenceTables['pluginArtifactGenerations']['$inferSelect']
 
 export function createHostedPluginGenerations(input: {
@@ -379,7 +368,7 @@ export function createHostedPluginGenerations(input: {
           'plugin-install-failed',
           'file source is externally managed and cannot be checked',
         )
-      const currentRow = currentCachedPath.startsWith('cs-plugin:')
+      const currentRow = isLegacyHostedPluginReference(currentCachedPath)
         ? await find(parseReference(currentCachedPath).root)
         : undefined
       const current = currentRow ? await read(currentCachedPath) : null

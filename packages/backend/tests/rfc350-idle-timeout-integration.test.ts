@@ -1,3 +1,10 @@
+import {
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -51,7 +58,7 @@ function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
 }
 
 async function seedBase(): Promise<void> {
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -60,7 +67,7 @@ async function seedBase(): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 async function seedTask(seed: {
@@ -70,8 +77,7 @@ async function seedTask(seed: {
   parentTaskId?: string
   deletedAt?: number
 }): Promise<void> {
-  const { tasks, taskRepos } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -91,7 +97,7 @@ async function seedTask(seed: {
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
     ...(seed.deletedAt === undefined ? {} : { deletedAt: seed.deletedAt }),
   })
-  await insertOne(db, taskRepos, {
+  await taskRepoFixture(db, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -101,8 +107,7 @@ async function seedTask(seed: {
 }
 
 async function seedRun(taskId: string, id: string, startedAt: number): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n1',
@@ -136,16 +141,14 @@ async function statusOf(taskId: string): Promise<{
   errorMessage: string | null
   finishedAt: number | null
 } | null> {
-  const { tasks } = tablesOf(db)
-  const rows = await db
-    .select({
-      status: tasks.status,
-      errorSummary: tasks.errorSummary,
-      errorMessage: tasks.errorMessage,
-      finishedAt: tasks.finishedAt,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
+  const rows = await readTaskFixtures(db, { id: taskId }).then((rows) =>
+    rows.map((row) => ({
+      status: row.status,
+      errorSummary: row.errorSummary,
+      errorMessage: row.errorMessage,
+      finishedAt: row.finishedAt,
+    })),
+  )
   return rows[0] ?? null
 }
 

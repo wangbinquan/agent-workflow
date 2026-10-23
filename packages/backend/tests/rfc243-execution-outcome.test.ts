@@ -12,6 +12,9 @@
 //      projects exactly like a workflow task.
 //   4. Cross-output-node port collisions are deterministic (node-id order,
 //      later wins) and surfaced as warnings.
+
+import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
+import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -29,6 +32,7 @@ import {
 function baseTask(overrides: Partial<OutcomeTaskRow> = {}): OutcomeTaskRow {
   return {
     id: 't1',
+    workflowId: 'authored',
     status: 'done',
     errorSummary: null,
     errorMessage: null,
@@ -51,12 +55,12 @@ function run(over: Partial<OutcomeRunRow> & { id: string; nodeId: string }): Out
 }
 
 describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () => {
-  test('picks the highest iteration, then the freshest ULID; fanout child rows excluded', () => {
+  test('picks the highest iteration, then the freshest ULID; fanout child rows excluded', async () => {
     const old = run({ id: '01A', nodeId: 'out-a' })
     const newer = run({ id: '01B', nodeId: 'out-a', iteration: 1 })
     const newest = run({ id: '01C', nodeId: 'out-a', iteration: 1 })
     const shard = run({ id: '01D', nodeId: 'out-a', iteration: 1, parentNodeRunId: '01C' })
-    const outcome = projectExecutionOutcome({
+    const outcome = await projectExecutionOutcome({
       task: baseTask(),
       runs: [old, newer, newest, shard],
       outputs: [
@@ -71,10 +75,10 @@ describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () 
     expect(outcome.warnings).toEqual([])
   })
 
-  test('non-done rows never win even when fresher', () => {
+  test('non-done rows never win even when fresher', async () => {
     const done = run({ id: '01A', nodeId: 'out-a' })
     const failedFresher = run({ id: '01Z', nodeId: 'out-a', status: 'failed' })
-    const outcome = projectExecutionOutcome({
+    const outcome = await projectExecutionOutcome({
       task: baseTask(),
       runs: [done, failedFresher],
       outputs: [{ nodeRunId: '01A', portName: 'report', content: 'ok', kind: null }],
@@ -83,7 +87,7 @@ describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () 
     expect(outcome.outputs.report?.content).toBe('ok')
   })
 
-  test('cross-output-node port collision: node-id order, later wins, warning surfaced', () => {
+  test('cross-output-node port collision: node-id order, later wins, warning surfaced', async () => {
     const task = baseTask({
       workflowSnapshot: JSON.stringify({
         nodes: [
@@ -92,7 +96,7 @@ describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () 
         ],
       }),
     })
-    const outcome = projectExecutionOutcome({
+    const outcome = await projectExecutionOutcome({
       task,
       runs: [run({ id: '01A', nodeId: 'out-a' }), run({ id: '01B', nodeId: 'out-b' })],
       outputs: [
@@ -106,8 +110,8 @@ describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () 
     expect(outcome.warnings).toContain('output-port-collision:x')
   })
 
-  test('non-done task: empty outputs + verbatim error triple', () => {
-    const outcome = projectExecutionOutcome({
+  test('non-done task: empty outputs + verbatim error triple', async () => {
+    const outcome = await projectExecutionOutcome({
       task: baseTask({
         status: 'failed',
         errorSummary: 'workgroup hit max_rounds (3)',
@@ -127,8 +131,8 @@ describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () 
     })
   })
 
-  test('unparsable snapshot degrades to warning, not throw', () => {
-    const outcome = projectExecutionOutcome({
+  test('unparsable snapshot degrades to warning, not throw', async () => {
+    const outcome = await projectExecutionOutcome({
       task: baseTask({ workflowSnapshot: 'not json' }),
       runs: [],
       outputs: [],
@@ -140,8 +144,8 @@ describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () 
 })
 
 describe('RFC-243 T4 — agent projection', () => {
-  test('projects the __agent_main__ ports', () => {
-    const outcome = projectExecutionOutcome({
+  test('projects the __agent_main__ ports', async () => {
+    const outcome = await projectExecutionOutcome({
       task: baseTask({ sourceAgentName: 'worker', workflowSnapshot: '{"nodes":[]}' }),
       runs: [run({ id: '01A', nodeId: '__agent_main__' })],
       outputs: [{ nodeRunId: '01A', portName: 'out', content: 'payload', kind: 'text' }],
@@ -156,10 +160,10 @@ describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
   const fc = JSON.stringify({ mode: 'free_collab' })
   const dw = JSON.stringify({ mode: 'dynamic_workflow' })
 
-  test('explicit anchor body wins for both turn-engine modes', () => {
+  test('explicit anchor body wins for both turn-engine modes', async () => {
     for (const config of [lw, fc]) {
-      const outcome = projectExecutionOutcome({
-        task: baseTask({ workgroupId: 'wg1', workgroupConfigJson: config }),
+      const outcome = await projectExecutionOutcome({
+        task: baseTask({ workgroupId: 'wg1', workgroupConfig: decodeTaskWorkgroupConfig(config) }),
         runs: [],
         outputs: [],
         workgroup: { gateSummary: 'gate says', dwPhase: null, resultMessageBody: 'anchored' },
@@ -168,9 +172,9 @@ describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
     }
   })
 
-  test('lw falls back to gate_summary for legacy tasks', () => {
-    const outcome = projectExecutionOutcome({
-      task: baseTask({ workgroupId: 'wg1', workgroupConfigJson: lw }),
+  test('lw falls back to gate_summary for legacy tasks', async () => {
+    const outcome = await projectExecutionOutcome({
+      task: baseTask({ workgroupId: 'wg1', workgroupConfig: decodeTaskWorkgroupConfig(lw) }),
       runs: [],
       outputs: [],
       workgroup: { gateSummary: 'shipped the fix', dwPhase: null, resultMessageBody: null },
@@ -179,9 +183,9 @@ describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
     expect(outcome.warnings).toEqual([])
   })
 
-  test('fc without an anchor degrades to empty result + warning (RFC-184: no persisted ports)', () => {
-    const outcome = projectExecutionOutcome({
-      task: baseTask({ workgroupId: 'wg1', workgroupConfigJson: fc }),
+  test('fc without an anchor degrades to empty result + warning (RFC-184: no persisted ports)', async () => {
+    const outcome = await projectExecutionOutcome({
+      task: baseTask({ workgroupId: 'wg1', workgroupConfig: decodeTaskWorkgroupConfig(fc) }),
       runs: [],
       outputs: [],
       workgroup: { gateSummary: 'free-collab converged', dwPhase: null, resultMessageBody: null },
@@ -190,9 +194,9 @@ describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
     expect(outcome.warnings).toContain('workgroup-result-anchor-missing')
   })
 
-  test('dynamic_workflow executing projects like a workflow task', () => {
-    const outcome = projectExecutionOutcome({
-      task: baseTask({ workgroupId: 'wg1', workgroupConfigJson: dw }),
+  test('dynamic_workflow executing projects like a workflow task', async () => {
+    const outcome = await projectExecutionOutcome({
+      task: baseTask({ workgroupId: 'wg1', workgroupConfig: decodeTaskWorkgroupConfig(dw) }),
       runs: [run({ id: '01A', nodeId: 'out-a' })],
       outputs: [{ nodeRunId: '01A', portName: 'plan', content: 'dag says', kind: 'text' }],
       workgroup: { gateSummary: null, dwPhase: 'executing', resultMessageBody: null },
@@ -200,9 +204,9 @@ describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
     expect(outcome.outputs).toEqual({ plan: { content: 'dag says', kind: 'text' } })
   })
 
-  test('dynamic_workflow outside executing warns instead of fabricating a result', () => {
-    const outcome = projectExecutionOutcome({
-      task: baseTask({ workgroupId: 'wg1', workgroupConfigJson: dw }),
+  test('dynamic_workflow outside executing warns instead of fabricating a result', async () => {
+    const outcome = await projectExecutionOutcome({
+      task: baseTask({ workgroupId: 'wg1', workgroupConfig: decodeTaskWorkgroupConfig(dw) }),
       runs: [],
       outputs: [],
       workgroup: { gateSummary: null, dwPhase: 'generating', resultMessageBody: null },
@@ -211,9 +215,12 @@ describe('RFC-243 T4/§6.4 — workgroup result carriers', () => {
     expect(outcome.warnings).toContain('workgroup-dw-not-executing')
   })
 
-  test('unparsable workgroup config warns', () => {
-    const outcome = projectExecutionOutcome({
-      task: baseTask({ workgroupId: 'wg1', workgroupConfigJson: 'not json' }),
+  test('unparsable workgroup config warns', async () => {
+    const outcome = await projectExecutionOutcome({
+      task: baseTask({
+        workgroupId: 'wg1',
+        workgroupConfig: decodeTaskWorkgroupConfig('not json'),
+      }),
       runs: [],
       outputs: [],
       workgroup: { gateSummary: null, dwPhase: null, resultMessageBody: null },
@@ -227,10 +234,10 @@ describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
     test('result_message_id anchors the projection; noise decision rows cannot win', async () => {
       const db = harness.db
       const wfId = ulid()
-      const { workflows, tasks, workgroupMessages, workgroupTaskState } = tablesOf(db)
-      await insertOne(db, workflows, { id: wfId, name: 'wf-wg', definition: '{}' })
+      const { workgroupMessages, workgroupTaskState } = tablesOf(db)
+      await workflowFixture(db, { id: wfId, name: 'wf-wg', definition: '{}' })
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -344,13 +351,12 @@ describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
       }
       const workflowId = ulid()
       const taskId = ulid()
-      const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: `wf-${workflowId.slice(-6).toLowerCase()}`,
         definition: JSON.stringify(definition),
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -369,7 +375,7 @@ describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
         finishedAt: Date.now(),
       })
       const runId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: 'out-a',
@@ -379,7 +385,7 @@ describe('RFC-243 T4 — getExecutionOutcome db assembly', () => {
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: runId,
         portName: 'report',
         content: 'hello',

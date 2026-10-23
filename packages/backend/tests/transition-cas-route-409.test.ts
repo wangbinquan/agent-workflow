@@ -9,8 +9,7 @@
 // boundary (errorHandler doesn't double-wrap / smother / mistype the
 // response).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { Hono } from 'hono'
 import { ulid } from 'ulid'
@@ -32,10 +31,9 @@ async function seedNodeRun(
     | 'canceled'
     | 'interrupted',
 ): Promise<{ nodeRunId: string }> {
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'w', name: 'w', definition: '{}' })
+  await workflowFixture(db, { id: 'w', name: 'w', definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: 'w',
@@ -49,7 +47,7 @@ async function seedNodeRun(
     startedAt: Date.now(),
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'n',
@@ -97,7 +95,11 @@ describeEachProvider(
           db,
           nodeRunId: id,
           event: { kind: 'mark-running' },
-          extra: { startedAt: Date.now() },
+          extra: {
+            identity: {
+              startedAt: Date.now(),
+            },
+          },
         })
         return c.json({ ok: true })
       })

@@ -10,7 +10,12 @@
 //     exists to remove;
 //   · a seed failure taking the daemon down with it.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readAgentFixtures,
+  readWorkflowFixtures,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -64,21 +69,21 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       const result = await seed()
       expect(result.seeded).toBe(true)
 
-      const { capabilityTemplates, agents, codeWorkRounds, workflows } = tablesOf(db)
+      const { capabilityTemplates, codeWorkRounds } = tablesOf(db)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
-      expect((await db.select().from(agents)).map((a) => a.id)).toContain(DEMO_AGENT_ID)
+      expect((await readAgentFixtures(db)).map((a) => a.id)).toContain(DEMO_AGENT_ID)
       expect(await db.select().from(codeWorkRounds)).toHaveLength(1)
-      expect((await db.select().from(workflows)).length).toBeGreaterThanOrEqual(2)
+      expect((await readWorkflowFixtures(db)).length).toBeGreaterThanOrEqual(2)
     })
 
     test('seeding twice produces ONE of each, not two', async () => {
       await seed()
       const second = await seed()
       expect(second).toEqual({ seeded: false, reason: 'already-offered' })
-      const { capabilityTemplates, workflows } = tablesOf(db)
+      const { capabilityTemplates } = tablesOf(db)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
-      expect(await db.select().from(workflows)).toHaveLength(2)
+      expect(await readWorkflowFixtures(db)).toHaveLength(2)
     })
 
     test('DELETED STAYS DELETED — a removed sample is not re-created on restart', async () => {
@@ -97,7 +102,6 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     })
 
     test('a partial failure does NOT write the marker, so the next start retries', async () => {
-      const { agents } = tablesOf(db)
       // Without this, one bad start leaves an install permanently half-seeded and
       // nothing ever finishes the job.
       //
@@ -109,7 +113,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // not fail for the stated reason: an occupied id is SKIPPED by design (and
       // logged), not thrown. A test that cannot fail for its stated reason is
       // worse than no test.
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: 'someone-elses-agent',
         name: '[demo] reviewer',
         bodyMd: 'x',
@@ -126,8 +130,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     })
 
     test('a seed failure is reported, never thrown — a daemon must still start', async () => {
-      const { agents } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: 'someone-elses-agent',
         name: '[demo] reviewer',
         bodyMd: 'x',
@@ -141,10 +144,10 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     })
 
     test('a demo id occupied by someone else is skipped, and the rest still seeds', async () => {
-      const { workflows, capabilityTemplates } = tablesOf(db)
+      const { capabilityTemplates } = tablesOf(db)
       // The other half of the collision story: skipping is correct (overwriting
       // someone's workflow would be much worse), and it must not abort the batch.
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: DEMO_WORKFLOW_REVIEW_ID,
         name: 'not ours',
         definition: '{}',
@@ -154,7 +157,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       })
 
       expect((await seed()).seeded).toBe(true)
-      const rows = await db.select().from(workflows)
+      const rows = await readWorkflowFixtures(db)
       // Theirs untouched, and the other sample still arrived.
       expect(rows.find((r) => r.id === DEMO_WORKFLOW_REVIEW_ID)?.name).toBe('not ours')
       expect(rows.some((r) => r.name.includes('[demo]'))).toBe(true)
@@ -163,10 +166,10 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
 
     test('every seeded row says it is a sample and is safe to delete', async () => {
       await seed()
-      const { capabilityTemplates, agents, workflows } = tablesOf(db)
+      const { capabilityTemplates } = tablesOf(db)
       const framework = (await db.select().from(capabilityTemplates))[0]
       const binding = (await db.select().from(capabilityTemplates))[0]
-      const agent = (await db.select().from(agents)).find((a) => a.id === DEMO_AGENT_ID)
+      const agent = (await readAgentFixtures(db)).find((a) => a.id === DEMO_AGENT_ID)
 
       for (const name of [framework?.name, binding?.name, agent?.name]) {
         expect(name).toContain('[demo]')
@@ -176,7 +179,7 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
         // surrounding page copy travels with them.
         expect(description).toContain('safe to delete')
       }
-      for (const row of await db.select().from(workflows)) {
+      for (const row of await readWorkflowFixtures(db)) {
         expect(row.name).toContain('[demo]')
       }
     })
@@ -256,8 +259,8 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
     test('an existing marker means the seed does not even look at the database', async () => {
       writeFileSync(join(home, '.demo-seeded'), 'already\n')
       expect(await seed()).toEqual({ seeded: false, reason: 'already-offered' })
-      const { workflows, capabilityTemplates } = tablesOf(db)
-      expect(await db.select().from(workflows)).toEqual([])
+      const { capabilityTemplates } = tablesOf(db)
+      expect(await readWorkflowFixtures(db)).toEqual([])
       expect(await db.select().from(capabilityTemplates)).toEqual([])
     })
 
@@ -284,11 +287,11 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // binding answered `capability-template-builtin` to the exact prompt edit
       // this RFC exists to enable, and "safe to delete" was simply false.
       await seed()
-      const { workflows, capabilityTemplates, agents } = tablesOf(db)
-      for (const row of await db.select().from(workflows)) expect(row.builtin).toBe(false)
+      const { capabilityTemplates } = tablesOf(db)
+      for (const row of await readWorkflowFixtures(db)) expect(row.builtin).toBe(false)
       for (const row of await db.select().from(capabilityTemplates)) expect(row.builtin).toBe(false)
       for (const row of await db.select().from(capabilityTemplates)) expect(row.builtin).toBe(false)
-      const agent = (await db.select().from(agents)).find((a) => a.id === DEMO_AGENT_ID)
+      const agent = (await readAgentFixtures(db)).find((a) => a.id === DEMO_AGENT_ID)
       expect(agent?.builtin).toBe(false)
     })
 
@@ -296,19 +299,19 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // The other half of the same decision: not builtin, but not private either
       // — a sample nobody can see is not a sample.
       await seed()
-      const { capabilityTemplates, agents, workflows } = tablesOf(db)
+      const { capabilityTemplates } = tablesOf(db)
       for (const row of await db.select().from(capabilityTemplates)) {
         expect(row.visibility).toBe('public')
       }
       for (const row of await db.select().from(capabilityTemplates)) {
         expect(row.visibility).toBe('public')
       }
-      expect((await db.select().from(agents)).find((a) => a.id === DEMO_AGENT_ID)?.visibility).toBe(
+      expect((await readAgentFixtures(db)).find((a) => a.id === DEMO_AGENT_ID)?.visibility).toBe(
         'public',
       )
       // Workflows too: `createWorkflow` also defaults to `private` (RFC-099), so
       // the sample needs the same follow-up. Caught by this case going red.
-      for (const row of await db.select().from(workflows)) expect(row.visibility).toBe('public')
+      for (const row of await readWorkflowFixtures(db)) expect(row.visibility).toBe('public')
     })
 
     test('every demo hook returns ONLY keys its stage declares injectable', async () => {

@@ -4,6 +4,7 @@
 // cannot create resources or use the task surface. Granting the private range
 // changes only that capability while the persisted role remains `guest`.
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -59,8 +60,8 @@ describeEachProviderHttpApplication(
       const session = await createSession({ db, userId: guest.id })
       const publicId = ulid()
       const privateId = ulid()
-      const { agents, resourceGrants } = tablesOf(db)
-      await db.insert(agents).values([
+      const { resourceGrants } = tablesOf(db)
+      await agentFixture(db, [
         {
           id: publicId,
           name: 'public-agent-for-guest',

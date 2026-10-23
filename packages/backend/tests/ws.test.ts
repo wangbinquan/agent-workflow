@@ -4,6 +4,7 @@
 // real WebSocket client. The broadcaster fan-out is exercised by invoking
 // services directly (createWorkflow / updateWorkflow / startTask).
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Server } from 'bun'
@@ -187,15 +188,14 @@ describeEachProviderWebSocketApplication(
     test('/ws/tasks/{id}: task.status broadcasts from the committed-event projector', async () => {
       // Seed a fake task row (avoids spawning the scheduler in this test).
       const taskId = ulid()
-      const { workflows, tasks } = tablesOf(h.db)
-      await insertOne(h.db, workflows, {
+      await workflowFixture(h.db, {
         id: 'wf-x',
         name: 'wf',
         definition: '{}',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id: taskId,
@@ -256,15 +256,15 @@ describeEachProviderWebSocketApplication(
     test('/ws/tasks/{id}?since=N replays node_run_events with id > N', async () => {
       // Seed a task + node_run + 3 events.
       const taskId = ulid()
-      const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(h.db)
-      await insertOne(h.db, workflows, {
+      const { nodeRunEvents } = tablesOf(h.db)
+      await workflowFixture(h.db, {
         id: 'wf-y',
         name: 'wf',
         definition: '{}',
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         name: 'fixture-task',
 
         id: taskId,
@@ -279,7 +279,7 @@ describeEachProviderWebSocketApplication(
         startedAt: Date.now(),
       })
       const nrId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: nrId,
         taskId,
         nodeId: 'n1',

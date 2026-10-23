@@ -21,7 +21,13 @@
 // not depend on node_runs row reuse. Deterministic: single agent, serial
 // dispatch; no sleep / polling / network; temp dirs cleaned in afterEach.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -65,8 +71,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -85,13 +90,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc354-nested-task',
     id: taskId,
     workflowId,
@@ -211,11 +215,11 @@ describe('RFC-354 — loop-in-loop: the inner scope re-executes on every outer r
         }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // The outer loop legitimately exhausts (its exit condition is never
     // satisfied) — this anchors that the nested topology was driven to
     // completion rather than rejected up front (runTask runs no validator).
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-exhausted')
     const oloopRuns = await h.db
@@ -267,12 +271,10 @@ describe('RFC-354 — loop-in-loop: the inner scope re-executes on every outer r
     // proves the read was fresh is the time axis: both round-2 worker runs
     // started at/after the round-2 generation row was minted.
     const iloopRound2 = iloopRuns.find((r) => r.iteration === 1)!
-    const round2Final = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(
-        and(eq(nodeRunOutputs.nodeRunId, iloopRound2.id), eq(nodeRunOutputs.portName, 'final')),
-      )
+    const round2Final = await readNodeRunOutputFixtures(h.db, {
+      nodeRunId: iloopRound2.id,
+      portName: 'final',
+    })
     expect(round2Final[0]?.content).toBe('STOP')
     const round2Start = iloopRound2.startedAt
     expect(round2Start).not.toBeNull()

@@ -102,6 +102,7 @@
 //     「徽记数 == 共用 run 的卡数」——它在这套夹具上锁住的是**反方向**（判据写成 `>= 1`
 //     会给每一张卡挂上「同批 ×1」，当场变红，已实测），正向那一半如实登记为未覆盖。
 
+import { patchTaskFixtureSql, readTaskFixturesSql, fixtureSqlParameter } from './fixtures/model'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -1438,15 +1439,18 @@ test('RFC-319 WG-X4: 任务显示的组名冻在启动那一刻——事后改�
   )
   runSqlite(
     wgDbPath(),
-    `UPDATE tasks SET workgroup_config_json = ${sqlLiteral('{not json at all')} WHERE id = ${sqlLiteral(taskId)};`,
+    patchTaskFixtureSql({ id: taskId }, { workgroupConfigJson: '{not json at all' }),
   )
-  const readback = querySqlite<{ workgroup_config_json: string | null }>(
+  const readback = querySqlite<{ workgroupConfigJson: string | null }>(
     wgDbPath(),
-    'SELECT workgroup_config_json FROM tasks WHERE id = ?',
+    readTaskFixturesSql(
+      { id: fixtureSqlParameter },
+      { workgroupConfigJson: 'workgroupConfigJson' },
+    ),
     [taskId],
   )
   // runSqlite 的 exec 对约束错误不抛异常（docs/dev-gotchas.md 有最小复现），种完必须回读自证。
-  expect(readback[0]?.workgroup_config_json, '把冻结配置弄坏这一步根本没落库').toBe(
+  expect(readback[0]?.workgroupConfigJson, '把冻结配置弄坏这一步根本没落库').toBe(
     '{not json at all',
   )
 

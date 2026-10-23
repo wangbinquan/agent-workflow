@@ -1,24 +1,10 @@
+import { taskRepositoryNodePaths } from '@/modules/task-execution/domain/taskRepository'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PlannedDirectoryNode, PlannedRepo } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import type { PlannedSpaceLayout } from '../application/ports/preparedWorkspace'
 import { ValidationError } from '@/util/errors'
-
-function minimalNodePaths(mountPaths: readonly string[]): string[] {
-  const paths = new Map<string, string>([['', '']])
-  for (const mountPath of mountPaths) {
-    let current = ''
-    for (const segment of mountPath.split('/').filter(Boolean)) {
-      current = current === '' ? segment : `${current}/${segment}`
-      paths.set(current.toLowerCase(), current)
-    }
-  }
-  const depth = (path: string) => path.split('/').filter(Boolean).length
-  return [...paths.values()].sort(
-    (left, right) => depth(left) - depth(right) || left.localeCompare(right),
-  )
-}
 
 export async function loadFrozenSpaceLayout(
   db: PersistenceDb,
@@ -61,7 +47,7 @@ export async function loadFrozenSpaceLayout(
   const paths =
     frozenNodes.length > 0
       ? frozenNodes.map((row) => row.path)
-      : minimalNodePaths(repos.map((repo) => repo.mountPath))
+      : taskRepositoryNodePaths(repos.map((repo) => repo.mountPath))
   const depth = (path: string) => path.split('/').filter(Boolean).length
   const nodes: PlannedDirectoryNode[] = paths
     .sort((left, right) => depth(left) - depth(right) || left.localeCompare(right))

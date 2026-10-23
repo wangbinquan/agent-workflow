@@ -3,8 +3,7 @@
 // Functionality only: these tests lock request shape, status/call-graph parity,
 // explicit fixture topology and the three dependency cuts.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -216,8 +215,7 @@ describe('RFC-331 scheduler topology contract', () => {
 describeEachProvider('RFC-331 purpose-specific read models', (harness) => {
   test('status projection and legacy single-repo fallback preserve the old read shape', async () => {
     const db = harness.db
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: 'wf-rfc331',
       name: 'wf-rfc331',
       definition: JSON.stringify({ $schema_version: 3, inputs: [], nodes: [], edges: [] }),
@@ -225,7 +223,7 @@ describeEachProvider('RFC-331 purpose-specific read models', (harness) => {
       version: 1,
       schemaVersion: 3,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: 'task-rfc331',
       name: 'task-rfc331',
       workflowId: 'wf-rfc331',
@@ -252,7 +250,7 @@ describeEachProvider('RFC-331 purpose-specific read models', (harness) => {
     expect(await reads.callGraphWorkspace.find('task-rfc331')).toEqual({
       taskId: 'task-rfc331',
       worktreePath: '/tmp/rfc331/worktree',
-      repos: [{ worktreeDirName: '', worktreePath: '/tmp/rfc331/worktree' }],
+      repos: [{ mountPath: '', worktreePath: '/tmp/rfc331/worktree' }],
     })
     expect(await reads.statusProjection.find('missing')).toBeNull()
     expect(await reads.callGraphWorkspace.find('missing')).toBeNull()
@@ -272,8 +270,8 @@ describe('RFC-331 purpose-specific read models', () => {
             taskId: 'multi',
             worktreePath: '/unused',
             repos: [
-              { worktreeDirName: 'a', worktreePath: '/unused/a' },
-              { worktreeDirName: 'b', worktreePath: '/unused/b' },
+              { mountPath: 'a', worktreePath: '/unused/a' },
+              { mountPath: 'b', worktreePath: '/unused/b' },
             ],
           }),
         },

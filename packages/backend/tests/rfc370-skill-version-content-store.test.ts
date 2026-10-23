@@ -123,7 +123,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
     const store = memoryStore({
       async stage(publication, change, compareLive) {
         expect(publication.liveRef.startsWith('blob:')).toBe(true)
-        expect(change).toEqual({ kind: 'write-main', content: 'new body' })
+        expect(change).toEqual({ kind: 'write-main', content: Buffer.from('new body') })
         expect(compareLive).toBe(true)
         stageEntered.release()
         await stageReady.pending
@@ -146,7 +146,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
         versionContent: store,
       },
       skillId,
-      { kind: 'write-main', content: 'new body' },
+      { kind: 'write-main', content: Buffer.from('new body') },
       { source: 'editor', authorUserId: null },
     )
     try {
@@ -193,7 +193,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
         harness.db,
         { appHome, versionContent: store },
         skillId,
-        { kind: 'write-main', content: 'new' },
+        { kind: 'write-main', content: Buffer.from('new') },
         { source: 'editor', authorUserId: null },
       )
       // Attach rejection observation immediately; preserve the original error object.
@@ -237,7 +237,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
         harness.db,
         opts,
         skillId,
-        { kind: 'write-main', content: 'new' },
+        { kind: 'write-main', content: Buffer.from('new') },
         { source: 'editor', authorUserId: null },
       ),
     ).rejects.toBe(failure)
@@ -378,7 +378,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
       {
         kind: 'replace-files',
         files: [{ path: 'assets/binary.dat', content: binary }],
-        mainContent: 'imported body',
+        mainContent: Buffer.from('imported body'),
       },
       { source: 'import', authorUserId: null },
     )

@@ -7,6 +7,7 @@
 //
 // RFC-359 AC-6：整份文件跑双引擎——库由 harness 现建（`describeEachProvider`），
 // `harness()` 只在那个库上种夹具，不再自建 SQLite 内存库。
+import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -90,8 +91,8 @@ async function harness(): Promise<Harness> {
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  const { workflows, webhookEndpoints, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { webhookEndpoints } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'audit-wf',
     description: '',
@@ -124,7 +125,7 @@ async function harness(): Promise<Harness> {
       if (invoker.type !== 'webhook') throw new Error('expected webhook invoker')
       const taskId = ulid()
       // supersede 查询依赖真实 tasks 行（running），fake launch 落一行。
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         // SQLite 的 `rfc328_tasks_lineage_after_insert` 会补这两列，PostgreSQL 按设计没有
         // 对应触发器——直插 `tasks` 的夹具自己给，两个引擎的物理行才一样。
@@ -160,7 +161,7 @@ async function harness(): Promise<Harness> {
     },
     cancel: async (taskId) => {
       canceled.push(taskId)
-      await db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status: 'canceled' })
     },
   }
   return {
@@ -462,10 +463,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       }
       // invoker 的 fireId = fires 行 id；tasks 行 stamped（AC-18 归属链）
       for (const fire of fires) {
-        const { tasks } = tablesOf(h.db)
-        const task = (
-          await h.db.select().from(tasks).where(eq(tasks.webhookFireId, fire.id)).limit(1)
-        )[0]
+        const task = (await readTaskFixtures(h.db, { webhookFireId: fire.id }, { limit: 1 }))[0]
         expect(task?.webhookTriggerId).toBe(fire.triggerId)
         expect(fire.taskId).toBe(task?.id ?? '')
       }
@@ -543,8 +541,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
       // 串行化下第二个 fire 必须看见并取消第一个的任务 —— 无互斥时两者都查不到
       // 对方（check-then-act 交错），此断言红。
       expect(h.canceled).toEqual([h.launched[0]!.taskId])
-      const { tasks } = tablesOf(h.db)
-      const alive = await h.db.select().from(tasks).where(eq(tasks.status, 'running'))
+      const alive = await readTaskFixtures(h.db, { status: 'running' })
       expect(alive.length).toBe(1) // 每流至多一个活任务
     })
 
@@ -820,8 +817,7 @@ describeEachProvider('RFC-257 webhook 分流（双引擎）', (providerHarness) 
     /** 必填 git 输入 + 无分支事件 = 渲染出空 ref，`workflow-inputs-invalid`。 */
     async function gitInputWorkflow(h: Harness): Promise<string> {
       const id = ulid()
-      const { workflows } = tablesOf(h.db)
-      await insertOne(h.db, workflows, {
+      await workflowFixture(h.db, {
         id,
         name: 'git-input-wf',
         description: '',

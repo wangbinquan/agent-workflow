@@ -8,7 +8,8 @@
 // 10 tasks 0 done). This drives it for real via `scenario-opencode` (per-agent,
 // per-turn scripted opencode) so the first green is regression-locked.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { readTaskFixtures, taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { __resetRecoveryCountersForTest } from '../src/services/recovery'
@@ -26,11 +27,8 @@ import { createResumeEngine } from './helpers/resumeEngine'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { abortAllActiveTasks } from '../src/services/task'
 import { createWorkgroup } from '../src/services/workgroups'
-import {
-  buildWorkgroupHostSnapshot,
-  ensureWorkgroupHostWorkflow,
-  WORKGROUP_HOST_WORKFLOW_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
@@ -236,8 +234,8 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, groupId)
 
-      const { tasks, nodeRuns, workgroupAssignments } = tablesOf(h.db)
-      const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const { nodeRuns, workgroupAssignments } = tablesOf(h.db)
+      const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
       expect(final?.status).toBe('done')
 
       // a real __wg_member__ (worker) host run reached done — the thing that had
@@ -268,8 +266,8 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
       })
       const task = await launch(h, groupId)
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
-      const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const { nodeRuns } = tablesOf(h.db)
+      const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
       expect(final?.status).toBe('done')
 
       // the first leader host run failed on envelope-missing but the turn recovered.
@@ -312,7 +310,6 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
       )
       const leadId = await seedAgent(h.db, 'wg-lead')
       const writerId = await seedAgent(h.db, 'wg-writer')
-      await ensureWorkgroupHostWorkflow(h.db)
 
       const config = {
         workgroupId: 'wg-rec',
@@ -347,13 +344,13 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
         ],
       }
       const taskId = ulid()
-      const { tasks, nodeRuns } = tablesOf(h.db)
+      const { nodeRuns } = tablesOf(h.db)
       // The task was interrupted by a daemon restart BEFORE the leader's first
       // turn completed (the common case): status=interrupted, no host node_runs.
-      await insertOne(h.db, tasks, {
+      await taskFixture(h.db, {
         id: taskId,
         name: 'rec',
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
+        workflowId: TASK_DEFINITION_HOSTS.workgroup.id,
         workflowSnapshot: JSON.stringify(buildWorkgroupHostSnapshot(config)),
         repoPath: repo,
         worktreePath: repo,
@@ -393,7 +390,7 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
       // Before RFC-186 PR-2 this was `[]` (turn-engine workgroups filtered out) and
       // the task stayed `interrupted` forever.
       expect(res.resumed).toEqual([taskId])
-      const final = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const final = (await readTaskFixtures(h.db, { id: taskId }))[0]
       expect(final?.status).toBe('done')
       const memberDone = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))

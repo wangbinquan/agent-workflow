@@ -166,7 +166,7 @@ class MemoryIsolationScope implements IsolationWorkspaceScope {
         'same resolver callback',
         reference,
         conflict.paths.map((path) => ({
-          worktreeDirName: conflict.mount,
+          mountPath: conflict.mount,
           path,
           type: 'content' as const,
         })),

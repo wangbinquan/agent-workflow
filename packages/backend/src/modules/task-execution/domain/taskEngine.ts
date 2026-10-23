@@ -1,3 +1,4 @@
+import type { TaskWorkgroupConfig } from './taskWorkgroupConfig'
 import type { DynamicWorkflowPhase } from '@agent-workflow/shared'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import type { ResolvedTaskDriveConfig } from '../application/drive/taskDriveTypes'
@@ -62,7 +63,7 @@ export function taskEngineOutcomeFromScope(result: TaskScopeOutcome): TaskEngine
 export interface TaskEngineSnapshot {
   readonly taskId: string
   readonly workgroupId: string | null
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
   readonly dynamicWorkflowPhase: DynamicWorkflowPhase | null
 }
 

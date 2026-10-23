@@ -12,6 +12,17 @@
 // per-round single path (auto and manual never double-dispatch); RFC-125 single-path invariant
 // (flag never flipped); lock non-reentry; the P5-0 guard (RFC-132: lifted universally).
 
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readClarifyRoundFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -22,7 +33,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
-import { gitStashSnapshot, runGit } from '../src/util/git'
+import { runGit } from '../src/util/git'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { expectDatabaseFailure } from './helpers/databaseFailure'
@@ -69,18 +80,15 @@ async function commitClarifyDecisionThenInterrupt(input: {
   directive?: 'continue' | 'stop'
   idempotencyKey: string
 }): Promise<void> {
-  const { clarifyRounds, tasks } = tablesOf(input.db)
   const round = (
-    await input.db
-      .select({ id: clarifyRounds.id })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.intermediaryNodeRunId, input.originNodeRunId))
+    await readClarifyRoundFixtures(input.db, { intermediaryNodeRunId: input.originNodeRunId }).then(
+      (rows) => rows.map((row) => ({ id: row.id })),
+    )
   )[0]!
   const task = (
-    await input.db
-      .select({ lifecycleEventRevision: tasks.lifecycleEventRevision })
-      .from(tasks)
-      .where(eq(tasks.id, input.taskId))
+    await readTaskFixtures(input.db, { id: input.taskId }).then((rows) =>
+      rows.map((row) => ({ lifecycleEventRevision: row.lifecycleEventRevision })),
+    )
   )[0]!
   const directive = input.directive ?? 'continue'
   const prepared = await prepareClarifyDecision({
@@ -190,14 +198,14 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       gate: { kind: 'clarify', ref: `clarify:${intermediaryNodeRunId}` },
       replayed: false,
     })
-    const { tasks, clarifyRounds, taskExecutionIntents, nodeRuns } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+    const { taskExecutionIntents, nodeRuns } = tablesOf(db)
+    expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'pending',
       lifecycleEventRevision: decided.receipt.taskRevision,
     })
-    expect(
-      (await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)))[0],
-    ).toMatchObject({ status: 'answered' })
+    expect((await readClarifyRoundFixtures(db, { taskId }))[0]).toMatchObject({
+      status: 'answered',
+    })
     const intents = await db
       .select()
       .from(taskExecutionIntents)
@@ -251,13 +259,8 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         idempotencyKey: command.decision.idempotencyKey,
       }),
     ).rejects.toThrow('rfc341-commit-edge-fault')
-    const {
-      collaborationGateOperations,
-      taskExecutionIntents,
-      clarifyRounds,
-      taskQuestions,
-      nodeRuns,
-    } = tablesOf(db)
+    const { collaborationGateOperations, taskExecutionIntents, taskQuestions, nodeRuns } =
+      tablesOf(db)
     const operation = (
       await db
         .select()
@@ -265,18 +268,16 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         .where(eq(collaborationGateOperations.operationKind, 'decide'))
     )[0]!
     const intent = (await db.select().from(taskExecutionIntents))[0]!
-    const sealedRound = (
-      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
-    )[0]!
+    const sealedRound = (await readClarifyRoundFixtures(db, { taskId }))[0]!
     expect(JSON.parse(operation.manifestJson)).toMatchObject({
       request: { actorUserId: actor.userId, payload: { actorRole: actor.role } },
     })
     expect(sealedRound).toMatchObject({
       status: 'answered',
       submittedByRole: actor.role,
-      draftAnswersJson: null,
+      draftAnswers: null,
     })
-    expect(JSON.parse(sealedRound.answerAttributionsJson ?? '{}')).toMatchObject({
+    expect(JSON.parse(sealedRound.answerAttributions ?? '{}')).toMatchObject({
       q1: { userId: actor.userId, role: actor.role },
     })
     expect(await getNodeClarifyDirectiveRow(db, taskId, P)).toMatchObject({ directive: 'stop' })
@@ -382,8 +383,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
-    const { collaborationGateOperations, nodeRuns, tasks, clarifyRounds, taskExecutionIntents } =
-      tablesOf(db)
+    const { collaborationGateOperations, nodeRuns, taskExecutionIntents } = tablesOf(db)
     const beforeOperations = (await db.select().from(collaborationGateOperations)).length
     const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
     // 注入「intent 写入必失败」的故障：两个引擎的 DDL 不同（SQLite 直接 RAISE(ABORT)，
@@ -410,13 +410,14 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         'rfc333-clarify-intent-fault',
       )
 
-      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'awaiting_human',
         lifecycleEventRevision: 2,
       })
-      expect(
-        (await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)))[0],
-      ).toMatchObject({ status: 'awaiting_human', answersJson: null })
+      expect((await readClarifyRoundFixtures(db, { taskId }))[0]).toMatchObject({
+        status: 'awaiting_human',
+        answers: null,
+      })
       expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
       expect((await db.select().from(collaborationGateOperations)).length).toBe(beforeOperations)
       expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
@@ -430,8 +431,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
 
 async function seedTask(db: PersistenceDb, taskId: string, _deferred = true): Promise<void> {
   const def = liveDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -439,7 +439,7 @@ async function seedTask(db: PersistenceDb, taskId: string, _deferred = true): Pr
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -461,8 +461,7 @@ async function seedRun(
   over: { status?: string; iteration?: number; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -515,13 +514,12 @@ async function seedSealableCrossRound(
     taskId,
     loopIter: 0,
     iteration: 0,
-    questionsJson: JSON.stringify(questions),
-    answersJson: '[]',
+    questions: JSON.stringify(questions),
+    answers: '[]',
     directive: 'continue' as const,
     status: 'awaiting_human' as const,
   }
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     ...common,
     kind: 'cross',
     askingNodeId: Q,
@@ -1316,16 +1314,19 @@ describeEachProvider(
         // Ask-time worktree state (a non-HEAD working change so the stash snapshot is NON-empty —
         // an empty snapshot would be a resume-mode no-op). This is the pre_snapshot the rerun restores.
         writeFileSync(join(repo, 'data.txt'), 'ASK-TIME\n')
-        const snap = await gitStashSnapshot(repo)
+        const snap = await legacyStashSnapshotFixture(repo)
 
         const db = harness.db
         const taskId = `t_${ulid()}`
         await seedTask(db, taskId)
-        const { tasks, nodeRuns } = tablesOf(db)
-        await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
+        await patchTaskFixture(db, { id: taskId }, { worktreePath: repo })
         const { intermediaryNodeRunId: clarifyNodeRunId, askingRunId } =
           await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
-        await db.update(nodeRuns).set({ preSnapshot: snap }).where(eq(nodeRuns.id, askingRunId))
+        await patchNodeRunFixture(
+          db,
+          { id: askingRunId },
+          { checkpoints: [{ mountPath: '', preSnapshot: snap }] },
+        )
 
         // Dirty the worktree AFTER the snapshot (edits the isolated rerun must NOT inherit).
         writeFileSync(join(repo, 'data.txt'), 'DIRTY\n')
@@ -1362,17 +1363,20 @@ describeEachProvider(
         writeFileSync(join(repo, 'data.txt'), 'CLEAN\n')
         await runGit(repo, ['add', '.'])
         await runGit(repo, ['commit', '-q', '-m', 'init'])
-        const snap = await gitStashSnapshot(repo)
+        const snap = await legacyStashSnapshotFixture(repo)
 
         const db = harness.db
         const taskId = `t_${ulid()}`
         await seedTask(db, taskId)
-        const { tasks, nodeRuns } = tablesOf(db)
-        await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
+        await patchTaskFixture(db, { id: taskId }, { worktreePath: repo })
         const { crossNodeRunId, questionerRunId } = await seedSealableCrossRound(db, taskId, [
           mkQ('q1', 't'),
         ])
-        await db.update(nodeRuns).set({ preSnapshot: snap }).where(eq(nodeRuns.id, questionerRunId))
+        await patchNodeRunFixture(
+          db,
+          { id: questionerRunId },
+          { checkpoints: [{ mountPath: '', preSnapshot: snap }] },
+        )
 
         writeFileSync(join(repo, 'data.txt'), 'DIRTY\n')
 
@@ -1487,8 +1491,7 @@ describeEachProvider('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
-    const { tasks } = tablesOf(db)
-    await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'awaiting_human' })
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
     await autoDispatchClarifyRoundWithDecision({
@@ -1531,10 +1534,9 @@ describeEachProvider(
       const { intermediaryNodeRunId: clarifyNodeRunId } = await seedSealableSelfRound(db, taskId, [
         mkQ('q1', 't'),
       ])
-      const { tasks } = tablesOf(db)
       // Corrupt the snapshot AFTER seeding (worktreePath stays '' so the rollback path is skipped and
       // only dispatchTaskQuestions' parseDefinition hits it → task-question-snapshot-unparseable).
-      await db.update(tasks).set({ workflowSnapshot: 'not json{' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { workflowSnapshot: 'not json{' })
       const received: Array<{ type: string }> = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
       let caught: unknown
@@ -1590,13 +1592,12 @@ describeEachProvider(
         await runGit(repo, ['add', '.'])
         await runGit(repo, ['commit', '-q', '-m', 'init'])
         writeFileSync(join(repo, 'data.txt'), 'ASK-TIME\n')
-        const snap = await gitStashSnapshot(repo) // non-empty pre_snapshot (would roll back if not deferred)
+        const snap = await legacyStashSnapshotFixture(repo) // non-empty pre_snapshot (would roll back if not deferred)
 
         const db = harness.db
         const taskId = `t_${ulid()}`
         await seedTask(db, taskId)
-        const { tasks, nodeRuns } = tablesOf(db)
-        await db.update(tasks).set({ worktreePath: repo }).where(eq(tasks.id, taskId))
+        await patchTaskFixture(db, { id: taskId }, { worktreePath: repo })
         // A prior IN-FLIGHT dispatched self entry on home P (dispatched, trigger NULL = unconsumed) —
         // it OWNS the worktree; an unconditional rollback would rewrite the tree under its (pending) rerun.
         const priorOrigin = await seedRun(db, taskId, CL, { status: 'done' })
@@ -1612,7 +1613,11 @@ describeEachProvider(
         // New self round on the SAME home P, with a pre_snapshot (would trigger the rollback path).
         const { intermediaryNodeRunId: clarifyNodeRunId, askingRunId } =
           await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
-        await db.update(nodeRuns).set({ preSnapshot: snap }).where(eq(nodeRuns.id, askingRunId))
+        await patchNodeRunFixture(
+          db,
+          { id: askingRunId },
+          { checkpoints: [{ mountPath: '', preSnapshot: snap }] },
+        )
         // Dirty the worktree — it must SURVIVE (the rollback is skipped because we defer).
         writeFileSync(join(repo, 'data.txt'), 'DIRTY\n')
 

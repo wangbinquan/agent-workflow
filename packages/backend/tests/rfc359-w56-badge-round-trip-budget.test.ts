@@ -21,6 +21,7 @@
 //
 // 判据是**语句数**而不是墙钟：确定性、可进每次 PR，不会因为机器忙就假红
 // （与 `rfc311-perf-guards` 同一哲学；RFC-244 的教训是墙钟测不出真回归）。
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -40,7 +41,7 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seedOnePendingReview(db: PersistenceDb): Promise<void> {
   const now = 1_788_278_400_000
-  const { users, workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
+  const { users, docVersions } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'carol', 'root'].map((id) => ({
       id,
@@ -51,12 +52,12 @@ async function seedOnePendingReview(db: PersistenceDb): Promise<void> {
       updatedAt: now,
     })),
   )
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: 't-badge',
     name: 't-badge',
     workflowId: 'wf',
@@ -71,7 +72,7 @@ async function seedOnePendingReview(db: PersistenceDb): Promise<void> {
     ownerUserId: 'alice',
   })
   const runId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId: 't-badge',
     nodeId: 'rev',

@@ -11,14 +11,19 @@
 //      自愈规则尚未实现,所以没有任何兜底)。
 // 这里用真启动路径 + 真删除路径把两件事都锁住。
 
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { StartTask } from '@agent-workflow/shared'
 
@@ -34,13 +39,11 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
 async function branchStartedAt(db: DbClient, id: string): Promise<number> {
-  const { tasks } = tablesOf(db)
-  const row = await first(
-    db
-      .select({ v: tasks.branchStartedAt, started: tasks.startedAt })
-      .from(tasks)
-      .where(eq(tasks.id, id)),
-  )
+  const row = (
+    await readTaskFixtures(db, { id }).then((rows) =>
+      rows.map((row) => ({ v: row.branchStartedAt, started: row.startedAt })),
+    )
+  )[0]
   return row?.v ?? -1
 }
 
@@ -91,7 +94,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
   test('a child launched through launchTestTask lifts its ancestors, and deleting it converges them back', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
-    const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+    const { users } = tablesOf(db)
     await insertOne(db, users, {
       id: 'u1',
       username: 'u1',
@@ -101,11 +104,11 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       updatedAt: now,
     })
     const wf = ulid()
-    await insertOne(db, workflows, { id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
+    await workflowFixture(db, { id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
 
     const parentId = ulid()
     const parentStartedAt = now - 60_000
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: parentId,
       name: 'parent',
       workflowId: wf,
@@ -123,7 +126,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       branchStartedAt: parentStartedAt,
     })
     const callRun = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: callRun,
       taskId: parentId,
       nodeId: 'n1',
@@ -166,18 +169,12 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
 
       // ② 真删除路径:删掉子任务后父行必须收敛回自己的 started_at,
       // 否则默认视图(物化列)与过滤视图(现算)会永远给出不同行序。
-      await db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(tasks.id, childId))
+      await patchTaskFixture(db, { id: childId }, { status: 'done', finishedAt: Date.now() })
       // launchTestTask 注册了活动任务(真实路径的副作用),删除前解除——这里要测的是
       // 删除对物化列的影响,不是活动闸门。
       // 删子任务要求父也已终态(deleteTask 的既有闸门)——正是报告里的场景:
       // 「两者终态后管理员删掉 C」。
-      await db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(tasks.id, parentId))
+      await patchTaskFixture(db, { id: parentId }, { status: 'done', finishedAt: Date.now() })
       clearTaskDriverLifecycleForTesting()
       await deleteTask(db, childId, {
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -194,7 +191,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
   test('root_task_id is stamped through the real launch path and chains across depths', async () => {
     const db = createInMemoryDb(MIGRATIONS)
     const now = Date.now()
-    const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+    const { users } = tablesOf(db)
     await insertOne(db, users, {
       id: 'u1',
       username: 'u1',
@@ -204,7 +201,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       updatedAt: now,
     })
     const wf = ulid()
-    await insertOne(db, workflows, { id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
+    await workflowFixture(db, { id: wf, name: `wf-${wf.slice(-6)}`, definition: EMPTY_DEF })
 
     const rootDir = mkdtempSync(join(tmpdir(), 'aw-rfc311-root-'))
     try {
@@ -221,12 +218,12 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
 
       // 子任务的铸行闸门要求父处于 running(既有语义,与本测试无关)。
       const markRunning = async (taskId: string): Promise<void> => {
-        await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+        await patchTaskFixture(db, { id: taskId }, { status: 'running' })
       }
       // RFC-359 W8-A：调用行必须预留它要铸的那个子任务 id，否则铸行准入门直接拒。
       const runOf = async (taskId: string, childTaskId: string): Promise<string> => {
         const id = ulid()
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id,
           taskId,
           nodeId: 'n1',
@@ -290,7 +287,8 @@ async function rootTaskIdOf(
   db: ReturnType<typeof createInMemoryDb>,
   id: string,
 ): Promise<string | null> {
-  const { tasks } = tablesOf(db)
-  const row = await db.select({ rootTaskId: tasks.rootTaskId }).from(tasks).where(eq(tasks.id, id))
+  const row = await readTaskFixtures(db, { id }).then((rows) =>
+    rows.map((row) => ({ rootTaskId: row.rootTaskId })),
+  )
   return row[0]?.rootTaskId ?? null
 }

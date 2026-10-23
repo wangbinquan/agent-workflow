@@ -17,7 +17,7 @@
 //      stale on supersede" is a registered known limitation (design.md §1),
 //      improving it is explicitly out of scope for RFC-152.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -145,8 +145,7 @@ describeEachProviderWebSocketApplication(
       resetBroadcastersForTests()
       h = await buildHarness(scope)
       privateWfId = ulid()
-      const { workflows } = tablesOf(h.db)
-      await insertOne(h.db, workflows, {
+      await workflowFixture(h.db, {
         id: privateWfId,
         name: 'private-flow',
         definition: '{}',
@@ -155,7 +154,7 @@ describeEachProviderWebSocketApplication(
       })
       // RFC-359 AC-20 因果屏障用：任何连接都有权看见的公共工作流。
       publicWfId = ulid()
-      await insertOne(h.db, workflows, {
+      await workflowFixture(h.db, {
         id: publicWfId,
         name: 'public-control-flow',
         definition: '{}',
@@ -247,8 +246,8 @@ describeEachProviderWebSocketApplication(
       resetBroadcastersForTests()
       h = await buildHarness(scope)
       privateAgentId = ulid()
-      const { agents, memories } = tablesOf(h.db)
-      await insertOne(h.db, agents, {
+      const { memories } = tablesOf(h.db)
+      await agentFixture(h.db, {
         id: privateAgentId,
         name: `priv-${privateAgentId}`,
         ownerUserId: h.aliceId,

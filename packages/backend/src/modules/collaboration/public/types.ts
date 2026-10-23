@@ -92,3 +92,9 @@ export type CollaborationCommandContext<
 export type CollaborationRouteContext = CollaborationCommandContext<
   'reviewDecisions' | 'questionDispatches' | 'clarifyDecisions' | 'taskExecutionReadModels'
 >
+
+export type {
+  ClarifyAnswerQueries,
+  ClarifyAnswerSource,
+} from '../application/ports/clarifyAnswerQueries'
+export type { ClarifyAnswerContent } from '../domain/clarifyAnswerContent'

@@ -9,6 +9,7 @@
 // replaced: for every actor, count === filtered-list length. If either side
 // drifts, the badge starts lying about the inbox.
 
+import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -38,7 +39,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seed(db: Db): Promise<void> {
   const now = 1_788_278_400_000
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await db.insert(users).values(
     ['admin', 'alice', 'bob', 'carol'].map((id) => ({
       id,
@@ -49,7 +50,7 @@ async function seed(db: Db): Promise<void> {
       updatedAt: now,
     })),
   )
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -63,8 +64,7 @@ async function addTask(
   status: 'running' | 'awaiting_review' | 'awaiting_human' | 'done' | 'canceled',
   opts: { workflowId?: string } = {},
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId: opts.workflowId ?? 'wf1',
@@ -86,8 +86,7 @@ async function addReviewRun(
   runId: string,
   status: 'awaiting_review' | 'running' | 'done',
 ): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'rev',
@@ -202,8 +201,7 @@ describeEachProvider('RFC-311 — countAwaitingClarifyRounds oracle', (harness) 
     status: 'awaiting_human' | 'answered',
   ): Promise<void> {
     const runId = ulid()
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runId,
       taskId,
       nodeId: 'ask',
@@ -212,7 +210,7 @@ describeEachProvider('RFC-311 — countAwaitingClarifyRounds oracle', (harness) 
       iteration: 0,
       startedAt: 100,
     })
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: ulid(),
       taskId,
       kind: 'self',
@@ -220,7 +218,7 @@ describeEachProvider('RFC-311 — countAwaitingClarifyRounds oracle', (harness) 
       askingNodeRunId: runId,
       intermediaryNodeId: 'ask',
       intermediaryNodeRunId: runId,
-      questionsJson: '[]',
+      questions: '[]',
       status,
     })
   }

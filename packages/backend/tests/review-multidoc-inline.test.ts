@@ -9,14 +9,21 @@
 //     joined by the boundary), NOT list<path<md>>.
 //   - getReviewDetail still exposes documents[] (titles from the body heading).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -55,8 +62,8 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
     docs: PersistenceTables['docVersions']['$inferSelect'][]
   }> {
     const caseGenId = ulid()
-    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
-    await insertOne(db, agents, {
+    const { docVersions } = tablesOf(db)
+    await agentFixture(db, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -87,7 +94,7 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
       edges: [],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -100,7 +107,7 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
     const lineageSlotPathJson = JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ])
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'inline-multidoc',
       workflowId,
@@ -117,32 +124,30 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
     })
     // Both providers must start from the original SQLite-materialized row.
     expect(
-      await first(
-        db
-          .select({
-            executionLineageId: tasks.executionLineageId,
-            lineageSlotPathJson: tasks.lineageSlotPathJson,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId)),
-      ),
+      (
+        await readTaskFixtures(db, { id: taskId }).then((rows) =>
+          rows.map((row) => ({
+            executionLineageId: row.executionLineageId,
+            lineageSlotPathJson: row.lineageSlotPathJson,
+          })),
+        )
+      )[0],
     ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
 
     // Upstream done run: `cases` port carries the doc bodies inline.
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: '01SRC',
       taskId,
       nodeId: 'src',
       status: 'done',
       retryIndex: 0,
       iteration: 0,
-      preSnapshot: null,
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: '01SRC',
       portName: 'cases',
       content: joinMarkdownDocs(DOCS),
@@ -218,17 +223,9 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
       expectedReviewIteration: 0,
     })
 
-    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const accepted = (
-      await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(
-            eq(nodeRunOutputs.nodeRunId, reviewNodeRunId),
-            eq(nodeRunOutputs.portName, 'accepted'),
-          ),
-        )
+      await readNodeRunOutputFixtures(db, { nodeRunId: reviewNodeRunId, portName: 'accepted' })
     )[0]!
     // accepted = Alpha (0) + Gamma (2), in item order, joined by the boundary.
     expect(accepted.kind).toBe('list<markdown>')

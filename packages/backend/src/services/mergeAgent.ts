@@ -157,10 +157,7 @@ export function parseBinaryWarningPaths(stdout: string): Set<string> {
  * --write-tree` stdout (the variant WITHOUT `--name-only`, so the informational
  * `CONFLICT (...)` messages are present). Deduplicates by (path,type).
  */
-export function parseConflictManifest(
-  stdout: string,
-  worktreeDirName: string,
-): MergeConflictEntry[] {
+export function parseConflictManifest(stdout: string, mountPath: string): MergeConflictEntry[] {
   const binaryPaths = parseBinaryWarningPaths(stdout)
   const seen = new Set<string>()
   const out: MergeConflictEntry[] = []
@@ -170,7 +167,7 @@ export function parseConflictManifest(
     const key = `${c.type}\x00${c.path}`
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ worktreeDirName, path: c.path, type: c.type })
+    out.push({ mountPath, path: c.path, type: c.type })
   }
   return out
 }
@@ -201,9 +198,9 @@ export function buildMergeResolvePrompt(opts: {
   // Group by repo for multi-repo clarity.
   const byRepo = new Map<string, MergeConflictEntry[]>()
   for (const e of manifest) {
-    const arr = byRepo.get(e.worktreeDirName) ?? []
+    const arr = byRepo.get(e.mountPath) ?? []
     arr.push(e)
-    byRepo.set(e.worktreeDirName, arr)
+    byRepo.set(e.mountPath, arr)
   }
   for (const [dir, entries] of byRepo) {
     const rawLabel = repoLabels[dir] ?? dir
@@ -251,7 +248,7 @@ function conflictInstruction(type: MergeConflictType): string {
  * success from these facts.
  */
 export interface ResolvedPathState {
-  worktreeDirName: string
+  mountPath: string
   path: string
   /** File still present in the resolve-iso worktree? */
   present: boolean
@@ -285,10 +282,10 @@ export function evaluateResolution(
   states: ResolvedPathState[],
 ): ResolutionVerdict {
   const stateOf = new Map<string, ResolvedPathState>()
-  for (const s of states) stateOf.set(`${s.worktreeDirName}\x00${s.path}`, s)
+  for (const s of states) stateOf.set(`${s.mountPath}\x00${s.path}`, s)
   const unresolved: MergeConflictEntry[] = []
   for (const e of manifest) {
-    const s = stateOf.get(`${e.worktreeDirName}\x00${e.path}`)
+    const s = stateOf.get(`${e.mountPath}\x00${e.path}`)
     if (e.type === 'content') {
       // Must be observed, present, and marker-free.
       if (s === undefined || !s.present) {

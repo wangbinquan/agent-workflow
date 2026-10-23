@@ -14,9 +14,8 @@
 //   B's dispatch alone fires exactly one designer rerun; A contributes no designer entry
 //   to the batch.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -91,8 +90,7 @@ async function seedTwoSource(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc-059-c4',
     description: '',
@@ -105,7 +103,7 @@ async function seedTwoSource(
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -122,17 +120,16 @@ async function seedTwoSource(
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'nr_d_1',
     taskId,
     nodeId: 'designer',
@@ -167,8 +164,7 @@ async function spawnSession(
     questions: ClarifyQuestion[]
   },
 ): Promise<string> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: args.questionerRunId,
     taskId,
     nodeId: args.questionerNodeId,

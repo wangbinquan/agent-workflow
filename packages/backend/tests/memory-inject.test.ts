@@ -1,3 +1,4 @@
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
@@ -455,8 +456,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     workflowId: string
   }> {
     const wfId = ulid()
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: wfId,
       name: 'wf',
       definition: JSON.stringify({ schemaVersion: 1, nodes: [], edges: [] }),
@@ -466,7 +466,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
     })
 
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'fixture-task',
       workflowId: wfId,

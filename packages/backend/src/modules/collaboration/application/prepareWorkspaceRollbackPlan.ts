@@ -23,7 +23,7 @@ export async function prepareWorkspaceRollbackPlan(input: {
       .map((target) => ({
         sourceNodeRunId: candidate.sourceNodeRunId,
         worktreePath: target.worktreePath,
-        worktreeDirName: target.worktreeDirName,
+        worktreeDirName: target.mountPath,
         snapshot: target.snapshot,
       })),
   )

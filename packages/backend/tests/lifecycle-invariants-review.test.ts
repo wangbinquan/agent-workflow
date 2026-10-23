@@ -12,6 +12,13 @@
 // Sibling files cover C1 (clarify), T1/T2/T3/U1 (task ↔ node_runs / U1
 // dup-active), migration smoke, and route.
 
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -66,10 +73,9 @@ async function buildHarness(db: PersistenceDb, taskStatus: HarnessTaskStatus): P
     edges: [],
   }
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -91,8 +97,7 @@ async function insertReviewRun(
   opts: { status: HarnessTaskStatus | 'skipped' | 'exhausted'; finishedAt?: number | null },
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'rev_1',
@@ -259,13 +264,10 @@ describeEachProvider(
         scope: { taskId: h.taskId },
       })
       expect(r1.openAlerts.filter((a) => a.rule === 'R1')).toHaveLength(1)
-      const { nodeRuns, tasks, lifecycleAlerts } = tablesOf(h.db)
+      const { lifecycleAlerts } = tablesOf(h.db)
       // Fix shape: run becomes done, task moves to done too so T1 doesn't fire.
-      await h.db
-        .update(nodeRuns)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(nodeRuns.id, run))
-      await h.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, h.taskId))
+      await patchNodeRunFixture(h.db, { id: run }, { status: 'done', finishedAt: Date.now() })
+      await patchTaskFixture(h.db, { id: h.taskId }, { status: 'done' })
       // Second scan: R1 row resolved; no new R1 inserted.
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db).recoveryAdministration,

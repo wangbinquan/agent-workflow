@@ -39,8 +39,13 @@
 // 「两个写手都已经读完了」这件事经语句录制器观测（`harness.recordStatements()`），不是等墙钟；
 // SQLite 上录不到（写手还没开始），等待自然走到上限后放行，两条路都不依赖时序。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -533,8 +538,7 @@ function recoveryOperations(db: PersistenceDb): TaskRecoveryOperations {
 
 async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const workflowId = id('wf')
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -548,11 +552,10 @@ async function seedWorkflow(db: PersistenceDb): Promise<string> {
 async function seedTask(
   db: PersistenceDb,
   workflowId: string,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  over: Partial<TaskFixtureSpec> = {},
 ): Promise<string> {
   const taskId = (over.id as string | undefined) ?? id('task')
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -602,15 +605,14 @@ describeEachProvider('RFC-359 W6-T28 L5 —— 自动恢复的滑动窗口必须
       'maxPerWindow = 1 时第二次尝试必须触发隔离',
     ).toBe(true)
 
-    const row = await firstRow(
-      db
-        .select({
-          attempts: tasks.autoRecoveryAttempts,
-          suspended: tasks.autoRecoverySuspended,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    )
+    const row = (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          attempts: row.autoRecoveryAttempts,
+          suspended: row.autoRecoverySuspended,
+        })),
+      )
+    )[0]
     expect(row?.attempts).toBe(2)
     expect(row?.suspended, '闸门跳了就必须落库，否则下一轮 loop 还会继续自动重跑').toBe(true)
   })
@@ -666,12 +668,11 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
 
     await Promise.all([deletingFirst, deletingSecond])
 
-    const parent = await firstRow(
-      db
-        .select({ branchStartedAt: tasks.branchStartedAt })
-        .from(tasks)
-        .where(eq(tasks.id, parentId)),
-    )
+    const parent = (
+      await readTaskFixtures(db, { id: parentId }).then((rows) =>
+        rows.map((row) => ({ branchStartedAt: row.branchStartedAt })),
+      )
+    )[0]
     expect(
       parent?.branchStartedAt,
       '两个子任务都删光之后，父行的物化列必须退回它自己的 started_at——' +

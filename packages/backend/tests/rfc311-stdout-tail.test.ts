@@ -12,6 +12,7 @@
 //   4. **读取有界**：尾巴被 DB 填满时根本不读归档（归档严格更旧）。第 4 条是
 //      "只省网络不省内存"与"真有界"的分界，也是这次改动的要点。
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -30,7 +31,7 @@ import {
 const describeEachProvider = bindDescribeEachProviderLifecycle({ sourceFile: import.meta.url })
 
 async function seed(db: PersistenceDb, payloads: string[]): Promise<void> {
-  const { users, workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
+  const { users, nodeRunEvents } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -39,8 +40,8 @@ async function seed(db: PersistenceDb, payloads: string[]): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
+  await taskFixture(db, {
     id: 't1',
     name: 't1',
     workflowId: 'wf1',
@@ -64,7 +65,7 @@ async function seed(db: PersistenceDb, payloads: string[]): Promise<void> {
     branchStartedAt: 1,
     rootTaskId: 't1',
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'nr1',
     taskId: 't1',
     nodeId: 'n1',

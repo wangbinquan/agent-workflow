@@ -7,7 +7,7 @@
 //
 //   SQLite 侧  `platform/persistence/sqlite/legacyResourcePackageCommit.ts`（约 796 行）
 //              `platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`（约 652 行）
-//   PG   侧    `platform/persistence/postgresqlResourcePackageAtomicApply.ts`（约 976 行）
+//   PG   侧    `modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts`（约 976 行）
 //
 // 同一件事——「把一个资源包的决策落成库里的行 + 盘上的工件，失败要补偿」——两台机器。
 // 它是顺着「AC-6 的账本压不动了，剩下的都卡在哪」摸出来的（plan §5do），现在登记在那条守卫的
@@ -35,6 +35,7 @@
 // 不是某个类型的巧合；工作流那组还顺带把 `finalName` 改名与 `scripts:author` 这条
 // **随 payload 动态求值**的写能力判据（RFC-304/309）拉进两台机器一起验。
 
+import { readAgentFixtures, readWorkflowFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -59,7 +60,7 @@ import {
   composePostgresqlResourcePackageProvider,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import type { ComposedResourcePackageCatalog } from '@/modules/resource-catalog/composition/resourcePackageOperations'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
 import { encodeZip } from '@/util/zip'
 import { buildWorkgroupPackageZip } from './fixtures/rfc271Package'
@@ -292,7 +293,7 @@ describeEachProvider(
         execution: createPostgresqlResourcePackageExecutionAdapter({
           box,
           provider,
-          atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({ db: client, box }),
+          atomicApply: createResourcePackageAtomicApplyOperations({ db: client, box }),
         }),
       })
 
@@ -431,8 +432,8 @@ describeEachProvider(
 
       const rootId = receipt.root?.resourceId
       if (rootId === undefined) throw new Error('agent receipt root missing')
-      const { agents, resourceGrants, resourceBundleApplies } = tablesOf(f.db)
-      const rows = await f.db.select().from(agents).where(eq(agents.id, rootId))
+      const { resourceGrants, resourceBundleApplies } = tablesOf(f.db)
+      const rows = await readAgentFixtures(f.db, { id: rootId })
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
         name: 'worker',
@@ -457,8 +458,8 @@ describeEachProvider(
       const replay = await f.apply(bytes, previewResult.previewToken, decision)
 
       expect(replay).toEqual(first)
-      const { agents, resourceBundleApplies } = tablesOf(f.db)
-      expect(await f.db.select().from(agents)).toHaveLength(1)
+      const { resourceBundleApplies } = tablesOf(f.db)
+      expect(await readAgentFixtures(f.db)).toHaveLength(1)
       expect(await f.db.select().from(resourceBundleApplies)).toHaveLength(1)
     })
 
@@ -528,8 +529,8 @@ describeEachProvider(
 
       const rootId = receipt.root?.resourceId
       if (rootId === undefined) throw new Error('workflow receipt root missing')
-      const { workflows, resourceGrants } = tablesOf(f.db)
-      const rows = await f.db.select().from(workflows).where(eq(workflows.id, rootId))
+      const { resourceGrants } = tablesOf(f.db)
+      const rows = await readWorkflowFixtures(f.db, { id: rootId })
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
         name: 'deploy',
@@ -553,10 +554,9 @@ describeEachProvider(
       })
 
       expect(receipt.root?.name).toBe('deploy-copy')
-      const { workflows } = tablesOf(f.db)
-      const rows = await f.db.select().from(workflows).where(eq(workflows.name, 'deploy-copy'))
+      const rows = await readWorkflowFixtures(f.db, { name: 'deploy-copy' })
       expect(rows).toHaveLength(1)
-      expect(await f.db.select().from(workflows).where(eq(workflows.name, 'deploy'))).toEqual([])
+      expect(await readWorkflowFixtures(f.db, { name: 'deploy' })).toEqual([])
     })
 
     test('⑪ 写能力的动态判据两台机器同解：带 script 节点的 workflow 一律拒绝，且不落行', async () => {
@@ -578,8 +578,8 @@ describeEachProvider(
           (e: unknown) => e,
         )
       expect(err).toMatchObject({ code: 'package-decision-not-allowed' })
-      const { workflows, resourceBundleApplies } = tablesOf(f.db)
-      expect(await f.db.select().from(workflows)).toEqual([])
+      const { resourceBundleApplies } = tablesOf(f.db)
+      expect(await readWorkflowFixtures(f.db)).toEqual([])
       expect(await f.db.select().from(resourceBundleApplies)).toEqual([])
     })
   },

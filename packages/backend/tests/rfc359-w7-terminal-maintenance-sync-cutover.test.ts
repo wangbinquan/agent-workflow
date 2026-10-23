@@ -28,8 +28,14 @@
 //   T6  workspace-GC：终结事务的原子性。墓碑（`workspace_pruning_at`）被抹掉后 CAS 命中 0 行，
 //       整笔回滚——`workspace_pruned_at` 仍为空、认领仍停在 io-complete。
 
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -85,8 +91,7 @@ function store(db: PersistenceDb): DrizzleTerminalMaintenancePersistence {
 
 async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const workflowId = id('wf')
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -100,11 +105,10 @@ async function seedWorkflow(db: PersistenceDb): Promise<string> {
 async function seedTask(
   db: PersistenceDb,
   workflowId: string,
-  over: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  over: Partial<TaskFixtureSpec> = {},
 ): Promise<string> {
   const taskId = (over.id as string | undefined) ?? id('task')
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -246,9 +250,9 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
       await settle(1)
     }
     await settle(2)
-    const { tasks, taskExecutionMaintenanceClaims } = tablesOf(db)
+    const { taskExecutionMaintenanceClaims } = tablesOf(db)
     // 并发的续跑把任务翻回非终态：删除事务里的复检必须看到它。
-    await db.update(tasks).set({ status: 'running', finishedAt: null }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'running', finishedAt: null })
     release()
 
     await expect(pending).rejects.toThrow(/is running; cancel it first/)
@@ -408,7 +412,7 @@ describeEachProvider('RFC-359 W7 —— workspace GC 终结事务迁离 dbTxSync
     expect(ioComplete.revision).toBe(2)
     const { tasks } = tablesOf(db)
     // 并发的 lifecycle 修复抹掉了墓碑：终结事务的 CAS 必须落空。
-    await db.update(tasks).set({ workspacePruningAt: null }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { workspacePruningAt: null })
 
     expect(
       await workspaceMaintenanceForTest(legacy(db)).recover({

@@ -29,6 +29,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 import type { ClarifyRepairParticipant } from '../application/ports/clarifyRepairParticipant'
 
 export function createClarifyRepairParticipant(db: PersistenceDb): ClarifyRepairParticipant {
@@ -76,20 +77,11 @@ export function createClarifyRepairParticipant(db: PersistenceDb): ClarifyRepair
       return { roundId: row.roundId, status: row.status }
     },
     async reopen(input: Parameters<ClarifyRepairParticipant['reopen']>[0]) {
-      const { clarifyRounds } = tablesOf(db)
-      const changed = await db
-        .update(clarifyRounds)
-        .set({ status: 'awaiting_human', answersJson: null, answeredAt: null })
-        .where(
-          and(
-            eq(clarifyRounds.id, input.roundId),
-            eq(clarifyRounds.taskId, input.taskId),
-            eq(clarifyRounds.kind, 'self'),
-            eq(clarifyRounds.status, input.expectedStatus),
-          ),
-        )
-        .returning({ id: clarifyRounds.id })
-      return changed.length === 1
+      return createClarifyAnswerWritePort(db).transition({
+        ...input,
+        kind: 'reopen',
+        roundKind: 'self',
+      })
     },
   })
 }

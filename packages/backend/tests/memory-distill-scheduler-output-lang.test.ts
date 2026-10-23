@@ -29,6 +29,7 @@ import {
 import { DEFAULT_DISTILL_POLICY, type Language } from '@agent-workflow/shared'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 /**
  * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
@@ -58,7 +59,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     resetBroadcastersForTests()
     resetMemoryDistillPolicyProviderForTest()
     db = harness.db
-    memory = { store: new DrizzleMemoryDistillWorkStore(db) }
+    memory = { store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)) }
   })
 
   afterEach(() => {

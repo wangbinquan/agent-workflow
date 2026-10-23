@@ -1,11 +1,11 @@
 export interface SkillTreeFiles {
   readonly files: readonly { readonly path: string; readonly content: Uint8Array }[]
-  readonly mainContent: string
+  readonly mainContent: Uint8Array
 }
 
 /** Initial content is prepared by AW; the adapter only materializes its bytes. */
 export type SkillInitialContent =
-  | { readonly kind: 'main'; readonly content: string }
+  | { readonly kind: 'main'; readonly content: Uint8Array }
   | ({ readonly kind: 'files' } & SkillTreeFiles)
 
 export interface SkillContentRoot {

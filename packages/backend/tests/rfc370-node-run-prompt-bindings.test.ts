@@ -1,4 +1,10 @@
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  patchTaskFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
@@ -32,6 +38,7 @@ import { getSessionTree } from '@/services/sessionView'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DESIGNER, CL, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 import { runNode } from './helpers/runner'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function held<T>() {
   let resolve!: (value: T) => void
@@ -46,8 +53,8 @@ const sourceRunId = monotonicFactory()
 
 async function sourceRun(db: PersistenceDb, taskId: string, retryIndex = 0) {
   const id = sourceRunId()
-  const { nodeRuns, nodeRunEvents } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  const { nodeRunEvents } = tablesOf(db)
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: DESIGNER,
@@ -80,8 +87,7 @@ async function sourceRun(db: PersistenceDb, taskId: string, retryIndex = 0) {
 async function clarifySource(db: PersistenceDb, taskId: string, askingNodeRunId: string) {
   const intermediaryNodeRunId = ulid(),
     id = ulid()
-  const { nodeRuns, clarifyRounds } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: intermediaryNodeRunId,
     taskId,
     nodeId: CL,
@@ -90,7 +96,7 @@ async function clarifySource(db: PersistenceDb, taskId: string, askingNodeRunId:
     reviewIteration: 0,
     status: 'awaiting_human',
   })
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id,
     kind: 'self',
     taskId,
@@ -100,8 +106,8 @@ async function clarifySource(db: PersistenceDb, taskId: string, askingNodeRunId:
     intermediaryNodeId: CL,
     intermediaryNodeRunId,
     iteration: 0,
-    questionsJson: JSON.stringify([{ id: 'question', kind: 'open', text: 'Which provider?' }]),
-    answersJson: JSON.stringify([{ questionId: 'question', text: 'Selected provider' }]),
+    questions: JSON.stringify([{ id: 'question', kind: 'open', text: 'Which provider?' }]),
+    answers: JSON.stringify([{ questionId: 'question', text: 'Selected provider' }]),
     status: 'answered',
   })
   return rowToDistillJob({
@@ -203,7 +209,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     const prompts = composeNodeRunPromptOperations(Object.freeze(new Content()))
     let settled = false
     const pending = loadSourceEvents(
-      new DrizzleMemoryDistillWorkStore(db),
+      new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
       noReviewedContent,
       [job],
       prompts,
@@ -252,7 +258,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       },
     })
     const loaded = await loadSourceEvents(
-      new DrizzleMemoryDistillWorkStore(db),
+      new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
       noReviewedContent,
       [job],
       prompts,
@@ -267,7 +273,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       },
     })
     const degraded = await loadSourceEvents(
-      new DrizzleMemoryDistillWorkStore(db),
+      new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
       noReviewedContent,
       [job],
       rejectingReader,
@@ -316,6 +322,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       }
     }
     const memory = composeMemoryOperationsFor({
+      clarifyAnswers: createClarifyAnswerQueries(db),
       systemAgentBinding: memorySystemAgentBindingForTest(),
       db,
       reviewedArtifacts: noReviewedContent,
@@ -378,10 +385,10 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     await seedTask(db, taskId)
     const worktreePath = join(root, 'wt')
     mkdirSync(worktreePath, { recursive: true })
-    const { tasks, nodeRuns } = tablesOf(db)
-    await db.update(tasks).set({ status: 'running', worktreePath }).where(eq(tasks.id, taskId))
+    const { nodeRuns } = tablesOf(db)
+    await patchTaskFixture(db, { id: taskId }, { status: 'running', worktreePath })
     const nodeRunId = ulid()
-    await insertOne(db, tablesOf(db).nodeRuns, {
+    await nodeRunFixture(db, {
       id: nodeRunId,
       taskId,
       nodeId: DESIGNER,
@@ -416,8 +423,13 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
             return typeof value === 'function' ? value.bind(target) : value
           }
           return async (input: Parameters<typeof original.nodeExecution.patch>[0]) => {
-            if ('promptPath' in input.values) {
-              expect(input.values).toEqual({ promptText: null, promptPath: 'object:runner' })
+            if (input.values.config?.promptPath !== undefined) {
+              expect(input.values).toEqual({
+                config: {
+                  promptText: null,
+                  promptPath: 'object:runner',
+                },
+              })
               trace.push('patch')
               patchEntered.resolve(undefined)
               await patchAck.promise
@@ -505,9 +517,11 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       patchAck.resolve(undefined)
       expect(await pending).toBe(stop)
       expect(trace).toEqual(['store', 'store-ack', 'patch', 'patch-ack', 'mark-running'])
-      expect(
-        await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))),
-      ).toMatchObject({ status: 'pending', promptText: null, promptPath: 'object:runner' })
+      expect((await readNodeRunFixtures(db, { id: nodeRunId }))[0]).toMatchObject({
+        status: 'pending',
+        promptText: null,
+        promptPath: 'object:runner',
+      })
     } finally {
       writeAck.resolve(undefined)
       patchAck.resolve(undefined)

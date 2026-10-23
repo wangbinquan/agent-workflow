@@ -10,7 +10,7 @@
 //   3. closure / closure-preview stopped appending placeholder `missing:true`
 //      rows for dangling dependsOn references.
 
-import { rawExec } from '@/platform/persistence/queryHelpers'
+import { patchAgentFixture } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { createAgent } from '../src/services/agent'
@@ -125,8 +125,7 @@ registerProviderApplication('GET /api/agents/:id/closure', (buildHarness) => {
     // refuse). Matches the runtime scenario where another writer modifies
     // depends_on directly.
     const top = await seedAgent(db, 'top')
-    const { sql } = await import('drizzle-orm')
-    await rawExec(db, sql`UPDATE agents SET depends_on = '["ghost"]' WHERE name = 'top'`)
+    await patchAgentFixture(db, { name: 'top' }, { dependsOn: '["ghost"]' })
 
     const res = await req(app, `/api/agents/${top.id}/closure`)
     expect(res.status).toBe(200)

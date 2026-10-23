@@ -19,6 +19,7 @@ import { eq, inArray } from 'drizzle-orm'
 import type { DbTxSync } from '@/db/txSync'
 import type { AclRow } from '../domain/resourceAccess'
 import { ownedAclTable } from './aclReadRepository'
+import { catalogResourcePredicate } from './workflowCatalogPredicate'
 
 export {
   findOwnedAclResourceIdsByName,
@@ -39,8 +40,12 @@ export function getAclResourceOwnerInTx(
   id: string,
 ): string | null | undefined {
   const table = ownedAclTable(tx, type)
-  return first(tx.select({ ownerUserId: table.ownerUserId }).from(table).where(eq(table.id, id)))
-    ?.ownerUserId
+  return first(
+    tx
+      .select({ ownerUserId: table.ownerUserId })
+      .from(table)
+      .where(catalogResourcePredicate(type, table.id, eq(table.id, id))),
+  )?.ownerUserId
 }
 
 export function getAclResourceAccessRowInTx(
@@ -58,7 +63,7 @@ export function getAclResourceAccessRowInTx(
           visibility: table.visibility,
         })
         .from(table)
-        .where(eq(table.id, id)),
+        .where(catalogResourcePredicate(type, table.id, eq(table.id, id))),
     ) ?? null
   )
 }
@@ -80,7 +85,7 @@ export function getAclResourceIdentityRowInTx(
           aclRevision: table.aclRevision,
         })
         .from(table)
-        .where(eq(table.id, id)),
+        .where(catalogResourcePredicate(type, table.id, eq(table.id, id))),
     ) as AclResourceIdentitySnapshot | undefined) ?? null
   )
 }
@@ -102,7 +107,7 @@ export function listAclResourceIdentityRowsByIdsInTx(
         aclRevision: table.aclRevision,
       })
       .from(table)
-      .where(inArray(table.id, [...ids])),
+      .where(catalogResourcePredicate(type, table.id, inArray(table.id, [...ids]))),
   ) as AclResourceIdentitySnapshot[]
 }
 
@@ -123,6 +128,6 @@ export function listAclResourceIdentityRowsByNamesInTx(
         aclRevision: table.aclRevision,
       })
       .from(table)
-      .where(inArray(table.name, [...names])),
+      .where(catalogResourcePredicate(type, table.id, inArray(table.name, [...names]))),
   ) as AclResourceIdentitySnapshot[]
 }

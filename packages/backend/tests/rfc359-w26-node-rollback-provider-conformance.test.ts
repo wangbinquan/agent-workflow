@@ -1,5 +1,6 @@
 // One rollback target loader runs against both real provider databases. The
 // no-context observer case covers construction only, with no workspace effect.
+import { patchTaskRepoFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -50,7 +51,7 @@ function repositoryRow(repoIndex: number) {
     branch: `task/w26-repo-${repoIndex}`,
     worktreePath: `/fixture/worktrees/repo-${repoIndex}`,
     worktreeDirName: `repo-${repoIndex}`,
-    mountPath: `nested/repo-${repoIndex}`,
+    mountPath: `repo-${repoIndex}`,
   }
 }
 
@@ -89,7 +90,7 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
         taskId,
         db: harness.db,
         worktreePath: '/fixture/worktrees/task',
-        repos: [{ worktreePath: '/fixture/worktrees/task', worktreeDirName: '' }],
+        repos: [{ worktreePath: '/fixture/worktrees/task', mountPath: '' }],
       })
       expect(recording.selects().map(({ values, rows }) => ({ values, rows }))).toEqual([
         { values: [taskId, 1], rows: 1 },
@@ -119,7 +120,7 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
         worktreePath: '/fixture/worktrees/task',
         repos: [1, 2, 4].map((index) => ({
           worktreePath: `/fixture/worktrees/repo-${index}`,
-          worktreeDirName: `repo-${index}`,
+          mountPath: `repo-${index}`,
         })),
       })
       expect(recording.selects().map(({ values, rows }) => ({ values, rows }))).toEqual([
@@ -149,10 +150,7 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
           .update(tasks)
           .set({ repoCount: 9, worktreePath: '/fixture/transaction/task', inputs: editedInputs })
           .where(eq(tasks.id, taskId))
-        await tx
-          .update(taskRepos)
-          .set({ worktreePath: '/fixture/transaction/repo-1' })
-          .where(eq(taskRepos.taskId, taskId))
+        await patchTaskRepoFixture(tx, { taskId }, { worktreePath: '/fixture/transaction/repo-1' })
         await insertOne(tx, taskRepos, repositoryRow(0))
         const target = await loadNodeRollbackTarget(tx, taskId)
         expect(target?.db).toBe(tx)
@@ -161,8 +159,8 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
           db: tx,
           worktreePath: '/fixture/transaction/task',
           repos: [
-            { worktreePath: '/fixture/worktrees/repo-0', worktreeDirName: 'repo-0' },
-            { worktreePath: '/fixture/transaction/repo-1', worktreeDirName: 'repo-1' },
+            { worktreePath: '/fixture/worktrees/repo-0', mountPath: 'repo-0' },
+            { worktreePath: '/fixture/transaction/repo-1', mountPath: 'repo-1' },
           ],
         })
         const inside = await readStored(tx)

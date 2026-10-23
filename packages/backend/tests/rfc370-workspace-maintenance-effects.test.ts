@@ -1,10 +1,9 @@
 // RFC-370: selected workspace maintenance reads may be remote and asynchronous.
 // Use real provider stores/claims with explicit effect fakes; local fallback must
 // not run and durable cleanup completion must follow acknowledged effects.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/application/ports/workspaceMaintenance'
@@ -59,15 +58,14 @@ async function terminalTask(db: PersistenceDb) {
   const workflowId = ulid(),
     taskId = ulid(),
     workspace = `workspace://${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'RFC370 workspace',
     definition: '{}',
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'selected workspace',
     workflowId,
@@ -128,24 +126,19 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
     )
     try {
       await entered.pending
-      const { tasks } = tablesOf(harness.db)
-      const pendingRow = (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const pendingRow = (await readTaskFixtures(harness.db, { id: taskId }))[0]!
       expect(pendingRow.workspacePruningAt).toBeNull()
       expect(pendingRow.workspacePrunedAt).toBeNull()
       release.release()
       expect(await firstResult).toEqual(new Error('remote existence unavailable'))
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBeNull()
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBeNull()
       fail = false
       expect(await maintenance.runGcPhase(gcInput('worktree'))).toEqual({
         scanned: 1,
         removed: 0,
         skipped: 1,
       })
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBe(10000)
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBe(10000)
       expect(calls).toEqual(['exists', 'exists'])
     } finally {
       release.release()
@@ -181,24 +174,20 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
       removed: 0,
       skipped: 1,
     })
-    const { tasks, taskExecutionMaintenanceClaims } = tablesOf(harness.db)
-    const row = (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { taskExecutionMaintenanceClaims } = tablesOf(harness.db)
+    const row = (await readTaskFixtures(harness.db, { id: taskId }))[0]!
     expect(row.workspacePruningAt).toBe(10000)
     expect(row.workspacePrunedAt).toBeNull()
     const retry = maintenance.recover({ activeTaskIds: [], now: 10001, webhookClaims: 'all' })
     try {
       await entered.pending
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBeNull()
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBeNull()
       expect((await harness.db.select().from(taskExecutionMaintenanceClaims))[0]!.state).toBe(
         'claimed',
       )
       release.release()
       expect(await retry).toEqual({ completed: 1, failed: 0, skipped: 0, healed: 0 })
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBe(10001)
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBe(10001)
       expect((await harness.db.select().from(taskExecutionMaintenanceClaims))[0]!.state).toBe(
         'completed',
       )
@@ -227,15 +216,10 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
     const recovery = maintenance.recover({ activeTaskIds: [], now: 10000 })
     try {
       await entered.pending
-      const { tasks } = tablesOf(harness.db)
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBeNull()
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBeNull()
       release.release()
       expect(await recovery).toEqual({ completed: 0, failed: 0, skipped: 0, healed: 0 })
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBeNull()
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBeNull()
     } finally {
       release.release()
       await recovery.catch(() => {})
@@ -268,15 +252,10 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
     )
     try {
       await entered.pending
-      const { tasks } = tablesOf(harness.db)
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBeNull()
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBeNull()
       release.release()
       expect(await firstResult).toEqual(new Error('remote recovery existence unavailable'))
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBeNull()
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBeNull()
       fail = false
       expect(await maintenance.recover({ activeTaskIds: [], now: 10001 })).toEqual({
         completed: 0,
@@ -284,9 +263,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
         skipped: 0,
         healed: 1,
       })
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-      ).toBe(10001)
+      expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBe(10001)
     } finally {
       release.release()
       await firstResult
@@ -312,23 +289,21 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
       const recovery = maintenance.recover({ activeTaskIds: [], now: 10000 })
       try {
         await entered.pending
-        const { tasks } = tablesOf(harness.db)
-        await harness.db
-          .update(tasks)
-          .set(
-            stale === 'resumed'
-              ? { status: 'pending', lifecycleEventRevision: 2 }
-              : stale === 'new-terminal-revision'
-                ? { lifecycleEventRevision: 2 }
-                : stale === 'changed-path'
-                  ? { worktreePath: `${workspace}/new` }
-                  : { deletedAt: 10001 },
-          )
-          .where(eq(tasks.id, taskId))
+        await patchTaskFixture(
+          harness.db,
+          { id: taskId },
+          stale === 'resumed'
+            ? { status: 'pending', lifecycleEventRevision: 2 }
+            : stale === 'new-terminal-revision'
+              ? { lifecycleEventRevision: 2 }
+              : stale === 'changed-path'
+                ? { worktreePath: `${workspace}/new` }
+                : { deletedAt: 10001 },
+        )
         release.release()
         expect(await recovery).toEqual({ completed: 0, failed: 0, skipped: 0, healed: 0 })
         expect(
-          (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
+          (await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt,
         ).toBeNull()
       } finally {
         release.release()
@@ -381,8 +356,8 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
         await cleanupEntered.pending
         existenceReleased.release()
         expect(await recovery).toEqual({ completed: 0, failed: 0, skipped: 0, healed: 0 })
-        const { tasks, taskExecutionMaintenanceClaims } = tablesOf(harness.db)
-        const pending = (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+        const { taskExecutionMaintenanceClaims } = tablesOf(harness.db)
+        const pending = (await readTaskFixtures(harness.db, { id: taskId }))[0]!
         expect(pending.workspacePruningAt).toBe(10001)
         expect(pending.workspacePrunedAt).toBeNull()
         expect((await harness.db.select().from(taskExecutionMaintenanceClaims))[0]!.state).toBe(
@@ -393,8 +368,7 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
         if (failsFirstAck) {
           expect(result).toEqual(new Error(`workspace-prune-finalization-failed:${taskId}`))
           expect(
-            (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
-              .workspacePrunedAt,
+            (await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt,
           ).toBeNull()
           expect((await harness.db.select().from(taskExecutionMaintenanceClaims))[0]!.state).toBe(
             'claimed',
@@ -410,9 +384,9 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
         } else {
           expect(result).toBeNull()
         }
-        expect(
-          (await harness.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workspacePrunedAt,
-        ).toBe(failsFirstAck ? 10003 : 10001)
+        expect((await readTaskFixtures(harness.db, { id: taskId }))[0]!.workspacePrunedAt).toBe(
+          failsFirstAck ? 10003 : 10001,
+        )
         expect((await harness.db.select().from(taskExecutionMaintenanceClaims))[0]!.state).toBe(
           'completed',
         )

@@ -1,4 +1,12 @@
 // RFC-370 A4: actual Task diff and S1 repair must await the selected workspace readers.
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -106,9 +114,8 @@ async function seedTask(db: PersistenceDb, workspaceRef: string, baseCommit: str
   const id = ulid(),
     workflowId = ulid()
   const snapshot = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: workflowId, definition: snapshot })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: workflowId, name: workflowId, definition: snapshot })
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -198,8 +205,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
       taskDiffProjection({ db: provider.db, workspaceReads: f.reads }, id),
     ).rejects.toMatchObject({ code: 'task-no-base-commit', status: 409 })
     expect(f.store.calls).toEqual([])
-    const { tasks } = tablesOf(provider.db)
-    await provider.db.update(tasks).set({ baseCommit: 'base' }).where(eq(tasks.id, id))
+    await patchTaskFixture(provider.db, { id }, { baseCommit: 'base' })
     const missing = await taskDiffProjection(
       { db: provider.db, workspaceReads: f.reads },
       id,
@@ -269,9 +275,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     f.store.paths.set(a, repoA.root)
     f.store.paths.set(b, repoB.root)
     const id = await seedTask(provider.db, parent, null)
-    const { tasks, taskRepos } = tablesOf(provider.db)
-    await provider.db.update(tasks).set({ repoCount: 5 }).where(eq(tasks.id, id))
-    await provider.db.insert(taskRepos).values([
+    await taskRepoFixture(provider.db, [
       {
         taskId: id,
         repoIndex: 3,
@@ -365,9 +369,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     const f = mapped(parent, temp())
     f.store.paths.set(ref, repo.root)
     const id = await seedTask(provider.db, parent, null)
-    const { tasks, taskRepos } = tablesOf(provider.db)
-    await provider.db.update(tasks).set({ repoCount: 2 }).where(eq(tasks.id, id))
-    await insertOne(provider.db, taskRepos, {
+    await taskRepoFixture(provider.db, {
       taskId: id,
       repoIndex: 0,
       repoPath: ref,
@@ -481,17 +483,18 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
       ],
       edges: [],
     }
-    const { tasks, nodeRuns, nodeRunOutputs, lifecycleAlerts } = tablesOf(provider.db)
-    await provider.db
-      .update(tasks)
-      .set({ status: 'awaiting_review', workflowSnapshot: JSON.stringify(snapshot) })
-      .where(eq(tasks.id, taskId))
+    const { lifecycleAlerts } = tablesOf(provider.db)
+    await patchTaskFixture(
+      provider.db,
+      { id: taskId },
+      { status: 'awaiting_review', workflowSnapshot: JSON.stringify(snapshot) },
+    )
     const oldWrapper = ulid(1),
       latestWrapper = ulid(2),
       source = ulid(),
       review = ulid(),
       alert = ulid()
-    await provider.db.insert(nodeRuns).values([
+    await nodeRunFixture(provider.db, [
       { id: oldWrapper, taskId, nodeId: 'wrap', status: 'done', isoWorktreePath: 'old:iso' },
       {
         id: latestWrapper,
@@ -503,7 +506,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
       { id: source, taskId, nodeId: 'src', status: 'done', finishedAt: 2 },
       { id: review, taskId, nodeId: 'review', status: 'awaiting_review' },
     ])
-    await insertOne(provider.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(provider.db, {
       nodeRunId: source,
       portName: 'docpath',
       content: '# actual repaired document',

@@ -17,6 +17,7 @@
 // 每次 `seed` 用一组新 id：同一个用例里连着种两份夹具（作者矩阵那两条）在共库上会撞主键，
 // 而合一前每次 `createInMemoryDb` 都是一个新库，天然不会。
 
+import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
@@ -62,8 +63,8 @@ async function seed(
   const docVersionId = `dv_test_${ordinal}`
   const commentId = `cmt_test_${ordinal}`
 
-  const { workflows, tasks, nodeRuns, docVersions, reviewComments } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { docVersions, reviewComments } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -73,7 +74,7 @@ async function seed(
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -93,7 +94,7 @@ async function seed(
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ]),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'rev_1',
@@ -211,8 +212,8 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
 describeEachProvider('review comment ownership and terminal guards', (harness) => {
   test('delete refuses a comment owned by a different review and preserves it', async () => {
     const s = await seed(harness.db)
-    const { nodeRuns, docVersions, reviewComments } = tablesOf(s.db)
-    await insertOne(s.db, nodeRuns, {
+    const { docVersions, reviewComments } = tablesOf(s.db)
+    await nodeRunFixture(s.db, {
       id: 'run_other',
       taskId: s.taskId,
       nodeId: 'rev_2',
@@ -265,8 +266,8 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
 
   test('terminal task rejects comment edits before touching the row', async () => {
     const s = await seed(harness.db)
-    const { tasks, reviewComments } = tablesOf(s.db)
-    await s.db.update(tasks).set({ status: 'canceled' }).where(eq(tasks.id, s.taskId))
+    const { reviewComments } = tablesOf(s.db)
+    await patchTaskFixture(s.db, { id: s.taskId }, { status: 'canceled' })
 
     await expect(
       updateReviewCommentText(s.db, s.nodeRunId, s.commentId, 'too late', OWNER_AUTHZ),

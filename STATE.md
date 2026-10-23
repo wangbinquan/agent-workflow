@@ -1,3 +1,18 @@
+## 2026-10-23 RFC-395 In Progress：II-a（端口先行）完成，下一步 II-b
+
+**II-a 已提交**（交付记录见 [RFC plan §6.11](design/RFC-395-database-target-schema-rebuild/plan.md)）：在现有物理 schema 上把业务改为经目标形状的端口读写；HTTP API、用户可见行为与持久化字节不变，唯一有意变化是记忆提炼读取多轮澄清时按 round id 二进制序排列。七个包：A1 测试造数 builder 与 fixture 直写 / 直读棘轮；A2 Task 主体与工作区端口（D1 宿主工作流停止播种，读侧不再依赖宿主行）；A3 NodeRun 选择端口 + 复现 HEAD 选择的 oracle、类型化分组写入、铸行显式 role；A4 澄清逐题模型、单一投影与写端口，中立 `ContentRef`；A5 资源引用单一写者、共享依赖收集与反查端口；A6 `platform/atomic-apply` 合一；A7 表归属守卫扩到全部 registry 表，并给模块外文件单独记账。
+
+**对其他会话的影响**：
+- 测试造数：被重塑的七张表（tasks、task_repos、node_runs、node_run_outputs、agents、workflows、clarify_rounds）在测试里经 `packages/backend/tests/helpers/model/` 的 builder 读写；fixture 之外的直写 / 直读是只降棘轮，新增即红。builder 是异步的，调用要 `await`。
+- 跨域表访问：`tests/architecture/rfc317-table-ownership.test.ts` 覆盖全部 registry 表，模块账本 `tests/fixtures/rfc395-module-table-ownership-debt.json` 与模块外账本 `tests/fixtures/rfc395-horizontal-table-ownership-debt.json` 都精确匹配、只减不增；跨域读写改走 owner 的 `public/queries` / `public/participants`。
+- NodeRun 选择：新代码经 task-execution 的选择端口（`application/ports/runSelection.ts`），不要再手写 freshest / picker 比较器；守卫 `rfc395-run-selection-boundary` 与选择口径账本锁住存量站点。
+- 公共合同：RFC-294 `PUBLIC_SURFACE_DEBT` 末尾新增一块带注释的「RFC-395 II-a 过渡合同」（38 条，owner 查询 / participant 绑定调用方的会话、事务或语句）；新的 public 符号仍须使用闭合类型。
+- 任务上下文：`createTaskGateQueries(db).listContexts` 不再带冻结定义（保持 RFC-311 L1-3 的窄投影），需要定义时用 `listDefinitionContexts`。
+
+**留给 II-b**（详见 plan §6.11）：K1 / K3 / K6 稳定 role 与 canonical slot 推导；被重塑表仍有 39 处记账访问（模块间 31 处：没有 offered 边，或闭合会成环 / 越出 RFC-376 已提交 DAG；模块外 8 处），须在 B2 换适配器前收口，收口方式需 RFC-294 层面裁决；聚合行重放判据需用户裁决；会话表集按模块收窄（design §12.2 S3）。
+
+**验证**：本地后端 SQLite 全量三轮后清零（第三轮余下 6 个失败均已修复并单独复验；`rfc220-oauth2-callback-route` 为负载抖动），shared / frontend / system-mocks 全过，A1 改动的 24 个 e2e spec 冒烟 195 过、3 个失败与 II-a 无关（逐条归因见 plan §6.11）；本地 PostgreSQL 因 Docker 虚拟机磁盘满中断，以 CI ubuntu 分片为准。验证中修掉 7 处生产回退（调度采纳 pending 重跑行、oracle 范围、任务空间目录行、AtomicApply 冻结、评审徽标单语句、收件箱窄投影、`VALIDATE_CALL_POLICY` 调用点）。另发现一个与 II-a 无关的既有缺陷：`util/zip.ts` 把 zip mtime 固定为 `Date.UTC(1980,0,1)`，在 UTC 以西时区按本地时间换算成 1979 年，资源包导出返回 500（`date not in range 1980-2099`），未在本次修改。
+
 ## 2026-10-22 RFC-395 In Progress：阶段 I-a、II-pre、I-b 完成，下一步 II-a
 
 **进行中 RFC**：[RFC-395](design/RFC-395-database-target-schema-rebuild/proposal.md)（数据库阶段目标模型与一次迁移）。用户 2026-10-21 交本会话做任务分解并指挥 Codex 实施（按本会话惯例免设计门与实现门，可推翻）。**I-a 已完成**（各领域显式 schema contribution 等价重述今日 schema，零物理变更；交付记录见 RFC plan §6.7）：表声明改在各模块 `infrastructure/persistence/schema.ts`，用 `platform/persistence/schema/dsl.ts` 的简写 DSL；`bootstrap/persistenceSchema.ts` 唯一汇集；冻结对比（v2 合同、PostgreSQL plan、两套 drizzle 表、drizzle-kit 快照）全部相等，SQLite 与真实 PostgreSQL 的长期等价测试入库。**II-pre 已完成**（交付记录见 plan §6.8；提前到 I-b 之前的理由见 §6.7）：删除旧启动入口 `startTask` 族、`getTaskNodeRuns`、`systemWorkspaceGc` GC 库、intent `converge`、BundleApply 旧合同段，以及随之失去生产引用的 `services/users.ts` 与 `legacyUserService`；测试改走生产路径，RFC-199 的 11 个竞态回归全部改接生产启动与物化器清理。**I-b 已完成**（交付记录见 plan §6.9）：业务查询写在中立查询面 `PersistenceDb` / `PersistenceTx` 上，表从会话句柄取（`tablesOf(db)`），运行时是原生 bun-sqlite / bun-sql；sqlite-proxy、SQL 改写链与进程级表投影已删除；PostgreSQL 写闸只做语句分类，单行插入经 `insertOne` 保持一次往返。下一步 **II**，用户 2026-10-22 选定拆两次交付（plan §6.10）：**II-a 端口先行**——在现有 schema 上把业务改为经目标形状的端口读写，行为与 API 不变、不激活新合同，单独集中验证并提交（A1 测试造数 builder 与 codemod、A2 Task 主体与工作区、A3 NodeRun 选择端口与 oracle、A4 澄清与内容、A5 资源依赖、A6 AtomicApply、A7 跨域收口）；**II-b 一次切换**——目标 schema、转换器、迁移回执与激活，一次激活交付→ III（每个真实实例单独批准迁移）。已提交：任务分解 `ab4fee188`、用户决定 `02f0ff213`、阶段 I 技术方案 `865944979`、II-0 设计修订 `461e8bc6c`、I-a `4b91ada04`、II-pre `e2e8b925b`（前端用例改读修复 `7ee66e0cd`）、I-b `9e66d89df`（CI 补正 `c35067361`、`d41f068f1`，收口 CI 除外部依赖公告 dompurify GHSA-mrv2-3pqr-j5jr 外全绿）。

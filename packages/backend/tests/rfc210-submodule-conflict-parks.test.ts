@@ -18,9 +18,9 @@
 import { describe, expect, test } from 'bun:test'
 import { resolveConflictWithAgent } from '@/services/nodeIsolation'
 
-function subConflict(paths: string[], worktreeDirName = '') {
+function subConflict(paths: string[], mountPath = '') {
   return {
-    worktreeDirName,
+    mountPath,
     paths,
     // What mergeBackNodeIso actually pushes for a submodule conflict.
     mergedTree: '',
@@ -70,6 +70,6 @@ describe('RFC-210 — submodule conflict parks instead of throwing', () => {
       'libs/a (submodule)',
       'libs/b (submodule)',
     ])
-    expect(outcome.unresolved.every((e) => e.worktreeDirName === 'repo2')).toBe(true)
+    expect(outcome.unresolved.every((e) => e.mountPath === 'repo2')).toBe(true)
   })
 })

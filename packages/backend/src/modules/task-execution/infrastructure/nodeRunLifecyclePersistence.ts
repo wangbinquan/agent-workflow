@@ -1,6 +1,7 @@
 // RFC-359 W4-B1 批 2g —— node run 生命周期（mint / transition / set + 事务内参与者）：一份实现，两个 provider 共用。
 // 此前 SQLite 侧薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 的同步内核；现在端口两侧都走统一写事务 + owner 围栏。
 
+import { createRunSelectionParticipantInTx } from './runSelection/oracle/participant'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   allowedFromStatusesForEvent,
@@ -23,6 +24,7 @@ import {
 } from './ownedTaskExecution'
 import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
+import { nodeRunLifecycleWriteColumns } from './nodeRunWriteProtocol'
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 
 const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES = new Set(
@@ -122,7 +124,11 @@ export function createNodeRunLifecycleParticipantInTx(
         nodeRunId: input.nodeRunId,
         to: input.status,
         allowedFrom: [input.expectedStatus],
-        extra: { finishedAt: input.finishedAt },
+        extra: {
+          identity: {
+            finishedAt: input.finishedAt,
+          },
+        },
         reason: input.cause,
       })
       return await appendTaskNodeStatusesCommittedEvent(tx, {
@@ -184,7 +190,7 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
       const { nodeRuns } = tablesOf(tx)
       const updated = await tx
         .update(nodeRuns)
-        .set({ status: to, ...(input.extra ?? {}) })
+        .set({ status: to, ...nodeRunLifecycleWriteColumns(input.extra) })
         .where(and(eq(nodeRuns.id, input.nodeRunId), eq(nodeRuns.status, row.status)))
         .returning({ id: nodeRuns.id })
       if (updated[0] === undefined) {
@@ -193,6 +199,8 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
           `node_run ${input.nodeRunId} status changed concurrently`,
         )
       }
+      if (input.selection !== undefined)
+        await createRunSelectionParticipantInTx().apply(tx, [input.selection])
       return { from: row.status, to }
     })
   }

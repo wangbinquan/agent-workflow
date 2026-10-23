@@ -25,8 +25,8 @@ export function isoWorktreePathFor(
   appHome: string,
   taskId: string,
   nodeRunId: string,
-  worktreeDirName: string,
+  mountPath: string,
 ): string {
   const root = join(appHome, 'iso', taskId, nodeRunId)
-  return worktreeDirName === '' ? root : join(root, worktreeDirName)
+  return mountPath === '' ? root : join(root, mountPath)
 }

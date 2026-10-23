@@ -8,10 +8,10 @@
 //      绝不进 payload（404 同形隐藏纪律的一致延伸）；
 //   3. 可见即列名：public / 本人 / admin 视角下引用名单完整；
 //   4. 计划（schedule）走成员私有规则（owner / tasks:read:all），非 ACL 表。
+import { patchAgentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -127,8 +127,7 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
   })
 
   async function seedWorkflowUsing(agentId: string, visibility: 'public' | 'private') {
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: ulid(),
       name: `wf-${visibility}`,
       definition: JSON.stringify({
@@ -196,18 +195,18 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
       { name: 'same-ref', ...AGENT_BASE },
       { ownerUserId: 'u-other' },
     )
-    const { agents } = tablesOf(db)
     // LIKE prefilter intentionally sees this row, while the authoritative
     // JSON-array exact matcher rejects it. The two rows share a display name,
     // so a name-based second filter would incorrectly re-introduce this
     // private row and disclose its existence through hiddenCount.
-    await db
-      .update(agents)
-      .set({
+    await patchAgentFixture(
+      db,
+      { id: coarseOnly.id },
+      {
         dependsOn: JSON.stringify({ coarseMatchOnly: target.id }),
         visibility: 'private',
-      })
-      .where(eq(agents.id, coarseOnly.id))
+      },
+    )
 
     try {
       await deleteAgent(db, target.id, owner)
@@ -240,14 +239,14 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
       ...AGENT_BASE,
       mcp: [mcp.id],
     })
-    const { agents } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, publicUser.id))
+    await patchAgentFixture(db, { id: publicUser.id }, { visibility: 'public' })
     // 他人私有代理也引用 m1
     await createAgent(db, { name: 'priv-user', ...AGENT_BASE, mcp: [mcp.id] })
-    await db
-      .update(agents)
-      .set({ ownerUserId: 'u-other', visibility: 'private' })
-      .where(eq(agents.name, 'priv-user'))
+    await patchAgentFixture(
+      db,
+      { name: 'priv-user' },
+      { ownerUserId: 'u-other', visibility: 'private' },
+    )
 
     try {
       await deleteMcp(binding, mcp.id)

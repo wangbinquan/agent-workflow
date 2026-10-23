@@ -4,6 +4,7 @@
 // 这一批比前三批更靠近生产装配链：数字员工模块的启动屏障、资源包 apply 日志的收敛扫描、
 // 数字员工动作执行器的结果读取。共同点是它们都曾只有装配点那行字，工厂一次没跑过。
 
+import { workflowFixture, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -19,10 +20,8 @@ import { developmentEmployeeTypePackage } from '@/modules/development-automation
 import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
 import { employeeTypePackageDescriptorSchema } from '@/modules/digital-employee/domain/model'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
-import {
-  composePostgresqlResourcePackageApplyMaintenance,
-  composeSqliteResourcePackageApplyMaintenance,
-} from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -97,13 +96,12 @@ async function seedActor(db: PersistenceDb): Promise<Actor> {
 
 async function seedTerminalTask(db: PersistenceDb, taskId: string): Promise<void> {
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `wf-${workflowId.slice(-6).toLowerCase()}`,
     definition: JSON.stringify({ $schema_version: 2, nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -148,14 +146,14 @@ describeEachProvider('RFC-359 W7 —— 资源包 apply 维护面组合根', (ha
     const appHome = tmpRoot('aw-rfc359-w7-pkg-')
     const pluginsDir = join(appHome, 'plugins')
     const active: string[] = []
-    const sqlite = composeSqliteResourcePackageApplyMaintenance({
+    const sqlite = composeResourcePackageApplyMaintenance({
       db: asSqlite(harness.db),
       appHome,
       pluginsDir,
       activitySource: { activeApplyIds: () => active },
       now: () => T0,
     })
-    const postgresql = composePostgresqlResourcePackageApplyMaintenance({
+    const postgresql = composeResourcePackageApplyMaintenance({
       db: asPostgresql(harness.db),
       appHome,
       pluginsDir,
@@ -163,11 +161,19 @@ describeEachProvider('RFC-359 W7 —— 资源包 apply 维护面组合根', (ha
     })
 
     // 日志表是空的：两个装配面各跑一次真扫描，都收敛到零。
-    expect(await sqlite.command.converge({ activeApplyIds: [] })).toEqual({
+    expect(
+      await createAtomicApplyRecovery([sqlite.scene], () => T0).converge({
+        'resource-package': [],
+      }),
+    ).toEqual({
       failed: 0,
       rolledForward: 0,
     })
-    expect(await postgresql.command.converge({ activeApplyIds: [] })).toEqual({
+    expect(
+      await createAtomicApplyRecovery([postgresql.scene], () => T0).converge({
+        'resource-package': [],
+      }),
+    ).toEqual({
       failed: 0,
       rolledForward: 0,
     })

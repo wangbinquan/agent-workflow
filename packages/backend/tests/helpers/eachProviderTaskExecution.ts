@@ -1,6 +1,8 @@
+// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+
+import { readAgentFixtures } from './model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTask } from './productionTaskLaunch'
-// RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
 import {
   composeProcessTaskExecutionBinding,
@@ -94,9 +96,9 @@ export function createTestDynamicWorkflowOperations(
     persistence: composeDynamicWorkflowPersistence(db),
     validationContext: Object.freeze({
       async load() {
-        const { agents, mcps } = tablesOf(db)
+        const { mcps } = tablesOf(db)
         const [agentRows, skills, mcpRows, pluginRows] = await Promise.all([
-          db.select().from(agents),
+          readAgentFixtures(db),
           listSkills(db),
           db.select().from(mcps),
           plugins.list(),
@@ -250,7 +252,7 @@ export async function createEachProviderTaskExecution(
       task,
       internal: { workspace: borrowedPostgresqlWorkspace(workspace) },
       subject: {
-        workflowId: workflow.id,
+        subject: { kind: 'workflow' as const, sourceId: workflow.id },
         workflowName: workflow.name,
         workflowVersion: workflow.version,
         workflowSnapshot: WorkflowDefinitionSchema.parse(JSON.parse(workflow.definition)),
@@ -567,7 +569,7 @@ export async function createEachProviderTaskExecution(
         task,
         internal: { workspace: borrowedPostgresqlWorkspace(workspace) },
         subject: {
-          workflowId: workflow.id,
+          subject: { kind: 'workflow' as const, sourceId: workflow.id },
           workflowName: workflow.name,
           // fixture 用的是普通工作流行，不是平台合成宿主。
           builtin: false,

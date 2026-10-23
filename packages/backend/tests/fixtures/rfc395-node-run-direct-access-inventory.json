@@ -1,0 +1,116 @@
+{
+  "stage": "RFC-395 II-a A3",
+  "nextPackage": "A7",
+  "scope": "Remaining task-execution-external direct access; raw SQL included. This inventory is not a selection exception allow-list.",
+  "sites": [
+    {
+      "path": "packages/backend/src/modules/code-capability/infrastructure/codeWorkspaceRead.ts",
+      "symbol": "findNodeRun / listNodeRuns",
+      "purpose": "workspace checkpoint facts and API timeline",
+      "a7": {
+        "status": "ledger",
+        "entry": "nodeRuns|code-capability/infrastructure/codeWorkspaceRead.ts",
+        "ledger": "rfc395-module-table-ownership-debt.json",
+        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+      }
+    },
+    {
+      "path": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
+      "symbol": "sealClarifyRound",
+      "purpose": "existing lifecycle UPDATE only",
+      "a7": {
+        "status": "closed",
+        "via": "task-execution/public/participants.ts#completeClarifyRunInTx"
+      }
+    },
+    {
+      "path": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
+      "symbol": "terminal sweep",
+      "purpose": "three existing terminal UPDATE statements only",
+      "a7": {
+        "status": "closed",
+        "via": "task-execution/public/participants.ts#cancelClarifyRunInTx+cancelTaskGateRunsInTx"
+      }
+    },
+    {
+      "path": "packages/backend/src/modules/runtime-management/infrastructure/realtimeStore.ts",
+      "symbol": "event replay",
+      "purpose": "node_runs association JOIN",
+      "a7": {
+        "status": "ledger",
+        "entry": "nodeRuns|runtime-management/infrastructure/realtimeStore.ts",
+        "ledger": "rfc395-module-table-ownership-debt.json",
+        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+      }
+    },
+    {
+      "path": "packages/backend/src/modules/system-operations/infrastructure/resourceLimitPersistence.ts",
+      "symbol": "resource usage",
+      "purpose": "resource-limit facts",
+      "a7": {
+        "status": "ledger",
+        "entry": "nodeRuns|system-operations/infrastructure/resourceLimitPersistence.ts",
+        "ledger": "rfc395-module-table-ownership-debt.json",
+        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+      }
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+      "symbol": "archive event rows",
+      "purpose": "run/task association",
+      "a7": {
+        "status": "ledger",
+        "entry": "nodeRuns|platform/persistence/eventsArchiveStore.ts",
+        "ledger": "rfc395-horizontal-table-ownership-debt.json",
+        "why": "归档仅面向 Task 事件，联查 run 归属；两个平台 provider wrapper 仍导入该文件，直接移入 owner 会新增 platform → modules 边。",
+        "removeWhen": "RFC-395 T11 eventsArchiveStore 边界任务：bootstrap 注入 Task 事件归档 store 后删除平台 adapter。 必须在 RFC-395 II-b B2 替换该表 adapter 前完成。"
+      }
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+      "symbol": "legacy lifecycle",
+      "purpose": "existing run facts and writes",
+      "a7": {
+        "status": "ledger",
+        "entry": "nodeRuns|platform/persistence/sqlite/taskLifecycle.ts",
+        "ledger": "rfc395-horizontal-table-ownership-debt.json",
+        "why": "遗留生命周期 writer 被 services/lifecycle 与平台 prune 策略类型引用；整体迁移需同时拆开这些合同，不能新增 platform → modules 边。",
+        "removeWhen": "RFC-395 II-b B2：Task 生命周期 adapter 换到目标表时收回 task-execution，并先解除平台策略对该 writer 的引用。"
+      }
+    },
+    {
+      "path": "packages/backend/src/services/task.ts",
+      "symbol": "resume / sync / call / prep",
+      "purpose": "legacy lifecycle and preparation facts",
+      "a7": {
+        "status": "closed",
+        "via": "task-execution/public/queries.ts#createNodeRunQueries",
+        "why": "Run facts, caller-mount rollback projections, sync, call and preparation reads use owner queries."
+      }
+    },
+    {
+      "path": "packages/backend/src/modules/source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
+      "symbol": "hasLiveOrRevivableChild",
+      "purpose": "raw SELECT child_task_id FROM node_runs; child task status existence, no run selection",
+      "a7": {
+        "status": "ledger",
+        "entry": "nodeRuns|source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
+        "ledger": "rfc395-module-table-ownership-debt.json",
+        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+      }
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/maintenanceExecutionFence.ts",
+      "symbol": "createMaintenanceExecutionFence",
+      "purpose": "raw SELECT 1 FROM node_runs WHERE status IN (...) LIMIT 1; active-run existence, no run selection",
+      "a7": {
+        "status": "closed",
+        "movedTo": "packages/backend/src/modules/task-execution/infrastructure/maintenanceExecutionFence.ts",
+        "via": "task-execution/composition/maintenanceExecutionFence.ts#createMaintenanceExecutionFence",
+        "why": "Only bootstrap imports the production factory; owner move preserves the indexed query without a platform-to-modules edge."
+      }
+    }
+  ],
+  "a7Part1": "2 closed; 4 module sites in exact T11 debt ledger; 4 horizontal sites handed to A7 part 2",
+  "a7Part2": "2 horizontal sites closed (services query and owner move); 2 exact horizontal ledger entries; no part-2 site unclassified"
+}

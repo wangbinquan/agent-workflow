@@ -25,6 +25,13 @@
 // If any of these go red the runtime contract drifted — investigate before
 // relaxing.
 
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -148,8 +155,7 @@ async function seedTask(db: PersistenceDb, opts: SeedOptions = {}): Promise<{ ta
   const taskId = opts.taskId ?? `task_${Math.random().toString(36).slice(2, 8)}`
   const def = opts.definition ?? defaultDef()
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -157,7 +163,7 @@ async function seedTask(db: PersistenceDb, opts: SeedOptions = {}): Promise<{ ta
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     workflowId,
@@ -184,8 +190,7 @@ async function seedQuestionerRun(
   opts: { id?: string; nodeId?: string } = {},
 ): Promise<string> {
   const id = opts.id ?? `nr_q_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId ?? 'questioner',
@@ -202,15 +207,14 @@ async function seedDesignerRun(
   opts: { id?: string; nodeId?: string; clarifyIteration?: number; status?: string } = {},
 ): Promise<string> {
   const id = opts.id ?? `nr_d_${Math.random().toString(36).slice(2, 8)}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId ?? 'designer',
     status: (opts.status ?? 'done') as 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: 'stub-snapshot',
+    checkpoints: [{ mountPath: '', preSnapshot: 'stub-snapshot' }],
   })
   return id
 }
@@ -255,16 +259,14 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
     expect(session.intermediaryNodeRunId).toBe(crossClarifyNodeRunId)
     expect(session.questions).toHaveLength(2)
 
-    const { clarifyRounds, nodeRuns, tasks, taskQuestions } = tablesOf(db)
+    const { clarifyRounds, nodeRuns, taskQuestions } = tablesOf(db)
     const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, session.id)))[0]
     expect(row?.status).toBe('awaiting_human')
     expect(row?.iteration).toBe(0)
 
     const nr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, crossClarifyNodeRunId)))[0]
     expect(nr?.status).toBe('awaiting_human')
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-      'awaiting_human',
-    )
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('awaiting_human')
     expect(
       (await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))).map(
         (question) => ({
@@ -598,7 +600,7 @@ describeEachProvider(
       const { taskId } = await seedTask(db, { definition: def })
       const nrId = 'nr_pending_cross'
       const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: nrId,
         taskId,
         nodeId: 'cross1',
@@ -666,11 +668,11 @@ describeEachProvider(
         actor: { userId: 'u1', role: 'owner' },
       })
 
-      const { tasks, clarifyRounds } = tablesOf(db)
+      const { clarifyRounds } = tablesOf(db)
       // Task fails before the designer consumes the feedback. RFC-126: CR-1 is
       // RETIRED → the lifecycle scan must NOT abandon the round; it stays 'answered'
       // so the human's answer is preserved (the deferred queue re-injects it on resume).
-      await db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status: 'failed' })
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(db).recoveryAdministration,
       })
@@ -681,7 +683,7 @@ describeEachProvider(
 
       // RESUME the task. RFC-126 fix: the answered round survives — never abandoned —
       // so its human answer stays available to the designer rerun.
-      await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status: 'running' })
       const afterResume = (
         await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
       )[0]
@@ -831,7 +833,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     // (in-flight / unconsumed).
     const dispatchedRerunId = `nr_qrr_${Math.random().toString(36).slice(2, 8)}`
     const { nodeRuns, taskQuestions, clarifyRounds } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: dispatchedRerunId,
       taskId,
       nodeId: 'questioner',

@@ -1,3 +1,4 @@
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -49,10 +50,8 @@ async function seedUser(
 
 async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(
+  await agentFixture(
     db,
-    agents,
     createAgentPersistenceValues({
       id,
       agent: CreateAgentSchema.parse({ name: `agent-${id.slice(-6).toLowerCase()}` }),

@@ -5,8 +5,7 @@
 // existed only as that one response. The request is now accepted once its checks pass
 // (202), the model runs in the background, and the round detail reports the running
 // generation or its last failure (kept ten minutes, cleared by the next start).
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { Hono, type Context } from 'hono'
@@ -75,14 +74,13 @@ async function seed(h: ProviderHarness) {
     edges: [],
     outputs: [],
   }
-  const { workflows, tasks, nodeRuns } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'async-followup',
     definition: JSON.stringify(definition),
     schemaVersion: 7,
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'async-followup',
     executionLineageId: taskId,
@@ -99,7 +97,7 @@ async function seed(h: ProviderHarness) {
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: askingNodeRunId,
     taskId,
     nodeId: 'asking',

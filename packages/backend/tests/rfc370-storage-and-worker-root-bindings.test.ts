@@ -386,11 +386,10 @@ test('RFC-383 workspace selection reaches the three shared consumers and the HTT
 
 test('both real maintenance Worker composers bind the selected recovery content without moving their database owner', () => {
   const source = load('bootstrap/maintenanceWorkerGraph.ts')
-  for (const name of [
-    'composePostgresqlResourcePackageApplyMaintenance',
-    'composeSqliteResourcePackageApplyMaintenance',
-  ]) {
-    const call = oneRoot(source, name)
+  const calls = namedCalls(source, source, 'composeResourcePackageApplyMaintenance')
+  expect(calls).toHaveLength(2)
+  for (const invocation of calls) {
+    const call = objectArgument(invocation)
     expect(compact(property(call, source, 'recoveryEffectsFactory'), source)).toBe(
       'workerEffects?.resourcePackageRecoveryContent',
     )

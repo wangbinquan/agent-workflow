@@ -1,5 +1,6 @@
 // RFC-359 W4-B4 —— webhook 派发持久化：一份实现，两个 provider 共用。
 
+import { createTaskTriggerQueries } from '@/modules/task-execution/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, sql } from 'drizzle-orm'
@@ -89,19 +90,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async findTaskByOrigin(input) {
-      const { tasks } = tablesOf(db)
-      const row = (
-        await db
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(
-            input.eventDeliveryId === undefined
-              ? eq(tasks.webhookFireId, input.fireId)
-              : eq(tasks.eventDeliveryId, input.eventDeliveryId),
-          )
-          .limit(1)
-      )[0]
-      return row?.id ?? null
+      return createTaskTriggerQueries(db).findByOrigin(input)
     },
 
     async getTrigger(triggerId) {
@@ -171,7 +160,7 @@ export function createWebhookDispatchPersistence(
     },
 
     async findLatestLaunchedTask(triggerId, streamKey) {
-      const { webhookTriggerFires, tasks } = tablesOf(db)
+      const { webhookTriggerFires } = tablesOf(db)
       const latest = (
         await db
           .select({ taskId: webhookTriggerFires.taskId })
@@ -187,15 +176,7 @@ export function createWebhookDispatchPersistence(
           .limit(1)
       )[0]
       if (latest?.taskId == null) return null
-      return (
-        (
-          await db
-            .select({ id: tasks.id, status: tasks.status })
-            .from(tasks)
-            .where(eq(tasks.id, latest.taskId))
-            .limit(1)
-        )[0] ?? null
-      )
+      return createTaskTriggerQueries(db).status(latest.taskId)
     },
 
     async markTriggerLaunchFailed(triggerId, error, now) {

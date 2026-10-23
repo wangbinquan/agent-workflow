@@ -7,7 +7,7 @@ import { normalizeResourceDisplayName, RESOURCE_DISPLAY_NAME_MAX } from '@agent-
  * out as the bare fallback `workflow-copy`.
  *
  * Leading `_` is stripped because the name rule reserves that prefix for the
- * framework's `__agent_host__` / `__workgroup_host__` rows.
+ * framework's `__agent_host__` / `__workgroup_host__` compatibility names.
  */
 function normalizeCopyBase(value: string, fallback: string): string {
   const normalized = normalizeResourceDisplayName(value).replace(/^[-_]+|[-_]+$/g, '')

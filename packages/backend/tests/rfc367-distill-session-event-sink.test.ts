@@ -23,6 +23,7 @@ import { createMemoryDistillSessionEventSink } from '../src/modules/memory/infra
 import { DISTILL_CAPTURE_FAILED_KIND } from '../src/modules/runtime-management/public/types'
 import { composeMemoryDistillQueries } from '../src/modules/memory/composition'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 async function seedJob(db: PersistenceDb): Promise<string> {
   const id = ulid()
@@ -207,7 +208,10 @@ describeEachProvider(
       })
       await sink.markTerminal('complete')
 
-      const view = await composeMemoryDistillQueries(db).getJobSessionView(jobId)
+      const view = await composeMemoryDistillQueries(
+        db,
+        createClarifyAnswerQueries(db),
+      ).getJobSessionView(jobId)
       expect(view.attempts).toHaveLength(1)
       const tree = view.attempts[0]!.tree
       expect(tree).not.toBeNull()

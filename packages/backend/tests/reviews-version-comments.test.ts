@@ -14,6 +14,7 @@
 //     reviews by brute-forcing ULIDs).
 //   - HTTP route returns the same shape and 404s consistently.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
@@ -54,8 +55,8 @@ async function seed(db: PersistenceDb): Promise<Seed<PersistenceDb>> {
   const taskId = 'task'
   const nodeRunId = 'run_rev'
 
-  const { workflows, tasks, nodeRuns, docVersions, reviewComments } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { docVersions, reviewComments } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -65,7 +66,7 @@ async function seed(db: PersistenceDb): Promise<Seed<PersistenceDb>> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -81,7 +82,7 @@ async function seed(db: PersistenceDb): Promise<Seed<PersistenceDb>> {
     // 库总是由 harness 传进来，血缘列因此总是补齐（合一前只有 provider 那条路补）。
     ...providerTaskLineage(taskId),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'rev_1',
@@ -455,10 +456,10 @@ describeEachProvider(
       // RFC-359 AC-6：这条此前只跑 SQLite（自建 `seed()` + `createApp`），判据在双引擎那半里
       // 并不存在。折进来时把同步的 `app()` 换成这边的 async 形态。
       test('404 — versionId from a different nodeRunId', async () => {
-        const { nodeRuns, docVersions } = tablesOf(s.db)
+        const { docVersions } = tablesOf(s.db)
         // Keep the parent run valid and visible so this exercises the version/run
         // ownership fence rather than short-circuiting on an unknown run.
-        await insertOne(s.db, nodeRuns, {
+        await nodeRunFixture(s.db, {
           id: 'run_other',
           taskId: s.taskId,
           nodeId: 'rev_other',

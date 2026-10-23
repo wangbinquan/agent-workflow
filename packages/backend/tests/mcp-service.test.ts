@@ -4,14 +4,12 @@
 // id addressing; type immutability; still-referenced delete guard; name
 // conflict; rename leaves id-based references untouched.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { agentFixture, readAgentFixtures } from './helpers/model'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { CreateAgent } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
@@ -36,8 +34,7 @@ import { ConflictError, NotFoundError, ValidationError } from '../src/util/error
 // These rows are reference fixtures for catalog operations. Keep the original
 // canonical ID arrays and default null owner; the catalog itself remains real.
 async function seedAgent(db: PersistenceDb, input: CreateAgent): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     ...input,
     id: ulid(),
     ownerUserId: null,
@@ -54,8 +51,7 @@ async function seedAgent(db: PersistenceDb, input: CreateAgent): Promise<void> {
 }
 
 async function getAgent(db: PersistenceDb, name: string) {
-  const { agents } = tablesOf(db)
-  const [row] = await db.select().from(agents).where(eq(agents.name, name)).limit(1)
+  const [row] = await readAgentFixtures(db, { name }, { limit: 1 })
   return row === undefined
     ? null
     : {

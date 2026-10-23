@@ -30,6 +30,12 @@ function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   // Monotonic id so isFresherNodeRun (pure id-order) picks the last-inserted row.
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -85,9 +91,9 @@ describe('RFC-092 §1.2b — answer-race window（openAskingNodeIds 守卫）', 
     }
   }
 
-  test('self-clarify：窗口开着（askingRunIds 含 asking 行 id）→ rerun 不 ready、无 anchor —— 无答案起跑被守卫挡住', () => {
+  test('self-clarify：窗口开着（askingRunIds 含 asking 行 id）→ rerun 不 ready、无 anchor —— 无答案起跑被守卫挡住', async () => {
     const s = selfClarifyScenario()
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       s.rows,
       s.definition,
       s.scopeNodes,
@@ -110,9 +116,9 @@ describe('RFC-092 §1.2b — answer-race window（openAskingNodeIds 守卫）', 
     expect(f.allSettled).toBe(false)
   })
 
-  test('self-clarify：答案已写、session answered（askingRunIds 清空）→ 同一 rows 即放行 ready 且 pendingAnchors 含 rerun 行 id', () => {
+  test('self-clarify：答案已写、session answered（askingRunIds 清空）→ 同一 rows 即放行 ready 且 pendingAnchors 含 rerun 行 id', async () => {
     const s = selfClarifyScenario()
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       s.rows,
       s.definition,
       s.scopeNodes,
@@ -147,11 +153,11 @@ describe('RFC-092 §1.2b — answer-race window（openAskingNodeIds 守卫）', 
     return { definition, scopeNodes, scopeIds, rows, upstreams, dispatched, qAsking, qRerun }
   }
 
-  test('cross-clarify questioner 同型：窗口内不 ready；answered 后同一 rows → ready + anchor', () => {
+  test('cross-clarify questioner 同型：窗口内不 ready；answered 后同一 rows → ready + anchor', async () => {
     const s = crossClarifyScenario()
     // 窗口开着：session 仍 awaiting_human ⇒ askingRunIds 含 questioner asking 行 id，
     // openClarifyNodeIds 含 cc（N6 正向证据，挡住 cc 的 settles-without-row）。
-    const open = deriveFrontier(
+    const open = await deriveFrontier(
       s.rows,
       s.definition,
       s.scopeNodes,
@@ -171,7 +177,7 @@ describe('RFC-092 §1.2b — answer-race window（openAskingNodeIds 守卫）', 
     expect(open.allSettled).toBe(false)
 
     // 窗口关闭：session 翻 answered ⇒ 两个 open-session 集合都清空。
-    const closed = deriveFrontier(
+    const closed = await deriveFrontier(
       s.rows,
       s.definition,
       s.scopeNodes,

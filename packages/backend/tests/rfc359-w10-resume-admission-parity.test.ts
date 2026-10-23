@@ -35,6 +35,7 @@
 //     ——顺带证明 SQLite 侧独立地有这道门、而且报同一个码。
 //   · 把 SQLite 的 `resumeKick` 里那句 `await assertChildTaskDrivable(...)` 拿掉
 //     ⇒ **只有 sqlite lane 的 C 红**，postgresql lane 全绿。
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -97,7 +98,7 @@ async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promis
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
-  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+  const { users } = tablesOf(db)
   const existing = await db
     .select({ id: users.id })
     .from(users)
@@ -115,7 +116,7 @@ async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promis
     })
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `w10-${workflowId}`,
     definition: JSON.stringify(DEFINITION),
@@ -126,7 +127,7 @@ async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promis
   let parentNodeRunId: string | null = null
   if (options.parentCallRowStatus !== undefined) {
     parentTaskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: parentTaskId,
       name: 'w10-parent',
       workflowId,
@@ -142,7 +143,7 @@ async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promis
       executionLineageId: parentTaskId,
     })
     parentNodeRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: parentNodeRunId,
       taskId: parentTaskId,
       nodeId: 'call1',
@@ -155,7 +156,7 @@ async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promis
   }
 
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'w10',
     workflowId,
@@ -186,7 +187,7 @@ async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promis
     ...(parentTaskId === null ? {} : { parentTaskId, parentNodeRunId, invocationDepth: 1 }),
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'doc',
@@ -198,7 +199,7 @@ async function seedFixture(db: PersistenceDb, options: SeedOptions = {}): Promis
     errorMessage: 'boom',
   })
   if (options.repoPrepRun === true) {
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: REPO_PREP_NODE_ID,

@@ -8,9 +8,7 @@ import {
 import { pluginCachedPathQuery } from './pluginCachedPathQuery'
 import { errorValue } from './resourcePackageMaintenancePaths'
 
-import { BUNDLE_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
-import { z } from 'zod'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
@@ -20,108 +18,35 @@ import type {
 } from '../application/resourcePackageMaintenance'
 
 import { markSkillBootVerified } from './legacy/skillBootVerify'
-import { assertCommittedApplyReceipt } from '../domain/resourcePackageApplyReceipt'
+import {
+  decodeResourcePackageArtifacts,
+  decodeResourcePackageReceipt,
+  isCurrentResourcePackageArtifact,
+} from './resourcePackageArtifactCodec'
+import type {
+  ResourcePackageCurrentArtifact,
+  ResourcePackageCurrentReceipt,
+} from './resourcePackageCurrentCodec'
 import {
   resourcePackageSkillRecoveryDisposition,
   type ResourcePackageSkillRecoveryDisposition,
 } from '../domain/resourcePackageSkillRecovery'
 
-const PostgresqlArtifactSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      kind: z.literal('plugin-install'),
-      operationId: z.string().min(1),
-      pluginId: z.string().min(1),
-      generationId: z.string().min(1),
-      generationDirectory: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('skill-stage'),
-      operationId: z.string().min(1),
-      skillId: z.string().min(1),
-      stagingDirectory: z.string().min(1),
-      targetDirectory: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      kind: z.literal('skill-version-stage'),
-      operationId: z.string().min(1),
-      skillId: z.string().min(1),
-      publishId: z.string().min(1),
-      version: z.number().int().positive(),
-      stagingDirectory: z.string().min(1),
-      versionDirectory: z.string().min(1),
-    })
-    .strict(),
-])
-
-const AppliedReceiptSchema = z
-  .object({
-    resourceType: z.enum(BUNDLE_RESOURCE_TYPES),
-    operationId: z.string().min(1),
-    resourceId: z.string().min(1),
-    action: z.enum(['create', 'update']),
-    name: z.string(),
-  })
-  .strict()
-
-const ApplyReceiptSchema = z
-  .object({
-    journalId: z.string().min(1),
-    applied: z.array(AppliedReceiptSchema),
-    root: z
-      .object({
-        resourceType: z.enum(BUNDLE_RESOURCE_TYPES),
-        resourceId: z.string().min(1),
-        name: z.string(),
-        action: z.enum(['create', 'update', 'reuse']),
-      })
-      .strict()
-      .optional(),
-    skippedSecrets: z
-      .array(
-        z
-          .object({
-            resourceType: z.enum(BUNDLE_RESOURCE_TYPES),
-            resourceName: z.string(),
-            field: z.string(),
-          })
-          .strict(),
-      )
-      .optional(),
-  })
-  .strict()
-
-type PostgresqlArtifact = z.infer<typeof PostgresqlArtifactSchema>
+type PostgresqlArtifact = ResourcePackageCurrentArtifact
 type PostgresqlSkillArtifact = Exclude<PostgresqlArtifact, { kind: 'plugin-install' }>
-type ApplyReceipt = z.infer<typeof ApplyReceiptSchema>
+type ApplyReceipt = ResourcePackageCurrentReceipt
 
 function parseArtifacts(json: string): readonly PostgresqlArtifact[] {
-  return z.array(PostgresqlArtifactSchema).parse(JSON.parse(json))
+  return decodeResourcePackageArtifacts(json).map((artifact) => {
+    if (!isCurrentResourcePackageArtifact(artifact))
+      throw new Error('resource-package-current-artifact-expected')
+    return artifact
+  })
 }
 
-/**
- * RFC-359 W10（判据缺口 13a）：**信封那两条判据搬进中立的
- * `domain/resourcePackageApplyReceipt.ts`，两个引擎调同一份**——此前只有 PostgreSQL 有，
- * SQLite 上回执缺失 / 认领别的 journal 也照常 roll-forward 并报成功。
- *
- * 留在这里的只有**载荷层**：`applied[]` 逐条的 `operationId` + `.strict()` 形状。
- *
- * RFC-359（apply 引擎合一）：**两个 provider 现在都写这一种格式**——生产侧只剩一台 apply 引擎。
- * 旧的 SQLite 格式（逐条 `opId`）只可能来自**合一之前**留在盘上的半成品，由
- * `composeResourcePackageApplyArtifactRecoveryChain` 回落到 legacy 读回侧处理。
- */
-function parseReceipt(journal: ResourcePackageApplyJournalSnapshot): ApplyReceipt {
-  return ApplyReceiptSchema.parse(JSON.parse(assertCommittedApplyReceipt(journal)))
-}
-
-// Both native and hosted content owners decode the same durable AW journal.
 export {
-  parseArtifacts as decodeResourcePackageArtifacts,
-  parseReceipt as decodeResourcePackageReceipt,
+  decodeResourcePackageArtifacts,
+  decodeResourcePackageReceipt,
   assertOperationInReceipt as assertResourcePackageArtifactReceipt,
 }
 
@@ -303,7 +228,7 @@ export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
   const factory = selectedResourcePackageRecoveryEffects(input.effectsFactory, input.appHome)
   return Object.freeze({
     async rollForward(journal: ResourcePackageApplyJournalSnapshot) {
-      const receipt = parseReceipt(journal)
+      const receipt = decodeResourcePackageReceipt(journal)
       let failure: Error | undefined
       for (const artifact of parseArtifacts(journal.preparedArtifactsJson)) {
         try {

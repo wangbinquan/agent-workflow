@@ -3,6 +3,7 @@
 //   端点（manage 权限、secret 一次性明文 + 掩码 hint、轮换、restrict 删除）；
 //   触发器（owner 制 404 同形、保存期三层校验、kind/endpoint 不可变、级联）；
 //   投递（manage 读、replay 三规则）。AC-14/15/16/17 的落点。
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -43,8 +44,7 @@ async function harness(scope: ProviderHttpApplicationScope) {
     },
   }
   const workflowId = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',

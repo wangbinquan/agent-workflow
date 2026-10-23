@@ -1,5 +1,6 @@
 // RFC-360: profile writes and Resource Catalog participants must share one real transaction.
 // Inject a failure after the real session write: neither context may commit alone.
+import { agentFixture, readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -146,8 +147,7 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
     const agentId = ulid()
     await expect(
       harness.session.serializable(async (transaction) => {
-        const { agents } = tablesOf(transaction)
-        await insertOne(transaction, agents, {
+        await agentFixture(transaction, {
           id: agentId,
           name: 'new-reference',
           runtime: f.name,
@@ -163,8 +163,7 @@ describeEachProvider('RFC-360 runtime profile transaction participants', (harnes
         throw new Error('rollback-reference')
       }),
     ).rejects.toThrow('rollback-reference')
-    const { agents } = tablesOf(harness.db)
-    expect(await harness.db.select().from(agents).where(eq(agents.id, agentId))).toEqual([])
+    expect(await readAgentFixtures(harness.db, { id: agentId })).toEqual([])
     expect(await f.store.getRuntime(f.name)).not.toBeNull()
     expect((await f.session())?.status).toBe('active')
   })

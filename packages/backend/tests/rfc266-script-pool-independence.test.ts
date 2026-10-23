@@ -10,7 +10,7 @@
 // 独立 ⇒ 任务照常跑完；退回共享一池 ⇒ 任务永远拿不到名额，测试超时失败。
 // 第三条反向锁住「脚本确实排在脚本池上」，防止有人把取闸整段删掉后前两条依然绿。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -47,8 +47,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -66,15 +65,14 @@ async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): 
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: `wf-${workflowId}`,
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -129,8 +127,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 }
 
 const statusOf = async (h: Harness, taskId: string): Promise<string | undefined> => {
-  const { tasks } = tablesOf(h.db)
-  return (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status
+  return (await readTaskFixtures(h.db, { id: taskId }))[0]?.status
 }
 
 describe('RFC-266 script nodes run in their own daemon pool', () => {

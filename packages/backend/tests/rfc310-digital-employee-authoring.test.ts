@@ -3484,8 +3484,8 @@ describeEachProviderHttpApplication(
         // 锁的是「结果按**具名端口**取，不是按硬编码的 `result` 字段」。
         // RFC-396：通过统一任务 outcome 选最终输出节点和最新 settled run，
         // 保留具名端口与 inactive 过滤；中间 Agent 的同名端口不能抢占结果。
-        expect(executionSource).toContain(
-          'projectExecutionOutcome(outcome).outputs[DIGITAL_EMPLOYEE_RESULT_PORT]',
+        expect(executionSource).toMatch(
+          /\(await projectExecutionOutcome\(outcome\)\)\.outputs\[\s*DIGITAL_EMPLOYEE_RESULT_PORT\s*\]/u,
         )
         expect(executionSource).toContain('resultPort?.active === false ? null')
         expect(executionSource).not.toContain('outcome.outputs.result')

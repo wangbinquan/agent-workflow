@@ -2,6 +2,9 @@
 // minting and lifecycle events commit atomically; native-session fencing and
 // git rollback complete before the replacement driver can touch a workspace.
 
+import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { decodeTaskRollbackCheckpoints } from './taskCheckpointCodec'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   isSingleRootRepository,
@@ -353,7 +356,7 @@ async function assertResumeAdmission(
   }
   if (
     phase === 'pruned' ||
-    task.worktreePath.length === 0 ||
+    isTaskWorkspaceUnbound(task.worktreePath) ||
     !(await dependencies.workspacePresence.exists(task.worktreePath))
   ) {
     throw new DomainError(
@@ -365,7 +368,7 @@ async function assertResumeAdmission(
   const rollbackTarget = await new DrizzleTaskRollbackQueries(dependencies.db).load(task.id)
   if (
     rollbackTarget !== null &&
-    !isSingleRootRepository(rollbackTarget.repositories.map((repo) => repo.worktreeDirName)) &&
+    !isSingleRootRepository(rollbackTarget.repositories.map((repo) => repo.mountPath)) &&
     rollbackTarget.repositories.length > 0
   ) {
     let remainingWorkspace = false
@@ -594,7 +597,14 @@ async function rollbackForResume(
     ...row,
     status: row.status as NodeRunStatus,
   }))
-  const rollbackRuns = selectResumeRollbackTargets(runs)
+  const rollbackRuns = await selectResumeRollbackTargets(
+    runs,
+    createRunSelectionOracleSnapshot(
+      runs.map((run) => ({ ...run, taskId: input.taskId })),
+      { scope: { kind: 'rows' } },
+    ),
+    input.taskId,
+  )
 
   // Held native sessions are fenced even when their run is not one of the
   // top-level rollback rows (for example a nested framework child).
@@ -631,8 +641,11 @@ async function rollbackForResume(
   for (const run of rollbackRuns) {
     const outcome = await rollbackNodeRunWorktrees(
       rollbackTarget,
-      run,
-      { resetOnEmptySnapshot: false, checkOnly: true },
+      decodeTaskRollbackCheckpoints(
+        run,
+        rollbackTarget.repos.map((repo) => repo.mountPath),
+      ),
+      { checkOnly: true },
       log,
     )
     const missing = snapshotMissingDetail(outcome)
@@ -660,8 +673,11 @@ async function rollbackForResume(
   for (const run of rollbackRuns) {
     const outcome = await rollbackNodeRunWorktrees(
       rollbackTarget,
-      run,
-      { resetOnEmptySnapshot: false },
+      decodeTaskRollbackCheckpoints(
+        run,
+        rollbackTarget.repos.map((repo) => repo.mountPath),
+      ),
+      {},
       log,
     )
     const missing = snapshotMissingDetail(outcome)

@@ -11,6 +11,7 @@
 // 所以这里测的是**行为**，不是源码里有没有那几个字段名：源码断言挡不住「字段解析了
 // 但没参与比对」这类失败。
 
+import { agentFixture, patchWorkflowFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -42,7 +43,7 @@ async function seed(
   db: PersistenceDb,
 ): Promise<{ db: PersistenceDb; appHome: string; agentId: string; mcpId: string }> {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc271-fence-'))
-  const { users, agents, mcps } = tablesOf(db)
+  const { users, mcps } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'alice',
@@ -54,7 +55,7 @@ async function seed(
     updatedAt: 1,
   } as never)
   const agentId = ulid()
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId,
     name: 'auditor',
     description: '',
@@ -71,7 +72,7 @@ async function seed(
     createdAt: 1,
     updatedAt: 1000,
     aclRevision: 3,
-  } as never)
+  })
   const mcpId = ulid()
   await insertOne(db, mcps, {
     id: mcpId,
@@ -226,8 +227,7 @@ describeEachProvider(
     test('ACL 漂移产出逐字节相同的包 ⇒ 旧 fence 应当放行', async () => {
       const { db, appHome } = await seed(harness.db)
       const wfId = ulid()
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: wfId,
         name: 'wf-acl',
         description: '',
@@ -238,7 +238,7 @@ describeEachProvider(
         aclRevision: 0,
         createdAt: 1,
         updatedAt: 1,
-      } as never)
+      })
 
       const before = await exportResourcePackage(
         db,
@@ -248,10 +248,11 @@ describeEachProvider(
       )
 
       // ACL 写路径：推 aclRevision / visibility / updatedAt，**不动 version**。
-      await db
-        .update(workflows)
-        .set({ visibility: 'public', aclRevision: 1, updatedAt: 2 } as never)
-        .where(eq(workflows.id, wfId))
+      await patchWorkflowFixture(
+        db,
+        { id: wfId },
+        { visibility: 'public', aclRevision: 1, updatedAt: 2 },
+      )
 
       const after = await exportResourcePackage(
         db,
@@ -268,8 +269,7 @@ describeEachProvider(
     test('内容漂移（version）仍然 409', async () => {
       const { db, appHome } = await seed(harness.db)
       const wfId = ulid()
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: wfId,
         name: 'wf',
         description: '',
@@ -279,7 +279,7 @@ describeEachProvider(
         version: 2,
         createdAt: 1,
         updatedAt: 1,
-      } as never)
+      })
       expect(
         await codeOf(
           exportResourcePackage(

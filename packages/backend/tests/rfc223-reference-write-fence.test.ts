@@ -7,6 +7,14 @@
 // stored ref is grandfathered. RFC-228 intentionally ends the historical
 // allowance for never-resolved managed-Skill refs.
 
+import {
+  patchAgentFixture,
+  readAgentFixtures,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
@@ -168,16 +176,11 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         kind: 'dependsOn',
         seed: async (id: string) => {
           await createAgent(db, { name: `dep-${id}`, ...EMPTY_AGENT }, { id })
-          const { agents } = tablesOf(db)
-          await db
-            .update(agents)
-            .set({ ownerUserId: 'target-owner', visibility: 'public' })
-            .where(eq(agents.id, id))
+          await patchAgentFixture(db, { id }, { ownerUserId: 'target-owner', visibility: 'public' })
         },
         input: (id: string): Partial<CreateAgent> => ({ dependsOn: [id] }),
         hide: async (id: string) => {
-          const { agents } = tablesOf(db)
-          await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, id))
+          await patchAgentFixture(db, { id }, { visibility: 'private' })
         },
       },
       {
@@ -219,9 +222,8 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         code: 'acl-missing-refs',
         details: { missing: [{ name: targetId }] },
       })
-      const { agents } = tablesOf(db)
       expect(
-        (await db.select({ name: agents.name }).from(agents)).some(
+        (await readAgentFixtures(db).then((rows) => rows.map((row) => ({ name: row.name })))).some(
           (row) => row.name === sourceName,
         ),
       ).toBe(false)
@@ -244,8 +246,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         },
       ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
-    const { agents } = tablesOf(db)
-    expect((await db.select().from(agents)).some((row) => row.name === 'system-writer')).toBe(false)
+    expect((await readAgentFixtures(db)).some((row) => row.name === 'system-writer')).toBe(false)
   })
 
   test('agent update rejects grant revocation and leaves the ref unset', async () => {
@@ -317,9 +318,8 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         issues: [{ code: 'skill-not-found', refKind: 'skill', direct: true }],
       },
     })
-    const { agents } = tablesOf(db)
     expect(
-      (await db.select({ name: agents.name }).from(agents)).some(
+      (await readAgentFixtures(db).then((rows) => rows.map((row) => ({ name: row.name })))).some(
         (row) => row.name === 'dormant-skill-ref',
       ),
     ).toBe(false)
@@ -349,8 +349,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         },
       ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
-    const { workflows } = tablesOf(db)
-    expect(await db.select().from(workflows)).toHaveLength(0)
+    expect(await readWorkflowFixtures(db)).toHaveLength(0)
 
     const dangling = await createWorkflow(
       db,
@@ -370,8 +369,8 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       { name: 'workflow-update-target', ...EMPTY_AGENT },
       { ownerUserId: 'target-owner' },
     )
-    const { agents, resourceGrants } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id))
+    const { resourceGrants } = tablesOf(db)
+    await patchAgentFixture(db, { id: target.id }, { visibility: 'private' })
     await grant(db, 'agent', target.id, editor.user.id)
     const empty = await createWorkflow(
       db,
@@ -401,13 +400,13 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
     expect((await getWorkflow(db, empty.id))?.version).toBe(1)
 
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, target.id))
+    await patchAgentFixture(db, { id: target.id }, { visibility: 'public' })
     const withRef = await createWorkflow(
       db,
       { name: 'grandfathered', description: '', definition: workflowDefinition(target.id) },
       { ownerUserId: editor.user.id, actor: editor },
     )
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id))
+    await patchAgentFixture(db, { id: target.id }, { visibility: 'private' })
     const receipt = await updateWorkflow(
       db,
       withRef.id,
@@ -427,8 +426,8 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       { name: 'portable-target', ...EMPTY_AGENT },
       { ownerUserId: 'target-owner' },
     )
-    const { agents, resourceGrants, workflows } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id))
+    const { resourceGrants } = tablesOf(db)
+    await patchAgentFixture(db, { id: target.id }, { visibility: 'private' })
     await grant(db, 'agent', target.id, editor.user.id)
 
     await expect(
@@ -455,7 +454,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         },
       ),
     ).rejects.toMatchObject({ code: 'import-ref-unresolved' })
-    expect(await db.select().from(workflows)).toHaveLength(0)
+    expect(await readWorkflowFixtures(db)).toHaveLength(0)
   })
 
   test('workgroup create/save fence new members while unchanged members stay grandfathered', async () => {
@@ -470,8 +469,8 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       { ownerUserId: 'target-owner' },
     )
     const { agents } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, baseAgent.id))
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, racedAgent.id))
+    await patchAgentFixture(db, { id: baseAgent.id }, { visibility: 'public' })
+    await patchAgentFixture(db, { id: racedAgent.id }, { visibility: 'public' })
     const createInput = CreateWorkgroupSchema.parse({
       name: 'create-race',
       description: '',
@@ -491,10 +490,11 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
         ownerUserId: editor.user.id,
         actor: editor,
         beforeWriteTransaction: async () => {
-          await db
-            .update(agents)
-            .set({ ownerUserId: 'new-owner', visibility: 'private' })
-            .where(eq(agents.id, racedAgent.id))
+          await patchAgentFixture(
+            db,
+            { id: racedAgent.id },
+            { ownerUserId: 'new-owner', visibility: 'private' },
+          )
         },
       }),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
@@ -517,7 +517,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       }),
       { ownerUserId: editor.user.id, actor: editor },
     )
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, baseAgent.id))
+    await patchAgentFixture(db, { id: baseAgent.id }, { visibility: 'private' })
     const grandfathered = await saveWorkgroup(
       db,
       group.id,
@@ -530,7 +530,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
     )
     expect(grandfathered.outcome).toBe('committed')
 
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, racedAgent.id))
+    await patchAgentFixture(db, { id: racedAgent.id }, { visibility: 'public' })
     const current = grandfathered.workgroup
     await expect(
       saveWorkgroup(
@@ -599,13 +599,13 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
     }
     const workflowId = ulid()
     const taskId = ulid()
-    const { workflows, tasks, agents } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { agents } = tablesOf(db)
+    await workflowFixture(db, {
       id: workflowId,
       name: 'runtime-host',
       definition: JSON.stringify(workflowDefinition()),
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'runtime-task',
       workflowId,
@@ -648,7 +648,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
     const stored = JSON.parse(
-      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!.workgroupConfigJson!,
+      (await readTaskFixtures(db, { id: taskId }))[0]!.workgroupConfigJson!,
     ) as WorkgroupRuntimeConfig
     expect(stored.members.map((member) => member.displayName)).toEqual(['base'])
   })

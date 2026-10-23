@@ -1,4 +1,6 @@
 /** RFC-370: prompt references are interpreted only by the selected content adapter. */
+
+import type { NodeRunConfigView } from '../../domain/nodeRunSnapshot'
 export interface NodeRunPromptContentEffects {
   reference(taskId: string, nodeRunId: string): string
   write(reference: string, prompt: string): void | Promise<void>
@@ -11,10 +13,7 @@ export interface SynchronousNodeRunPromptContentEffects extends NodeRunPromptCon
   read(reference: string): string | null
 }
 
-export interface NodeRunPromptRow {
-  readonly promptText: string | null
-  readonly promptPath: string | null
-}
+export type NodeRunPromptRow = Pick<NodeRunConfigView, 'promptText' | 'promptPath'>
 
 export interface PromptStorage {
   promptText: string | null

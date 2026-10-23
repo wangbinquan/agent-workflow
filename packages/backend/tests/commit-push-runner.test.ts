@@ -4,7 +4,7 @@
 // exhaustion, and non-fast-forward auto-merge → re-push. The framework owns
 // git; the message/repair generators are injected (production wraps opencode).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -80,10 +80,9 @@ exit 0
   // against the bun:sqlite dialect. The same rows through the neutral query
   // builder run unchanged on both engines.
   const db = harness.db
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'wf', name: 'f', definition: '{}' })
+  await workflowFixture(db, { id: 'wf', name: 'f', definition: '{}' })
   const taskId = 'task-cpr'
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'cpr',
     workflowId: 'wf',
@@ -107,7 +106,7 @@ exit 0
   // RFC-098 WP-10: the commit container row is born 'running' and the mint
   // factory enforces "born-running ⟹ child row" (frontier invisibility), so
   // the fixture provides the triggering agent run the way production does.
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'parent-agent-run',
     taskId,
     nodeId: 'agent-1',
@@ -157,9 +156,8 @@ async function readMeta(
   f: Fixture,
   nodeRunId: string,
 ): Promise<{ status: string; meta: CommitPushMeta }> {
-  const { nodeRuns } = tablesOf(f.db)
-  const row = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))[0]!
-  return { status: row.status, meta: JSON.parse(row.commitPushJson!) as CommitPushMeta }
+  const row = (await readNodeRunFixtures(f.db, { id: nodeRunId }))[0]!
+  return { status: row.status, meta: JSON.parse(row.commitPush!) as CommitPushMeta }
 }
 
 describeEachProvider('提交并推送执行器（双引擎）', (harness) => {
@@ -768,10 +766,10 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
             ),
           )
           await enteredBeforeOutcome(barrier.entered, pending)
-          const { nodeRuns, taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(f.db)
-          const running = (
-            await f.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, f.taskId))
-          ).filter((row) => row.rerunCause === 'commit-push')
+          const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(f.db)
+          const running = (await readNodeRunFixtures(f.db, { taskId: f.taskId })).filter(
+            (row) => row.rerunCause === 'commit-push',
+          )
           const effects = await f.db
             .select()
             .from(taskExecutionEffects)
@@ -782,7 +780,7 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
             .where(eq(taskExecutionEffectAttempts.effectId, effects[0]!.id))
           expect(running).toHaveLength(1)
           expect(running[0]!.status).toBe('running')
-          expect(running[0]!.commitPushJson).toBeNull()
+          expect(running[0]!.commitPush).toBeNull()
           expect(effects).toHaveLength(1)
           expect(effects[0]!.kind).toBe('repository')
           expect(effects[0]!.state).toBe('open')
@@ -798,9 +796,7 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
           if (rejectClose) {
             const result = await pending.catch((error) => error)
             expect<unknown>(result).toBe(failure)
-            const row = (
-              await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, running[0]!.id))
-            )[0]!
+            const row = (await readNodeRunFixtures(f.db, { id: running[0]!.id }))[0]!
             const effect = (
               await f.db
                 .select()
@@ -808,7 +804,7 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
                 .where(eq(taskExecutionEffects.id, effects[0]!.id))
             )[0]!
             expect(row.status).toBe('running')
-            expect(row.commitPushJson).toBeNull()
+            expect(row.commitPush).toBeNull()
             expect(effect.state).toBe('open')
             expect(effect.receiptJson).toBeNull()
             expect(

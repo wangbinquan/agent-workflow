@@ -1,3 +1,5 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { legacyHostedPrompt, readLegacyHostedPrompt } from '@/platform/content/legacyPrompt'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -47,7 +49,7 @@ export function createCrewStationExecutionWorkspaces(input: {
         .where(eq(tasks.id, taskId))
         .limit(1)
     )[0]
-    return task !== undefined && task.workspaceRef !== ''
+    return task !== undefined && !isTaskWorkspaceUnbound(task.workspaceRef)
       ? input.locate(task.workspaceRef).taskId
       : taskId
   }
@@ -255,8 +257,8 @@ export function composeCrewStationExecutionOwner(
         materialObjectsAvailable: capability('materialObjectsVersion'),
         // Small prompts are durable DB content, never service-local files.
         nodeRunPrompts: {
-          store: async (_taskId, _nodeRunId, prompt) => ({ promptText: prompt, promptPath: null }),
-          read: async (row) => row?.promptText ?? null,
+          store: async (_taskId, _nodeRunId, prompt) => legacyHostedPrompt(prompt),
+          read: async (row) => readLegacyHostedPrompt(row),
         },
         portArtifacts: composePortArtifactOperations(portArtifactContentEffects),
       }),

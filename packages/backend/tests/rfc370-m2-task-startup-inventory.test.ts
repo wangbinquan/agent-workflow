@@ -1,6 +1,6 @@
 // The real Task core persists transported runtime facts while still running;
 // presentation-only observation failures do not change the business result.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -32,15 +32,15 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
           taskId = ulid(),
           nodeRunId = ulid(),
           workflowId = ulid()
-        const { workflows, tasks, nodeRuns, nodeRunEvents } = tablesOf(db)
-        await insertOne(db, workflows, {
+        const { nodeRunEvents } = tablesOf(db)
+        await workflowFixture(db, {
           id: workflowId,
           name: 'inventory',
           definition: '{}',
           createdAt: 1,
           updatedAt: 1,
         })
-        await insertOne(db, tasks, {
+        await taskFixture(db, {
           id: taskId,
           workflowId,
           name: 'inventory',
@@ -53,7 +53,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
           inputs: '{}',
           startedAt: 1,
         })
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: nodeRunId,
           taskId,
           nodeId: 'n1',
@@ -135,7 +135,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
           async execute(request, sink) {
             await request.beforeStart?.()
             await sink.record({ ...record, sourceKey: 'original:1' })
-            const [live] = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))
+            const [live] = await readNodeRunFixtures(db, { id: nodeRunId })
             expect(live?.status).toBe('running')
             eager = JSON.parse(live!.runtimeInventoryJson!)
             // A replay must retain the first report, including a failure.
@@ -232,7 +232,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
         )
         expect(result.status).toBe('done')
         expect(settled).toBe(true)
-        const [final] = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))
+        const [final] = await readNodeRunFixtures(db, { id: nodeRunId })
         const inventory = JSON.parse(final!.runtimeInventoryJson!),
           verification = JSON.parse(final!.startupVerificationJson!)
         expect(inventory.state).toBe(state === 'verified' ? 'captured' : state)

@@ -1,3 +1,4 @@
+import { readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
@@ -43,6 +44,7 @@ import {
 import { appHome } from '../src/util/paths'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 const NONCE = 'deadbeefcafe0002'
 const SESSION_ID = 'ses_distill'
@@ -170,7 +172,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
     runFn: RunDistillOptions['runFn'],
   ): RunDistillOptions => ({
     // No sinkFactory => the REAL memory_distill_events writer.
-    store: new DrizzleMemoryDistillWorkStore(db),
+    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
@@ -203,7 +205,10 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
     const persisted = await db.select().from(memories).where(eq(memories.distillJobId, job.id))
     expect(persisted).toHaveLength(1)
 
-    const view = await composeMemoryDistillQueries(db).getJobSessionView(job.id)
+    const view = await composeMemoryDistillQueries(
+      db,
+      createClarifyAnswerQueries(db),
+    ).getJobSessionView(job.id)
     expect(view.attempts).toHaveLength(1)
     expect(view.attempts[0]!.captureFailed).toBe(false)
     const tree = view.attempts[0]!.tree
@@ -234,7 +239,10 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
     expect(rows.length).toBeGreaterThan(0)
     expect(rows.some((r) => r.payload === envelope && r.kind === 'text')).toBe(true)
 
-    const view = await composeMemoryDistillQueries(db).getJobSessionView(job.id)
+    const view = await composeMemoryDistillQueries(
+      db,
+      createClarifyAnswerQueries(db),
+    ).getJobSessionView(job.id)
     const tree = view.attempts[0]!.tree
     expect(tree).not.toBeNull()
     expect(assistantTexts(tree!)).toEqual([envelope])
@@ -242,8 +250,8 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
 
   test('AC-10: full attempts (ok and protocol failure) rewrite no historical row', async () => {
     const taskId = ulid()
-    const { tasks, taskFeedback, memories } = tablesOf(db)
-    await insertOne(db, tasks, {
+    const { taskFeedback, memories } = tablesOf(db)
+    await taskFixture(db, {
       id: taskId,
       name: 'history-task',
       workflowId: 'wf-history',
@@ -308,7 +316,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
       const byId = <T extends { id: string }>(rows: T[]) =>
         [...rows].sort((a, b) => (a.id < b.id ? -1 : 1))
       return {
-        tasks: byId(await db.select().from(tasks)),
+        tasks: byId(await readTaskFixtures(db)),
         feedback: byId(await db.select().from(taskFeedback)),
         memories: byId(await db.select().from(memories)),
       }

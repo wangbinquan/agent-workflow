@@ -1,6 +1,7 @@
 // RFC-359 W4-D4 —— memory 资源 scope 访问判定要的两件事实（scope 资源行、授权档）：一份实现，两个 provider 共用。
 // 两个读都落在调用方交来的统一事务句柄上；没有 provider 客户端、事务句柄或行经 resource-catalog 的 public 合同外泄。
 
+import { isTaskDefinitionHostId } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
@@ -20,6 +21,7 @@ export const resourceScopeAccessReads: ResourceScopeAccessReads<PersistenceTx> =
         .limit(1)
       return rows[0] ?? null
     }
+    if (isTaskDefinitionHostId(scope.id)) return { ownerUserId: null, visibility: 'public' }
     const { workflows } = tablesOf(transaction)
     const rows = await transaction
       .select({ ownerUserId: workflows.ownerUserId, visibility: workflows.visibility })

@@ -71,7 +71,7 @@ export function workspaceView(
       repoPath: repo.repositoryRef,
       canonWorktreePath: repo.canonicalRef,
       isoWorktreePath: repo.workspaceRef,
-      worktreeDirName: repo.mount,
+      mountPath: repo.mount,
       baseBranch: repo.baseBranch,
       baseSnapshot: repo.baseSnapshot,
       taskBaseHead: repo.taskBaseHead,
@@ -113,7 +113,7 @@ function retainTopology(handle: IsoHandle, record: WorkspaceRecord): void {
 
 function conflictView(scope: IsolationWorkspaceScope, value: IsolationConflict): MergeBackConflict {
   const result: MergeBackConflict = {
-    worktreeDirName: value.mount,
+    mountPath: value.mount,
     paths: value.paths,
     mergedTree: value.mergedTree,
     rawConflictOutput: value.rawConflictOutput,

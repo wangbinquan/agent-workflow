@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
 // RFC-359 W1-T7c —— 任务删除认领的崩溃恢复，两个引擎各跑一遍。
@@ -27,8 +27,7 @@ async function seedTask(
   over: { readonly parentTaskId?: string; readonly status?: 'done' | 'running' } = {},
 ): Promise<void> {
   const snapshot = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-t7c',
     description: '',
@@ -36,7 +35,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf_${taskId}`,
@@ -88,8 +87,10 @@ async function claimState(db: PersistenceDb, claimId: string) {
 }
 
 async function taskExists(db: PersistenceDb, taskId: string): Promise<boolean> {
-  const { tasks } = tablesOf(db)
-  return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length > 0
+  return (
+    (await readTaskFixtures(db, { id: taskId }).then((rows) => rows.map((row) => ({ id: row.id }))))
+      .length > 0
+  )
 }
 
 describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) => {

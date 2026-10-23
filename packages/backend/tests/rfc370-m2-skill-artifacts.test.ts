@@ -1,3 +1,4 @@
+import { skillTextView } from '@/modules/resource-catalog/application/skills/textView'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -105,7 +106,10 @@ describeEachProvider('RFC-370 durable skill artifacts', (harness) => {
     })
     const content = createDatabaseSkillContent({ db: harness.db })
     expect(
-      await content.content.readMain({ id: skillId, name: 'skill', contentVersion: 1 }),
+      skillTextView(
+        await content.content.readMain({ id: skillId, name: 'skill', contentVersion: 1 }),
+        content.content,
+      ),
     ).toContain('version one')
     const current = (await getSkillById(harness.db, skillId))!
     const updateId = ulid()
@@ -120,12 +124,18 @@ describeEachProvider('RFC-370 durable skill artifacts', (harness) => {
     await update.complete()
     await plan.complete() // An old replay must never replace a newer live tree.
     expect(
-      await content.content.readMain({ id: skillId, name: 'skill', contentVersion: 2 }),
+      skillTextView(
+        await content.content.readMain({ id: skillId, name: 'skill', contentVersion: 2 }),
+        content.content,
+      ),
     ).toContain('version two')
     expect(
-      await content.content.readFile(
-        { id: skillId, name: 'skill', contentVersion: 2 },
-        'scripts/check.txt',
+      skillTextView(
+        await content.content.readFile(
+          { id: skillId, name: 'skill', contentVersion: 2 },
+          'scripts/check.txt',
+        ),
+        content.content,
       ),
     ).toBe('retained helper')
     expect(

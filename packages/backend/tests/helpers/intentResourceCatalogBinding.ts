@@ -1,4 +1,4 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readWorkflowFixtures } from './model'
 import { createWorkflowValidationPort } from '@/modules/resource-catalog/infrastructure/workflowValidation'
 import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { Actor } from '../../src/auth/actor'
@@ -287,8 +287,7 @@ export function intentGraphValidationForTest(db: PersistenceDb): IntentWorkflowG
       const wanted = new Set(input.agentIds)
       const byAgent = new Map<string, { readonly id: string; readonly name: string }[]>()
       if (wanted.size === 0) return byAgent
-      const { workflows } = tablesOf(db)
-      for (const row of await db.select().from(workflows)) {
+      for (const row of await readWorkflowFixtures(db)) {
         let nodes: Array<{ agentId?: unknown }> = []
         try {
           nodes =

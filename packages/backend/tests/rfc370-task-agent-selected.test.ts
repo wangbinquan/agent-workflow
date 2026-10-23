@@ -1,4 +1,9 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
@@ -59,15 +64,15 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         taskId = ulid(),
         nodeRunId = ulid(),
         workflowId = ulid()
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { nodeRuns } = tablesOf(db)
+      await workflowFixture(db, {
         id: workflowId,
         name: 'selected-rejection',
         definition: '{}',
         createdAt: 1,
         updatedAt: 1,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'selected-rejection',
         workflowId,
@@ -80,7 +85,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         inputs: '{}',
         startedAt: 1,
       })
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
@@ -177,15 +182,14 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         taskId = ulid(),
         nodeRunId = ulid(),
         workflowId = ulid()
-      const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'selected',
         definition: '{}',
         createdAt: 1,
         updatedAt: 1,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'selected',
         workflowId,
@@ -198,7 +202,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         inputs: '{}',
         startedAt: 1,
       })
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
@@ -443,10 +447,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
       expect(submitted).not.toHaveProperty('cmd')
       expect(submitted).not.toHaveProperty('env')
       expect(submitted).not.toHaveProperty('pid')
-      const rows = await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+      const rows = await readNodeRunOutputFixtures(db, { nodeRunId })
       expect(rows.map((row) => row.portName).sort()).toEqual(['closed', 'summary'])
     })
   }

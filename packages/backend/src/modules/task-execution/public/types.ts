@@ -1,3 +1,4 @@
+import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
 export type {
   PortArchiveItem,
   PortArchive,
@@ -104,7 +105,7 @@ export interface TaskCallGraphWorkspace {
   readonly taskId: string
   readonly worktreePath: string
   readonly repos: readonly {
-    readonly worktreeDirName: string
+    readonly mountPath: string
     readonly worktreePath: string
   }[]
 }
@@ -156,6 +157,7 @@ export interface TaskStartupVerificationReadModel {
 
 export interface TaskExecutionOutcomeSource {
   readonly task: Readonly<{
+    workflowId: string
     id: string
     status: string
     errorSummary: string | null
@@ -163,7 +165,7 @@ export interface TaskExecutionOutcomeSource {
     failedNodeId: string | null
     workflowSnapshot: string | null
     workgroupId: string | null
-    workgroupConfigJson: string | null
+    workgroupConfig: TaskWorkgroupConfig | null
     sourceAgentName: string | null
     codeRoundId: string | null
   }>
@@ -345,3 +347,32 @@ export interface EmployeeExecutionArtifactQueries {
     readonly reviewRunIds: readonly string[]
   } | null>
 }
+
+export type { TaskSubject, StoredTaskSubject, TaskDefinitionOrigin } from '../domain/taskSubject'
+export type {
+  TaskSubjectQueries,
+  TaskSubjectProjection,
+} from '../application/ports/taskSubjectQueries'
+
+export type { TaskRepositoryMount } from '../domain/taskRepository'
+export type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
+export type { TaskRollbackCheckpointRun } from '../domain/taskCheckpointRollback'
+
+export type {
+  TaskWorkgroupConfig,
+  TaskWorkgroupLaunchConfig,
+  TaskWorkgroupRuntimeConfig,
+} from '../domain/taskWorkgroupConfig'
+export type { RequestedSource } from '../domain/taskRepository'
+
+export { deriveNodeRunRole } from '../domain/nodeRunRole'
+export { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
+export type { NodeRunRole, NodeRunSyntheticKind, DerivedNodeRunRole } from '../domain/nodeRunRole'
+export type {
+  NodeRunIdentitySnapshot,
+  NodeRunConfigView,
+  NodeRunRuntimeStateView,
+  NodeRunResultView,
+  NodeRunCheckpointView,
+  NodeRunInputView,
+} from '../domain/nodeRunSnapshot'

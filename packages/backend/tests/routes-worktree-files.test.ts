@@ -4,8 +4,7 @@
 // stat the filesystem; sanity-checks the JSON wire shape against the shared
 // zod schemas to catch field drift between server / shared / client.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -30,8 +29,7 @@ async function seedTask(
 ): Promise<string> {
   const taskId = opts.taskId ?? `task_${ulid()}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -39,7 +37,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc065-fixture',
     workflowId,

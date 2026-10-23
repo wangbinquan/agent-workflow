@@ -9,6 +9,7 @@
 // If this goes red, services/review.ts:submitReviewDecision iterate/reject
 // branch is out of lock-step with RFC-011 design §3.1.
 
+import { patchNodeRunFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -240,17 +241,18 @@ async function seedDesignerPreSnapshot(h: Harness): Promise<string> {
   const rows = await fetchDesignerTopRuns(h)
   const target = rows[rows.length - 1]
   if (target === undefined) throw new Error('no designer node_run to seed')
-  const { nodeRuns } = tablesOf(h.db)
-  await h.db.update(nodeRuns).set({ preSnapshot: sha }).where(eq(nodeRuns.id, target.id))
+  await patchNodeRunFixture(
+    h.db,
+    { id: target.id },
+    { checkpoints: [{ mountPath: '', preSnapshot: sha }] },
+  )
   return sha
 }
 
 async function fetchDesignerTopRuns(h: Harness) {
-  const { nodeRuns } = tablesOf(h.db)
-  const rows = await h.db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'designer')))
+  const rows = await readNodeRunFixtures(h.db, {
+    $and: [{ taskId: h.taskId }, { nodeId: 'designer' }],
+  })
   return rows.filter((r) => r.parentNodeRunId === null).sort((a, b) => a.retryIndex - b.retryIndex)
 }
 
@@ -315,7 +317,8 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     h = await buildHarness()
     cleanupHarness = h.cleanup
     const before = (await fetchDesignerTopRuns(h))[0]!
-    const beforeSnapshot = before.preSnapshot
+    const beforeSnapshot =
+      before.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null
 
     await submitAndSettleReviewDecision(h, {
       nodeRunId: h.reviewNodeRunId,
@@ -327,7 +330,9 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     const fresh = afterRuns.find((r) => r.retryIndex === 1)
     expect(fresh).toBeDefined()
     expect(fresh!.status).toBe('pending')
-    expect(fresh!.preSnapshot).toBe(beforeSnapshot)
+    expect(
+      fresh!.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null,
+    ).toBe(beforeSnapshot)
     expect(fresh!.parentNodeRunId).toBeNull()
     expect(fresh!.iteration).toBe(before.iteration)
     // The fresh row is the one the scheduler will pick up next; its

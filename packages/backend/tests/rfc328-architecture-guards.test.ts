@@ -49,7 +49,10 @@ const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
   ],
   ['packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts', new Set(['tickOnce'])],
   ['packages/backend/src/services/runtime/claudeCode/sessionCapture.ts', new Set(['persistRows'])],
-  ['packages/backend/src/services/task.ts', new Set(['persistPreparedProjection'])],
+  [
+    'packages/backend/src/modules/task-execution/infrastructure/taskPreparationParticipant.ts',
+    new Set(['writeWorkspace']),
+  ],
 ])
 const WORKER_MUTATION_TABLES = new Set(['tasks', 'nodeRuns', 'nodeRunOutputs', 'nodeRunEvents'])
 const OWNED_MUTATION_GATEWAYS = new Set([
@@ -190,7 +193,10 @@ const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
   ],
   ['packages/backend/src/services/nodeRunMint.ts', new Set(['mintNodeRunTx'])],
   ['packages/backend/src/services/commitPushRunner.ts', new Set(['persistMeta'])],
-  ['packages/backend/src/services/task.ts', new Set(['persistPreparedProjection'])],
+  [
+    'packages/backend/src/modules/task-execution/infrastructure/taskPreparationParticipant.ts',
+    new Set(['writeWorkspace']),
+  ],
 ])
 
 const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
@@ -256,10 +262,8 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // 参与者自己不再 compose 别的 context。这条债因此从 infrastructure 挪到组合根，
   // 与 PostgreSQL 那一支同形（那边一直是 bootstrap 交）。
   'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/composition/triggerExecution.ts',
-  'resource-catalog/application/resourceDefaults: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
   'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
-  'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/dynamicWorkflowPersistence.ts',
   'resource-catalog/infrastructure/legacy/workflow.validator: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组启动的资源面收成两个 provider 唯一的一份，
   // 形状与紧邻的 `agentLaunchResourceOperations.ts` 三条**逐字对称**（同一处置、同一层）。
@@ -268,7 +272,6 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // 换掉 PG 那份是**功能修复**而不是整理：它把 actor 投影成 direct authority 再查目录，
   // 认不出定时 / webhook 的委派 actor，PostgreSQL 上定时启动代理 / 工作组任务当场 500。
   'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
-  'resource-catalog/infrastructure/legacy/workgroup/launch: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/workgroups: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   // RFC-370 A-T5: the unchanged native pairing moved from RM into TE
   // composition. These two actual compatibility addresses are already recorded
@@ -333,7 +336,13 @@ function crossContextProviderBridges(units: readonly GuardUnit[]): string[] {
 function callableName(node: ts.Node): string | null {
   let cursor: ts.Node | undefined = node
   while (cursor !== undefined) {
-    if (ts.isFunctionDeclaration(cursor) && cursor.name !== undefined) return cursor.name.text
+    // RFC-395 II-a: participant mutations moved into named object methods.
+    if (
+      (ts.isFunctionDeclaration(cursor) || ts.isMethodDeclaration(cursor)) &&
+      cursor.name !== undefined &&
+      (ts.isIdentifier(cursor.name) || ts.isStringLiteral(cursor.name))
+    )
+      return cursor.name.text
     if (
       (ts.isArrowFunction(cursor) || ts.isFunctionExpression(cursor)) &&
       ts.isVariableDeclaration(cursor.parent) &&
@@ -352,8 +361,9 @@ function isInsideCanonicalMutationSymbol(node: ts.Node, path: string): boolean {
   let cursor: ts.Node | undefined = node
   while (cursor !== undefined) {
     if (
-      ts.isFunctionDeclaration(cursor) &&
+      (ts.isFunctionDeclaration(cursor) || ts.isMethodDeclaration(cursor)) &&
       cursor.name !== undefined &&
+      (ts.isIdentifier(cursor.name) || ts.isStringLiteral(cursor.name)) &&
       allowed.has(cursor.name.text)
     ) {
       return true
@@ -725,6 +735,34 @@ describe('RFC-328 architecture guards', () => {
     expect(
       validateCodeHostRecoveryBindingManifest([...bindings, bindings[0]!], bindingUnits),
     ).toContain('duplicate code-host recovery binding id')
+  })
+
+  test('RFC-395 II-a: object method names keep the exact mutation allowlist effective', () => {
+    const path =
+      'packages/backend/src/modules/task-execution/infrastructure/taskPreparationParticipant.ts'
+    for (const [method, expected] of [
+      ['writeWorkspace', true],
+      ["'writeWorkspace'", true],
+      ['otherWrite', false],
+    ] as const) {
+      const source = ts.createSourceFile(
+        path,
+        `const participant = { async ${method}() { tx.update(tasks) } }`,
+        ts.ScriptTarget.Latest,
+        true,
+      )
+      let checked = 0
+      const visit = (node: ts.Node): void => {
+        if (ts.isCallExpression(node)) {
+          expect(callableName(node)).toBe(method.replaceAll("'", ''))
+          expect(isInsideCanonicalMutationSymbol(node, path)).toBe(expected)
+          checked += 1
+        }
+        ts.forEachChild(node, visit)
+      }
+      visit(source)
+      expect(checked).toBe(1)
+    }
   })
 
   test('negative fixtures prove every RFC-328 source guard can bite', () => {

@@ -14,13 +14,19 @@
 // (resolvePortContentDetailed) and packages/backend/src/services/review.ts
 // (dispatchReviewNode upstream port resolve).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
@@ -54,8 +60,7 @@ describeEachProvider(
       const frontmatter = opts.declareMarkdownFileKind
         ? JSON.stringify({ outputKinds: { design: 'markdown_file' } })
         : '{}'
-      const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: agentId,
         name: 'designer',
         description: '',
@@ -86,7 +91,7 @@ describeEachProvider(
         edges: [],
       }
       const workflowId = ulid()
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'w',
         description: '',
@@ -95,7 +100,7 @@ describeEachProvider(
       })
 
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         name: 'fixture-task',
         id: taskId,
         workflowId,
@@ -108,7 +113,7 @@ describeEachProvider(
         inputs: '{}',
         startedAt: Date.now(),
       })
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]!
 
       mkdirSync(join(worktree, 'docs'), { recursive: true })
       const fileBody = '# Generated design\n\nbody of the file the user expects to see.'
@@ -116,7 +121,7 @@ describeEachProvider(
       const absPath = join(worktree, 'docs', 'test_design.md')
 
       const designerRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: designerRunId,
         taskId,
         nodeId: 'designer',
@@ -127,7 +132,7 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: designerRunId,
         portName: 'design',
         content: absPath,

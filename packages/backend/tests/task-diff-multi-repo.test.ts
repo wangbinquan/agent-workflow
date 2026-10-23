@@ -14,8 +14,7 @@
 //   B18 one repo has zero changes: that repo's section (including header)
 //       is silently dropped; only the changed repo appears in output.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -55,8 +54,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     repos.push(repoPath)
   }
   const db = createInMemoryDb(MIGRATIONS)
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-diff',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),

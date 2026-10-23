@@ -3,8 +3,7 @@
 // digital employee round must retain the owning Case, so direct/reloaded task
 // details can render the same stable backlink without a cross-context join.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { describe, expect, test } from 'bun:test'
@@ -22,15 +21,14 @@ describe('RFC-310 digital employee task source link', () => {
       const taskId = ulid()
       const now = Date.now()
       const definition = JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] })
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'RFC-310 source-link workflow',
         definition,
         createdAt: now,
         updatedAt: now,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'RFC-310 source-link task',
         workflowId,

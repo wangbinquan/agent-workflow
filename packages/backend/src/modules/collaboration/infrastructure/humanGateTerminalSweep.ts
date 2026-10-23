@@ -1,6 +1,8 @@
 // RFC-359 W4-B3 —— 任务终态时的人工门清扫（澄清轮次封存 / 作废 + 挂起 run 取消 + node-statuses committed event）：
 // 一份实现，两个 provider 共用。SQLite 此前经 dbTxSync + 同步 committed-event 参与者，PG 经 SERIALIZABLE；现在同走统一写事务。
 
+import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
@@ -25,7 +27,7 @@ export function createHumanGateTerminalSweepCommand(
       } = { sealedSelfRounds: 0, abandonedCrossRounds: 0, canceledRuns: [] }
       const now = input.now ?? Date.now()
       const eventRef = await databaseSessionFor(db).transaction(async (tx) => {
-        const { clarifyRounds, nodeRuns } = tablesOf(tx)
+        const { clarifyRounds } = tablesOf(tx)
         const openRounds = await tx
           .select({
             id: clarifyRounds.id,
@@ -37,60 +39,39 @@ export function createHumanGateTerminalSweepCommand(
           .where(
             and(eq(clarifyRounds.taskId, input.taskId), eq(clarifyRounds.status, 'awaiting_human')),
           )
+        const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
         for (const round of openRounds) {
-          if (round.kind === 'cross') {
-            await tx
-              .update(clarifyRounds)
-              .set({ status: 'abandoned', abandonedAt: now })
-              .where(
-                and(eq(clarifyRounds.id, round.id), eq(clarifyRounds.status, 'awaiting_human')),
-              )
-            result.abandonedCrossRounds += 1
-          } else {
-            await tx
-              .update(clarifyRounds)
-              .set({ status: 'canceled' })
-              .where(
-                and(eq(clarifyRounds.id, round.id), eq(clarifyRounds.status, 'awaiting_human')),
-              )
-            result.sealedSelfRounds += 1
-          }
-          // rfc053-allow-direct-status-write -- provider terminal-sweep CAS
-          const parked = await tx
-            .update(nodeRuns)
-            .set({ status: 'canceled', finishedAt: now, errorMessage: input.cause })
-            .where(
-              and(
-                eq(nodeRuns.id, round.intermediaryNodeRunId),
-                eq(nodeRuns.status, 'awaiting_human'),
-              ),
-            )
-            .returning({ id: nodeRuns.id })
-          if (parked.length > 0) {
+          await createClarifyAnswerWritePort(db).transition(
+            {
+              roundId: round.id,
+              kind: round.kind === 'cross' ? 'abandon' : 'cancel',
+              expectedStatus: 'awaiting_human',
+              now,
+            },
+            tx,
+          )
+          if (round.kind === 'cross') result.abandonedCrossRounds += 1
+          else result.sealedSelfRounds += 1
+          if (
+            await taskHumanGate.cancelClarifyRun({
+              runId: round.intermediaryNodeRunId,
+              now,
+              cause: input.cause,
+            })
+          ) {
             result.canceledRuns.push({
               nodeRunId: round.intermediaryNodeRunId,
               nodeId: round.intermediaryNodeId,
             })
-          } else {
-            await tx
-              .update(nodeRuns)
-              .set({ errorMessage: input.cause })
-              .where(
-                and(eq(nodeRuns.id, round.intermediaryNodeRunId), eq(nodeRuns.status, 'canceled')),
-              )
           }
         }
-        for (const status of ['awaiting_human', 'awaiting_review'] as const) {
-          // rfc053-allow-direct-status-write -- provider terminal-sweep CAS
-          const rows = await tx
-            .update(nodeRuns)
-            .set({ status: 'canceled', finishedAt: now, errorMessage: input.cause })
-            .where(and(eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.status, status)))
-            .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
-          for (const row of rows) {
-            result.canceledRuns.push({ nodeRunId: row.id, nodeId: row.nodeId })
-          }
-        }
+        result.canceledRuns.push(
+          ...(await taskHumanGate.cancelTaskGateRuns({
+            taskId: input.taskId,
+            now,
+            cause: input.cause,
+          })),
+        )
         if (result.canceledRuns.length === 0) return null
         return await appendTaskNodeStatusesCommittedEvent(tx, {
           taskId: input.taskId,

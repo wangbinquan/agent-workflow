@@ -10,16 +10,16 @@
 // 合并 470 行之前先把等价性钉住——这是 agent 那一刀（§5hn 批次一）验证过的次序：
 // 先有基线，换终端时才知道「行为没动」不是自我说服。
 // 判据形状照抄那条：相等面 + 各自的正确性断言（相等只证明「一致」，不证明「对」）。
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
+import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
+import { readTaskFixtures, readWorkflowFixtures } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { WORKGROUP_HOST_WORKFLOW_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
 
 const TOKEN = 'd'.repeat(64)
 
@@ -160,7 +160,7 @@ describeEachProviderHttpApplication(
 
       // 先钉住这一侧**本身**确实是工作组启动落出来的——两个引擎同样地错也会让相等断言绿掉。
       expect(task['workflowId'], '工作组启动必须挂在 __workgroup_host__ 锚上').toBe(
-        WORKGROUP_HOST_WORKFLOW_ID,
+        TASK_DEFINITION_HOSTS.workgroup.id,
       )
       expect(
         (comparable['workflowSnapshot'] as { nodeIds: string[] }).nodeIds,
@@ -171,13 +171,8 @@ describeEachProviderHttpApplication(
         '宿主边扫成 0 ⇒ 比较面失效',
       ).toBeGreaterThan(0)
 
-      const { tasks } = tablesOf(scope.harness.db)
       const row = (
-        await scope.harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, String(task['id'])))
-          .limit(1)
+        await readTaskFixtures(scope.harness.db, { id: String(task['id']) }, { limit: 1 })
       )[0] as unknown as Record<string, unknown>
       expect(row, '任务行必须真的落库了').toBeDefined()
       expect(earlyLifecycleViolation(row), '比较面摘掉的生命周期三格必须自洽').toBeNull()
@@ -193,6 +188,10 @@ describeEachProviderHttpApplication(
         ]),
       )
 
+      // RFC-395 II-a A2: the real dual-provider launch never creates a catalog host.
+      for (const host of Object.values(TASK_DEFINITION_HOSTS)) {
+        expect(await readWorkflowFixtures(scope.harness.db, { id: host.id })).toEqual([])
+      }
       launched.set(scope.harness.capabilities.provider, comparable)
       if (launched.size < 2) return
       expect(

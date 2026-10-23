@@ -1,4 +1,5 @@
 // RFC-374 T10: real SQLite logical copying preserves run seq and the pruned allocation high-water row; PostgreSQL identity continues above it.
+import { patchTaskFixture } from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
@@ -15,7 +16,7 @@ import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLo
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
 import { restoreLogicalDatabaseBackup } from '@/platform/persistence/logicalDatabaseRestore'
 import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
+import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedSequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
 
@@ -37,11 +38,8 @@ describeEachProvider(
           taskId = await seedSequenceTask(sourceDb)
           await mintSequenceRun(sourceDb, taskId, { id: 'z-old' })
           await mintSequenceRun(sourceDb, taskId, { id: 'a-new' })
-          const { tasks, nodeRuns, nodeRunSeqAllocations } = tablesOf(sourceDb)
-          await sourceDb
-            .update(tasks)
-            .set({ status: 'done', finishedAt: 2 })
-            .where(eq(tasks.id, taskId))
+          const { nodeRuns, nodeRunSeqAllocations } = tablesOf(sourceDb)
+          await patchTaskFixture(sourceDb, { id: taskId }, { status: 'done', finishedAt: 2 })
           await backfillNodeRunSequences(createNodeRunSeqBackfillStore(sourceDb))
           runs = await sourceDb.select().from(nodeRuns)
           allocations = await sourceDb.select().from(nodeRunSeqAllocations)

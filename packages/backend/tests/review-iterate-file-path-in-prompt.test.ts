@@ -19,6 +19,7 @@
 // submitReviewDecision), and the doc_versions schema migration that adds
 // the source_file_path column.
 
+import { readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -350,11 +351,9 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       binaryOverride: h.stubOpencode,
     })
 
-    const { nodeRuns } = tablesOf(h.db)
-    const designerRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'designer')))
+    const designerRuns = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId: h.taskId }, { nodeId: 'designer' }],
+    })
     const tops = designerRuns
       .filter((r) => r.parentNodeRunId === null)
       .sort((a, b) => a.retryIndex - b.retryIndex)

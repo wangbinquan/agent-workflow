@@ -1,5 +1,8 @@
 // RFC-359 W4-B1 —— 任务生命周期 WS 投影：一份实现，两个 provider 共用。
 
+import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
+import { projectStoredTaskRepositorySummary } from './taskRepositorySurface'
+import { decodeTaskSubject, projectTaskSubject } from '../domain/taskSubject'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
@@ -16,28 +19,27 @@ export function createDatabaseTaskLifecycleWsProjection(
 ): TaskLifecycleWsProjection {
   return Object.freeze({
     async findCreatedTask(taskId: string): Promise<TaskLifecycleCreatedProjection | null> {
-      const { tasks, workflows } = tablesOf(db)
+      const { tasks } = tablesOf(db)
       const rows = await db
-        .select({ task: tasks, workflowName: workflows.name })
+        .select({ task: tasks, workflowName: workflowNameExpression(db, tasks.workflowId) })
         .from(tasks)
-        .leftJoin(workflows, eq(workflows.id, tasks.workflowId))
         .where(eq(tasks.id, taskId))
         .limit(1)
       const row = rows[0]
       if (row === undefined) return null
+      const repository = projectStoredTaskRepositorySummary(row.task, 'stored')
       return Object.freeze({
         id: row.task.id,
         name: row.task.name,
-        workflowId: row.task.workflowId,
-        workflowName: row.workflowName,
-        repoPath: row.task.repoPath,
-        repoUrl: row.task.repoUrl,
-        cachedRepoId: row.task.cachedRepoId,
+        ...projectTaskSubject(decodeTaskSubject(row.task), row.workflowName),
+        repoPath: repository.repoPath,
+        repoUrl: repository.repoUrl,
+        cachedRepoId: repository.cachedRepoId,
         status: row.task.status,
         startedAt: row.task.startedAt,
         finishedAt: row.task.finishedAt,
         errorSummary: row.task.errorSummary,
-        repoCount: row.task.repoCount,
+        repoCount: repository.repoCount,
         spaceKind: row.task.spaceKind,
         sourceAgentName: row.task.sourceAgentName,
       })

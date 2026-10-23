@@ -6,8 +6,7 @@
 // 多用户不可见→404 同形行为（RFC-285 B1，旧 403）由 worktree-files-acl.test.ts
 // 对同一原语覆盖，含 byte-oracle）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
 import type { Hono } from 'hono'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -46,14 +45,13 @@ async function buildHarness(provider: ProviderHarnessContext): Promise<Harness<P
   mkdirSync(worktree, { recursive: true })
 
   const workflowId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture',
     id: taskId,
     workflowId,
@@ -68,7 +66,7 @@ async function buildHarness(provider: ProviderHarnessContext): Promise<Harness<P
     ...(provider === undefined ? {} : providerTaskLineage(taskId)),
   })
   const runId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'w',
@@ -110,11 +108,10 @@ async function seedArchivedPort(
     nodeRunId: h.runId,
     portName,
     items,
-    worktreeDirName: '',
+    mountPath: '',
     worktreeRootAbs: h.worktree,
   })
-  const { nodeRunOutputs } = tablesOf(h.db)
-  await insertOne(h.db, nodeRunOutputs, {
+  await nodeRunOutputFixture(h.db, {
     nodeRunId: h.runId,
     portName,
     content: Object.keys(files).join('\n'),
@@ -232,8 +229,7 @@ describeProviderPortArtifacts((getHarness) => {
 describeProviderPortArtifacts((getHarness) => {
   test('legacy row (no archive) falls back to worktree; both-missing → 404', async () => {
     writeFileSync(join(getHarness().worktree, 'legacy.md'), 'FROM WORKTREE')
-    const { nodeRunOutputs } = tablesOf(getHarness().db)
-    await insertOne(getHarness().db, nodeRunOutputs, {
+    await nodeRunOutputFixture(getHarness().db, {
       nodeRunId: getHarness().runId,
       portName: 'legacy',
       content: 'legacy.md',
@@ -302,14 +298,12 @@ describeProviderPortArtifacts((getHarness) => {
     await seedArchivedPort(getHarness(), 'doc', { 'a.md': 'x' })
     const otherTask = ulid()
     const workflowId = ulid()
-    const { workflows } = tablesOf(getHarness().db)
-    await insertOne(getHarness().db, workflows, {
+    await workflowFixture(getHarness().db, {
       id: workflowId,
       name: 'wf2',
       definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     })
-    const { tasks } = tablesOf(getHarness().db)
-    await insertOne(getHarness().db, tasks, {
+    await taskFixture(getHarness().db, {
       name: 'other',
       id: otherTask,
       workflowId,

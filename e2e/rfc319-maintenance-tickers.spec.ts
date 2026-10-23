@@ -52,6 +52,7 @@
 //   * e2e/crash-recovery.spec.ts 只借用它起「真子进程」的姿势（slow stub + 真任务），
 //     断言的对象（心跳停滞自动杀）与它的 SIGKILL 恢复语义无交集。
 
+import { taskFixtureSql, readNodeRunFixturesSql, fixtureSqlParameter } from './fixtures/model'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -233,16 +234,21 @@ function distillEventInsert(jobId: string, sessionId: string, ts: number): strin
 
 /** 一条**未终态**的任务：EVENT-X4 的保留期不得吃掉指向它的那条 fire 行。 */
 function liveTaskInsert(taskId: string, now: number): string {
-  return (
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,' +
-    ' base_branch, branch, status, inputs, started_at, running_ms, space_kind, repo_count)' +
-    ` VALUES (${sqlText(taskId)}, ${sqlText('RFC-319 retention live-task fixture')},` +
-    ` ${sqlText('rfc319-retention-wf')},` +
-    ` ${sqlText('{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}')},` +
-    ` ${sqlText('/rfc319/retention-fixture')}, ${sqlText('/rfc319/retention-fixture/wt')},` +
-    ` ${sqlText('main')}, ${sqlText(`agent-workflow/${taskId}`)}, ${sqlText('awaiting_human')},` +
-    ` ${sqlText('{}')}, ${String(now - MINUTE_MS)}, 0, ${sqlText('scratch')}, 1);`
-  )
+  return taskFixtureSql({
+    id: taskId,
+    name: 'RFC-319 retention live-task fixture',
+    workflowId: 'rfc319-retention-wf',
+    workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+    repoPath: '/rfc319/retention-fixture',
+    worktreePath: '/rfc319/retention-fixture/wt',
+    baseBranch: 'main',
+    branch: `agent-workflow/${taskId}`,
+    status: 'awaiting_human',
+    inputs: '{}',
+    startedAt: now - MINUTE_MS,
+    runningMs: 0,
+    spaceKind: 'scratch',
+  })
 }
 
 interface DeliveryProbe {
@@ -459,19 +465,25 @@ function pendingTaskWithS4Alert(
 ): string {
   const alertId = `${taskId.slice(0, 20)}ALRT`
   return [
-    'INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,' +
-      ' base_branch, branch, status, inputs, started_at, running_ms, space_kind, repo_count,' +
-      ' auto_recovery_attempts, auto_recovery_window_started_at, auto_recovery_suspended)' +
-      ` VALUES (${sqlText(taskId)}, ${sqlText('RFC-319 auto-repair fixture')},` +
-      ` ${sqlText('rfc319-autorepair-wf')},` +
-      ` ${sqlText('{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}')},` +
-      ` ${sqlText('/rfc319/autorepair-fixture')},` +
-      ` ${sqlText(`/rfc319/autorepair-fixture/${taskId}`)},` +
-      ` ${sqlText('main')}, ${sqlText(`agent-workflow/${taskId}`)}, ${sqlText('pending')},` +
-      ` ${sqlText('{}')}, ${String(now - 20 * MINUTE_MS)}, 0, ${sqlText('scratch')}, 1,` +
-      ` ${String(breaker.attempts)},` +
-      ` ${breaker.windowStartedAt === null ? 'NULL' : String(breaker.windowStartedAt)},` +
-      ` ${breaker.suspended ? '1' : '0'});`,
+    taskFixtureSql({
+      id: taskId,
+      name: 'RFC-319 auto-repair fixture',
+      workflowId: 'rfc319-autorepair-wf',
+      workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+      repoPath: '/rfc319/autorepair-fixture',
+      worktreePath: `/rfc319/autorepair-fixture/${taskId}`,
+      baseBranch: 'main',
+      branch: `agent-workflow/${taskId}`,
+      status: 'pending',
+      inputs: '{}',
+      startedAt: now - 20 * MINUTE_MS,
+      runningMs: 0,
+      spaceKind: 'scratch',
+      autoRecoveryAttempts: breaker.attempts,
+      autoRecoveryWindowStartedAt:
+        breaker.windowStartedAt === null ? null : breaker.windowStartedAt,
+      autoRecoverySuspended: Boolean(breaker.suspended ? 1 : 0),
+    }),
     'INSERT INTO lifecycle_alerts (id, task_id, rule, severity, detail, detected_at, resolved_at)' +
       ` VALUES (${sqlText(alertId)}, ${sqlText(taskId)}, ${sqlText('S4')}, ${sqlText('warning')},` +
       ` ${sqlText('{"rule":"S4","message":"task pending too long without scheduler pickup"}')},` +
@@ -547,13 +559,16 @@ interface LiveChild {
 
 /** 等到 daemon 真的 spawn 了一个 runtime 子进程，并把 pid 记进 node_runs。 */
 async function waitForLiveChild(daemon: DaemonHandle, taskId: string): Promise<LiveChild> {
-  const rows = await new Promise<Array<{ id: string; pid: number; spawn_binary_path: string }>>(
+  const rows = await new Promise<Array<{ id: string; pid: number; spawnBinaryPath: string }>>(
     (resolve, reject) => {
       const deadline = Date.now() + 120_000
       const tick = (): void => {
-        const found = querySqlite<{ id: string; pid: number; spawn_binary_path: string }>(
+        const found = querySqlite<{ id: string; pid: number; spawnBinaryPath: string }>(
           databasePath(daemon),
-          "SELECT id, pid, spawn_binary_path FROM node_runs WHERE task_id = ? AND pid IS NOT NULL AND status = 'running';",
+          readNodeRunFixturesSql(
+            { taskId: fixtureSqlParameter, pid: { $ne: null }, status: 'running' },
+            { id: 'id', pid: 'pid', spawnBinaryPath: 'spawnBinaryPath' },
+          ),
           [taskId],
         )
         if (found.length > 0) {
@@ -577,7 +592,7 @@ async function waitForLiveChild(daemon: DaemonHandle, taskId: string): Promise<L
   expect(row, '没有拿到 node_run 行').toBeDefined()
   if (row === undefined) throw new Error('unreachable')
   expect(
-    row.spawn_binary_path,
+    row.spawnBinaryPath,
     'node_runs.spawn_binary_path 是空的 ⇒ killStaleRunProcessTree 的命令行身份闸（util/process.ts:281-285）' +
       '会以 command-mismatch 拒杀，本用例测的那条链路根本走不到',
   ).toBeTruthy()

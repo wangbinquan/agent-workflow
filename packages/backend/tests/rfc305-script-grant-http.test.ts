@@ -2,7 +2,7 @@
 // RFC-305 actual capability journey: an existing user session gains and loses
 // privileged workflow projection/authoring from current effective permissions.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 
 import type { Hono } from 'hono'
@@ -92,8 +92,7 @@ describeEachProviderHttpApplication(
       const session = await createSession({ db, userId: user.id })
       const publicId = ulid()
       const privateId = ulid()
-      const { workflows } = tablesOf(db)
-      await db.insert(workflows).values([
+      await workflowFixture(db, [
         {
           id: publicId,
           name: 'public-privileged-workflow',

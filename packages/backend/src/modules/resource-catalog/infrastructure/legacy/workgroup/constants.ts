@@ -11,10 +11,6 @@
 // clarify asker keys reference them); renaming the constants is fine, renaming
 // the VALUES is a data migration.
 
-/** Fixed ULID-shaped id of the builtin host workflow (lazy seed, ensureWorkgroupHostWorkflow). */
-export const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
-export const WORKGROUP_HOST_WORKFLOW_NAME = '__workgroup_host__'
-
 export const WG_LEADER_NODE_ID = '__wg_leader__'
 export const WG_MEMBER_NODE_ID = '__wg_member__'
 export const WG_CLARIFY_NODE_ID = '__wg_clarify__'

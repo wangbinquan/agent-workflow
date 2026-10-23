@@ -18,6 +18,7 @@
 //   const plugins = await loadPluginsByIds(query, ids)
 //   await runNode({ ..., dependents: closure, plugins })
 
+import { agentReferenceIds } from '@agent-workflow/shared'
 import type { Agent, Plugin } from '@agent-workflow/shared'
 import { runtimeIdRef, runtimeRefKey } from '@/services/ref/runtimeRef'
 
@@ -40,7 +41,7 @@ export function collectPluginIdsFromClosure(closure: readonly Agent[]): string[]
   const seen = new Set<string>()
   const out: string[] = []
   for (const agent of closure) {
-    for (const id of agent.plugins ?? []) {
+    for (const id of agentReferenceIds(agent, 'plugin')) {
       const key = runtimeRefKey(runtimeIdRef('plugin', id))
       if (seen.has(key)) continue
       seen.add(key)

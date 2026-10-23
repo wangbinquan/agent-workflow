@@ -12,6 +12,7 @@
 // PostgreSQL 侧 `/api/tasks` 用的是等价的 `IS DISTINCT FROM`。三态各来一行，
 // 任何一侧改写成裸 `ne(...)` 都会在这里红。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -41,7 +42,7 @@ function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
  * 于是「共享给我」这一档的差别只可能来自属主一栏。
  */
 async function seed(db: Db): Promise<void> {
-  const { users, workflows, tasks, taskCollaborators } = tablesOf(db)
+  const { users, taskCollaborators } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'bob'].map((id) => ({
       id,
@@ -53,7 +54,7 @@ async function seed(db: Db): Promise<void> {
       updatedAt: 1,
     })),
   )
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf1',
     name: 'wf',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -66,7 +67,7 @@ async function seed(db: Db): Promise<void> {
   let startedAt = 1_788_278_400_000
   for (const row of rows) {
     startedAt += 1
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: row.id,
       name: row.id,
       workflowId: 'wf1',

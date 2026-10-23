@@ -47,7 +47,7 @@ const LIST_COLUMNS = [
   'repoCount',
   'scheduledTaskId',
   'workgroupId',
-  'workgroupConfigJson',
+  'workgroupLaunch',
   'spaceKind',
   'parentTaskId',
   'invocationDepth',
@@ -107,11 +107,35 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
     expect(block.length).toBeGreaterThan(0)
     for (const column of LIST_COLUMNS) {
       expect(block, `TASK_LIST_COLUMNS is missing ${column}`).toContain(
-        `${column}: tasks.${column}`,
+        column === 'workgroupLaunch'
+          ? 'workgroupLaunch: taskWorkgroupLaunchSelection(db)'
+          : `${column}: tasks.${column}`,
       )
     }
+    const configReader = read(
+      'modules',
+      'task-execution',
+      'infrastructure',
+      'taskWorkgroupConfig.ts',
+    )
+    expect(configReader).toContain('tasks.workgroupConfigJson')
+    expect(configReader).toContain('.mapWith(decodeTaskWorkgroupLaunchConfig)')
+    expect(block).not.toContain('taskWorkgroupConfigSelection(')
+    const configDecoder = readFileSync(
+      resolve(SRC, '../../shared/src/schemas/workgroupRuntime.ts'),
+      'utf8',
+    )
+    const launchStart = configDecoder.indexOf('export function decodeTaskWorkgroupLaunchConfig(')
+    expect(launchStart).toBeGreaterThanOrEqual(0)
+    const launchEnd = configDecoder.indexOf('\n}', launchStart)
+    expect(launchEnd).toBeGreaterThan(launchStart)
+    const launchDecoder = configDecoder.slice(launchStart, launchEnd)
+    expect(launchDecoder).toContain('projectTaskWorkgroupLaunch(parseTaskWorkgroupJson(stored))')
+    expect(launchDecoder).not.toContain('safeParse')
+    expect(launchDecoder).not.toContain('decodeTaskWorkgroupConfig(')
     for (const heavy of HEAVY_COLUMNS) {
       expect(block, `TASK_LIST_COLUMNS must not carry ${heavy}`).not.toContain(`tasks.${heavy}`)
+      expect(configReader).not.toContain(`tasks.${heavy}`)
     }
     // 列清单存在还不够——`listRows` 必须真的用它，而不是留一份摆设再走 `select()`。
     // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：投影多带一列 `workflowName`
@@ -119,7 +143,7 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
     // `.select(TASK_LIST_COLUMNS)` 变成 `.select({ ...TASK_LIST_COLUMNS, workflowName })`。
     // 本条锁的不变量没变——**列清单必须被真的摊进去**，且不得回退成裸 `select()`。
     const listRows = source.slice(source.indexOf('async function listRows(')).slice(0, 1600)
-    expect(listRows).toContain('.select({ ...TASK_LIST_COLUMNS')
+    expect(listRows).toMatch(/\.select\(\{\s*\.\.\.TASK_LIST_COLUMNS\(db\),/)
     expect(listRows, '裸 select() 会把整行重列拖过来').not.toMatch(/\.select\(\)/)
   })
 

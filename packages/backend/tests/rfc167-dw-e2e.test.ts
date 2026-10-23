@@ -13,6 +13,12 @@
 //      runScope re-runs the swapped DAG to done — the recovery path Codex
 //      impl-gate P1-3 unlocked, exercised end to end.
 
+import {
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -133,7 +139,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         user: { id: 'u-e2e', username: 'e2e', displayName: 'e2e', role: 'admin', status: 'active' },
         source: 'daemon',
       })
-      const { users, tasks, nodeRuns } = tablesOf(db)
+      const { users, nodeRuns } = tablesOf(db)
       // RFC-359 AC-1（plan §5hn 批次二 ⑧）：根启动内核要为非系统 actor 解析 **Git 提交身份**
       // （用户存在、active、有 email、gitName 非空），旧的 `startWorkgroupTask` 不看这些。
       await db
@@ -179,7 +185,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         ),
       )
 
-      const afterGen = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const afterGen = (await readTaskFixtures(db, { id: task.id }))[0]
       expect(afterGen?.status).toBe('awaiting_review')
       // RFC-217 T2 — the dw checkpoint rides workgroup_task_state now.
       const stateGen = await loadWorkgroupTaskState(db, task.id)
@@ -187,7 +193,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       expect(dwGen?.phase).toBe('awaiting_confirm')
       const generatedDef = WorkflowDefinitionSchema.parse(dwGen?.generatedDef)
       expect(generatedDef.nodes.map((n) => n.id)).toEqual(['plan-step'])
-      const runsGen = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
+      const runsGen = await readNodeRunFixtures(db, { taskId: task.id })
       const orchRun = runsGen.find((r) => r.rerunCause === DW_GENERATE_CAUSE)
       expect(orchRun?.status).toBe('done')
       // the generation run's iso delta is discarded, never merged (Codex P1)
@@ -232,7 +238,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         ),
       )
 
-      const final = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const final = (await readTaskFixtures(db, { id: task.id }))[0]
       expect(final?.status).toBe('done')
       expect(JSON.parse(final?.workflowSnapshot ?? '{}')).toEqual(generatedDef)
       const finalDw = (await loadWorkgroupTaskState(db, task.id)).dwState
@@ -296,14 +302,14 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         edges: [],
       }
       const taskId = ulid()
-      const { workflows, tasks, workgroupTaskState, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { workgroupTaskState, nodeRuns } = tablesOf(db)
+      await workflowFixture(db, {
         id: 'wf-anchor',
         name: 'anchor',
         definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
         builtin: true,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'rec',
         workflowId: 'wf-anchor',
@@ -373,7 +379,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
         ),
       )
       expect(res.resumed).toEqual([taskId])
-      const final = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const final = (await readTaskFixtures(db, { id: taskId }))[0]
       expect(final?.status).toBe('done')
       const planRuns = await db
         .select()

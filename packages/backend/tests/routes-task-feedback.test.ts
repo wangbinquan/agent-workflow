@@ -4,6 +4,7 @@
 // Covers: visibility gate (RFC-285 B1: invisible ≡ missing, both 404), valid POST → 201 + distill job created,
 // invalid body → 422, permission gating.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -57,8 +58,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const outsiderToken = (await createSession({ db, userId: outsider.id })).token
 
   const wfId = ulid()
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -67,7 +68,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     workflowId: wfId,

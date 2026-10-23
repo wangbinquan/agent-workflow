@@ -1,0 +1,1856 @@
+{
+  "stage": "RFC-395 II-a A7 part 1",
+  "scope": "modules only; horizontal directories require a separate shrinking ledger using referencedPersistenceTables",
+  "entries": [
+    {
+      "table": "actionTemplates",
+      "owner": "development-automation",
+      "file": "resource-catalog/infrastructure/resourceVisibility.ts",
+      "module": "resource-catalog",
+      "tableId": "action_templates",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceVisibility.ts 仍依赖 action_templates；resource-catalog → development-automation 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceVisibility 边界任务：先由 RFC-294 设计门确认 development-automation 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "agents",
+      "owner": "resource-catalog",
+      "file": "code-capability/infrastructure/capabilityMatrixRead.ts",
+      "module": "development-automation",
+      "tableId": "agents",
+      "kind": "reshaped",
+      "why": "RFC-376 结构门（off-dag-offered-file-context-pairs / context-value-pairs-off-dag）按物理目录把 code-capability 计为独立 context，code-capability → resource-catalog 不在已提交的 DAG 基线内；经 resource-catalog public query 闭合会新增 off-DAG 边。",
+      "removeWhen": "RFC-294 设计门把 code-capability 归入 development-automation 的 offered 边（或提供 required SPI）后改经 createAgentExecutionQueries；必须在 RFC-395 II-b B2 替换 agents adapter 前完成。"
+    },
+    {
+      "table": "agents",
+      "owner": "resource-catalog",
+      "file": "collaboration/infrastructure/review.ts",
+      "module": "collaboration",
+      "tableId": "agents",
+      "kind": "reshaped",
+      "why": "collaboration/infrastructure/review.ts 仍依赖 agents；collaboration → resource-catalog 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 collaboration/review 边界任务：先由 RFC-294 设计门确认 resource-catalog 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 agents adapter 前完成。"
+    },
+    {
+      "table": "automationPolicies",
+      "owner": "development-automation",
+      "file": "resource-catalog/infrastructure/resourceVisibility.ts",
+      "module": "resource-catalog",
+      "tableId": "automation_policies",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceVisibility.ts 仍依赖 automation_policies；resource-catalog → development-automation 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceVisibility 边界任务：先由 RFC-294 设计门确认 development-automation 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "code-capability/infrastructure/repoEndpointRead.ts",
+      "module": "development-automation",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "code-capability/infrastructure/repoEndpointRead.ts 的仓库与连接、webhook endpoint 的联合定位仍使用 cached_repos；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 development-automation/repoEndpointRead 端口任务：在 source-control 实现对应的 repoEndpointRead query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "development-automation/infrastructure/developmentDeliveryProvider.ts",
+      "module": "development-automation",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "development-automation/infrastructure/developmentDeliveryProvider.ts 的交付过程的仓库工作区状态与回执仍使用 cached_repos；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 development-automation/developmentDeliveryProvider 端口任务：在 source-control 实现对应的 developmentDeliveryProvider query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "development-automation/infrastructure/employeePlatformWorkItemPersistence.ts",
+      "module": "development-automation",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "development-automation/infrastructure/employeePlatformWorkItemPersistence.ts 的发布工作项与员工工作区、候选、审批的联合投影仍使用 cached_repos；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 development-automation/employeePlatformWorkItemPersistence 端口任务：在 source-control 实现对应的 employeePlatformWorkItemPersistence query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "development-automation/infrastructure/employeeWorkspacePersistence.ts",
+      "module": "development-automation",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "development-automation/infrastructure/employeeWorkspacePersistence.ts 的员工工作区与仓库拓扑的联合读写仍使用 cached_repos；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 development-automation/employeeWorkspacePersistence 端口任务：在 source-control 实现对应的 employeeWorkspacePersistence query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "development-automation/infrastructure/gitBaselineReader.ts",
+      "module": "development-automation",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "development-automation/infrastructure/gitBaselineReader.ts 的工作区 baseline 与仓库路径的解析仍使用 cached_repos；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 development-automation/gitBaselineReader 端口任务：在 source-control 实现对应的 gitBaselineReader query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "development-automation/infrastructure/missionReadModels.ts",
+      "module": "development-automation",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "development-automation/infrastructure/missionReadModels.ts 的mission 与仓库名称、路径的列表投影仍使用 cached_repos；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 development-automation/missionReadModels 端口任务：在 source-control 实现对应的 missionReadModels query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "integration/infrastructure/webhookRepositoryResolver.ts",
+      "module": "integration",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "integration/infrastructure/webhookRepositoryResolver.ts 仍依赖 cached_repos；integration → source-control 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 integration/webhookRepositoryResolver 边界任务：先由 RFC-294 设计门确认 source-control 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "cachedRepos",
+      "owner": "source-control",
+      "file": "system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "module": "system-operations",
+      "tableId": "cached_repos",
+      "kind": "other",
+      "why": "system-operations/infrastructure/local/doctorDiagnostics.ts 仍依赖 cached_repos；system-operations → source-control 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 system-operations/doctorDiagnostics 边界任务：先由 RFC-294 设计门确认 source-control 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "capabilityTemplates",
+      "owner": "code-capability",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts",
+      "module": "resource-catalog",
+      "tableId": "capability_templates",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts 仍依赖 capability_templates；resource-catalog → development-automation 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/postgresqlResourcePackageMutationParticipants 边界任务：先由 RFC-294 设计门确认 development-automation 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "capabilityTemplates",
+      "owner": "code-capability",
+      "file": "resource-catalog/infrastructure/packageResourceRows.ts",
+      "module": "resource-catalog",
+      "tableId": "capability_templates",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/packageResourceRows.ts 仍依赖 capability_templates；resource-catalog → development-automation 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/packageResourceRows 边界任务：先由 RFC-294 设计门确认 development-automation 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "capabilityTemplates",
+      "owner": "code-capability",
+      "file": "resource-catalog/infrastructure/resourceVisibility.ts",
+      "module": "resource-catalog",
+      "tableId": "capability_templates",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceVisibility.ts 仍依赖 capability_templates；resource-catalog → development-automation 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceVisibility 边界任务：先由 RFC-294 设计门确认 development-automation 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "clarifyRounds",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/legacyMigration/frameBackfillStore.ts",
+      "module": "task-execution",
+      "tableId": "clarify_rounds",
+      "kind": "reshaped",
+      "why": "task-execution/infrastructure/legacyMigration/frameBackfillStore.ts 仍依赖 clarify_rounds；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/frameBackfillStore 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 clarify_rounds adapter 前完成。"
+    },
+    {
+      "table": "clarifyRounds",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "clarify_rounds",
+      "kind": "reshaped",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 clarify_rounds；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 clarify_rounds adapter 前完成。"
+    },
+    {
+      "table": "clarifyRounds",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskRecoveryOperations.ts",
+      "module": "task-execution",
+      "tableId": "clarify_rounds",
+      "kind": "reshaped",
+      "why": "task-execution/infrastructure/taskRecoveryOperations.ts 仍依赖 clarify_rounds；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRecoveryOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 clarify_rounds adapter 前完成。"
+    },
+    {
+      "table": "clarifyRounds",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskRouteOperations.ts",
+      "module": "task-execution",
+      "tableId": "clarify_rounds",
+      "kind": "reshaped",
+      "why": "task-execution/infrastructure/taskRouteOperations.ts 仍依赖 clarify_rounds；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRouteOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 clarify_rounds adapter 前完成。"
+    },
+    {
+      "table": "codeHostConnections",
+      "owner": "integration",
+      "file": "code-capability/infrastructure/repoEndpointRead.ts",
+      "module": "development-automation",
+      "tableId": "code_host_connections",
+      "kind": "other",
+      "why": "code-capability/infrastructure/repoEndpointRead.ts 仍依赖 code_host_connections；development-automation → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/repoEndpointRead 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "codeHostConnections",
+      "owner": "integration",
+      "file": "source-control/infrastructure/repositoryTransportCredentialRepository.ts",
+      "module": "source-control",
+      "tableId": "code_host_connections",
+      "kind": "other",
+      "why": "source-control/infrastructure/repositoryTransportCredentialRepository.ts 仍依赖 code_host_connections；source-control → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryTransportCredentialRepository 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "collaborationGateArtifacts",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "collaboration_gate_artifacts",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 collaboration_gate_artifacts；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "collaborationGateOperations",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "collaboration_gate_operations",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 collaboration_gate_operations；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "collaborationGateOperations",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
+      "module": "task-execution",
+      "tableId": "collaboration_gate_operations",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskIdleTimeoutPersistence.ts 仍依赖 collaboration_gate_operations；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskIdleTimeoutPersistence 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "committedEvents",
+      "owner": "platform/committed-events",
+      "file": "collaboration/infrastructure/clarify/autoDispatch.ts",
+      "module": "collaboration",
+      "tableId": "committed_events",
+      "kind": "other",
+      "why": "collaboration/infrastructure/clarify/autoDispatch.ts 仍直接使用 committed_events 的平台存储协议；需要把事件游标或对象发布操作封装为平台服务，不能伪装成业务 owner query。",
+      "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/committed-events 的 autoDispatch 提供闭合读写操作并移除此站点。"
+    },
+    {
+      "table": "committedEvents",
+      "owner": "platform/committed-events",
+      "file": "collaboration/infrastructure/collaborationCommittedEventWsProjector.ts",
+      "module": "collaboration",
+      "tableId": "committed_events",
+      "kind": "other",
+      "why": "collaboration/infrastructure/collaborationCommittedEventWsProjector.ts 仍直接使用 committed_events 的平台存储协议；需要把事件游标或对象发布操作封装为平台服务，不能伪装成业务 owner query。",
+      "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/committed-events 的 collaborationCommittedEventWsProjector 提供闭合读写操作并移除此站点。"
+    },
+    {
+      "table": "digitalEmployees",
+      "owner": "development-automation",
+      "file": "resource-catalog/infrastructure/resourceVisibility.ts",
+      "module": "resource-catalog",
+      "tableId": "digital_employees",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceVisibility.ts 仍依赖 digital_employees；resource-catalog → development-automation 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceVisibility 边界任务：先由 RFC-294 设计门确认 development-automation 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "docVersions",
+      "owner": "collaboration",
+      "file": "memory/infrastructure/memoryDistillReadStore.ts",
+      "module": "memory",
+      "tableId": "doc_versions",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryDistillReadStore.ts 的蒸馏候选与反馈、审阅文档的聚合选择仍使用 doc_versions；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 memory/memoryDistillReadStore 端口任务：在 collaboration 实现对应的 memoryDistillReadStore query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "docVersions",
+      "owner": "collaboration",
+      "file": "memory/infrastructure/memoryDistillWorkStore.ts",
+      "module": "memory",
+      "tableId": "doc_versions",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryDistillWorkStore.ts 的蒸馏 evidence 的文档、评论与反馈排序投影仍使用 doc_versions；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 memory/memoryDistillWorkStore 端口任务：在 collaboration 实现对应的 memoryDistillWorkStore query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "docVersions",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "doc_versions",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 doc_versions；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "docVersions",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskExecutionReadModels.ts",
+      "module": "task-execution",
+      "tableId": "doc_versions",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskExecutionReadModels.ts 仍依赖 doc_versions；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskExecutionReadModels 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "docVersions",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskRecoveryOperations.ts",
+      "module": "task-execution",
+      "tableId": "doc_versions",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRecoveryOperations.ts 仍依赖 doc_versions；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRecoveryOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "docVersions",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskRouteOperations.ts",
+      "module": "task-execution",
+      "tableId": "doc_versions",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRouteOperations.ts 仍依赖 doc_versions；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRouteOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "hostedObjectPublications",
+      "owner": "platform/content",
+      "file": "system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts",
+      "module": "system-operations",
+      "tableId": "hosted_object_publications",
+      "kind": "other",
+      "why": "system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts 仍直接使用 hosted_object_publications 的平台存储协议；需要把事件游标或对象发布操作封装为平台服务，不能伪装成业务 owner query。",
+      "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/content 的 hostedRestoreNormalization 提供闭合读写操作并移除此站点。"
+    },
+    {
+      "table": "hostedObjectPublications",
+      "owner": "platform/content",
+      "file": "system-operations/infrastructure/crewstation/objectPublications.ts",
+      "module": "system-operations",
+      "tableId": "hosted_object_publications",
+      "kind": "other",
+      "why": "system-operations/infrastructure/crewstation/objectPublications.ts 仍直接使用 hosted_object_publications 的平台存储协议；需要把事件游标或对象发布操作封装为平台服务，不能伪装成业务 owner query。",
+      "removeWhen": "RFC-395 T11 后续平台端口任务：为 platform/content 的 objectPublications 提供闭合读写操作并移除此站点。"
+    },
+    {
+      "table": "lifecycleAlerts",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "lifecycle_alerts",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 lifecycle_alerts；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "lifecycleAlerts",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskListPage/query.ts",
+      "module": "task-execution",
+      "tableId": "lifecycle_alerts",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskListPage/query.ts 仍依赖 lifecycle_alerts；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/query 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "lifecycleAlerts",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskRecoveryOperations.ts",
+      "module": "task-execution",
+      "tableId": "lifecycle_alerts",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRecoveryOperations.ts 仍依赖 lifecycle_alerts；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRecoveryOperations 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "lifecycleAlerts",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskRouteOperations.ts",
+      "module": "task-execution",
+      "tableId": "lifecycle_alerts",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRouteOperations.ts 仍依赖 lifecycle_alerts；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRouteOperations 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "lifecycleAlerts",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "module": "task-execution",
+      "tableId": "lifecycle_alerts",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRouteRepairOperations.ts 仍依赖 lifecycle_alerts；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRouteRepairOperations 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "lifecycleRepairAudit",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskRouteRepairOperations.ts",
+      "module": "task-execution",
+      "tableId": "lifecycle_repair_audit",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRouteRepairOperations.ts 仍依赖 lifecycle_repair_audit；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRouteRepairOperations 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "maintenanceState",
+      "owner": "system-operations",
+      "file": "development-automation/infrastructure/cutoverStore.ts",
+      "module": "development-automation",
+      "tableId": "maintenance_state",
+      "kind": "other",
+      "why": "development-automation/infrastructure/cutoverStore.ts 仍依赖 maintenance_state；development-automation → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/cutoverStore 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "maintenanceState",
+      "owner": "system-operations",
+      "file": "development-automation/infrastructure/migrationAssets.ts",
+      "module": "development-automation",
+      "tableId": "maintenance_state",
+      "kind": "other",
+      "why": "development-automation/infrastructure/migrationAssets.ts 仍依赖 maintenance_state；development-automation → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/migrationAssets 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "maintenanceState",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/legacyMigration/frameBackfillStore.ts",
+      "module": "task-execution",
+      "tableId": "maintenance_state",
+      "kind": "other",
+      "why": "task-execution/infrastructure/legacyMigration/frameBackfillStore.ts 仍依赖 maintenance_state；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/frameBackfillStore 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "mcpRuntimeTestSessions",
+      "owner": "resource-catalog",
+      "file": "identity-access/infrastructure/userAccessPersistence.ts",
+      "module": "identity-access",
+      "tableId": "mcp_runtime_test_sessions",
+      "kind": "other",
+      "why": "identity-access/infrastructure/userAccessPersistence.ts 仍依赖 mcp_runtime_test_sessions；identity-access → resource-catalog 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 identity-access/userAccessPersistence 边界任务：先由 RFC-294 设计门确认 resource-catalog 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "mcps",
+      "owner": "resource-catalog",
+      "file": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
+      "module": "task-execution",
+      "tableId": "mcps",
+      "kind": "other",
+      "why": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts 的执行注入资源的技能、MCP、插件解析及可用性投影仍使用 mcps；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/legacyTaskExecutionInjectionResolver 端口任务：在 resource-catalog 实现对应的 legacyTaskExecutionInjectionResolver query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "memories",
+      "owner": "memory",
+      "file": "knowledge-evolution/infrastructure/fusionRepository.ts",
+      "module": "knowledge-evolution",
+      "tableId": "memories",
+      "kind": "other",
+      "why": "knowledge-evolution/infrastructure/fusionRepository.ts 的融合候选、技能版本、记忆成员的同事务写入仍使用 memories；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 knowledge-evolution/fusionRepository 端口任务：在 memory 实现对应的 fusionRepository query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "memories",
+      "owner": "memory",
+      "file": "runtime-management/infrastructure/realtimeStore.ts",
+      "module": "runtime-management",
+      "tableId": "memories",
+      "kind": "other",
+      "why": "runtime-management/infrastructure/realtimeStore.ts 仍依赖 memories；runtime-management → memory 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 runtime-management/realtimeStore 边界任务：先由 RFC-294 设计门确认 memory 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "memories",
+      "owner": "memory",
+      "file": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
+      "module": "source-control",
+      "tableId": "memories",
+      "kind": "other",
+      "why": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts 仍依赖 memories；source-control → memory 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceSqlStore 边界任务：先由 RFC-294 设计门确认 memory 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "memories",
+      "owner": "memory",
+      "file": "source-control/infrastructure/repositoryWorkspaceStore.ts",
+      "module": "source-control",
+      "tableId": "memories",
+      "kind": "other",
+      "why": "source-control/infrastructure/repositoryWorkspaceStore.ts 仍依赖 memories；source-control → memory 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceStore 边界任务：先由 RFC-294 设计门确认 memory 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "nodeRunEvents",
+      "owner": "task-execution",
+      "file": "collaboration/infrastructure/humanGateOpenParticipant.ts",
+      "module": "collaboration",
+      "tableId": "node_run_events",
+      "kind": "other",
+      "why": "collaboration/infrastructure/humanGateOpenParticipant.ts 被 task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts 直接 import（RFC-294 CROSS_CONTEXT_INTERNAL_DEBT 存量反向边）；改走 task-execution public participant 写入开门事件会形成文件级值依赖环（RFC-376 backend-value-scc）。",
+      "removeWhen": "RFC-294 S5/S6 去掉 task-execution 对 collaboration 人工门 infrastructure 的反向 import 后，改经 task-execution 人工门 participant 的 appendTextEvent 写入。"
+    },
+    {
+      "table": "nodeRunEvents",
+      "owner": "task-execution",
+      "file": "runtime-management/infrastructure/realtimeStore.ts",
+      "module": "runtime-management",
+      "tableId": "node_run_events",
+      "kind": "other",
+      "why": "runtime-management/infrastructure/realtimeStore.ts 仍依赖 node_run_events；runtime-management → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 runtime-management/realtimeStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "nodeRuns",
+      "owner": "task-execution",
+      "file": "code-capability/infrastructure/codeWorkspaceRead.ts",
+      "module": "development-automation",
+      "tableId": "node_runs",
+      "kind": "reshaped",
+      "why": "code-capability/infrastructure/codeWorkspaceRead.ts 仍依赖 node_runs；development-automation → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/codeWorkspaceRead 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 node_runs adapter 前完成。"
+    },
+    {
+      "table": "nodeRuns",
+      "owner": "task-execution",
+      "file": "runtime-management/infrastructure/realtimeStore.ts",
+      "module": "runtime-management",
+      "tableId": "node_runs",
+      "kind": "reshaped",
+      "why": "runtime-management/infrastructure/realtimeStore.ts 仍依赖 node_runs；runtime-management → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 runtime-management/realtimeStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 node_runs adapter 前完成。"
+    },
+    {
+      "table": "nodeRuns",
+      "owner": "task-execution",
+      "file": "source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
+      "module": "source-control",
+      "tableId": "node_runs",
+      "kind": "reshaped",
+      "why": "source-control/infrastructure/workspaceMaintenanceSqlStore.ts 仍依赖 node_runs；source-control → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/workspaceMaintenanceSqlStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 node_runs adapter 前完成。"
+    },
+    {
+      "table": "nodeRuns",
+      "owner": "task-execution",
+      "file": "system-operations/infrastructure/resourceLimitPersistence.ts",
+      "module": "system-operations",
+      "tableId": "node_runs",
+      "kind": "reshaped",
+      "why": "system-operations/infrastructure/resourceLimitPersistence.ts 仍依赖 node_runs；system-operations → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 system-operations/resourceLimitPersistence 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 node_runs adapter 前完成。"
+    },
+    {
+      "table": "plugins",
+      "owner": "resource-catalog",
+      "file": "intent/infrastructure/intentApplyArtifactLifecycle.ts",
+      "module": "intent",
+      "tableId": "plugins",
+      "kind": "other",
+      "why": "intent/infrastructure/intentApplyArtifactLifecycle.ts 的应用 journal 中插件与技能版本的事务清理仍使用 plugins；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 intent/intentApplyArtifactLifecycle 端口任务：在 resource-catalog 实现对应的 intentApplyArtifactLifecycle query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "plugins",
+      "owner": "resource-catalog",
+      "file": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
+      "module": "task-execution",
+      "tableId": "plugins",
+      "kind": "other",
+      "why": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts 的执行注入资源的技能、MCP、插件解析及可用性投影仍使用 plugins；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/legacyTaskExecutionInjectionResolver 端口任务：在 resource-catalog 实现对应的 legacyTaskExecutionInjectionResolver query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "recoveryEvents",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "recovery_events",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 recovery_events；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "recoveryEvents",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskIdleTimeoutPersistence.ts",
+      "module": "task-execution",
+      "tableId": "recovery_events",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskIdleTimeoutPersistence.ts 仍依赖 recovery_events；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskIdleTimeoutPersistence 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "recoveryEvents",
+      "owner": "system-operations",
+      "file": "task-execution/infrastructure/taskRecoveryOperations.ts",
+      "module": "task-execution",
+      "tableId": "recovery_events",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRecoveryOperations.ts 仍依赖 recovery_events；task-execution → system-operations 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRecoveryOperations 边界任务：先由 RFC-294 设计门确认 system-operations 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "integration/infrastructure/developmentToolConnectionStore.ts",
+      "module": "integration",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "integration/infrastructure/developmentToolConnectionStore.ts 仍依赖 resource_grants；integration → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 integration/developmentToolConnectionStore 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "integration/infrastructure/scheduledTaskPersistence.ts",
+      "module": "integration",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "integration/infrastructure/scheduledTaskPersistence.ts 仍依赖 resource_grants；integration → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 integration/scheduledTaskPersistence 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "knowledge-evolution/infrastructure/fusionRepository.ts",
+      "module": "knowledge-evolution",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "knowledge-evolution/infrastructure/fusionRepository.ts 仍依赖 resource_grants；knowledge-evolution → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 knowledge-evolution/fusionRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aclReadRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aclReadRepository.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/aclReadRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/agentImportQueries.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/agentImportQueries.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agentImportQueries 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/integrationTriggerResourceSnapshots 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/intentApplyResourcePorts 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/postgresqlResourcePackageMutationParticipants 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/resourceScopeAuthorization.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/resourceScopeAuthorization.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceScopeAuthorization 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/intentContextResourceAuthorization.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/intentContextResourceAuthorization.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/intentContextResourceAuthorization 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/legacy/resourceRefs.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/resourceRefs.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceRefs 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/referenceUsability.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/referenceUsability.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/referenceUsability 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/resourceAclRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceAclRepository.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceAclRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/resourceAclTransaction.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceAclTransaction.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceAclTransaction 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/resourceVisibility.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceVisibility.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceVisibility 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/sqliteResourceGrantRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/sqliteResourceGrantRepository.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/sqliteResourceGrantRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/workflowRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workflowRepository.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workflowRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "resourceGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "module": "resource-catalog",
+      "tableId": "resource_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoom.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoom 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "reviewComments",
+      "owner": "collaboration",
+      "file": "memory/infrastructure/memoryDistillWorkStore.ts",
+      "module": "memory",
+      "tableId": "review_comments",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryDistillWorkStore.ts 的蒸馏 evidence 的文档、评论与反馈排序投影仍使用 review_comments；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 memory/memoryDistillWorkStore 端口任务：在 collaboration 实现对应的 memoryDistillWorkStore query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "reviewComments",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "review_comments",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 review_comments；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "reviewNodeReviewers",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "review_node_reviewers",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 review_node_reviewers；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "runtimes",
+      "owner": "runtime-management",
+      "file": "intent/infrastructure/intentSqlPersistence.ts",
+      "module": "intent",
+      "tableId": "runtimes",
+      "kind": "other",
+      "why": "intent/infrastructure/intentSqlPersistence.ts 仍依赖 runtimes；intent → runtime-management 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 intent/intentSqlPersistence 边界任务：先由 RFC-294 设计门确认 runtime-management 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "runtimes",
+      "owner": "runtime-management",
+      "file": "memory/infrastructure/memoryDistillRuntimeResolver.ts",
+      "module": "memory",
+      "tableId": "runtimes",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryDistillRuntimeResolver.ts 仍依赖 runtimes；memory → runtime-management 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 memory/memoryDistillRuntimeResolver 边界任务：先由 RFC-294 设计门确认 runtime-management 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "runtimes",
+      "owner": "runtime-management",
+      "file": "resource-catalog/infrastructure/agentBranchPorts.ts",
+      "module": "resource-catalog",
+      "tableId": "runtimes",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/agentBranchPorts.ts 仍依赖 runtimes；resource-catalog → runtime-management 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agentBranchPorts 边界任务：先由 RFC-294 设计门确认 runtime-management 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "runtimes",
+      "owner": "runtime-management",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
+      "module": "resource-catalog",
+      "tableId": "runtimes",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts 仍依赖 runtimes；resource-catalog → runtime-management 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/intentApplyResourcePorts 边界任务：先由 RFC-294 设计门确认 runtime-management 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "runtimes",
+      "owner": "runtime-management",
+      "file": "resource-catalog/infrastructure/legacy/agent.ts",
+      "module": "resource-catalog",
+      "tableId": "runtimes",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/agent.ts 仍依赖 runtimes；resource-catalog → runtime-management 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agent 边界任务：先由 RFC-294 设计门确认 runtime-management 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "resource-catalog/infrastructure/agentPersistenceSemantics.ts",
+      "module": "resource-catalog",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/agentPersistenceSemantics.ts 仍依赖 scheduled_tasks；resource-catalog → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agentPersistenceSemantics 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "resource-catalog/infrastructure/legacy/agent.ts",
+      "module": "resource-catalog",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/agent.ts 仍依赖 scheduled_tasks；resource-catalog → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agent 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "resource-catalog/infrastructure/legacy/workflow.ts",
+      "module": "resource-catalog",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/workflow.ts 仍依赖 scheduled_tasks；resource-catalog → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workflow 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "resource-catalog/infrastructure/legacy/workgroups.ts",
+      "module": "resource-catalog",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/workgroups.ts 仍依赖 scheduled_tasks；resource-catalog → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroups 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "resource-catalog/infrastructure/workflowPersistenceSemantics.ts",
+      "module": "resource-catalog",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workflowPersistenceSemantics.ts 仍依赖 scheduled_tasks；resource-catalog → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workflowPersistenceSemantics 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "resource-catalog/infrastructure/workgroupRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupRepository.ts 仍依赖 scheduled_tasks；resource-catalog → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupRepository 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
+      "module": "source-control",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts 仍依赖 scheduled_tasks；source-control → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceSqlStore 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "scheduledTasks",
+      "owner": "integration",
+      "file": "source-control/infrastructure/repositoryWorkspaceStore.ts",
+      "module": "source-control",
+      "tableId": "scheduled_tasks",
+      "kind": "other",
+      "why": "source-control/infrastructure/repositoryWorkspaceStore.ts 仍依赖 scheduled_tasks；source-control → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceStore 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "skillVersions",
+      "owner": "resource-catalog",
+      "file": "intent/infrastructure/intentApplyArtifactLifecycle.ts",
+      "module": "intent",
+      "tableId": "skill_versions",
+      "kind": "other",
+      "why": "intent/infrastructure/intentApplyArtifactLifecycle.ts 的应用 journal 中插件与技能版本的事务清理仍使用 skill_versions；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 intent/intentApplyArtifactLifecycle 端口任务：在 resource-catalog 实现对应的 intentApplyArtifactLifecycle query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "skillVersions",
+      "owner": "resource-catalog",
+      "file": "knowledge-evolution/infrastructure/fusionRepository.ts",
+      "module": "knowledge-evolution",
+      "tableId": "skill_versions",
+      "kind": "other",
+      "why": "knowledge-evolution/infrastructure/fusionRepository.ts 的融合候选、技能版本、记忆成员的同事务写入仍使用 skill_versions；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 knowledge-evolution/fusionRepository 端口任务：在 resource-catalog 实现对应的 fusionRepository query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "skills",
+      "owner": "resource-catalog",
+      "file": "intent/infrastructure/intentApplyArtifactLifecycle.ts",
+      "module": "intent",
+      "tableId": "skills",
+      "kind": "other",
+      "why": "intent/infrastructure/intentApplyArtifactLifecycle.ts 的应用 journal 中插件与技能版本的事务清理仍使用 skills；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 intent/intentApplyArtifactLifecycle 端口任务：在 resource-catalog 实现对应的 intentApplyArtifactLifecycle query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "skills",
+      "owner": "resource-catalog",
+      "file": "knowledge-evolution/infrastructure/fusionRepository.ts",
+      "module": "knowledge-evolution",
+      "tableId": "skills",
+      "kind": "other",
+      "why": "knowledge-evolution/infrastructure/fusionRepository.ts 的融合候选、技能版本、记忆成员的同事务写入仍使用 skills；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 knowledge-evolution/fusionRepository 端口任务：在 resource-catalog 实现对应的 fusionRepository query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "skills",
+      "owner": "resource-catalog",
+      "file": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
+      "module": "task-execution",
+      "tableId": "skills",
+      "kind": "other",
+      "why": "task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts 的执行注入资源的技能、MCP、插件解析及可用性投影仍使用 skills；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/legacyTaskExecutionInjectionResolver 端口任务：在 resource-catalog 实现对应的 legacyTaskExecutionInjectionResolver query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "integration/infrastructure/webhookDeliveryQueries.ts",
+      "module": "integration",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "integration/infrastructure/webhookDeliveryQueries.ts 仍依赖 task_collaborators；integration → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 integration/webhookDeliveryQueries 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "runtime-management/infrastructure/realtimeStore.ts",
+      "module": "runtime-management",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "runtime-management/infrastructure/realtimeStore.ts 仍依赖 task_collaborators；runtime-management → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 runtime-management/realtimeStore 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/childExecutionLaunchOperations.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/childExecutionLaunchOperations.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/childExecutionLaunchOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/fusionEngineTaskOperations.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/fusionEngineTaskOperations.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/fusionEngineTaskOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskAuthorization.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskAuthorization.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskAuthorization 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskDeleteRecovery.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskDeleteRecovery.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskDeleteRecovery 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskEngineApplicationPersistence.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskEngineApplicationPersistence.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskEngineApplicationPersistence 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskExecutionReadModels.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskExecutionReadModels.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskExecutionReadModels 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskRecoveryOperations.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRecoveryOperations.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRecoveryOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskRouteLaunchOperations.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRouteLaunchOperations.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRouteLaunchOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskCollaborators",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts",
+      "module": "task-execution",
+      "tableId": "task_collaborators",
+      "kind": "other",
+      "why": "task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts 仍依赖 task_collaborators；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/workgroupTaskRoomTaskParticipant 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskExecutionIntents",
+      "owner": "task-execution",
+      "file": "collaboration/infrastructure/humanGateContinuationRecovery.ts",
+      "module": "collaboration",
+      "tableId": "task_execution_intents",
+      "kind": "other",
+      "why": "collaboration/infrastructure/humanGateContinuationRecovery.ts 的恢复时 execution intent 的查找与终结写入仍使用 task_execution_intents；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 collaboration/humanGateContinuationRecovery 端口任务：在 task-execution 实现对应的 humanGateContinuationRecovery query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "taskFeedback",
+      "owner": "collaboration",
+      "file": "memory/infrastructure/memoryDistillReadStore.ts",
+      "module": "memory",
+      "tableId": "task_feedback",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryDistillReadStore.ts 的蒸馏候选与反馈、审阅文档的聚合选择仍使用 task_feedback；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 memory/memoryDistillReadStore 端口任务：在 collaboration 实现对应的 memoryDistillReadStore query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "taskFeedback",
+      "owner": "collaboration",
+      "file": "memory/infrastructure/memoryDistillWorkStore.ts",
+      "module": "memory",
+      "tableId": "task_feedback",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryDistillWorkStore.ts 的蒸馏 evidence 的文档、评论与反馈排序投影仍使用 task_feedback；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 memory/memoryDistillWorkStore 端口任务：在 collaboration 实现对应的 memoryDistillWorkStore query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "taskFeedback",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "task_feedback",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 task_feedback；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskFeedback",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskDeleteRecovery.ts",
+      "module": "task-execution",
+      "tableId": "task_feedback",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskDeleteRecovery.ts 仍依赖 task_feedback；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskDeleteRecovery 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskQuestions",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/gateContinuationPreDrivePersistence.ts",
+      "module": "task-execution",
+      "tableId": "task_questions",
+      "kind": "other",
+      "why": "task-execution/infrastructure/gateContinuationPreDrivePersistence.ts 仍依赖 task_questions；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/gateContinuationPreDrivePersistence 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskQuestions",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskArchiveContentCoordinator.ts",
+      "module": "task-execution",
+      "tableId": "task_questions",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskArchiveContentCoordinator.ts 仍依赖 task_questions；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskArchiveContentCoordinator 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskQuestions",
+      "owner": "collaboration",
+      "file": "task-execution/infrastructure/taskRecoveryOperations.ts",
+      "module": "task-execution",
+      "tableId": "task_questions",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRecoveryOperations.ts 仍依赖 task_questions；task-execution → collaboration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRecoveryOperations 边界任务：先由 RFC-294 设计门确认 collaboration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "taskRepos",
+      "owner": "task-execution",
+      "file": "code-capability/infrastructure/codeWorkspaceRead.ts",
+      "module": "development-automation",
+      "tableId": "task_repos",
+      "kind": "reshaped",
+      "why": "code-capability/infrastructure/codeWorkspaceRead.ts 仍依赖 task_repos；development-automation → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/codeWorkspaceRead 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 task_repos adapter 前完成。"
+    },
+    {
+      "table": "taskRepos",
+      "owner": "task-execution",
+      "file": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
+      "module": "source-control",
+      "tableId": "task_repos",
+      "kind": "reshaped",
+      "why": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts 仍依赖 task_repos；source-control → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceSqlStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 task_repos adapter 前完成。"
+    },
+    {
+      "table": "taskRepos",
+      "owner": "task-execution",
+      "file": "source-control/infrastructure/repositoryWorkspaceStore.ts",
+      "module": "source-control",
+      "tableId": "task_repos",
+      "kind": "reshaped",
+      "why": "source-control/infrastructure/repositoryWorkspaceStore.ts 仍依赖 task_repos；source-control → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 task_repos adapter 前完成。"
+    },
+    {
+      "table": "taskRepos",
+      "owner": "task-execution",
+      "file": "source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
+      "module": "source-control",
+      "tableId": "task_repos",
+      "kind": "reshaped",
+      "why": "source-control/infrastructure/workspaceMaintenanceSqlStore.ts 仍依赖 task_repos；source-control → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/workspaceMaintenanceSqlStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 task_repos adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "code-capability/infrastructure/codeWorkspaceRead.ts",
+      "module": "development-automation",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "code-capability/infrastructure/codeWorkspaceRead.ts 仍依赖 tasks；development-automation → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/codeWorkspaceRead 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "code-capability/infrastructure/crewstation/codeReviewObjectSweep.ts",
+      "module": "development-automation",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "code-capability/infrastructure/crewstation/codeReviewObjectSweep.ts 仍依赖 tasks；development-automation → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/codeReviewObjectSweep 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "collaboration/infrastructure/humanGateOperationJournal.ts",
+      "module": "collaboration",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "collaboration/infrastructure/humanGateOperationJournal.ts 被 task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts 直接 import（RFC-294 CROSS_CONTEXT_INTERNAL_DEBT 存量反向边）；改走 task-execution public participant 会形成文件级值依赖环（RFC-376 backend-value-scc，模块初始化 TDZ），故保留同事务内的 tasks 聚合根行锁。",
+      "removeWhen": "RFC-294 S5/S6 去掉 task-execution 对 collaboration 人工门 infrastructure 的反向 import（改为 required SPI 或组合根注入）后，改经 task-execution 人工门 participant 加锁；必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/agentPersistenceSemantics.ts",
+      "module": "resource-catalog",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "resource-catalog/infrastructure/agentPersistenceSemantics.ts 仍依赖 tasks；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agentPersistenceSemantics 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/legacy/agent.ts",
+      "module": "resource-catalog",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "resource-catalog/infrastructure/legacy/agent.ts 仍依赖 tasks；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agent 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/legacy/workflow.ts",
+      "module": "resource-catalog",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "resource-catalog/infrastructure/legacy/workflow.ts 仍依赖 tasks；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workflow 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/legacy/workgroups.ts",
+      "module": "resource-catalog",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "resource-catalog/infrastructure/legacy/workgroups.ts 仍依赖 tasks；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroups 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workflowPersistenceSemantics.ts",
+      "module": "resource-catalog",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "resource-catalog/infrastructure/workflowPersistenceSemantics.ts 仍依赖 tasks；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workflowPersistenceSemantics 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "resource-catalog/infrastructure/workgroupRepository.ts 仍依赖 tasks；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupRepository 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "runtime-management/infrastructure/realtimeStore.ts",
+      "module": "runtime-management",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "runtime-management/infrastructure/realtimeStore.ts 仍依赖 tasks；runtime-management → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 runtime-management/realtimeStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
+      "module": "source-control",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "source-control/infrastructure/repositoryWorkspaceSqlStore.ts 仍依赖 tasks；source-control → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceSqlStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "source-control/infrastructure/repositoryWorkspaceStore.ts",
+      "module": "source-control",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "source-control/infrastructure/repositoryWorkspaceStore.ts 仍依赖 tasks；source-control → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryWorkspaceStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
+      "module": "source-control",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "source-control/infrastructure/workspaceMaintenanceSqlStore.ts 仍依赖 tasks；source-control → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/workspaceMaintenanceSqlStore 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "system-operations/infrastructure/healthReadModel.ts",
+      "module": "system-operations",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "system-operations/infrastructure/healthReadModel.ts 仍依赖 tasks；system-operations → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 system-operations/healthReadModel 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "system-operations/infrastructure/local/doctorDiagnostics.ts",
+      "module": "system-operations",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "system-operations/infrastructure/local/doctorDiagnostics.ts 仍依赖 tasks；system-operations → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 system-operations/doctorDiagnostics 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "tasks",
+      "owner": "task-execution",
+      "file": "system-operations/infrastructure/resourceLimitPersistence.ts",
+      "module": "system-operations",
+      "tableId": "tasks",
+      "kind": "reshaped",
+      "why": "system-operations/infrastructure/resourceLimitPersistence.ts 仍依赖 tasks；system-operations → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 system-operations/resourceLimitPersistence 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。 必须在 RFC-395 II-b B2 替换 tasks adapter 前完成。"
+    },
+    {
+      "table": "userPermissionGrants",
+      "owner": "identity-access",
+      "file": "memory/infrastructure/memoryCatalogOperations.ts",
+      "module": "memory",
+      "tableId": "user_permission_grants",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryCatalogOperations.ts 仍依赖 user_permission_grants；memory → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 memory/memoryCatalogOperations 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "userPermissionGrants",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "module": "resource-catalog",
+      "tableId": "user_permission_grants",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts 仍依赖 user_permission_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/mcpRuntimeTestTransitions 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "userRepositoryTransportCredentials",
+      "owner": "identity-access",
+      "file": "source-control/infrastructure/repositoryTransportCredentialRepository.ts",
+      "module": "source-control",
+      "tableId": "user_repository_transport_credentials",
+      "kind": "other",
+      "why": "source-control/infrastructure/repositoryTransportCredentialRepository.ts 仍依赖 user_repository_transport_credentials；source-control → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 source-control/repositoryTransportCredentialRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "collaboration/infrastructure/reviewNodeReviewerStore.ts",
+      "module": "collaboration",
+      "tableId": "users",
+      "kind": "other",
+      "why": "collaboration/infrastructure/reviewNodeReviewerStore.ts 仍依赖 users；collaboration → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 collaboration/reviewNodeReviewerStore 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "collaboration/infrastructure/taskCollab.ts",
+      "module": "collaboration",
+      "tableId": "users",
+      "kind": "other",
+      "why": "collaboration/infrastructure/taskCollab.ts 仍依赖 users；collaboration → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 collaboration/taskCollab 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "integration/infrastructure/scheduledTaskPersistence.ts",
+      "module": "integration",
+      "tableId": "users",
+      "kind": "other",
+      "why": "integration/infrastructure/scheduledTaskPersistence.ts 仍依赖 users；integration → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 integration/scheduledTaskPersistence 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "memory/infrastructure/memoryCatalogOperations.ts",
+      "module": "memory",
+      "tableId": "users",
+      "kind": "other",
+      "why": "memory/infrastructure/memoryCatalogOperations.ts 仍依赖 users；memory → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 memory/memoryCatalogOperations 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aclReadRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aclReadRepository.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/aclReadRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/agentImportQueries.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/agentImportQueries.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/agentImportQueries 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/intentApplyResourcePorts 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/postgresqlResourcePackageMutationParticipants 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/legacy/importRefs.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/importRefs.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/importRefs 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/legacy/workflow.yaml.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/workflow.yaml.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workflow.yaml 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/legacy/workgroups.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/workgroups.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroups 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/mcpRuntimeTestTransitions.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/mcpRuntimeTestTransitions 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/packageResourceRows.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/packageResourceRows.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/packageResourceRows 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/resourceAclRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceAclRepository.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceAclRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "resource-catalog/infrastructure/workgroupRepository.ts",
+      "module": "resource-catalog",
+      "tableId": "users",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupRepository.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "task-execution/infrastructure/childExecutionLaunchOperations.ts",
+      "module": "task-execution",
+      "tableId": "users",
+      "kind": "other",
+      "why": "task-execution/infrastructure/childExecutionLaunchOperations.ts 的child 启动事务中的成员与归属复制仍使用 users；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/childExecutionLaunchOperations 端口任务：在 identity-access 实现对应的 childExecutionLaunchOperations query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "task-execution/infrastructure/fusionEngineTaskOperations.ts",
+      "module": "task-execution",
+      "tableId": "users",
+      "kind": "other",
+      "why": "task-execution/infrastructure/fusionEngineTaskOperations.ts 的融合启动事务中的 owner 与成员建立仍使用 users；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/fusionEngineTaskOperations 端口任务：在 identity-access 实现对应的 fusionEngineTaskOperations query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "task-execution/infrastructure/taskRecoveryOperations.ts",
+      "module": "task-execution",
+      "tableId": "users",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRecoveryOperations.ts 的恢复事务中的人工门、成员、告警及用户投影仍使用 users；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRecoveryOperations 端口任务：在 identity-access 实现对应的 taskRecoveryOperations query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "users",
+      "owner": "identity-access",
+      "file": "task-execution/infrastructure/taskRouteLaunchOperations.ts",
+      "module": "task-execution",
+      "tableId": "users",
+      "kind": "other",
+      "why": "task-execution/infrastructure/taskRouteLaunchOperations.ts 的路由启动事务中的 owner 与成员建立仍使用 users；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/taskRouteLaunchOperations 端口任务：在 identity-access 实现对应的 taskRouteLaunchOperations query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "verificationProfiles",
+      "owner": "development-automation",
+      "file": "resource-catalog/infrastructure/resourceVisibility.ts",
+      "module": "resource-catalog",
+      "tableId": "verification_profiles",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/resourceVisibility.ts 仍依赖 verification_profiles；resource-catalog → development-automation 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/resourceVisibility 边界任务：先由 RFC-294 设计门确认 development-automation 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "webhookEndpoints",
+      "owner": "integration",
+      "file": "code-capability/infrastructure/repoEndpointRead.ts",
+      "module": "development-automation",
+      "tableId": "webhook_endpoints",
+      "kind": "other",
+      "why": "code-capability/infrastructure/repoEndpointRead.ts 仍依赖 webhook_endpoints；development-automation → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/repoEndpointRead 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "webhookTriggers",
+      "owner": "integration",
+      "file": "code-capability/infrastructure/capabilityMatrixRead.ts",
+      "module": "development-automation",
+      "tableId": "webhook_triggers",
+      "kind": "other",
+      "why": "code-capability/infrastructure/capabilityMatrixRead.ts 仍依赖 webhook_triggers；development-automation → integration 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 development-automation/capabilityMatrixRead 边界任务：先由 RFC-294 设计门确认 integration 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workflows",
+      "owner": "resource-catalog",
+      "file": "runtime-management/infrastructure/realtimeStore.ts",
+      "module": "runtime-management",
+      "tableId": "workflows",
+      "kind": "reshaped",
+      "why": "runtime-management → resource-catalog 虽是 offered 边，但 resource-catalog 与 task-execution 等已处于存量上下文值依赖环（RFC-376 context-value-sccs 基线 collaboration|memory|resource-catalog|task-execution）；新增这条值边会把 runtime-management 拉进环。",
+      "removeWhen": "RFC-294 S5 拆除该存量上下文环后改经 createWorkflowExecutionQueries；必须在 RFC-395 II-b B2 替换 workflows adapter 前完成。"
+    },
+    {
+      "table": "workgroupAssignments",
+      "owner": "task-execution",
+      "file": "collaboration/infrastructure/collaborationWorkgroupClarify.ts",
+      "module": "collaboration",
+      "tableId": "workgroup_assignments",
+      "kind": "other",
+      "why": "collaboration/infrastructure/collaborationWorkgroupClarify.ts 的工作组分配的 round、shard 与成员投影仍使用 workgroup_assignments；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 collaboration/collaborationWorkgroupClarify 端口任务：在 task-execution 实现对应的 collaborationWorkgroupClarify query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "workgroupAssignments",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/legacy/workgroup/state.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_assignments",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/workgroup/state.ts 仍依赖 workgroup_assignments；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/state 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupAssignments",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_assignments",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoom.ts 仍依赖 workgroup_assignments；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoom 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupAssignments",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_assignments",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts 仍依赖 workgroup_assignments；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoomCommands 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupAssignments",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoomQueries.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_assignments",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoomQueries.ts 仍依赖 workgroup_assignments；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoomQueries 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupAssignments",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_assignments",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTurnsOperations.ts 仍依赖 workgroup_assignments；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTurnsOperations 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupMemberCursors",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_member_cursors",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts 仍依赖 workgroup_member_cursors；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoomCommands 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupMemberCursors",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_member_cursors",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTurnsOperations.ts 仍依赖 workgroup_member_cursors；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTurnsOperations 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupMessages",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/legacy/workgroup/state.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_messages",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/workgroup/state.ts 仍依赖 workgroup_messages；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/state 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupMessages",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_messages",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts 仍依赖 workgroup_messages；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoomCommands 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupMessages",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoomQueries.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_messages",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoomQueries.ts 仍依赖 workgroup_messages；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoomQueries 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupMessages",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_messages",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTurnsOperations.ts 仍依赖 workgroup_messages；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTurnsOperations 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupTaskState",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/legacy/workgroup/state.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_task_state",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/legacy/workgroup/state.ts 仍依赖 workgroup_task_state；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/state 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupTaskState",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoom.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_task_state",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoom.ts 仍依赖 workgroup_task_state；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoom 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupTaskState",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_task_state",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoomCommands.ts 仍依赖 workgroup_task_state；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoomCommands 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupTaskState",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTaskRoomQueries.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_task_state",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTaskRoomQueries.ts 仍依赖 workgroup_task_state；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTaskRoomQueries 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroupTaskState",
+      "owner": "task-execution",
+      "file": "resource-catalog/infrastructure/workgroupTurnsOperations.ts",
+      "module": "resource-catalog",
+      "tableId": "workgroup_task_state",
+      "kind": "other",
+      "why": "resource-catalog/infrastructure/workgroupTurnsOperations.ts 仍依赖 workgroup_task_state；resource-catalog → task-execution 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroupTurnsOperations 边界任务：先由 RFC-294 设计门确认 task-execution 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+    },
+    {
+      "table": "workgroups",
+      "owner": "resource-catalog",
+      "file": "runtime-management/infrastructure/realtimeStore.ts",
+      "module": "runtime-management",
+      "tableId": "workgroups",
+      "kind": "other",
+      "why": "runtime-management/infrastructure/realtimeStore.ts 的事件重放的订阅归属与资源投影仍使用 workgroups；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 runtime-management/realtimeStore 端口任务：在 resource-catalog 实现对应的 realtimeStore query/participant 并迁移该联合操作。"
+    },
+    {
+      "table": "workgroups",
+      "owner": "resource-catalog",
+      "file": "task-execution/infrastructure/legacyCallClosure.ts",
+      "module": "task-execution",
+      "tableId": "workgroups",
+      "kind": "other",
+      "why": "task-execution/infrastructure/legacyCallClosure.ts 的call-workgroup 的同名候选选择与冻结成员定义仍使用 workgroups；需要专用结果合同及事务/排序等价性用例，不能只把原始表行从 public 透出。",
+      "removeWhen": "RFC-395 T11 task-execution/legacyCallClosure 端口任务：在 resource-catalog 实现对应的 legacyCallClosure query/participant 并迁移该联合操作。"
+    }
+  ]
+}

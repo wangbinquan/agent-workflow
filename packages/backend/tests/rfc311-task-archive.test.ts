@@ -1,3 +1,10 @@
+import {
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -66,7 +73,7 @@ function tmpDirs(): Dirs {
 }
 
 async function seedBase(db: Db): Promise<void> {
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -75,7 +82,7 @@ async function seedBase(db: Db): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 interface TaskSeed {
@@ -90,8 +97,7 @@ async function addTask(
   seed: TaskSeed,
   lineage?: { executionLineageId: string; lineageSlotPathJson: string },
 ): Promise<void> {
-  const { tasks, taskRepos } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -111,7 +117,7 @@ async function addTask(
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
     ...lineage,
   })
-  await insertOne(db, taskRepos, {
+  await taskRepoFixture(db, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -146,8 +152,8 @@ function createProviderTaskSeed() {
 }
 
 async function addRunWithEvents(db: Db, taskId: string, runId: string, events: number) {
-  const { nodeRuns, nodeRunEvents } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  const { nodeRunEvents } = tablesOf(db)
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'n1',
@@ -380,11 +386,12 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     expect(result.skipped).toBe(0)
     // 有界:剩下的那棵留给下一拍。
     expect(await taskCount(db)).toBe(1)
-    const { tasks } = tablesOf(db)
-    const rest = await db.select({ id: tasks.id }).from(tasks)
+    const rest = await readTaskFixtures(db).then((rows) => rows.map((row) => ({ id: row.id })))
     expect(rest).toHaveLength(1)
     expect(
-      await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, rest[0]!.id)),
+      await readTaskFixtures(db, { id: rest[0]!.id }).then((rows) =>
+        rows.map((row) => ({ id: row.id })),
+      ),
     ).toHaveLength(1)
   })
 })

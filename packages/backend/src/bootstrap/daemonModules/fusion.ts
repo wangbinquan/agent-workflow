@@ -1,3 +1,4 @@
+import { composeFusionResourceSeedParticipant } from '@/modules/resource-catalog/composition/fusionResourceSeed'
 import { composeFusionOperationsFor } from '@/modules/knowledge-evolution/composition/fusion'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
@@ -6,7 +7,7 @@ import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-
 export function composeDaemonFusionModules(
   input: Omit<
     Parameters<typeof composeFusionOperationsFor>[0],
-    'memoryMembership' | 'skillVersionCommit'
+    'memoryMembership' | 'skillVersionCommit' | 'resourceSeed'
   > & {
     readonly skillContent?: NonNullable<
       Parameters<typeof composeSkillVersionCommitParticipantFactory>[0]
@@ -18,6 +19,7 @@ export function composeDaemonFusionModules(
     appHome: input.appHome,
     memories: input.memories,
     tasks: input.tasks,
+    resourceSeed: composeFusionResourceSeedParticipant(),
     memoryMembership: composeSkillMemoryFusionParticipantFactory(),
     skillVersionCommit: composeSkillVersionCommitParticipantFactory({
       skillContent: input.skillContent,

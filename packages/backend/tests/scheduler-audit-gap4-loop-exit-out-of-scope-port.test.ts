@@ -10,7 +10,7 @@
 //      的值——否则第 1 轮读到空串、`port-count-lt` 为真，静默绿掉（v5 时代的
 //      同一缺口，当年靠「先等隐式来源完成再按 last-value 读」兜底）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Agent, WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -79,8 +79,7 @@ function buildHarness(provider?: ProviderHarness): Harness {
 }
 
 async function seedAgent(db: PersistenceDb, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: agentId(name),
     name,
     description: 'test',
@@ -132,15 +131,14 @@ function buildDefinition(): WorkflowDefinition {
 async function seedWorkflowAndTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -257,10 +255,10 @@ function registerProviderCases2(provider: ProviderHarness) {
       }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // The loop never gets to read `lister.findings` as if it were its own
     // return value: it is rejected before its first round, and the task fails.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-return-source-out-of-scope')
 

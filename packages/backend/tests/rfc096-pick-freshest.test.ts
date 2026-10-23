@@ -61,6 +61,13 @@ function row(over: Partial<PickRow> = {}): PickRow {
 function fullRow(nodeId: string, over: Partial<FullRow> = {}): FullRow {
   seq += 1
   return {
+    shardKey: null,
+    consumedUpstreamRunsJson: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+
+    containerRunId: null,
     seq: null,
     id: `01PF${String(seq).padStart(4, '0')}`,
     nodeId,
@@ -202,7 +209,7 @@ describe('RFC-096 generic widening', () => {
 })
 
 describe('RFC-096 buildFreshestSettledPerNode — post-migration smoke', () => {
-  test('four filters: out-of-scope / wrong-iteration / child / non-done rows are all excluded', () => {
+  test('four filters: out-of-scope / wrong-iteration / child / non-done rows are all excluded', async () => {
     const scopeIds = new Set(['a'])
     const oldDone = fullRow('a')
     const freshDone = fullRow('a')
@@ -212,7 +219,7 @@ describe('RFC-096 buildFreshestSettledPerNode — post-migration smoke', () => {
     const childRow = fullRow('a', { parentNodeRunId: 'parent-x' })
     const nonDone = fullRow('a', { status: 'running' })
     const outOfScope = fullRow('zz')
-    const m = buildFreshestSettledPerNode(
+    const m = await buildFreshestSettledPerNode(
       [oldDone, freshDone, wrongIteration, childRow, nonDone, outOfScope],
       scopeIds,
       { containerRunId: null, iteration: 0 },
@@ -222,13 +229,13 @@ describe('RFC-096 buildFreshestSettledPerNode — post-migration smoke', () => {
     expect(m.get('zz')).toBeUndefined()
   })
 
-  test('per-node freshest: largest done id wins for EACH node independently', () => {
+  test('per-node freshest: largest done id wins for EACH node independently', async () => {
     const scopeIds = new Set(['a', 'b'])
     const a1 = fullRow('a')
     const b1 = fullRow('b')
     const a2 = fullRow('a')
     const b2 = fullRow('b')
-    const m = buildFreshestSettledPerNode([a1, b1, a2, b2], scopeIds, {
+    const m = await buildFreshestSettledPerNode([a1, b1, a2, b2], scopeIds, {
       containerRunId: null,
       iteration: 0,
     })

@@ -472,7 +472,9 @@ export function taskToLaunchPayload(task: Task): {
   payload: Record<string, unknown>
   spaceResolvable: boolean
 } {
-  const kind = taskExecutionKind(task)
+  const subjectKind = taskExecutionKind(task)
+  // RFC-395: keep the existing digital-employee workflow presentation and relaunch target.
+  const kind = subjectKind === 'digital-employee' ? 'workflow' : subjectKind
   const payload: Record<string, unknown> = { name: task.name }
 
   // Space (§3): four spaceKind values. scratch/remote reconstruct faithfully;

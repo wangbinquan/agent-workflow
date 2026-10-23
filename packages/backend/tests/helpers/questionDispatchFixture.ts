@@ -1,6 +1,13 @@
 // RFC-359 —— 问题派发场景的双引擎夹具（移植自 rfc140-one-click-dispatch-all.test.ts 的种子）。
 // 只用 provider-中立的 drizzle 写入，SQLite 与 PostgreSQL 共用。
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
@@ -79,8 +86,7 @@ function ans(qid: string) {
 
 export async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
   const def = liveDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359',
     description: '',
@@ -88,7 +94,7 @@ export async function seedTask(db: PersistenceDb, taskId: string): Promise<void>
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc359',
     workflowId: `wf_${taskId}`,
@@ -116,8 +122,7 @@ export async function seedRun(
   over: { status?: string; hasOutput?: boolean; rerunCause?: string } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -127,7 +132,7 @@ export async function seedRun(
     ...(over.rerunCause ? { rerunCause: over.rerunCause } : {}),
   })
   if (over.hasOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -148,8 +153,7 @@ export async function seedRound(
     status: open ? 'awaiting_human' : 'done',
   })
   const roundId = ulid()
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: roundId,
     taskId,
     kind,
@@ -159,8 +163,8 @@ export async function seedRound(
     intermediaryNodeRunId: intRunId,
     targetConsumerNodeId: kind === 'cross' ? DESIGNER : null,
     iteration: 0,
-    questionsJson: JSON.stringify(questions),
-    answersJson: open ? '[]' : JSON.stringify(questions.map((q) => ans(q.id))),
+    questions: JSON.stringify(questions),
+    answers: open ? '[]' : JSON.stringify(questions.map((q) => ans(q.id))),
     directive: 'continue',
     status: open ? 'awaiting_human' : 'answered',
     answeredAt: open ? null : Date.now(),

@@ -26,6 +26,16 @@
 //               closed gate 409s. POST dw-save-as-workflow persists the
 //               generated DAG as a reusable workflows row.
 
+import {
+  nodeRunFixture,
+  patchAgentFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
@@ -36,7 +46,7 @@ import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq, inArray } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
   initialDwState,
@@ -154,7 +164,7 @@ const GENERATION_SNAPSHOT = {
 }
 
 async function seedPoolAgents(db: DbClient): Promise<void> {
-  const { runtimes, agents } = tablesOf(db)
+  const { runtimes } = tablesOf(db)
   // A registered runtime whose binary does not exist: any REAL dispatch of a
   // pool agent (post-approve runScope in the HTTP tests) fails fast at spawn
   // (ENOENT) instead of launching an actual opencode process on the dev box.
@@ -190,10 +200,7 @@ async function seedPoolAgents(db: DbClient): Promise<void> {
   // These are suite-wide shared pool fixtures. RFC-231 makes canonical
   // service creates private, so retain this test's historical cross-actor
   // premise explicitly instead of relying on the old product default.
-  await db
-    .update(agents)
-    .set({ visibility: 'public' })
-    .where(inArray(agents.name, ['wg-planner', 'wg-coder']))
+  await patchAgentFixture(db, { name: ['wg-planner', 'wg-coder'] }, { visibility: 'public' })
 }
 
 /**
@@ -229,14 +236,14 @@ async function seedDynamicTask(
 ): Promise<{ taskId: string }> {
   const taskId = ulid()
   const config = await stampConfigMemberAgentIds(db, opts.config ?? dynamicConfig())
-  const { workflows, tasks, workgroupTaskState } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { workgroupTaskState } = tablesOf(db)
+  await workflowFixture(db, {
     id: `wf-anchor-${taskId}`,
     name: `dw-anchor-${taskId}`,
     definition: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
     builtin: true,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'dw-task',
     workflowId: `wf-anchor-${taskId}`,
@@ -361,8 +368,7 @@ describe('RFC-167 engine — generation pass', () => {
     expect(idByNode.get('code')).toBe(coderId)
     expect(JSON.stringify(def)).not.toContain('member#')
 
-    const { nodeRuns } = tablesOf(db)
-    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(db, { taskId })
     const holder = runs.filter((r) => r.rerunCause === DW_GATE_CAUSE)
     expect(holder).toHaveLength(1)
     expect(holder[0]?.status).toBe('awaiting_review')
@@ -488,7 +494,7 @@ describe('RFC-167 engine — generation pass', () => {
     })
     const { nodeRuns } = tablesOf(db)
     // holder present → nothing minted, no orchestrator run
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: DW_ORCHESTRATOR_NODE_ID,
@@ -523,22 +529,21 @@ describe('RFC-167 engine — generation pass', () => {
     const hooks: WorkgroupTurnHostOperations = {
       runHost: async (r) => {
         requests.push(r)
-        const { tasks } = tablesOf(db)
         // simulate a PUT config landing WHILE the orchestrator runs: a new
         // top-level key must survive the engine's dw persist.
-        const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+        const row = (await readTaskFixtures(db, { id: taskId }))[0]
         const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-        await db
-          .update(tasks)
-          .set({ workgroupConfigJson: JSON.stringify({ ...cfg, probe: 'keep-me' }) })
-          .where(eq(tasks.id, taskId))
+        await patchTaskFixture(
+          db,
+          { id: taskId },
+          { workgroupConfigJson: JSON.stringify({ ...cfg, probe: 'keep-me' }) },
+        )
         return goodResult()
       },
     }
     const result = await runDynamicWorkflowGenerate({ db, taskId, log, hooks })
     expect(result.kind).toBe('awaiting_review')
-    const { tasks } = tablesOf(db)
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]
     const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
     expect(cfg.probe).toBe('keep-me') // the concurrent edit was NOT stomped
     expect((await readDw(db, taskId))?.phase).toBe('awaiting_confirm') // dw still landed
@@ -708,7 +713,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
           edges: [],
         }),
       })
-      const { users, tasks } = tablesOf(db)
+      const { users } = tablesOf(db)
       // RFC-359 AC-1（plan §5hn 批次二 ⑧）：改走**生产那条路**——启动参与者的工作组臂 → 根内核。
       // 内核要为非系统 actor 解析 Git 提交身份，所以这一行用户是完整的（email + gitName）。
       await db
@@ -738,7 +743,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
         { name: 't', goal: '目标', scratch: true },
       )
 
-      const row = (await db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const row = (await readTaskFixtures(db, { id: task.id }))[0]
       expect(row?.workgroupId).not.toBeNull()
       const snapshot = WorkflowDefinitionSchema.parse(JSON.parse(row?.workflowSnapshot ?? '{}'))
       expect(snapshot.nodes).toHaveLength(1)
@@ -775,8 +780,8 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       status: 'pending',
     })
     await runTask({ taskId, db, appHome: '/tmp/aw-rfc167-nonexistent' })
-    const { tasks, nodeRuns } = tablesOf(db)
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(db)
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(row?.status).toBe('failed')
     // runScope's failure shape for the REAL DAG node (g1): agent resolution
     // fail-fast with failedNodeId stamped. The generate engine can't produce
@@ -793,8 +798,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       status: 'pending',
     })
     await runTask({ taskId, db, appHome: '/tmp/aw-rfc167-nonexistent' })
-    const { tasks } = tablesOf(db)
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorSummary).toBe('dw-phase-invariant')
   })
@@ -824,7 +828,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       ),
       'utf8',
     )
-    expect(orchestrator).toContain('isWorkgroupTask(task)') // RFC-164 lock stays (RFC-217 G4: oracle form)
+    expect(orchestrator).toContain("task.subject.kind === 'workgroup'") // RFC-164 lock stays (RFC-217 G4: oracle form)
     // RFC-332 T10: the three-way oracle now belongs to the task-execution
     // registry. The scheduler mechanics bridge consumes the selected engine;
     // it must not regain an inline workgroup/dynamic dispatch truth table.
@@ -848,7 +852,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
       'utf8',
     )
     expect(enginesSrc).toContain('deriveWorkgroupDispatch(')
-    expect(enginesSrc).toContain('workgroupModeOf(task.workgroupConfigJson)')
+    expect(enginesSrc).toContain('workgroupLaunchMode(task.workgroupConfig?.launch)')
     // Codex impl-gate P1: the generation run's iso delta is dropped, never
     // merged into the canonical worktree (abandon + skip merge-back).
     expect(nodeMechanics).toContain('req.discardWrites === true')
@@ -960,8 +964,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       ownerUserId: ownerId,
     })
     if (opts.withHolder !== false) {
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: DW_ORCHESTRATOR_NODE_ID,
@@ -984,8 +987,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     const deadline = Date.now() + 5000
     let final: PersistenceTables['tasks']['$inferSelect'] | undefined
     while (Date.now() < deadline) {
-      const { tasks } = tablesOf(db)
-      final = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      final = (await readTaskFixtures(db, { id: taskId }))[0]
       const s = final?.status
       if (s !== 'pending' && s !== 'running' && s !== 'awaiting_review') break
       await Bun.sleep(25)
@@ -1003,8 +1005,8 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
       })
       expect(res.status).toBe(200)
 
-      const { tasks, nodeRuns } = tablesOf(db)
-      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const { nodeRuns } = tablesOf(db)
+      const row = (await readTaskFixtures(db, { id: taskId }))[0]
       // RFC-223 (PR-3b): the swapped-in snapshot is the id-canonical generated
       // def — node p1 carries wg-planner's frozen agentId (stamped at seed time).
       const swapped = JSON.parse(row?.workflowSnapshot ?? '{}') as {
@@ -1035,8 +1037,8 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
 
   test('approve rejects a trigger-dependent proposal before holder/snapshot mutation when context is missing', async () => {
     const { taskId } = await seedConfirmable({ generatedDef: TRIGGER_DEF })
-    const { tasks, nodeRuns } = tablesOf(db)
-    const before = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(db)
+    const before = (await readTaskFixtures(db, { id: taskId }))[0]
     const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
       method: 'POST',
       body: JSON.stringify({ decision: 'approve' }),
@@ -1044,7 +1046,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('trigger-context-missing')
 
-    const after = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const after = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(after?.status).toBe('awaiting_review')
     expect(after?.workflowSnapshot).toBe(before?.workflowSnapshot)
     expect((await readDw(db, taskId))?.phase).toBe('awaiting_confirm')
@@ -1058,22 +1060,22 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     const wt = mkdtempSync(join(tmpdir(), 'aw-rfc292-dw-'))
     try {
       const { taskId } = await seedConfirmable({ worktreePath: wt, generatedDef: TRIGGER_DEF })
-      const { tasks } = tablesOf(db)
-      await db
-        .update(tasks)
-        .set({
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        {
           triggerContextJson: JSON.stringify({
             trigger: { webhook: { event_type: 'note', comment_text: 'please inspect this' } },
           }),
-        })
-        .where(eq(tasks.id, taskId))
+        },
+      )
 
       const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
         method: 'POST',
         body: JSON.stringify({ decision: 'approve' }),
       })
       expect(res.status).toBe(200)
-      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const row = (await readTaskFixtures(db, { id: taskId }))[0]
       expect(JSON.parse(row?.workflowSnapshot ?? '{}')).toMatchObject({
         $schema_version: 7,
         nodes: [{ promptTemplate: 'Handle {{trigger.webhook.comment_text}}' }],
@@ -1108,22 +1110,22 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     const wt = mkdtempSync(join(tmpdir(), 'aw-rfc167-fw-'))
     try {
       const { taskId } = await seedConfirmable({ worktreePath: wt, generatedDef: POOL_DEF })
-      const { tasks } = tablesOf(db)
       // A "concurrent" config edit lands after the handler's entry snapshot
       // would have been taken: adds a top-level key. The approve must keep it.
-      const row0 = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const row0 = (await readTaskFixtures(db, { id: taskId }))[0]
       const cfg0 = JSON.parse(row0?.workgroupConfigJson ?? '{}') as Record<string, unknown>
-      await db
-        .update(tasks)
-        .set({ workgroupConfigJson: JSON.stringify({ ...cfg0, probe: 'keep-me' }) })
-        .where(eq(tasks.id, taskId))
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        { workgroupConfigJson: JSON.stringify({ ...cfg0, probe: 'keep-me' }) },
+      )
 
       const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
         method: 'POST',
         body: JSON.stringify({ decision: 'approve' }),
       })
       expect(res.status).toBe(200)
-      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const row = (await readTaskFixtures(db, { id: taskId }))[0]
       const cfg = JSON.parse(row?.workgroupConfigJson ?? '{}') as Record<string, unknown>
       expect(cfg.probe).toBe('keep-me') // fresh compose kept the edit
       expect((await loadWorkgroupTaskState(db, taskId)).dwState?.phase).toBe('executing')
@@ -1135,18 +1137,18 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
 
   test('approve validates against the FRESH pool: removing the referenced member concurrently → 409 stale', async () => {
     const { taskId } = await seedConfirmable({ generatedDef: POOL_DEF })
-    const { tasks } = tablesOf(db)
     // Concurrently shrink the pool so POOL_DEF's wg-planner is no longer a
     // member — the fresh-view revalidation must catch it (dw-agent-outside-pool).
-    const row0 = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const row0 = (await readTaskFixtures(db, { id: taskId }))[0]
     const cfg0 = JSON.parse(row0?.workgroupConfigJson ?? '{}') as Record<string, unknown>
     const members = (cfg0.members as Array<{ agentName: string | null }>).filter(
       (m) => m.agentName !== 'wg-planner',
     )
-    await db
-      .update(tasks)
-      .set({ workgroupConfigJson: JSON.stringify({ ...cfg0, members }) })
-      .where(eq(tasks.id, taskId))
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      { workgroupConfigJson: JSON.stringify({ ...cfg0, members }) },
+    )
 
     const res = await req(`/api/workgroup-tasks/${taskId}/dw-confirm`, {
       method: 'POST',
@@ -1181,7 +1183,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
         ownerUserId: ownerId,
       })
       const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: DW_ORCHESTRATOR_NODE_ID,
@@ -1270,8 +1272,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     expect(dw?.phase).toBe('awaiting_confirm') // untouched — gate still open
     expect(dw?.rejectRounds).toBe(0)
     expect(dw?.generatedDef).toBeDefined()
-    const { tasks } = tablesOf(db)
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(row?.status).toBe('awaiting_review')
   })
 
@@ -1285,8 +1286,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     })
     expect(res.status).toBe(200)
     expect(((await res.json()) as { exhausted?: boolean }).exhausted).toBe(true)
-    const { tasks } = tablesOf(db)
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]
     expect(row?.status).toBe('failed')
     expect(row?.errorSummary).toBe('dw-reject-exhausted')
     const dw = await readDw(db, taskId)
@@ -1364,8 +1364,7 @@ describe('RFC-167 — dw-confirm gate + save-as (HTTP)', () => {
     expect(res.status).toBe(201)
     const body = (await res.json()) as { id: string; name: string }
     expect(body.name).toBe('saved-dw')
-    const { workflows } = tablesOf(db)
-    const wf = (await db.select().from(workflows).where(eq(workflows.id, body.id)))[0]
+    const wf = (await readWorkflowFixtures(db, { id: body.id }))[0]
     expect(wf).toMatchObject({
       ownerUserId: ownerId,
       visibility: 'private',

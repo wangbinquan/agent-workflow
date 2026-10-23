@@ -1,3 +1,4 @@
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { STUB_REALTIME_CREDENTIALS } from './helpers/realtimeRuntime'
@@ -257,8 +258,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
   describeEachProvider('RFC-349 realtime store / channel access（双引擎）', (harness) => {
     async function seed(): Promise<void> {
       const db = harness.db
-      const { users, workflows, tasks, taskCollaborators, nodeRuns, nodeRunEvents, memories } =
-        tablesOf(db)
+      const { users, taskCollaborators, nodeRunEvents, memories } = tablesOf(db)
       await db.insert(users).values([
         {
           id: 'realtime-owner',
@@ -277,12 +277,12 @@ describe('RFC-349 WebSocket provider boundary', () => {
           updatedAt: 1,
         },
       ])
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: 'realtime-workflow',
         name: 'Realtime workflow',
         definition: '{}',
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: 'realtime-task',
         name: 'Realtime task',
         workflowId: 'realtime-workflow',
@@ -303,7 +303,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
         addedBy: 'realtime-owner',
         addedAt: 1,
       })
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: 'realtime-run',
         taskId: 'realtime-task',
         nodeId: 'node-1',

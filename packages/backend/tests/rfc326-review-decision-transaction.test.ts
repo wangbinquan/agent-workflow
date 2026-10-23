@@ -23,6 +23,18 @@
 //     after the lock is released. Dropping the lock from `updateTaskMembers`
 //     (mutation evidence ⑦) turns the race cases red.
 
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  readNodeRunOutputFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -50,7 +62,7 @@ import { wakeHumanGateContinuation } from '../src/services/task'
 import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMutationCoordinator'
 import { hasActingMembership, updateTaskMembers } from '../src/services/taskCollab'
 import { DomainError } from '../src/util/errors'
-import { gitStashSnapshot, runGit } from '../src/util/git'
+import { runGit } from '../src/util/git'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { registerRevalidationTrigger } from '../src/ws/revalidationHook'
 import { recordStatements } from './helpers/statementRecorder'
@@ -69,16 +81,20 @@ const BODY =
 // ---------------------------------------------------------------------------
 
 async function snapshot(db: DbClient): Promise<Record<string, unknown[]>> {
-  const { nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).orderBy(asc(nodeRuns.id))
+  const { docVersions, reviewComments, memoryDistillJobs } = tablesOf(db)
+  const runs = await readNodeRunFixtures(db, undefined, {
+    orderBy: [{ field: 'id', direction: 'asc' }],
+  })
   return {
     docVersions: await db.select().from(docVersions).orderBy(asc(docVersions.id)),
     reviewComments: await db.select().from(reviewComments).orderBy(asc(reviewComments.id)),
     nodeRuns: runs,
-    nodeRunOutputs: await db
-      .select()
-      .from(nodeRunOutputs)
-      .orderBy(asc(nodeRunOutputs.nodeRunId), asc(nodeRunOutputs.portName)),
+    nodeRunOutputs: await readNodeRunOutputFixtures(db, undefined, {
+      orderBy: [
+        { field: 'nodeRunId', direction: 'asc' },
+        { field: 'portName', direction: 'asc' },
+      ],
+    }),
     mergeStates: runs.map((r) => ({ id: r.id, mergeState: r.mergeState })),
     memoryDistillJobs: await db.select().from(memoryDistillJobs).orderBy(asc(memoryDistillJobs.id)),
   }
@@ -171,7 +187,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
   await runGit(repo, ['-c', 'commit.gpgsign=false', 'commit', '-q', '--no-verify', '-m', 'init'])
   // Snapshot-time body (what a rollback restores), then the "failed attempt".
   writeFileSync(join(repo, 'data.txt'), SNAPSHOT.data)
-  const sha = await gitStashSnapshot(repo)
+  const sha = await legacyStashSnapshotFixture(repo)
   if (sha === '') throw new Error('fixture: empty stash snapshot')
   writeFileSync(join(repo, 'data.txt'), DIRTY.data)
   writeFileSync(join(repo, 'stray.txt'), 'stray\n')
@@ -179,16 +195,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
   const db = createInMemoryDb(MIGRATIONS)
   const committedEvents = await installCommittedEventDeliveryHarness(db)
   const [owner, member, stranger, extraUser] = [ulid(), ulid(), ulid(), ulid()]
-  const {
-    users,
-    agents,
-    workflows,
-    tasks,
-    taskCollaborators,
-    nodeRuns,
-    nodeRunOutputs,
-    docVersions,
-  } = tablesOf(db)
+  const { users, taskCollaborators, docVersions } = tablesOf(db)
   await db.insert(users).values(
     [owner, member, stranger, extraUser].map((id, i) => ({
       id,
@@ -200,7 +207,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
       updatedAt: NOW,
     })),
   )
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name: 'doc',
     description: '',
@@ -225,13 +232,13 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -251,20 +258,20 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
     { taskId, userId: member, role: 'collaborator', addedBy: owner, addedAt: NOW },
   ])
   const docRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: docRunId,
     taskId,
     nodeId: 'doc',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: sha,
     startedAt: NOW - 1000,
     finishedAt: NOW - 900,
+    checkpoints: [{ mountPath: '', preSnapshot: sha }],
   })
-  await insertOne(db, nodeRunOutputs, { nodeRunId: docRunId, portName: 'docpath', content: BODY })
+  await nodeRunOutputFixture(db, { nodeRunId: docRunId, portName: 'docpath', content: BODY })
   const reviewRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -318,8 +325,8 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
  */
 async function addMultiInlineRound(f: Fixture): Promise<{ runId: string; ids: [string, string] }> {
   const runId = ulid()
-  const { nodeRuns, docVersions } = tablesOf(f.db)
-  await insertOne(f.db, nodeRuns, {
+  const { docVersions } = tablesOf(f.db)
+  await nodeRunFixture(f.db, {
     id: runId,
     taskId: f.taskId,
     nodeId: 'rev_1',
@@ -519,7 +526,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     )
     await settleDecisionContinuation(f, ok)
     expect(ok.reviewIteration).toBe(1)
-    const retired = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.docRunId)))[0]!
+    const retired = (await readNodeRunFixtures(f.db, { id: f.docRunId }))[0]!
     expect(retired.status).toBe('canceled')
     expect(retired.rolledBack).toBe(true)
     expect(retired.supersededByReview).toBe('iterated')
@@ -529,8 +536,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
   test('a corrupt workflowSnapshot is refused in prepare — before the rollback, nothing written', async () => {
     f = await buildFixture({ rollbackOnIterate: true })
     ev = taskEvents(f.taskId)
-    const { tasks } = tablesOf(f.db)
-    await f.db.update(tasks).set({ workflowSnapshot: '{not json' }).where(eq(tasks.id, f.taskId))
+    await patchTaskFixture(f.db, { id: f.taskId }, { workflowSnapshot: '{not json' })
     const before = await snapshot(f.db)
     const err = await expectRolledBack(before, () =>
       submitReviewDecision(decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] })),
@@ -546,7 +552,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     // A second review run with two inline items, both accepted; item 1's body is gone.
     const runId = ulid()
     const { nodeRuns, docVersions } = tablesOf(f.db)
-    await insertOne(f.db, nodeRuns, {
+    await nodeRunFixture(f.db, {
       id: runId,
       taskId: f.taskId,
       nodeId: 'rev_1',
@@ -650,8 +656,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     await revoke
     expect(result.reviewIteration).toBe(1)
     expect(worktreeState(f.repo)).toEqual(SNAPSHOT)
-    const { nodeRuns } = tablesOf(f.db)
-    const retired = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.docRunId)))[0]!
+    const retired = (await readNodeRunFixtures(f.db, { id: f.docRunId }))[0]!
     expect(retired.status).toBe('canceled')
     expect(retired.rolledBack).toBe(true)
     expect(ev.types.at(-1)).toBe('review.decision_made')
@@ -698,8 +703,8 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     const err = await failureOf(() => stale)
     expect((err as DomainError).code).toBe('forbidden')
     expect((err as DomainError).status).toBe(403)
-    const { tasks, taskCollaborators } = tablesOf(f.db)
-    const task = (await f.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
+    const { taskCollaborators } = tablesOf(f.db)
+    const task = (await readTaskFixtures(f.db, { id: f.taskId }))[0]!
     expect(task.ownerUserId).toBe(f.extraUser)
     const rows = await f.db
       .select()
@@ -931,9 +936,8 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
     expect(firstResult.ownerUserId).toBe(f.extraUser)
     expect(firstResult.members.map((m) => m.user.id)).not.toContain(f.extraUser)
     expect(firstResult.members.map((m) => m.user.id).sort()).toEqual([f.member, f.owner].sort())
-    const { tasks } = tablesOf(f.db)
     // …while the database has moved on to the second commit.
-    const task = (await f.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
+    const task = (await readTaskFixtures(f.db, { id: f.taskId }))[0]!
     expect(task.ownerUserId).toBe(f.stranger)
   })
 })

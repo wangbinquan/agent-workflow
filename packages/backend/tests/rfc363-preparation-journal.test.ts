@@ -1,6 +1,6 @@
 // RFC-363 T2: durable preparation facts, atomic rollback and terminal ownership.
 // These are real provider writes; recreating a repository must not lose its receipts.
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readTaskFixtures } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { createRepositoryPreparationJournal } from '@/modules/source-control/infrastructure/repositoryPreparationJournal'
@@ -67,8 +67,7 @@ describeEachProvider('RFC-363 preparation journals', (harness) => {
     expect(await reopened.snapshot(snapshotId)).toBeNull()
     expect(await reopened.operation(operationId)).toBeNull()
     expect(await createWorkspacePreparationJournal(harness.db).read(planId)).toBeNull()
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await readTaskFixtures(harness.db)).toEqual([])
   })
 
   test('source request replay returns the durable identity and rejects changed input', async () => {
@@ -194,8 +193,7 @@ describeEachProvider('RFC-363 preparation journals', (harness) => {
       now: 1,
     }
     await journal.prepare(input)
-    const { tasks } = tablesOf(harness.db)
-    expect(await harness.db.select().from(tasks)).toEqual([])
+    expect(await readTaskFixtures(harness.db)).toEqual([])
     await journal.advance({
       id: input.id,
       from: 'preparing',

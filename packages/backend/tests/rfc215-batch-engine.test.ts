@@ -5,6 +5,7 @@
 // attempt_count 认领计数与预算封顶（达 DEFAULT_PROTOCOL_RETRY_BUDGET 停止重开）、
 // 批 shardKey 编码、崩溃恢复矩阵（§3.4：dispatched 失驱重配 / host 行 interrupted
 // ⇒ redispatch / host 行 done ⇒ 收 done 不重跑）、游标单一归属（批 run 不推）。
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -15,7 +16,8 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET, parseBatchShardKey } from '@agent-workfl
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent } from '../src/services/agent'
-import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
@@ -73,15 +75,15 @@ async function seedTask(db: PersistenceDb, config: WorkgroupRuntimeConfig): Prom
       member.memberType === 'agent' ? { ...member, agentId: agent.id } : member,
     ),
   }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { workflows } = tablesOf(db)
+  await workflowFixture(db, {
     id: ulid(),
     name: `host-${taskId}`,
     definition: '{}',
     builtin: true,
   })
   const wf = (await db.select().from(workflows).limit(1))[0]
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'wg-batch-task',
     executionLineageId: taskId,
@@ -127,8 +129,7 @@ async function seedOpenCard(db: PersistenceDb, taskId: string, title: string): P
 
 /** 预置一个 done 的 member 行，让 nothingStarted=false（跳过 fc_initial 群唤）。 */
 async function seedPastRun(db: PersistenceDb, taskId: string): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: WG_MEMBER_NODE_ID,
@@ -372,8 +373,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const cardId = ulid()
       const runId = ulid()
-      const { nodeRuns, workgroupAssignments } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { workgroupAssignments } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
@@ -413,8 +414,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const cardId = ulid()
       const runId = ulid()
-      const { nodeRuns, workgroupAssignments } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { workgroupAssignments } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
@@ -503,8 +504,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const cardId = ulid()
       const runId = ulid()
-      const { nodeRuns, workgroupAssignments } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { workgroupAssignments } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: WG_MEMBER_NODE_ID,
@@ -533,7 +534,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       const hooks: WorkgroupEngineHooks = {
         runHostNode: async (req) => {
           requests.push(req)
-          await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, req.nodeRunId))
+          await patchNodeRunFixture(db, { id: req.nodeRunId }, { status: 'done' })
           return { status: 'done', outputs: { wg_result: JSON.stringify({ summary: 'ok' }) } }
         },
       }

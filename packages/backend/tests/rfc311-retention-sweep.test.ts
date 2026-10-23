@@ -5,6 +5,7 @@
 // rows go, in-window rows stay, per-MCP probe windows keep the newest N, and
 // a 0 config disables each stage.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -212,10 +213,10 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
     const db = harness.db
     await seedUser(db, 'u1')
     await seedFires(db, [200, 150])
-    const { workflows, tasks, webhookTriggerFires } = tablesOf(db)
-    await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+    const { webhookTriggerFires } = tablesOf(db)
+    await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
     const mkTask = async (id: string, status: 'awaiting_human' | 'done'): Promise<void> => {
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id,
         name: id,
         workflowId: 'wf1',

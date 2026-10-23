@@ -39,6 +39,11 @@ type Row = PersistenceTables['nodeRuns']['$inferSelect']
 // membership — not iteration arithmetic — is what makes a row "inside" the wrapper.
 function run(over: Partial<Row>): Row {
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
     id: '01R',
     nodeId: 'n',
     iteration: 0,
@@ -90,54 +95,54 @@ describe('S-3 — wrapper-loop ∋ review 被 approve 后复活（机制核心�
     run({ id: '01B', nodeId: 'rev', containerRunId: '01W', status: 'done', iteration: 1 }),
   ]
 
-  test('[S-3 LOCK·已翻转] approve 后形态（inner 全 done、含 fresh done review）→ wrapperHasFreshInnerWork = true', () => {
-    expect(wrapperHasFreshInnerWork(parkedLoopRow, postApproveRows, LOOP_DEF)).toBe(true)
+  test('[S-3 LOCK·已翻转] approve 后形态（inner 全 done、含 fresh done review）→ wrapperHasFreshInnerWork = true', async () => {
+    expect(await wrapperHasFreshInnerWork(parkedLoopRow, postApproveRows, LOOP_DEF)).toBe(true)
   })
 
-  test('[S-3 LOCK·已翻转] 因而 isDispatchable(awaiting_review wrapper-loop) = true —— resume 即复活，不再恒弹回 park', () => {
-    expect(isDispatchable(parkedLoopRow, 'wrapper-loop', NO_FRESH, postApproveRows, LOOP_DEF)).toBe(
-      true,
-    )
+  test('[S-3 LOCK·已翻转] 因而 isDispatchable(awaiting_review wrapper-loop) = true —— resume 即复活，不再恒弹回 park', async () => {
+    expect(
+      await isDispatchable(parkedLoopRow, 'wrapper-loop', NO_FRESH, postApproveRows, LOOP_DEF),
+    ).toBe(true)
   })
 
-  test('证据形态：wrapperRevivalEvidence 返回 approve 翻 done 的 review 行（rowId+nodeId）', () => {
-    expect(wrapperRevivalEvidence(parkedLoopRow, postApproveRows, LOOP_DEF)).toEqual({
+  test('证据形态：wrapperRevivalEvidence 返回 approve 翻 done 的 review 行（rowId+nodeId）', async () => {
+    expect(await wrapperRevivalEvidence(parkedLoopRow, postApproveRows, LOOP_DEF)).toEqual({
       rowId: '01B',
       nodeId: 'rev',
     })
   })
 
-  test('负例：非 review 的 inner done 不解锁（worker done 单独存在 → 证据为 null）', () => {
+  test('负例：非 review 的 inner done 不解锁（worker done 单独存在 → 证据为 null）', async () => {
     // 没有 review done 行、也没有 pending 行——agent done 不是复活证据，否则
     // clarify park 直接失效（dispatch-frontier.test.ts N2 同口径）。
     const agentDoneOnly = [
       parkedLoopRow,
       run({ id: '01A', nodeId: 'worker', containerRunId: '01W', status: 'done', iteration: 1 }),
     ]
-    expect(wrapperRevivalEvidence(parkedLoopRow, agentDoneOnly, LOOP_DEF)).toBeNull()
-    expect(wrapperHasFreshInnerWork(parkedLoopRow, agentDoneOnly, LOOP_DEF)).toBe(false)
-    expect(isDispatchable(parkedLoopRow, 'wrapper-loop', NO_FRESH, agentDoneOnly, LOOP_DEF)).toBe(
-      false,
-    )
+    expect(await wrapperRevivalEvidence(parkedLoopRow, agentDoneOnly, LOOP_DEF)).toBeNull()
+    expect(await wrapperHasFreshInnerWork(parkedLoopRow, agentDoneOnly, LOOP_DEF)).toBe(false)
+    expect(
+      await isDispatchable(parkedLoopRow, 'wrapper-loop', NO_FRESH, agentDoneOnly, LOOP_DEF),
+    ).toBe(false)
   })
 
-  test('对照组：inner pending 行（clarify 答复 rerun 形态）依旧放行，且 max-id 证据胜出', () => {
+  test('对照组：inner pending 行（clarify 答复 rerun 形态）依旧放行，且 max-id 证据胜出', async () => {
     const withPending = [
       ...postApproveRows,
       run({ id: '01C', nodeId: 'rev', containerRunId: '01W', status: 'pending', iteration: 1 }),
     ]
-    expect(wrapperHasFreshInnerWork(parkedLoopRow, withPending, LOOP_DEF)).toBe(true)
-    expect(isDispatchable(parkedLoopRow, 'wrapper-loop', NO_FRESH, withPending, LOOP_DEF)).toBe(
-      true,
-    )
+    expect(await wrapperHasFreshInnerWork(parkedLoopRow, withPending, LOOP_DEF)).toBe(true)
+    expect(
+      await isDispatchable(parkedLoopRow, 'wrapper-loop', NO_FRESH, withPending, LOOP_DEF),
+    ).toBe(true)
     // pending 行 id '01C' > done 行 '01B' → 证据取窗口内 max-id 行。
-    expect(wrapperRevivalEvidence(parkedLoopRow, withPending, LOOP_DEF)).toEqual({
+    expect(await wrapperRevivalEvidence(parkedLoopRow, withPending, LOOP_DEF)).toEqual({
       rowId: '01C',
       nodeId: 'rev',
     })
   })
 
-  test('窗口取值规则：loop 的扫描窗口来自 wrapperProgressJson.iteration，不是 wrapper 行自身 iteration', () => {
+  test('窗口取值规则：loop 的扫描窗口来自 wrapperProgressJson.iteration，不是 wrapper 行自身 iteration', async () => {
     // pending / review-done 都落在 wrapper 行自身的 iteration=0（≠ progress 窗口 1）
     // 不解锁——复活证据必须落在 progress 窗口上才有效（两类证据同规）。
     const wrongAxis = [
@@ -146,11 +151,11 @@ describe('S-3 — wrapper-loop ∋ review 被 approve 后复活（机制核心�
       run({ id: '01B', nodeId: 'rev', containerRunId: '01W', status: 'done', iteration: 0 }),
       run({ id: '01C', nodeId: 'rev', containerRunId: '01W', status: 'pending', iteration: 0 }),
     ]
-    expect(wrapperHasFreshInnerWork(parkedLoopRow, wrongAxis, LOOP_DEF)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(parkedLoopRow, wrongAxis, LOOP_DEF)).toBe(false)
     // 而落在 progress 窗口 iteration=1 上的同款行解锁（上方用例已证）。
   })
 
-  test('修订 #8 契约：review done 行的 fresh 判定按 innerIter 内部构图——窗口内 stale 的 done review 不解锁', () => {
+  test('修订 #8 契约：review done 行的 fresh 判定按 innerIter 内部构图——窗口内 stale 的 done review 不解锁', async () => {
     // rev 的 done 行 consumed 了 worker 的旧 run（01OLD），而窗口内 worker 的
     // freshest done 已是 01A → 该 review done 行 stale，不是复活证据。若实现误用
     // 外层（wrapper iteration=0 作用域）的 freshestSettled map，worker@iter1 不在图
@@ -167,8 +172,8 @@ describe('S-3 — wrapper-loop ∋ review 被 approve 后复活（机制核心�
         consumedUpstreamRunsJson: JSON.stringify({ worker: '01OLD' }),
       }),
     ]
-    expect(wrapperRevivalEvidence(parkedLoopRow, staleReviewDone, LOOP_DEF)).toBeNull()
-    expect(wrapperHasFreshInnerWork(parkedLoopRow, staleReviewDone, LOOP_DEF)).toBe(false)
+    expect(await wrapperRevivalEvidence(parkedLoopRow, staleReviewDone, LOOP_DEF)).toBeNull()
+    expect(await wrapperHasFreshInnerWork(parkedLoopRow, staleReviewDone, LOOP_DEF)).toBe(false)
   })
 })
 
@@ -193,24 +198,26 @@ describe('S-3 — wrapper-git ∋ review 被 approve 后复活（同型，已修
     run({ id: '01B', nodeId: 'rev', containerRunId: '01W', status: 'done', iteration: 2 }),
   ]
 
-  test('[S-3 LOCK·已翻转] approve 后形态 → wrapperHasFreshInnerWork = true 且 isDispatchable = true', () => {
-    expect(wrapperHasFreshInnerWork(parkedGitRow, postApproveRows, GIT_DEF)).toBe(true)
-    expect(isDispatchable(parkedGitRow, 'wrapper-git', NO_FRESH, postApproveRows, GIT_DEF)).toBe(
-      true,
-    )
-    expect(wrapperRevivalEvidence(parkedGitRow, postApproveRows, GIT_DEF)).toEqual({
+  test('[S-3 LOCK·已翻转] approve 后形态 → wrapperHasFreshInnerWork = true 且 isDispatchable = true', async () => {
+    expect(await wrapperHasFreshInnerWork(parkedGitRow, postApproveRows, GIT_DEF)).toBe(true)
+    expect(
+      await isDispatchable(parkedGitRow, 'wrapper-git', NO_FRESH, postApproveRows, GIT_DEF),
+    ).toBe(true)
+    expect(await wrapperRevivalEvidence(parkedGitRow, postApproveRows, GIT_DEF)).toEqual({
       rowId: '01B',
       nodeId: 'rev',
     })
   })
 
-  test('对照组 + 窗口规则：证据落在 wrapper 自身 iteration=2 解锁；落在 0 不解锁', () => {
+  test('对照组 + 窗口规则：证据落在 wrapper 自身 iteration=2 解锁；落在 0 不解锁', async () => {
     const atOwnIter = [
       ...postApproveRows,
       run({ id: '01C', nodeId: 'rev', containerRunId: '01W', status: 'pending', iteration: 2 }),
     ]
-    expect(wrapperHasFreshInnerWork(parkedGitRow, atOwnIter, GIT_DEF)).toBe(true)
-    expect(isDispatchable(parkedGitRow, 'wrapper-git', NO_FRESH, atOwnIter, GIT_DEF)).toBe(true)
+    expect(await wrapperHasFreshInnerWork(parkedGitRow, atOwnIter, GIT_DEF)).toBe(true)
+    expect(await isDispatchable(parkedGitRow, 'wrapper-git', NO_FRESH, atOwnIter, GIT_DEF)).toBe(
+      true,
+    )
 
     // pending 与 review-done 全部落在 iteration=0（≠ wrapper 自身 iteration=2）
     // → 两类证据都不解锁。
@@ -220,6 +227,6 @@ describe('S-3 — wrapper-git ∋ review 被 approve 后复活（同型，已修
       run({ id: '01B', nodeId: 'rev', containerRunId: '01W', status: 'done', iteration: 0 }),
       run({ id: '01C', nodeId: 'rev', containerRunId: '01W', status: 'pending', iteration: 0 }),
     ]
-    expect(wrapperHasFreshInnerWork(parkedGitRow, atWrongIter, GIT_DEF)).toBe(false)
+    expect(await wrapperHasFreshInnerWork(parkedGitRow, atWrongIter, GIT_DEF)).toBe(false)
   })
 })

@@ -296,10 +296,30 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect('set' in index.parentOf).toBe(false)
     expect('add' in index.rootNodeIds).toBe(false)
 
+    // RFC-395 II-a A3/A7: these exact query fields are run filters, not wrapper membership.
+    const selectionFilters: Record<string, readonly [RegExp, number]> = {
+      'packages/backend/src/modules/task-execution/infrastructure/nodeRunQueries.ts': [
+        /\binput\.nodeIds\b/g,
+        3,
+      ],
+      'packages/backend/src/modules/task-execution/infrastructure/runSelection/oracle/pickers.ts': [
+        /\bfamily\.nodeIds\b/g,
+        2,
+      ],
+    }
     const rawMembershipReaders = tsFilesUnder('packages/backend/src/modules/task-execution').filter(
-      (file) =>
-        file !== 'packages/backend/src/modules/task-execution/domain/executionScope.ts' &&
-        read(file).includes('.nodeIds'),
+      (file) => {
+        if (file === 'packages/backend/src/modules/task-execution/domain/executionScope.ts')
+          return false
+        let source = read(file)
+        const queryField = selectionFilters[file]
+        if (queryField !== undefined) {
+          const [field, count] = queryField
+          expect(source.match(field)).toHaveLength(count)
+          source = source.replace(field, '')
+        }
+        return source.includes('.nodeIds')
+      },
     )
     expect(rawMembershipReaders).toEqual([])
 

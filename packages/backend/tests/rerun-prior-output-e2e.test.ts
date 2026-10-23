@@ -36,6 +36,7 @@
 //     (!effectiveHasClarifyChannel / !suppressPriorOutput must stay gone), and
 //     the hasClarifyChannel threading is locked by clarify-prompt-wire-up.test.ts.
 
+import { readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -201,10 +202,9 @@ async function buildHarness(): Promise<Harness> {
   )
 
   const { nodeRuns } = tablesOf(db)
-  const auditorRows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'auditor')))
+  const auditorRows = await readNodeRunFixtures(db, {
+    $and: [{ taskId: task.id }, { nodeId: 'auditor' }],
+  })
   const auditorDone = auditorRows
     .filter((r) => r.status === 'done' && r.parentNodeRunId === null)
     .sort((a, b) => (a.id > b.id ? -1 : 1))[0]
@@ -297,10 +297,7 @@ describe('RFC-119 e2e — review-iterate rerun gets the prior output in its prom
     })
 
     const fresh = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'auditor')))
+      await readNodeRunFixtures(h.db, { $and: [{ taskId: h.taskId }, { nodeId: 'auditor' }] })
     )
       .filter((r) => r.parentNodeRunId === null && r.id !== h.auditorDoneRunId && r.retryIndex >= 1)
       .sort((a, b) => b.retryIndex - a.retryIndex)[0]

@@ -34,11 +34,11 @@
 //    「触发器补了」在 SQLite 上同形，①就证明不了任何事）。
 //  ④【继承优先】显式传进来的路径不被覆写。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { afterAll, expect, test } from 'bun:test'
-import { eq, sql } from 'drizzle-orm'
+import { sql } from 'drizzle-orm'
 
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
@@ -54,9 +54,8 @@ const MINTED = new Map<string, Record<string, { slot: string | null; lineage: st
 
 describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (harness) => {
   const seedTask = async (): Promise<void> => {
-    const { workflows, tasks } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, { id: 'wf-lin', name: 'lineage', definition: '{}' })
-    await insertOne(harness.db, tasks, {
+    await workflowFixture(harness.db, { id: 'wf-lin', name: 'lineage', definition: '{}' })
+    await taskFixture(harness.db, {
       id: 'tk-lin',
       name: 'lineage',
       workflowId: 'wf-lin',
@@ -91,26 +90,42 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
   test('① / ② 首个 node_run 的 lineage 由工厂写出，两个引擎逐字节相同', async () => {
     await seedTask()
     await mint([
-      { taskId: 'tk-lin', nodeId: 'n1', status: 'pending', cause: 'initial' },
-      { taskId: 'tk-lin', nodeId: 'n2', status: 'pending', cause: 'initial', iteration: 2 },
       {
+        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
+        taskId: 'tk-lin',
+        nodeId: 'n1',
+        status: 'pending',
+        cause: 'initial',
+      },
+      {
+        ...deriveNodeRunRole({ nodeId: 'n2', rerunCause: 'initial' }),
+        taskId: 'tk-lin',
+        nodeId: 'n2',
+        status: 'pending',
+        cause: 'initial',
+        iteration: 2,
+      },
+      {
+        ...deriveNodeRunRole({ nodeId: 'n3', rerunCause: 'initial' }),
         taskId: 'tk-lin',
         nodeId: 'n3',
         status: 'pending',
         cause: 'initial',
-        overrides: { shardKey: 's7' },
+        overrides: {
+          identity: {
+            shardKey: 's7',
+          },
+        },
       },
     ] as NodeRunMintInput[])
 
-    const { nodeRuns } = tablesOf(harness.db)
-    const rows = await harness.db
-      .select({
-        node: nodeRuns.nodeId,
-        slot: nodeRuns.continuationSlotKey,
-        lineage: nodeRuns.lineageSlotPathJson,
-      })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, 'tk-lin'))
+    const rows = await readNodeRunFixtures(harness.db, { taskId: 'tk-lin' }).then((rows) =>
+      rows.map((row) => ({
+        node: row.nodeId,
+        slot: row.continuationSlotKey,
+        lineage: row.lineageSlotPathJson,
+      })),
+    )
     const byNode = Object.fromEntries(
       rows.map((row) => [row.node, { slot: row.slot, lineage: row.lineage }]),
     )
@@ -137,18 +152,21 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
     ])
     await mint([
       {
+        ...deriveNodeRunRole({ nodeId: 'n9', rerunCause: 'initial' }),
         taskId: 'tk-lin',
         nodeId: 'n9',
         status: 'pending',
         cause: 'initial',
-        overrides: { lineageSlotPathJson: explicit },
+        overrides: {
+          identity: {
+            lineageSlotPathJson: explicit,
+          },
+        },
       },
     ] as NodeRunMintInput[])
-    const { nodeRuns } = tablesOf(harness.db)
-    const [row] = await harness.db
-      .select({ lineage: nodeRuns.lineageSlotPathJson })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.nodeId, 'n9'))
+    const [row] = await readNodeRunFixtures(harness.db, { nodeId: 'n9' }).then((rows) =>
+      rows.map((row) => ({ lineage: row.lineageSlotPathJson })),
+    )
     expect(row?.lineage).toBe(explicit)
   })
 

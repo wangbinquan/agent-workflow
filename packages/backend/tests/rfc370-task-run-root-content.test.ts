@@ -1,9 +1,12 @@
 // RFC-370: actual provider HTTP roots read the very content selection used by a
 // drive writer, including after application reconstruction. No listener is opened.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+} from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -55,9 +58,8 @@ describeEachProvider('RFC-370 real application root content coherence', (harness
     let pending: Promise<Response> | undefined
     try {
       await seedTask(harness.db, taskId)
-      const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
-      await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
-      await insertOne(harness.db, nodeRuns, {
+      await patchTaskFixture(harness.db, { id: taskId }, { status: 'running' })
+      await nodeRunFixture(harness.db, {
         id: nodeRunId,
         taskId,
         nodeId: DESIGNER,
@@ -71,17 +73,17 @@ describeEachProvider('RFC-370 real application root content coherence', (harness
       // HTTP root receives the same complete choice, with no native member fill.
       const root = bindTaskRunRootSelection(chosen.selection)
       const prompt = await root.nodeRunPrompts.store(taskId, nodeRunId, 'Selected root prompt 正文')
-      await harness.db.update(nodeRuns).set(prompt).where(eq(nodeRuns.id, nodeRunId))
+      await patchNodeRunFixture(harness.db, { id: nodeRunId }, prompt)
       const source = { workspaceRef: 'object:working:' + taskId, relativePath: 'report.md' }
       content.put(source, bytes)
       const archived = await root.portArtifacts.archive({
         taskId,
         nodeRunId,
         portName: 'report',
-        worktreeDirName: '',
+        mountPath: '',
         items: [{ source, sourcePath: 'report.md' }],
       })
-      await insertOne(harness.db, nodeRunOutputs, {
+      await nodeRunOutputFixture(harness.db, {
         nodeRunId,
         portName: 'report',
         content: 'report.md',

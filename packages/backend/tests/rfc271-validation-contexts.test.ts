@@ -12,8 +12,7 @@
 // 三条回归对应三行。② 与 ③ 此前是**真缺陷**：启动流程先从 live 构造 validator
 // context、之后才冻结，于是「校验的那一份」与「执行的那一份」是两次独立解析。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -75,8 +74,7 @@ const rootCalling = (target: { name: string; id?: string }) =>
   })
 
 const seed = async (db: PersistenceDb, id: string, name: string, d: WorkflowDefinition) => {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, { id, name, definition: JSON.stringify(d) })
+  await workflowFixture(db, { id, name, definition: JSON.stringify(d) })
 }
 
 const ROOT = '01ROOT00000000000000000000'

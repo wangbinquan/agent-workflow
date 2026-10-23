@@ -1,8 +1,9 @@
+import type { TaskWorkgroupConfig } from '../../domain/taskWorkgroupConfig'
 import type { Agent, DwState } from '@agent-workflow/shared'
 
 /** Closed durable snapshot needed by the dynamic-workflow generation pass. */
 export interface DynamicWorkflowTaskSnapshot {
-  readonly workgroupConfigJson: string | null
+  readonly workgroupConfig: TaskWorkgroupConfig | null
   readonly triggerContextJson: string | null
   readonly dwStateJson: string | null
 }

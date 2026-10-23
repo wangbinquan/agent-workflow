@@ -1,3 +1,4 @@
+import type { NodeRunConfigView } from '../../domain/nodeRunSnapshot'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 
 import type {
@@ -6,11 +7,10 @@ import type {
   RuntimeObservationIdentity,
 } from '@/modules/runtime-management/public/types'
 
-export interface FrozenNodeRunRuntimeRecord {
-  readonly runtime: string | null
-  readonly runtimeBinary: string | null
-  readonly runtimeParamsJson: string | null
-}
+export type FrozenNodeRunRuntimeRecord = Pick<
+  NodeRunConfigView,
+  'runtime' | 'runtimeBinary' | 'runtimeParamsJson'
+>
 
 export interface FrozenNodeRunRuntime {
   readonly protocol: RuntimeKind

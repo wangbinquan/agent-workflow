@@ -57,6 +57,12 @@ let seq = 0
 function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
   seq += 1
   return {
+    shardKey: null,
+    supersededByReview: null,
+    mergeState: null,
+
+    seq: null,
+    containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -120,13 +126,13 @@ const EXPECTED: Record<NodeRunStatus, { kind: NodeKind; bucket: Bucket; reasonPr
  * 跑一个单节点 scope，返回该节点落入的桶（blocked 时附 reason）。
  * 入零桶（旧黑洞）或多桶（互斥破坏）都抛错——"入且仅入一个"本身是契约。
  */
-function classify(
+async function classify(
   status: NodeRunStatus,
   kind: NodeKind,
   over: Partial<Row> = {},
-): { bucket: Bucket; reason?: string } {
+): Promise<{ bucket: Bucket; reason?: string }> {
   const { definition, scopeNodes, scopeIds } = def([{ id: 'n', kind }])
-  const f = deriveFrontier(
+  const f = await deriveFrontier(
     [row('n', status, over)],
     definition,
     scopeNodes,
@@ -162,8 +168,8 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
 
   for (const status of NODE_RUN_STATUS) {
     const { kind, bucket, reasonPrefix } = EXPECTED[status]
-    test(`latest='${status}' (kind=${kind}) → '${bucket}'${reasonPrefix === undefined ? '' : `（reason 前缀 '${reasonPrefix}'）`}`, () => {
-      const got = classify(status, kind)
+    test(`latest='${status}' (kind=${kind}) → '${bucket}'${reasonPrefix === undefined ? '' : `（reason 前缀 '${reasonPrefix}'）`}`, async () => {
+      const got = await classify(status, kind)
       expect(got.bucket).toBe(bucket)
       if (reasonPrefix !== undefined) {
         expect((got.reason ?? '').startsWith(reasonPrefix)).toBe(true)
@@ -173,8 +179,8 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
 
   // EXPECTED 表按 status 单行建模、表不下 errorMessage 维度，故独立成 case：
   // supersede 标记行是 canceled → ready 的唯一例外（design §1 标记守卫）。
-  test("补充表项：canceled + superseded_by_review 列非空 → blocked('review-superseded')（supersede 等待窗口，rerun 行承载复活）", () => {
-    const got = classify('canceled', 'agent-single', {
+  test("补充表项：canceled + superseded_by_review 列非空 → blocked('review-superseded')（supersede 等待窗口，rerun 行承载复活）", async () => {
+    const got = await classify('canceled', 'agent-single', {
       supersededByReview: 'iterated',
     })
     expect(got.bucket).toBe('blocked')
@@ -183,7 +189,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
 
   // RFC-306 补充：STALE 的 skip 重新进入 ready —— 这是「跳过可被推翻」的调度侧证据。
   // 与上表的 fresh 行成对：两行状态相同，只差 consumed 是否仍指向上游的最新结算行。
-  test("补充表项：skipped 且 consumed 指向已过期的上游代次 → 'ready'（重新评估分支）", () => {
+  test("补充表项：skipped 且 consumed 指向已过期的上游代次 → 'ready'（重新评估分支）", async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'up', kind: 'agent-single' },
       { id: 'n', kind: 'agent-single' },
@@ -193,7 +199,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
       row('up', 'done', { id: '02UP' }),
       row('n', 'skipped', { consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }) }),
     ]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -208,7 +214,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
     expect([...f.completed]).not.toContain('n')
   })
 
-  test('原黑洞两形态全部落 blocked + allSettled=false ⇒ decideScopeOutcome 给出点名各节点的 stalled 诊断（不再是裸 "scheduler stalled"）', () => {
+  test('原黑洞两形态全部落 blocked + allSettled=false ⇒ decideScopeOutcome 给出点名各节点的 stalled 诊断（不再是裸 "scheduler stalled"）', async () => {
     // RFC-306 把 skipped 移出了这一组：它不再是「无桶黑洞」，而是一个正常的已结算态
     // （见上表）。running / superseded-canceled 两形态仍是真卡点，诊断出口不变。
     const { definition, scopeNodes, scopeIds } = def([
@@ -221,7 +227,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
         supersededByReview: 'iterated',
       }),
     ]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -254,12 +260,12 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
 
   // RFC-092 补充表项（EXPECTED 表按 status 单行建模、表不下这组组合，故独立成 case）：
   // pending ∈ dispatchedThisInvocation 时的两种归宿 —— 行 id 一次性豁免的两侧。
-  test("RFC-092：pending ∈ dispatchedThisInvocation + 空 dispatchedPendingRowIds → ready（anchor 暴露）；行 id ∈ dispatchedPendingRowIds → blocked('pending-anchor-consumed')（有界退化，可诊断）", () => {
+  test("RFC-092：pending ∈ dispatchedThisInvocation + 空 dispatchedPendingRowIds → ready（anchor 暴露）；行 id ∈ dispatchedPendingRowIds → blocked('pending-anchor-consumed')（有界退化，可诊断）", async () => {
     const { definition, scopeNodes, scopeIds } = def([{ id: 'n', kind: 'agent-single' }])
     const r = row('n', 'pending')
     const dispatched = new Set(['n'])
     // 侧 1：行尚未豁免过 → pending-anchor bypass 绕过节点级去重放行。
-    const released = deriveFrontier(
+    const released = await deriveFrontier(
       [r],
       definition,
       scopeNodes,
@@ -277,7 +283,7 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
     expect(released.blocked).toEqual([])
     // 侧 2：同一行 id 已豁免过 → 不 ready、不入停泊桶，落 blocked 诊断
     //（= stall 语义防 busy-loop，但卡点点名而非黑洞）。
-    const bounded = deriveFrontier(
+    const bounded = await deriveFrontier(
       [r],
       definition,
       scopeNodes,
@@ -303,24 +309,24 @@ describe('S-12 / RFC-095 — deriveFrontier 状态分桶全集扫描（穷举语
     expect(bounded.allSettled).toBe(false)
   })
 
-  test("isDispatchable('skipped') → false（dispatch-frontier.test.ts 唯一未覆盖的状态值；canceled/running 已被其覆盖）", () => {
+  test("isDispatchable('skipped') → false（dispatch-frontier.test.ts 唯一未覆盖的状态值；canceled/running 已被其覆盖）", async () => {
     // 与 deriveFrontier 表的 skipped 行互为印证：gate 拒绝 + blocked 诊断收纳
     //（RFC-095 后不再是黑洞——分桶侧见上方表驱动用例）。
     const r = row('n', 'skipped')
     expect(
-      isDispatchable(r, 'agent-single', new Map(), [r], {
+      await isDispatchable(r, 'agent-single', new Map(), [r], {
         nodes: [],
         edges: [],
       } as unknown as WorkflowDefinition),
     ).toBe(false)
   })
 
-  test('S-22 翻转：canceled 上游本身 ready（复活信号），下游等上游 done 前不 ready 也不入 blocked —— 链路不再死锁', () => {
+  test('S-22 翻转：canceled 上游本身 ready（复活信号），下游等上游 done 前不 ready 也不入 blocked —— 链路不再死锁', async () => {
     const { definition, scopeNodes, scopeIds } = def([
       { id: 'up', kind: 'agent-single' },
       { id: 'down', kind: 'agent-single' },
     ])
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       [row('up', 'canceled')],
       definition,
       scopeNodes,

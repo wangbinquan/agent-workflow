@@ -18,6 +18,13 @@
 //   * scheduler converts a borrow ConflictError into a NODE-level failure (source lock) — the
 //     conflict surface stays guarded while resolveBorrowForNode remains in the tree.
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -115,8 +122,7 @@ function ans(qid: string) {
 }
 
 async function seedTask(db: PersistenceDb, taskId: string, _opts: { deferred?: boolean } = {}) {
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf-${taskId}`,
     name: 'rfc127-sq',
     description: '',
@@ -124,7 +130,7 @@ async function seedTask(db: PersistenceDb, taskId: string, _opts: { deferred?: b
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     // Preserve the values observed from the original SQLite task-row trigger.
     executionLineageId: taskId,
@@ -151,8 +157,7 @@ async function seedRun(
   opts: { status?: 'done' | 'pending' | 'failed'; withOutput?: boolean; iteration?: number } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -162,7 +167,7 @@ async function seedRun(
     startedAt: Date.now(),
   })
   if (opts.withOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'result', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'result', content: 'x' })
   }
   return id
 }
@@ -183,8 +188,8 @@ async function seedDispatchedSelfQEntry(
   const intermediary = kind === 'self' ? CL : CC
   const askingRunId = await seedRun(db, taskId, asking, { iteration: 0 })
   const intRunId = await seedRun(db, taskId, intermediary, { iteration: 0 })
-  const { clarifyRounds, taskQuestions } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  const { taskQuestions } = tablesOf(db)
+  await clarifyRoundFixture(db, {
     id: ulid(),
     taskId,
     kind,
@@ -195,8 +200,8 @@ async function seedDispatchedSelfQEntry(
     targetConsumerNodeId: kind === 'cross' ? D : null,
     loopIter: 0,
     iteration: 0,
-    questionsJson: JSON.stringify([mkQ('q1', 't')]),
-    answersJson: JSON.stringify([ans('q1')]),
+    questions: JSON.stringify([mkQ('q1', 't')]),
+    answers: JSON.stringify([ans('q1')]),
     directive: 'continue',
     status: 'answered',
     createdAt: Date.now(),

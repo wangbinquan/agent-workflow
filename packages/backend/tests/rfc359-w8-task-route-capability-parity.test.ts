@@ -51,8 +51,17 @@
 //
 // ⑥（续跑交棒的事件语义）不吃这条折扣：它走的是每一次 PostgreSQL 重试都会发生的事件面。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  patchWorkflowFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -89,7 +98,7 @@ import {
   taskBroadcaster,
   tasksListBroadcaster,
 } from '@/ws/broadcaster'
-import { gitStashSnapshot, runGit } from '@/util/git'
+import { runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
 import type { TaskStatus, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -318,8 +327,7 @@ async function seedWorkflow(
   def: WorkflowDefinition = definition(),
 ): Promise<string> {
   const id = `wf_${ulid()}`
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: 'rfc359-w8',
     description: '',
@@ -348,8 +356,7 @@ async function seedTask(db: PersistenceDb, options: SeedTaskOptions = {}): Promi
   await seedUsers(db)
   const workflowId = options.workflowId ?? (await seedWorkflow(db))
   const startedAt = options.startedAt ?? Date.now()
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: 'rfc359 w8 task',
     workflowId,
@@ -366,7 +373,6 @@ async function seedTask(db: PersistenceDb, options: SeedTaskOptions = {}): Promi
     branchStartedAt: options.branchStartedAt ?? startedAt,
     finishedAt: startedAt + 1,
     ownerUserId: OWNER,
-    repoCount: 1,
     spaceKind: 'local' as const,
     parentTaskId: options.parentTaskId ?? null,
     executionLineageId: id,
@@ -383,18 +389,17 @@ async function seedTask(db: PersistenceDb, options: SeedTaskOptions = {}): Promi
 async function seedRun(
   db: PersistenceDb,
   taskId: string,
-  values: Partial<PersistenceTables['nodeRuns']['$inferInsert']> & { nodeId: string },
+  values: Partial<NodeRunFixtureSpec> & { nodeId: string },
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     status: 'failed',
     retryIndex: 0,
     iteration: 0,
     ...values,
-  } as PersistenceTables['nodeRuns']['$inferInsert'])
+  })
   return id
 }
 
@@ -543,7 +548,7 @@ async function seedDirtyWorktree(): Promise<{ repoPath: string; snapshot: string
 
   // 节点开跑前的基线快照（生产里由 scheduler 在派发前拍下来存进 `pre_snapshot`）。
   writeFileSync(join(repoPath, 'a.txt'), 'baseline-before-node\n')
-  const snapshot = await gitStashSnapshot(repoPath, { log })
+  const snapshot = await legacyStashSnapshotFixture(repoPath, { log })
   expect(snapshot).toMatch(/^[0-9a-f]{40}$/)
 
   // 节点跑了一半被取消，留下半截产物。
@@ -603,7 +608,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     // 这个 sha 在任何 odb 里都不存在（工作树也不是 git 仓库）——等价于 gc 把它 prune 掉了。
     const runId = await seedRun(db, taskId, {
       nodeId: WRITER,
-      preSnapshot: '0123456789abcdef0123456789abcdef01234567',
+      checkpoints: [{ mountPath: '', preSnapshot: '0123456789abcdef0123456789abcdef01234567' }],
     })
 
     const failed = await code(
@@ -633,13 +638,17 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       repoPath,
       worktreePath: repoPath,
     })
-    await seedRun(db, taskId, { nodeId: WRITER, status: 'canceled', preSnapshot: snapshot })
-    const { workflows } = tablesOf(db)
+    await seedRun(db, taskId, {
+      nodeId: WRITER,
+      status: 'canceled',
+      checkpoints: [{ mountPath: '', preSnapshot: snapshot ?? undefined }],
+    })
     // 工作流被改过（多一个节点）并 bump 到 v2 —— sync 的正向前提。
-    await db
-      .update(workflows)
-      .set({ definition: JSON.stringify(definition('w2')), version: 2 })
-      .where(eq(workflows.id, workflowId))
+    await patchWorkflowFixture(
+      db,
+      { id: workflowId },
+      { definition: JSON.stringify(definition('w2')), version: 2 },
+    )
 
     await ops().syncWorkflow({ actor: actorOf(OWNER), taskId, expectedVersion: 2 })
 
@@ -745,7 +754,11 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       repoPath,
       worktreePath: repoPath,
     })
-    const runId = await seedRun(db, taskId, { nodeId: 'W', status: 'canceled', preSnapshot })
+    const runId = await seedRun(db, taskId, {
+      nodeId: 'W',
+      status: 'canceled',
+      checkpoints: [{ mountPath: '', preSnapshot: preSnapshot ?? undefined }],
+    })
 
     await ops().retry({
       actor: actorOf(OWNER),
@@ -784,7 +797,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     const runId = await seedRun(db, taskId, {
       nodeId: 'W',
       status: 'canceled',
-      preSnapshot: '0123456789abcdef0123456789abcdef01234567',
+      checkpoints: [{ mountPath: '', preSnapshot: '0123456789abcdef0123456789abcdef01234567' }],
     })
 
     const outcome = await code(
@@ -818,7 +831,7 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
     const runId = await seedRun(db, taskId, {
       nodeId: 'W',
       status: 'interrupted',
-      preSnapshot: '0123456789abcdef0123456789abcdef01234567',
+      checkpoints: [{ mountPath: '', preSnapshot: '0123456789abcdef0123456789abcdef01234567' }],
     })
 
     const outcome = await code(
@@ -871,13 +884,14 @@ describeEachProvider('RFC-359 W8 —— TaskRouteOperations 能力抬齐', (harn
       worktreePath: scratchDir('aw-rfc359-w8-wt-'),
       parentTaskId: parentId,
     })
-    const { tasks, nodeRuns } = tablesOf(db)
-    await db.update(tasks).set({ parentNodeRunId: callRunId }).where(eq(tasks.id, childId))
-    await db.update(nodeRuns).set({ childTaskId: childId }).where(eq(nodeRuns.id, callRunId))
+    await patchTaskFixture(db, { id: childId }, { parentNodeRunId: callRunId })
+    await patchNodeRunFixture(db, { id: callRunId }, { childTaskId: childId })
     const runId = await seedRun(db, childId, {
       nodeId: WRITER,
       status: 'failed',
-      ...(options.preSnapshot === undefined ? {} : { preSnapshot: options.preSnapshot }),
+      ...(options.preSnapshot === undefined
+        ? {}
+        : { checkpoints: [{ mountPath: '', preSnapshot: options.preSnapshot ?? undefined }] }),
     })
 
     // 父任务的调用节点在等子任务走到终态（RFC-243 §1.4 的 `watchTaskTerminal`）。

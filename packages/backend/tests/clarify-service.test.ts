@@ -19,7 +19,13 @@
 // Together with clarify-no-cross-review-interference (separate file), this
 // keeps the create/seal unit lock.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -65,8 +71,7 @@ async function seedTask(
   }
   // Stub workflow row to satisfy tasks.workflow_id FK.
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -74,7 +79,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -145,8 +150,8 @@ describeEachProvider('createClarifyRound', (harness) => {
 
     // Pre-existing source agent node_run (asking node_run).
     const sourceRunId = 'nr_source_1'
-    const { nodeRuns, clarifyRounds, tasks, taskQuestions } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { nodeRuns, clarifyRounds, taskQuestions } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: sourceRunId,
       taskId,
       nodeId: 'designer',
@@ -183,9 +188,7 @@ describeEachProvider('createClarifyRound', (harness) => {
     const nrRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId))
     expect(nrRows[0]?.status).toBe('awaiting_human')
     expect(nrRows[0]?.nodeId).toBe('clarify1')
-    expect((await firstRow(db.select().from(tasks).where(eq(tasks.id, taskId))))?.status).toBe(
-      'awaiting_human',
-    )
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('awaiting_human')
     expect(
       await firstRow(db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId))),
     ).toMatchObject({
@@ -204,8 +207,8 @@ describeEachProvider('createClarifyRound', (harness) => {
     const db = await createProjectionDb(harness.db)
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_source_reemit'
-    const { nodeRuns, clarifyRounds, taskQuestions, collaborationGateOperations } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { clarifyRounds, taskQuestions, collaborationGateOperations } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: sourceRunId,
       taskId,
       nodeId: 'designer',
@@ -266,8 +269,8 @@ describeEachProvider('createClarifyRound', (harness) => {
     const db = harness.db
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_multi_shard'
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { clarifyRounds } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: sourceRunId,
       taskId,
       nodeId: 'designer',
@@ -294,7 +297,7 @@ describeEachProvider('createClarifyRound', (harness) => {
       ],
     })
 
-    const nr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId)))[0]
+    const nr = (await readNodeRunFixtures(db, { id: clarifyNodeRunId }))[0]
     expect(nr?.shardKey).toBe('shard-A')
     expect(nr?.parentNodeRunId).toBe('parent-multi-run')
 

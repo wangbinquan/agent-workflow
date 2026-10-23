@@ -5,6 +5,13 @@
 // 回滚目标投影（taskRollbackQueries）。这里锁的是合一后的行为在两个引擎上一致，且 provider 名不再出现在
 // 这三份实现里。
 
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -39,8 +46,7 @@ async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user'): 
 
 async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const id = `wf_${ulid()}`
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: id,
     description: '',
@@ -66,12 +72,10 @@ async function seedTask(
     readonly finishedAt?: number
     readonly parentTaskId?: string
     readonly catalogVisibility?: 'public' | 'internal'
-    readonly repoCount?: number
   },
 ): Promise<string> {
   const id = `t_${ulid()}`
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -87,7 +91,6 @@ async function seedTask(
     ...(over.finishedAt === undefined ? {} : { finishedAt: over.finishedAt }),
     ...(over.parentTaskId === undefined ? {} : { parentTaskId: over.parentTaskId }),
     ...(over.catalogVisibility === undefined ? {} : { catalogVisibility: over.catalogVisibility }),
-    ...(over.repoCount === undefined ? {} : { repoCount: over.repoCount }),
   })
   return id
 }
@@ -153,8 +156,7 @@ describeEachProvider('RFC-359 W4-B1 —— 分支追踪快照读取一份实现'
     const taskId = await seedTask(db, wf, { status: 'running' })
     const runA = ulid()
     const runB = ulid()
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await db.insert(nodeRuns).values([
+    const insertedRuns = await nodeRunFixture(db, [
       { id: runA, taskId, nodeId: 'a', status: 'done', retryIndex: 0, iteration: 0 },
       {
         id: runB,
@@ -168,7 +170,7 @@ describeEachProvider('RFC-359 W4-B1 —— 分支追踪快照读取一份实现'
         errorMessage: 'boom',
       },
     ])
-    await db.insert(nodeRunOutputs).values([
+    await nodeRunOutputFixture(db, [
       { nodeRunId: runA, portName: 'out', content: 'hello', active: true },
       { nodeRunId: runB, portName: 'out', content: 'stale', active: false },
     ])
@@ -177,7 +179,7 @@ describeEachProvider('RFC-359 W4-B1 —— 分支追踪快照读取一份实现'
     expect(snapshot?.workflowSnapshot).toBe(SNAPSHOT)
     expect([...(snapshot?.runs ?? [])].sort((a, b) => a.nodeId.localeCompare(b.nodeId))).toEqual([
       {
-        seq: null,
+        seq: insertedRuns[0]!.seq,
         id: runA,
         nodeId: 'a',
         status: 'done',
@@ -187,7 +189,7 @@ describeEachProvider('RFC-359 W4-B1 —— 分支追踪快照读取一份实现'
         errorMessage: null,
       },
       {
-        seq: null,
+        seq: insertedRuns[1]!.seq,
         id: runB,
         nodeId: 'b',
         status: 'failed',
@@ -211,15 +213,14 @@ describeEachProvider('RFC-359 W4-B1 —— 回滚目标投影一份实现', (har
   test('多仓按 repo_index 排序；无 task_repos 行时退回任务工作树；任务不存在返回 null', async () => {
     const db = harness.db
     const wf = await seedWorkflow(db)
-    const multi = await seedTask(db, wf, { status: 'running', repoCount: 2 })
-    const { taskRepos } = tablesOf(db)
-    await db.insert(taskRepos).values([
+    const multi = await seedTask(db, wf, { status: 'running' })
+    await taskRepoFixture(db, [
       {
         taskId: multi,
         repoIndex: 1,
         repoPath: '/tmp/repo-b',
         worktreePath: '/tmp/wt/b',
-        worktreeDirName: 'b',
+        mountPath: 'b',
         baseBranch: 'main',
         branch: 'agent-workflow/b',
       },
@@ -228,7 +229,7 @@ describeEachProvider('RFC-359 W4-B1 —— 回滚目标投影一份实现', (har
         repoIndex: 0,
         repoPath: '/tmp/repo-a',
         worktreePath: '/tmp/wt/a',
-        worktreeDirName: 'a',
+        mountPath: 'a',
         baseBranch: 'main',
         branch: 'agent-workflow/a',
       },
@@ -236,13 +237,13 @@ describeEachProvider('RFC-359 W4-B1 —— 回滚目标投影一份实现', (har
     const queries = new DrizzleTaskRollbackQueries(db)
     const target = await queries.load(multi)
     expect(target?.repositories).toEqual([
-      { worktreePath: '/tmp/wt/a', worktreeDirName: 'a' },
-      { worktreePath: '/tmp/wt/b', worktreeDirName: 'b' },
+      { worktreePath: '/tmp/wt/a', mountPath: 'a' },
+      { worktreePath: '/tmp/wt/b', mountPath: 'b' },
     ])
     expect(target?.repositories).toHaveLength(2)
     const single = await seedTask(db, wf, { status: 'running' })
     expect((await queries.load(single))?.repositories).toEqual([
-      { worktreePath: `/tmp/worktree/${single}`, worktreeDirName: '' },
+      { worktreePath: `/tmp/worktree/${single}`, mountPath: '' },
     ])
     expect(await queries.load('missing')).toBeNull()
   })

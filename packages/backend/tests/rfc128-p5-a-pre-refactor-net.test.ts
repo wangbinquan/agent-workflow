@@ -20,6 +20,13 @@
 //   - rfc127-self-questioner-borrow.test.ts P2-2 按 message 锁了两账本 reject；本网补
 //     error CODE 锁（P5-D 三账本重做会破 code 锁）。
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -96,8 +103,7 @@ function ans(qid: string) {
 
 async function seedTask(db: PersistenceDb, taskId: string, _deferred = false): Promise<void> {
   const def = liveDef()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -105,7 +111,7 @@ async function seedTask(db: PersistenceDb, taskId: string, _deferred = false): P
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     workflowId: `wf_${taskId}`,
@@ -127,8 +133,7 @@ async function seedRun(
   over: { status?: string; iteration?: number; hasOutput?: boolean } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -137,7 +142,7 @@ async function seedRun(
     iteration: over.iteration ?? 0,
   })
   if (over.hasOutput) {
-    await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'out', content: 'x' })
+    await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'out', content: 'x' })
   }
   return id
 }
@@ -161,8 +166,7 @@ async function seedAnsweredRound(
     status: 'awaiting_human',
   })
   const roundId = ulid()
-  const { clarifyRounds } = tablesOf(db)
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     id: roundId,
     taskId,
     kind: opts.kind,
@@ -173,8 +177,8 @@ async function seedAnsweredRound(
     targetConsumerNodeId: opts.kind === 'cross' ? D : null,
     loopIter: opts.loopIter ?? 0,
     iteration: 0,
-    questionsJson: JSON.stringify(opts.questions),
-    answersJson: JSON.stringify(opts.questions.map((q) => ans(q.id))),
+    questions: JSON.stringify(opts.questions),
+    answers: JSON.stringify(opts.questions.map((q) => ans(q.id))),
     directive: 'continue',
     status: 'answered',
     answeredAt: Date.now(),

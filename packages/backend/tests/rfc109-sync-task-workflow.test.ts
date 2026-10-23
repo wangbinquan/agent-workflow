@@ -17,6 +17,14 @@
 // 共用那份走两段式交棒（准入 CAS 落 `interrupted` 并打 `continuationHandoff` 标记，随后才交给
 // 复活端口，由它 CAS 回 `pending`）。对外可见的终态仍是 `pending`——下面 AC-1 / AC-3 断的就是它。
 
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  patchWorkflowFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -95,7 +103,7 @@ async function seedFixture(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   const existing = await db
     .select({ id: users.id })
     .from(users)
@@ -113,14 +121,14 @@ async function seedFixture(
     })
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `w-${workflowId}`,
     definition: JSON.stringify(DEF_A),
     version: 1,
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -152,11 +160,11 @@ async function bumpWorkflow(
   definition: WorkflowDefinition,
   version: number,
 ): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await db
-    .update(workflows)
-    .set({ definition: JSON.stringify(definition), version })
-    .where(eq(workflows.id, workflowId))
+  await patchWorkflowFixture(
+    db,
+    { id: workflowId },
+    { definition: JSON.stringify(definition), version },
+  )
 }
 
 /** 生产装配：两条泳道各自跑自己部署里真正会执行的那份实现。 */
@@ -219,8 +227,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     const after = await syncVia(harness, f, 2)
     expect(after.status).toBe('pending')
     expect(after.workflowVersion).toBe(2)
-    const { tasks } = tablesOf(harness.db)
-    const row = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
+    const row = (await readTaskFixtures(harness.db, { id: f.taskId }))[0]!
     expect(JSON.parse(row.workflowSnapshot)).toEqual(migrateWorkflowDefinitionToLatest(DEF_B))
     expect(row.workflowVersion).toBe(2)
   })
@@ -267,8 +274,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     f = await seedFixture(harness.db, 'failed')
     await bumpWorkflow(harness.db, f.workflowId, defWith([inputNode('a'), inputNode('b')]), 2)
     expect(await codeOf(() => syncVia(harness, f!, 1))).toBe('workflow-sync-preview-stale')
-    const { tasks } = tablesOf(harness.db)
-    const row = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
+    const row = (await readTaskFixtures(harness.db, { id: f.taskId }))[0]!
     expect(row.workflowVersion).toBe(1) // unchanged
     expect(row.status).toBe('failed')
   })
@@ -277,8 +283,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     f = await seedFixture(harness.db, 'done')
     await bumpWorkflow(harness.db, f.workflowId, DEF_A, 2) // identical content, new version
     expect(await codeOf(() => syncVia(harness, f!, 2))).toBe('workflow-sync-noop')
-    const { tasks } = tablesOf(harness.db)
-    const row = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
+    const row = (await readTaskFixtures(harness.db, { id: f.taskId }))[0]!
     expect(row.status).toBe('done') // not churned
   })
 
@@ -298,22 +303,22 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
       edges: [],
     }
     const finishedAt = Date.now() - 10
-    const { tasks } = tablesOf(harness.db)
-    await harness.db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      harness.db,
+      { id: f.taskId },
+      {
         finishedAt,
         errorSummary: 'original-summary',
         errorMessage: 'original-detail',
         failedNodeId: 'a',
-      })
-      .where(eq(tasks.id, f.taskId))
-    const before = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
+      },
+    )
+    const before = (await readTaskFixtures(harness.db, { id: f.taskId }))[0]!
     await bumpWorkflow(harness.db, f.workflowId, next, 2)
 
     expect(await codeOf(() => syncVia(harness, f!, 2))).toBe('trigger-context-missing')
 
-    const after = (await harness.db.select().from(tasks).where(eq(tasks.id, f.taskId)))[0]!
+    const after = (await readTaskFixtures(harness.db, { id: f.taskId }))[0]!
     expect(after).toMatchObject({
       status: 'failed',
       workflowVersion: 1,
@@ -344,8 +349,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
 
   test('AC-10: worktree missing → worktree-missing', async () => {
     f = await seedFixture(harness.db, 'failed')
-    const { tasks } = tablesOf(harness.db)
-    await harness.db.update(tasks).set({ worktreePath: '' }).where(eq(tasks.id, f.taskId))
+    await patchTaskFixture(harness.db, { id: f.taskId }, { worktreePath: '' })
     await bumpWorkflow(harness.db, f.workflowId, defWith([inputNode('a'), inputNode('b')]), 2)
     expect(await codeOf(() => syncVia(harness, f!, 2))).toBe('worktree-missing')
   })
@@ -366,7 +370,7 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     f = await seedFixture(harness.db, 'done')
     const { nodeRuns } = tablesOf(harness.db)
     // seed the original node as a completed run
-    await insertOne(harness.db, nodeRuns, {
+    await nodeRunFixture(harness.db, {
       id: ulid(),
       taskId: f.taskId,
       nodeId: 'a',
@@ -399,30 +403,34 @@ describe('RFC-109 selectSyncRollbackTargets (Codex F4)', () => {
     status,
   })
 
-  test('adds canceled write nodes but spares wrapper-canceled revival rows', () => {
+  test('adds canceled write nodes but spares wrapper-canceled revival rows', async () => {
     const isWrapper = (n: string) => n === 'wrap'
     const runs = [
       row('01A', 'writer', 'canceled'), // write node → rolled back
       row('01B', 'wrap', 'canceled'), // wrapper revival → spared
       row('01C', 'other', 'failed'), // failed → rolled back
     ]
-    const picked = selectSyncRollbackTargets(runs, ['failed', 'interrupted', 'canceled'], isWrapper)
+    const picked = await selectSyncRollbackTargets(
+      runs,
+      ['failed', 'interrupted', 'canceled'],
+      isWrapper,
+    )
     expect(picked.map((r) => r.nodeId).sort()).toEqual(['other', 'writer'])
   })
 
-  test('resume status set ([failed,interrupted]) excludes canceled entirely', () => {
+  test('resume status set ([failed,interrupted]) excludes canceled entirely', async () => {
     const runs = [row('01A', 'w', 'canceled'), row('01B', 'x', 'failed')]
-    const picked = selectSyncRollbackTargets(runs, ['failed', 'interrupted'], () => false)
+    const picked = await selectSyncRollbackTargets(runs, ['failed', 'interrupted'], () => false)
     expect(picked.map((r) => r.nodeId)).toEqual(['x'])
   })
 
-  test('child rows (parentNodeRunId set) never selected; freshest top-level per node wins', () => {
+  test('child rows (parentNodeRunId set) never selected; freshest top-level per node wins', async () => {
     const runs = [
       row('01A', 'n', 'failed'),
       row('01C', 'n', 'failed'), // newer id → wins
       row('01D', 'n', 'failed', '01A'), // child → ignored
     ]
-    const picked = selectSyncRollbackTargets(runs, ['failed'], () => false)
+    const picked = await selectSyncRollbackTargets(runs, ['failed'], () => false)
     expect(picked).toHaveLength(1)
     expect(picked[0]!.id).toBe('01C')
   })

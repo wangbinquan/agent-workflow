@@ -1,13 +1,14 @@
 // RFC-345/W6 + RFC-349: Resource Package recovery is owned by Resource Catalog,
 // keeps active applies live, and replays real provider-specific artifact tails.
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { createResourcePackageRecoveryScene } from '@/modules/resource-catalog/infrastructure/resourcePackageRecovery'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
   createResourcePackageApplyActivityRegistry,
-  createResourcePackageApplyMaintenanceCommand,
   type ResourcePackageApplyArtifactRecoveryPort,
   type ResourcePackageApplyJournalPort,
   type ResourcePackageApplyJournalSnapshot,
@@ -45,8 +46,8 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
       async list() {
         return rows
       },
-      async settleFailed(input) {
-        settled.push(input.id)
+      async compareAndSet(row, patch) {
+        if (patch.state === 'failed') settled.push(row.id)
         return true
       },
     }
@@ -58,13 +59,15 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
         compensated.push(row.id)
       },
     }
-    const command = createResourcePackageApplyMaintenanceCommand({
-      journal: port,
-      artifacts,
-      now: () => 10_000_000,
-    })
+    const command = createAtomicApplyRecovery([
+      createResourcePackageRecoveryScene({
+        journal: port,
+        artifacts,
+        now: () => 10_000_000,
+      }),
+    ])
 
-    await expect(command.converge({ activeApplyIds: ['active'] })).resolves.toEqual({
+    await expect(command.converge({ 'resource-package': ['active'] })).resolves.toEqual({
       failed: 1,
       rolledForward: 1,
     })
@@ -75,26 +78,28 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
 
   test('leaves an incompletely compensated attempt retryable', async () => {
     const settled: string[] = []
-    const command = createResourcePackageApplyMaintenanceCommand({
-      journal: {
-        async list() {
-          return [journal('retry', 'applying', 1)]
+    const command = createAtomicApplyRecovery([
+      createResourcePackageRecoveryScene({
+        journal: {
+          async list() {
+            return [journal('retry', 'applying', 1)]
+          },
+          async compareAndSet(row, patch) {
+            if (patch.state === 'failed') settled.push(row.id)
+            return true
+          },
         },
-        async settleFailed(input) {
-          settled.push(input.id)
-          return true
+        artifacts: {
+          async rollForward() {},
+          async compensate() {
+            throw new Error('filesystem still busy')
+          },
         },
-      },
-      artifacts: {
-        async rollForward() {},
-        async compensate() {
-          throw new Error('filesystem still busy')
-        },
-      },
-      now: () => 10_000_000,
-    })
+        now: () => 10_000_000,
+      }),
+    ])
 
-    await expect(command.converge({ activeApplyIds: [] })).resolves.toEqual({
+    await expect(command.converge({ 'resource-package': [] })).resolves.toEqual({
       failed: 0,
       rolledForward: 0,
     })
@@ -155,7 +160,7 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
       'utf8',
     )
     const sqlite = readFileSync(
-      join(root, 'src/modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts'),
+      join(root, 'src/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery.ts'),
       'utf8',
     )
     const postgresql = readFileSync(
@@ -173,15 +178,23 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
       'utf8',
     )
 
-    expect(publicCommands).toContain('export interface ResourcePackageApplyMaintenanceCommand')
+    expect(publicCommands).not.toContain('export interface ResourcePackageApplyMaintenanceCommand')
     expect(publicQueries).toContain('export interface ResourcePackageApplyActivityQuery')
     expect(publicCommands).not.toContain('DbClient')
     expect(publicQueries).not.toContain('DbClient')
-    expect(composition).toContain('composeSqliteResourcePackageApplyMaintenance')
-    expect(composition).toContain('composePostgresqlResourcePackageApplyMaintenance')
+    expect(
+      composition.match(/export function composeResourcePackageApplyMaintenance\(/g),
+    ).toHaveLength(1)
+    expect(composition).toContain('scene: createResourcePackageRecoveryScene(recovery)')
     expect(composition).toContain('activityTracker: activity.tracker')
-    expect(composition.match(/journal: createResourcePackageApplyJournalPort\(/g)).toHaveLength(2)
-    expect(journalSource).toContain('.from(resourceBundleApplies)')
+    expect(composition.match(/journal: createResourcePackageApplyJournalPort\(/g)).toHaveLength(1)
+    expect(journalSource).toContain('createResourcePackageAtomicJournal(db)')
+    expect(
+      readFileSync(
+        join(root, 'src/modules/resource-catalog/infrastructure/resourcePackageAtomicJournal.ts'),
+        'utf8',
+      ),
+    ).toContain('.from(table)')
     expect(sqlite).toContain('await effects.swapStaged(filesDir, staged.publishId)')
     expect(postgresql).toContain(
       'await effects.restoreBackup(liveDirectory, input.artifact.operationId)',
@@ -191,6 +204,7 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
     expect(nativeRecovery).toContain('return swapInStaged(liveReference, publicationId)')
     expect(nativeRecovery).toContain('return restoreFromBackup(liveReference, publicationId)')
     expect(nativeRecovery).toContain('return hashRegularFileTree(reference)')
-    expect(postgresql).not.toContain('sqliteResourcePackageMaintenance')
+    expect(postgresql).not.toMatch(/from ['"][^'"]*resourcePackageLegacyRecovery['"]/)
+    expect(composition).toContain('createVersionedResourcePackageArtifactRecovery(')
   })
 })

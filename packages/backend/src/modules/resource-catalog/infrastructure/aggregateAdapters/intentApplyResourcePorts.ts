@@ -1,3 +1,9 @@
+import { assertAgentDependencyGraph as validateDependencyGraph } from '../../domain/agentDependencies'
+import { createAgentDependencyReadPort } from '../agentDependencyRead'
+import { collectWorkflowDependencyRefs, collectAgentDependencyRefs } from '@agent-workflow/shared'
+import { createAgentReferenceWriteParticipant } from '../agentReferenceWrite'
+import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -58,11 +64,7 @@ import { encodeSkillToken } from '../../application/skills/skillToken'
 import { hasResourceAclBypass } from '../../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
-import {
-  agentFromPersistenceRow,
-  createAgentPersistenceValues,
-  updateAgentPersistenceValues,
-} from '../agentPersistence'
+import { agentFromPersistenceRow } from '../agentPersistence'
 import { createMcpInsertValues, mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
 import { assertHostedPluginPublicationInTx } from '../crewstation/pluginPublication'
 import {
@@ -85,7 +87,6 @@ import type {
   IntentApplyResourceSessionOptions,
   IntentResourceChangesetReceipt,
 } from './intentApplyResourceParticipants'
-import { parseAgentDependencyIds } from '../agentDependencyJson'
 
 type PlanOf<K extends CatalogSelectorKind> = Extract<
   VersionedIntentResourceChangesetPlan,
@@ -325,7 +326,7 @@ async function visibleIdentity(
               visibility: workflows.visibility,
             })
             .from(workflows)
-            .where(eq(workflows.id, id)),
+            .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id))),
         )
       case 'workgroup':
         return first(
@@ -385,20 +386,14 @@ function agentReferenceGroups(
   ids: readonly string[]
   pendingIds: ReadonlySet<string>
 }>[] {
-  return [
-    { type: 'agent', ids: agent.dependsOn, pendingIds },
-    {
-      type: 'skill',
-      ids: agent.skills.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
-      pendingIds,
-    },
-    { type: 'mcp', ids: agent.mcp, pendingIds },
-    { type: 'plugin', ids: agent.plugins, pendingIds },
-  ]
-}
-
-function parseStringArray(value: string): readonly string[] {
-  return parseAgentDependencyIds(() => JSON.parse(value))
+  const refs = collectAgentDependencyRefs(agent)
+  return (['agent', 'skill', 'mcp', 'plugin'] as const).map((type) => ({
+    type,
+    ids: refs
+      .filter((ref) => ref.resourceType === type && ref.selectorKind === 'id')
+      .map((ref) => ref.value),
+    pendingIds,
+  }))
 }
 
 async function assertAgentGraphAcyclic(
@@ -406,29 +401,13 @@ async function assertAgentGraphAcyclic(
   candidateId: string,
   dependencies: readonly string[],
 ): Promise<void> {
-  if (dependencies.includes(candidateId)) {
-    throw new ValidationError('agent-dependency-cycle', 'agent dependency graph contains a cycle')
-  }
-  const { agents } = tablesOf(transaction)
-  const rows = await transaction.select({ id: agents.id, dependsOn: agents.dependsOn }).from(agents)
-  const graph = new Map(rows.map((row) => [row.id, parseStringArray(row.dependsOn)] as const))
-  graph.set(candidateId, dependencies)
-  const visiting = new Set<string>()
-  const visited = new Set<string>()
-  const visit = (id: string): boolean => {
-    if (visiting.has(id)) return true
-    if (visited.has(id)) return false
-    visiting.add(id)
-    for (const child of graph.get(id) ?? []) {
-      if (visit(child)) return true
-    }
-    visiting.delete(id)
-    visited.add(id)
-    return false
-  }
-  if (visit(candidateId)) {
-    throw new ValidationError('agent-dependency-cycle', 'agent dependency graph contains a cycle')
-  }
+  await validateDependencyGraph({
+    candidateId: candidateId,
+    dependencies: dependencies,
+    roots: dependencies,
+    load: createAgentDependencyReadPort(transaction).load,
+    semantics: 'intent',
+  })
 }
 
 async function assertRuntimeExists(
@@ -512,19 +491,14 @@ function createAgentPort(
         if (collision !== undefined) {
           throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
         }
-        const inserted = await first(
-          transaction
-            .insert(agents)
-            .values(
-              createAgentPersistenceValues({
-                id: plan.resourceId,
-                agent: input,
-                ownerUserId: actor.user.id,
-                now: committedAt,
-              }),
-            )
-            .returning(),
-        )
+        const inserted = (
+          await createAgentReferenceWriteParticipant(transaction).insert({
+            id: plan.resourceId,
+            agent: input,
+            ownerUserId: actor.user.id,
+            now: committedAt,
+          })
+        )[0]
         if (inserted === undefined) throw new Error('agent insert returned no row')
         return agentReceipt(plan, {
           kind: 'agent',
@@ -565,19 +539,15 @@ function createAgentPort(
       await assertAgentGraphAcyclic(transaction, current.id, candidate.dependsOn)
       await assertRuntimeExists(transaction, candidate.runtime)
       const updatedAt = monotonicNow(current.updatedAt)
-      const changed = await first(
-        transaction
-          .update(agents)
-          .set(updateAgentPersistenceValues(current, patch, updatedAt))
-          .where(
-            and(
-              eq(agents.id, current.id),
-              eq(agents.updatedAt, plan.expectedRevision.updatedAt),
-              eq(agents.aclRevision, plan.expectedRevision.aclRevision),
-            ),
-          )
-          .returning(),
-      )
+      const changed = (
+        await createAgentReferenceWriteParticipant(transaction).update({
+          current,
+          patch,
+          updatedAt,
+          expectedUpdatedAt: plan.expectedRevision.updatedAt,
+          expectedAclRevision: plan.expectedRevision.aclRevision,
+        })
+      )[0]
       if (changed === undefined) {
         throw staleConflictError('agent', `agent '${plan.resourceId}' changed; reload and retry`)
       }
@@ -1060,12 +1030,10 @@ function assertWorkflowPrivilegedContent(
   }
 }
 
-function workflowAgentIds(definition: WorkflowDefinition): readonly string[] {
-  return (definition.nodes ?? []).flatMap((node) =>
-    node.kind === 'agent-single' && typeof node.agentId === 'string' && node.agentId.length > 0
-      ? [node.agentId]
-      : [],
-  )
+function workflowAgentIds(definition: WorkflowDefinition): string[] {
+  return collectWorkflowDependencyRefs(definition, { throwOnNullNode: true })
+    .filter((ref) => ref.resourceType === 'agent')
+    .map((ref) => ref.value)
 }
 
 async function assertNamedReferencesVisible(
@@ -1087,7 +1055,7 @@ async function assertNamedReferencesVisible(
               visibility: workflows.visibility,
             })
             .from(workflows)
-            .where(eq(workflows.name, name))
+            .where(workflowCatalogPredicate(workflows.id, eq(workflows.name, name)))
         : await transaction
             .select({
               id: workgroups.id,
@@ -1129,27 +1097,25 @@ async function assertNamedReferencesVisible(
 function workflowCallNames(
   definition: WorkflowDefinition,
   kind: 'call-workflow' | 'call-workgroup',
-  field: 'workflowName' | 'workgroupName',
 ): readonly string[] {
-  return (definition.nodes ?? []).flatMap((node) => {
-    if (node.kind !== kind) return []
-    const value = Reflect.get(node, field)
-    return typeof value === 'string' && value.length > 0 ? [value] : []
-  })
+  return collectWorkflowDependencyRefs(definition, { throwOnNullNode: true })
+    .filter((ref) => ref.resourceType === (kind === 'call-workflow' ? 'workflow' : 'workgroup'))
+    .map((ref) => ref.value)
 }
 
 function assertCanonicalAgentIds(definition: WorkflowDefinition): void {
-  const missing = (definition.nodes ?? [])
-    .filter((node) => node.kind === 'agent-single')
-    .filter((node) => typeof node.agentId !== 'string' || node.agentId.length === 0)
-    .map((node) => node.id)
-  if (missing.length > 0) {
+  const missing = collectWorkflowDependencyRefs(definition, {
+    includeMissingAgentIds: true,
+    throwOnNullNode: true,
+  })
+    .filter((ref) => ref.resourceType === 'agent' && ref.value.length === 0)
+    .map((ref) => ref.nodeId)
+  if (missing.length > 0)
     throw new ValidationError(
       'workflow-agent-id-required',
       'agent-single nodes require a canonical agentId',
       { nodeIds: missing },
     )
-  }
 }
 
 function createWorkflowPort(
@@ -1171,7 +1137,10 @@ function createWorkflowPort(
       const currentRow =
         plan.action === 'update'
           ? await first(
-              transaction.select().from(workflows).where(eq(workflows.id, plan.resourceId)),
+              transaction
+                .select()
+                .from(workflows)
+                .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, plan.resourceId))),
             )
           : undefined
       const current = currentRow === undefined ? undefined : workflowFromPersistenceRow(currentRow)
@@ -1212,14 +1181,14 @@ function createWorkflowPort(
         transaction,
         actor,
         'workflow',
-        workflowCallNames(definition, 'call-workflow', 'workflowName'),
+        workflowCallNames(definition, 'call-workflow'),
         context.bundleCreatedNames.workflow,
       )
       await assertNamedReferencesVisible(
         transaction,
         actor,
         'workgroup',
-        workflowCallNames(definition, 'call-workgroup', 'workgroupName'),
+        workflowCallNames(definition, 'call-workgroup'),
         context.bundleCreatedNames.workgroup,
       )
 
@@ -1230,7 +1199,13 @@ function createWorkflowPort(
             .select({ id: workflows.id })
             .from(workflows)
             .where(
-              and(eq(workflows.ownerUserId, actor.user.id), eq(workflows.name, plan.payload.name)),
+              workflowCatalogPredicate(
+                workflows.id,
+                and(
+                  eq(workflows.ownerUserId, actor.user.id),
+                  eq(workflows.name, plan.payload.name),
+                ),
+              ),
             ),
         )
         if (collision !== undefined) {
@@ -1240,22 +1215,19 @@ function createWorkflowPort(
           )
         }
         const inserted = await first(
-          transaction
-            .insert(workflows)
-            .values({
-              id: plan.resourceId,
-              name: plan.payload.name,
-              description: plan.payload.description,
-              definition: serializeWorkflowDefinitionStorageV1(prepared.definition),
-              version: 1,
-              ownerUserId: actor.user.id,
-              visibility: 'private',
-              aclRevision: 0,
-              builtin: false,
-              createdAt: at,
-              updatedAt: at,
-            })
-            .returning({ version: workflows.version }),
+          createWorkflowDefinitionWriteParticipant(transaction).insert({
+            id: plan.resourceId,
+            name: plan.payload.name,
+            description: plan.payload.description,
+            definition: serializeWorkflowDefinitionStorageV1(prepared.definition),
+            version: 1,
+            ownerUserId: actor.user.id,
+            visibility: 'private',
+            aclRevision: 0,
+            builtin: false,
+            createdAt: at,
+            updatedAt: at,
+          }),
         )
         if (inserted === undefined) throw new Error('workflow insert returned no row')
         return workflowReceipt(plan, { kind: 'workflow', version: inserted.version })
@@ -1280,18 +1252,18 @@ function createWorkflowPort(
         return workflowReceipt(plan, { kind: 'workflow', version: current.version })
       }
       const changed = await first(
-        transaction
-          .update(workflows)
-          .set({
+        createWorkflowDefinitionWriteParticipant(transaction).update({
+          id: current.id,
+          expectedVersion: current.version,
+          set: {
             description: plan.payload.description,
             // 回填后的那份。写 `prepared.definition` 等于把 `INTENT_REDACTED` 占位符当正文存进去
             // ——脚本正文当场丢失，而且是静默的。
             definition: serializeWorkflowDefinitionStorageV1(definition),
             version: current.version + 1,
             updatedAt: now(),
-          })
-          .where(and(eq(workflows.id, current.id), eq(workflows.version, current.version)))
-          .returning({ version: workflows.version }),
+          },
+        }),
       )
       if (changed === undefined)
         throw staleConflictError('workflow', `workflow '${current.id}' changed`)

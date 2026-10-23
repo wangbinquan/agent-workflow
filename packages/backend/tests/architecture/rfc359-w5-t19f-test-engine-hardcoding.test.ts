@@ -74,7 +74,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'callgraph-multirepo-prefix.test.ts: 1',
   'clarify-inline-isolated-parity.test.ts: 1',
   'clarify-review-combination-scenarios.test.ts: 1',
-  'cli.test.ts: 2',
+  // RFC-395 II-a A1: the offline row fixture delegates to the shared model builder.
+  'cli.test.ts: 1',
   'contracts/harness.ts: 1',
   'createindb-snapshot-parity.test.ts: 6',
   // RFC-367 **销账**：`distill-session-capture.test.ts` 随被测对象（事后 opencode SQLite

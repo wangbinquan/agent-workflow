@@ -12,6 +12,7 @@
 //                   non-blocking warn (the scenario stub writes no files, so every
 //                   scenario done is zero-delta — exactly the detection surface).
 
+import { readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createResumeEngine } from './helpers/resumeEngine'
@@ -217,10 +218,10 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
       })
       const task = await launch(h, groupId)
 
-      const { tasks, clarifyRounds } = tablesOf(h.db)
+      const { clarifyRounds } = tablesOf(h.db)
       // PROBE B LOCK: the task parks awaiting_human — NOT running/failed — and the
       // leader ran exactly ONCE (before the fix it re-drove every round to max_rounds).
-      const parked = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const parked = (await readTaskFixtures(h.db, { id: task.id }))[0]
       expect(parked?.status).toBe('awaiting_human')
       expect(await leaderRunCount(h.db, task.id)).toBe(1)
       // the park is a LEADER clarify (a __wg_clarify__ session awaiting a human).
@@ -260,7 +261,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
         },
       }).resume(task.id)
 
-      const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
       expect(final?.status).toBe('done')
       // the leader re-woke (continued) — strictly more than the single parked run.
       expect(await leaderRunCount(h.db, task.id)).toBeGreaterThan(1)
@@ -279,8 +280,7 @@ describe('RFC-187 §3-7 — maxRounds with completed work wraps up (does not har
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, groupId)
 
-      const { tasks } = tablesOf(h.db)
-      const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
       expect(final).toBeDefined()
       // PROBE C LOCK: NOT failed — the deliverable-in-hand task wrapped up.
       expect(final?.status).not.toBe('failed')
@@ -302,8 +302,8 @@ describe('RFC-187 §4 — zero canonical delta on done posts a warn', () => {
       writePlan(h, { 'wg-lead': [DISPATCH, DONE], 'wg-writer': [WORKER_RESULT] })
       const task = await launch(h, groupId)
 
-      const { tasks, workgroupMessages } = tablesOf(h.db)
-      const final = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)))[0]
+      const { workgroupMessages } = tablesOf(h.db)
+      const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
       expect(final?.status).toBe('done')
       // PROBE A LOCK: the framework flags the silent empty deliverable.
       const msgs = await h.db

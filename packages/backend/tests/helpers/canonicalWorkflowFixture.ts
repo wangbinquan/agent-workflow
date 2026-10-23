@@ -1,4 +1,4 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readAgentFixtures } from './model'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 /**
@@ -11,8 +11,9 @@ export async function canonicalizeWorkflowAgentIds(
   db: PersistenceDb,
   definition: WorkflowDefinition,
 ): Promise<WorkflowDefinition> {
-  const { agents } = tablesOf(db)
-  const rows = await db.select({ id: agents.id, name: agents.name }).from(agents)
+  const rows = await readAgentFixtures(db).then((rows) =>
+    rows.map((row) => ({ id: row.id, name: row.name })),
+  )
   const idByName = new Map(rows.map((row) => [row.name, row.id]))
   return {
     ...definition,

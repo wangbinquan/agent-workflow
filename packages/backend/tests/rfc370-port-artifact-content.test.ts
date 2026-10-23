@@ -40,7 +40,7 @@ function archiveRequest(): PortArtifactArchiveRequest {
     nodeRunId: 'run',
     portName: 'report',
     items: [{ source, sourcePath: 'report.md' }],
-    worktreeDirName: 'repo0',
+    mountPath: 'repo0',
   }
 }
 function readRequest(archiveJson: string | null): PortArtifactReadRequest {
@@ -414,7 +414,7 @@ describe('RFC-370 port artifact content', () => {
         portName: 'report',
         appHome,
         items: [{ sourceAbs: original, sourcePath: 'report.md' }],
-        worktreeDirName: '',
+        mountPath: '',
         worktreeRootAbs: wt,
       })
       const file = parseArchiveJson(legacy.archiveJson)!.items[0]!.file!
@@ -428,7 +428,7 @@ describe('RFC-370 port artifact content', () => {
       ).toBe('from explicit sourceAbs')
       const asyncResult = await selected.archive({
         ...archiveRequest(),
-        worktreeDirName: '',
+        mountPath: '',
         items: [
           { source: { workspaceRef: wt, relativePath: 'report.md' }, sourcePath: 'report.md' },
         ],

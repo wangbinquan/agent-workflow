@@ -1,4 +1,4 @@
-import { createNodeRunSeqBackfillStore } from '../infrastructure/nodeRunSeqBackfillStore'
+import { createNodeRunSeqBackfillStore } from '../infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
@@ -87,8 +87,10 @@ function createRecoveryAdministration(
           nodeRunId: input.nodeRunId,
           event: { kind: 'mark-interrupted' },
           extra: {
-            finishedAt: input.now,
-            ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
+            identity: {
+              finishedAt: input.now,
+              ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
+            },
           },
         })
         return true

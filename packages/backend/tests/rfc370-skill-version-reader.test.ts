@@ -1,5 +1,9 @@
 // RFC-370 H6: history and diff use the selected asynchronous snapshot reader.
 // Real provider metadata and file snapshots preserve the existing history rules.
+import {
+  skillTextView,
+  skillTreeTextView,
+} from '@/modules/resource-catalog/application/skills/textView'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -98,7 +102,9 @@ describeEachProvider('RFC-370 skill version reader', (harness) => {
         entered.release()
         await ready.pending
         return {
-          main: '---\nname: ignored-snapshot-name\ndescription: historical description\ncustom: kept\n---\nhistorical body',
+          main: Buffer.from(
+            '---\nname: ignored-snapshot-name\ndescription: historical description\ncustom: kept\n---\nhistorical body',
+          ),
           files: [{ path: 'notes.txt', type: 'file', size: 5, modifiedAt: 12 }],
         }
       },
@@ -155,8 +161,8 @@ describeEachProvider('RFC-370 skill version reader', (harness) => {
         ;(initial ? first : second).release()
         await (initial ? firstReady : secondReady).pending
         return new Map<string, SkillVersionTreeEntry>([
-          ['SKILL.md', { kind: 'text', content: initial ? 'before\n' : 'after\n' }],
-          ['asset.bin', { kind: 'binary', hash: initial ? 'old-digest' : 'new-digest' }],
+          ['SKILL.md', Buffer.from(initial ? 'before\n' : 'after\n')],
+          ['asset.bin', Buffer.from(initial ? [0, 1] : [0, 2])],
         ])
       },
     }
@@ -228,14 +234,14 @@ describeEachProvider('RFC-370 skill version reader', (harness) => {
     const reader = createFileSkillVersionContentReader(appHome)
     const ref = { skillId: skill.id, version: 1 }
     const snapshot = await reader.readSnapshot(ref)
-    expect(snapshot.main).toContain('local first')
+    expect(skillTextView(snapshot.main!, reader)).toContain('local first')
     expect(snapshot.files).toContainEqual({ path: 'nested', type: 'dir' })
     expect(snapshot.files.find((node) => node.path === 'nested/note.txt')).toMatchObject({
       type: 'file',
       size: 8,
       modifiedAt: expect.any(Number),
     })
-    const tree = await reader.readTree(ref)
+    const tree = skillTreeTextView(await reader.readTree(ref), reader)
     expect(tree.get('nested/note.txt')).toEqual({ kind: 'text', content: 'old note' })
     expect(tree.get('asset.bin')).toEqual({ kind: 'binary', hash: sha256Hex(binary) })
     rmSync(join(root, 'SKILL.md'))

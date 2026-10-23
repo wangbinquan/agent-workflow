@@ -16,6 +16,7 @@
 //   · listTaskEvents —— 跨 node_run 汇总、按 id 升序、`since` 是**严格**大于、别的任务的事件
 //     不得混入（这条是 innerJoin 到 node_runs 的过滤，两个引擎的 join 语义在此对拍）。
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -44,8 +45,7 @@ async function seedTask(
   options: { readonly ownerUserId: string | null },
 ): Promise<string> {
   const taskId = `task-${ulid()}`
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `workflow-${ulid()}`,
@@ -64,8 +64,7 @@ async function seedTask(
 
 async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
   const runId = `run-${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'node-1',
@@ -123,8 +122,8 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
     const owner = await seedUser(db, `owner-${ulid()}`)
     // 故意让两类资源用**同一个** id：只有真的按 type 分表查，两边结果才会不同。
     const sharedId = `res-${ulid()}`
-    const { workflows, workgroups } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { workgroups } = tablesOf(db)
+    await workflowFixture(db, {
       id: sharedId,
       name: 'realtime workflow',
       definition: '{}',

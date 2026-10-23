@@ -54,6 +54,7 @@
 //   交错窗口靠 RFC-300 的回收策略回调撑开——两个引擎都在「读到 priorStatus 之后、终态写之前」
 //   await 它一次，是唯一一个对两侧都成立的确定性交错点，不用 sleep、不用墙钟。
 
+import { nodeRunFixture, patchTaskFixture, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -134,8 +135,8 @@ async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<S
   const slotPath = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ])
-  const { tasks, nodeRuns, taskExecutionIntents } = tablesOf(db)
-  await insertOne(db, tasks, {
+  const { taskExecutionIntents } = tablesOf(db)
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w8-source-termination',
@@ -163,7 +164,7 @@ async function seed(db: PersistenceDb, overrides: SeedOverrides = {}): Promise<S
     executionLineageId: taskId,
     lineageSlotPathJson: slotPath,
   })
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     {
       id: openRunId,
       taskId,
@@ -578,15 +579,16 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
       if (!raced) {
         raced = true
         const { tasks } = tablesOf(harness.db)
-        await harness.db
-          .update(tasks)
-          .set({
+        await patchTaskFixture(
+          harness.db,
+          { id: taskId },
+          {
             status: 'done',
             finishedAt: 99,
             runningSince: null,
             lifecycleEventRevision: sqlExpr`${tasks.lifecycleEventRevision} + 1`,
-          })
-          .where(eq(tasks.id, taskId))
+          },
+        )
       }
       return { prune: false }
     })

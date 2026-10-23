@@ -21,6 +21,7 @@
 //     streams are still cut at the limit (413 `review-body-too-large`).
 //   - Every refusal leaves review_comments untouched.
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Hono } from 'hono'
@@ -110,10 +111,10 @@ async function buildFixture(
 
   const db = provider.db
   const workflowId = ulid()
-  const { workflows, tasks, nodeRuns, docVersions } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
+  const { docVersions } = tablesOf(db)
+  await workflowFixture(db, { id: workflowId, name: 'wf', definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -136,7 +137,7 @@ async function buildFixture(
   })
   const reviewRunId = ulid()
   const otherRunId = ulid()
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     {
       id: reviewRunId,
       taskId,

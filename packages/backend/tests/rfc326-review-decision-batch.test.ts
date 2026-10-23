@@ -23,6 +23,17 @@
 // 夹具只在那个库上种行；REST 那一组走 `describeEachProviderHttpApplication`——`AppDeps.db`
 // 只收 SQLite 句柄，PostgreSQL 侧的应用必须由各自的组合根装配。
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -66,16 +77,20 @@ interface Snapshot {
 }
 
 async function snapshot(db: PersistenceDb): Promise<Snapshot> {
-  const { nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).orderBy(asc(nodeRuns.id))
+  const { docVersions, reviewComments, memoryDistillJobs } = tablesOf(db)
+  const runs = await readNodeRunFixtures(db, undefined, {
+    orderBy: [{ field: 'id', direction: 'asc' }],
+  })
   return {
     docVersions: await db.select().from(docVersions).orderBy(asc(docVersions.id)),
     reviewComments: await db.select().from(reviewComments).orderBy(asc(reviewComments.id)),
     nodeRuns: runs,
-    nodeRunOutputs: await db
-      .select()
-      .from(nodeRunOutputs)
-      .orderBy(asc(nodeRunOutputs.nodeRunId), asc(nodeRunOutputs.portName)),
+    nodeRunOutputs: await readNodeRunOutputFixtures(db, undefined, {
+      orderBy: [
+        { field: 'nodeRunId', direction: 'asc' },
+        { field: 'portName', direction: 'asc' },
+      ],
+    }),
     mergeStates: runs.map((r) => ({ id: r.id, mergeState: r.mergeState })),
     memoryDistillJobs: await db.select().from(memoryDistillJobs).orderBy(asc(memoryDistillJobs.id)),
   }
@@ -165,16 +180,7 @@ async function buildSingle(
   const uninstallProjection = await installCommittedEventProjectionHarness(db)
 
   const [ownerId, memberId, strangerId] = ['owner', 'member', 'stranger'].map(() => ulid())
-  const {
-    users,
-    agents,
-    workflows,
-    tasks,
-    taskCollaborators,
-    nodeRuns,
-    nodeRunOutputs,
-    docVersions,
-  } = tablesOf(db)
+  const { users, taskCollaborators, docVersions } = tablesOf(db)
   await db.insert(users).values(
     [ownerId!, memberId!, strangerId!].map((id, i) => ({
       id,
@@ -186,7 +192,7 @@ async function buildSingle(
       updatedAt: NOW,
     })),
   )
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name: 'doc',
     description: '',
@@ -210,13 +216,13 @@ async function buildSingle(
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(definition),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -241,7 +247,7 @@ async function buildSingle(
     { taskId, userId: memberId!, role: 'collaborator', addedBy: ownerId!, addedAt: NOW },
   ])
   const docRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: docRunId,
     taskId,
     nodeId: 'doc',
@@ -251,13 +257,13 @@ async function buildSingle(
     startedAt: NOW - 1000,
     finishedAt: NOW - 900,
   })
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId: docRunId,
     portName: 'docpath',
     content: SINGLE_BODY,
   })
   const reviewRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: reviewRunId,
     taskId,
     nodeId: 'rev_1',
@@ -328,8 +334,8 @@ async function buildMulti(
   mkdirSync(worktree, { recursive: true })
   const uninstallProjection = await installCommittedEventProjectionHarness(db)
   const caseGenId = ulid()
-  const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
-  await insertOne(db, agents, {
+  const { docVersions } = tablesOf(db)
+  await agentFixture(db, {
     id: caseGenId,
     name: 'caseGen',
     description: '',
@@ -359,7 +365,7 @@ async function buildMulti(
     edges: [],
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     description: '',
@@ -367,7 +373,7 @@ async function buildMulti(
     version: 1,
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'multidoc',
     workflowId,
@@ -386,26 +392,25 @@ async function buildMulti(
     ]),
   })
   const srcRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: srcRunId,
     taskId,
     nodeId: 'src',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: null,
     startedAt: NOW,
     finishedAt: NOW,
   })
   const content =
     kind === 'list<path<md>>' ? PATHS.join('\n') : joinMarkdownDocs(PATHS.map(bodyFor))
-  await insertOne(db, nodeRunOutputs, { nodeRunId: srcRunId, portName: 'cases', content })
+  await nodeRunOutputFixture(db, { nodeRunId: srcRunId, portName: 'cases', content })
   for (const p of PATHS) {
     const abs = join(worktree, p)
     mkdirSync(dirname(abs), { recursive: true })
     writeFileSync(abs, bodyFor(p), 'utf8')
   }
-  const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+  const task = (await readTaskFixtures(db, { id: taskId }))[0]!
   const r = await dispatchReviewNode({
     db,
     taskId,
@@ -622,11 +627,8 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         selectionsApplied: 3,
       })
 
-      const { nodeRunOutputs, docVersions, nodeRuns } = tablesOf(m.db)
-      const outs = await m.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
+      const { docVersions, nodeRuns } = tablesOf(m.db)
+      const outs = await readNodeRunOutputFixtures(m.db, { nodeRunId: m.reviewRunId })
       const byPort = new Map(outs.map((o) => [o.portName, o]))
       expect(byPort.get('accepted')?.content).toBe('cases/a.md\ncases/c.md')
       expect(byPort.get('accepted')?.kind).toBe('list<path<md>>')
@@ -674,11 +676,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
           { docVersionId: b.id, selection: 'accepted' },
         ],
       })
-      const { nodeRunOutputs } = tablesOf(m.db)
-      const outs = await m.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
+      const outs = await readNodeRunOutputFixtures(m.db, { nodeRunId: m.reviewRunId })
       const accepted = outs.find((o) => o.portName === 'accepted')!
       expect(accepted.kind).toBe('list<markdown>')
       expect(accepted.content).toBe(
@@ -697,7 +695,7 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         PersistenceTables['docVersions']['$inferSelect'],
         PersistenceTables['docVersions']['$inferSelect'],
       ]
-      const { docVersions, nodeRunOutputs } = tablesOf(m.db)
+      const { docVersions } = tablesOf(m.db)
       await m.db
         .update(docVersions)
         .set({ selection: 'accepted', selectionStale: true })
@@ -716,9 +714,9 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       })
       const rowA = (await m.db.select().from(docVersions).where(eq(docVersions.id, a.id)))[0]!
       expect(rowA.selectionStale).toBe(false)
-      const accepted = (
-        await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
-      ).find((o) => o.portName === 'accepted')!
+      const accepted = (await readNodeRunOutputFixtures(m.db, { nodeRunId: m.reviewRunId })).find(
+        (o) => o.portName === 'accepted',
+      )!
       expect(accepted.content).toBe('cases/a.md')
     })
   })
@@ -847,21 +845,17 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       expect(stranger.code).toBe('not-task-member')
       expect(stranger.status).toBe(403)
 
-      const { tasks } = tablesOf(f.db)
-      await f.db
-        .update(tasks)
-        .set({ sourceTerminationFence: 'closed' })
-        .where(eq(tasks.id, f.taskId))
+      await patchTaskFixture(f.db, { id: f.taskId }, { sourceTerminationFence: 'closed' })
       const fenced = await expectZeroWrites(f.db, events, run({}))
       expect(fenced.code).toBe('task-source-terminal-closed')
       expect(fenced.status).toBe(409)
-      await f.db.update(tasks).set({ sourceTerminationFence: null }).where(eq(tasks.id, f.taskId))
+      await patchTaskFixture(f.db, { id: f.taskId }, { sourceTerminationFence: null })
 
-      await f.db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, f.taskId))
+      await patchTaskFixture(f.db, { id: f.taskId }, { status: 'done' })
       const terminal = await expectZeroWrites(f.db, events, run({}))
       expect(terminal.code).toBe('task-terminal')
       expect(terminal.status).toBe(409)
-      await f.db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, f.taskId))
+      await patchTaskFixture(f.db, { id: f.taskId }, { status: 'awaiting_review' })
 
       // The fixture is still decidable afterwards — the refusals really were dry.
       const ok = await submitReviewDecision({
@@ -1029,10 +1023,10 @@ describeEachProviderHttpApplication(
       })
       expect(json.resume).toBeUndefined()
       expect(json.resumeRequired).toBeUndefined()
-      const { nodeRunOutputs, docVersions } = tablesOf(m.db)
-      const accepted = (
-        await m.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, m.reviewRunId))
-      ).find((o) => o.portName === 'accepted')!
+      const { docVersions } = tablesOf(m.db)
+      const accepted = (await readNodeRunOutputFixtures(m.db, { nodeRunId: m.reviewRunId })).find(
+        (o) => o.portName === 'accepted',
+      )!
       expect(accepted.content).toBe('cases/a.md')
       const rowB = (await m.db.select().from(docVersions).where(eq(docVersions.id, b.id)))[0]!
       expect(

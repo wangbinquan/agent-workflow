@@ -7,6 +7,16 @@
 // tasks. These tests lock the fixes end-to-end at the service layer. If a
 // refactor turns any of these red, one of those audit P0/P1s is back.
 
+import {
+  type NodeRunFixtureSpec,
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  taskFixture,
+  workflowFixture,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -30,8 +40,8 @@ import { deleteWorkflow, scheduledRowsReferencingWorkflow } from '../src/service
 import { ConflictError } from '../src/util/errors'
 import { buildActor } from '../src/auth/actor'
 
-type TaskStatusCol = PersistenceTables['tasks']['$inferInsert']['status']
-type NodeRunStatusCol = PersistenceTables['nodeRuns']['$inferInsert']['status']
+type TaskStatusCol = TaskFixtureSpec['status']
+type NodeRunStatusCol = NodeRunFixtureSpec['status']
 
 async function seedTask(
   db: PersistenceDb,
@@ -39,15 +49,14 @@ async function seedTask(
 ): Promise<{ taskId: string; workflowId: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `wf-${taskId.slice(-6)}`,
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: `task-${taskId.slice(-6)}`,
     workflowId,
@@ -71,15 +80,13 @@ async function seedRun(
   status: NodeRunStatusCol,
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
     status,
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: null,
     startedAt: Date.now(),
   })
   return id
@@ -104,7 +111,7 @@ async function seedClarifyRound(
     intermediaryNodeRunId,
     loopIter: 0,
     iteration: 0,
-    questionsJson: JSON.stringify([{ id: 'q1', question: 'which?' }]),
+    questions: JSON.stringify([{ id: 'q1', question: 'which?' }]),
     status,
     createdAt: Date.now(),
   })
@@ -184,8 +191,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
       reason: 'test',
     })
     expect(won).toBe(true)
-    const { tasks } = tablesOf(db)
-    const row = (await db.select().from(tasks).where(eq(tasks.id, a.taskId)))[0]!
+    const row = (await readTaskFixtures(db, { id: a.taskId }))[0]!
     expect(row.status).toBe('canceled')
     expect(calls).toEqual([{ taskId: a.taskId, to: 'canceled' }])
 
@@ -283,13 +289,10 @@ describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) =
         ],
       }),
     ).rejects.toMatchObject({ code: 'task-terminal' })
-    const { clarifyRounds } = tablesOf(db)
     // answers were NOT persisted
-    const round = (
-      await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
-    )[0]!
+    const round = (await readClarifyRoundFixtures(db, { taskId }))[0]!
     expect(round.status).toBe('awaiting_human')
-    expect(round.answersJson ?? null).toBeNull()
+    expect(round.answers ?? null).toBeNull()
   })
 
   test('submitReviewDecision refuses decisions on a canceled task', async () => {
@@ -420,8 +423,7 @@ describeEachProvider('RFC-202 T5 — deleteWorkflow scheduled-task guard', (prov
     const owner = 'user-owner'
     const { workflowId } = await (async () => {
       const workflowId = ulid()
-      const { workflows } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'wf-guarded',
         definition: '{}',
@@ -462,15 +464,13 @@ describeEachProvider('RFC-202 T5 — deleteWorkflow scheduled-task guard', (prov
       expect(details.visibleScheduled.map((v) => v.name)).toEqual(['mine-daily'])
       expect(details.hiddenCount).toBe(1)
     }
-    const { workflows } = tablesOf(db)
     // workflow still present
-    expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(1)
+    expect((await readWorkflowFixtures(db, { id: workflowId })).length).toBe(1)
   })
 
   test('no referencing schedules → delete proceeds', async () => {
     const workflowId = ulid()
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'wf-free',
       definition: '{}',
@@ -485,6 +485,6 @@ describeEachProvider('RFC-202 T5 — deleteWorkflow scheduled-task guard', (prov
       { expectedVersion: 1, clientMutationId: ulid() },
       { kind: 'system', reason: 'test' },
     )
-    expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(0)
+    expect((await readWorkflowFixtures(db, { id: workflowId })).length).toBe(0)
   })
 })

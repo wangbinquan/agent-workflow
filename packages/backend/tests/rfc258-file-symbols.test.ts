@@ -9,8 +9,7 @@
 //
 // RFC-359 AC-6：整份套件跑双引擎——服务层收的是中立客户端，夹具因此不再自建 SQLite 内存库。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { afterAll, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -59,18 +58,17 @@ async function makeRepo(files: Record<string, string>): Promise<{ dir: string; c
 
 async function seedTask(
   db: PersistenceDb,
-  opts: { worktreePath: string; baseCommit: string | null; repoCount?: number },
+  opts: { worktreePath: string; baseCommit: string | null },
 ): Promise<string> {
   const taskId = `01FS${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
     version: 1,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -83,7 +81,6 @@ async function seedTask(
     inputs: '{}',
     startedAt: Date.now(),
     baseCommit: opts.baseCommit,
-    repoCount: opts.repoCount ?? 1,
     // PostgreSQL 的迁移只投影 DDL，不带 `rfc328_tasks_lineage_after_insert` 那条 SQLite
     // 触发器，所以直插 `tasks` 的夹具两侧都显式写 lineage，两个引擎的起点才相同。
     executionLineageId: taskId,
@@ -206,13 +203,8 @@ describeEachProvider('getTaskFileSymbols — multi-repo wire keys (F-04)', (harn
     const d = harness.db
     const root = await makeRepo({ 'root.go': 'package main\nfunc RootFn() {}\n' })
     const sub = await makeRepo({ 'lib.rs': 'pub fn sub_fn() {}\n' })
-    const taskId = await seedTask(d, {
-      worktreePath: root.dir,
-      baseCommit: root.commit,
-      repoCount: 2,
-    })
-    const { taskRepos } = tablesOf(d)
-    await d.insert(taskRepos).values([
+    const taskId = await seedTask(d, { worktreePath: root.dir, baseCommit: root.commit })
+    await taskRepoFixture(d, [
       {
         taskId,
         repoIndex: 0,

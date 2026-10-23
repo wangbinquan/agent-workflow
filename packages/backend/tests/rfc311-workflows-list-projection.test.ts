@@ -3,8 +3,7 @@
 //   列表页负载),改返回 `nodeCount` 摘要;详情端点保持完整 definition。
 // 依赖列表端点拿定义的外部 PAT 脚本需改走详情端点——正是本锁要暴露的差异。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
@@ -43,8 +42,7 @@ describeEachProvider('RFC-311 C2 — /api/workflows list projection', (harness) 
       const appHome = join(tmp, 'home')
       mkdirSync(appHome, { recursive: true })
       process.env.AGENT_WORKFLOW_HOME = appHome
-      const { workflows } = tablesOf(harness.db)
-      await insertOne(harness.db, workflows, {
+      await workflowFixture(harness.db, {
         id: 'wf1',
         name: 'wf-one',
         definition: JSON.stringify(DEFINITION),

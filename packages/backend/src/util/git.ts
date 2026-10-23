@@ -2414,46 +2414,6 @@ export async function deleteSnapshotRefs(repoPath: string, taskId: string): Prom
 }
 
 /**
- * Capture the worktree state as a git stash entry without committing it
- * (P-3-07). Returns the stash sha — caller persists it in
- * `node_runs.pre_snapshot` for later rollback on retry/resume.
- *
- * `git stash create` produces a commit object referenced only by the
- * returned sha; it does NOT push to the stash list, so concurrent stashes
- * across tasks don't fight over reflog ordering. Empty trees return ''.
- *
- * RFC-098 WP-9 (audit S-11): without a ref the stash commit is a dangling
- * object — any `git gc` past gc.pruneExpire in the SHARED source-repo odb
- * (which the platform cannot stop the user from running) destroys it and a
- * later resume loses the pre-snapshot state forever. Pass `opts.pinRef`
- * (typically `snapshotRefName(taskId, nodeRunId)`) to pin the commit with a
- * lightweight ref. Pin failure is deliberately non-blocking — the snapshot
- * is still usable short-term and failing the node over a ref write would be
- * worse than the (pre-existing) gc exposure; it is logged via `opts.log`.
- */
-export async function gitStashSnapshot(
-  worktreePath: string,
-  opts?: { pinRef?: string; log?: Logger },
-): Promise<string> {
-  const r = await runGit(worktreePath, ['stash', 'create'])
-  if (r.exitCode !== 0) {
-    throw new DomainError('worktree-snapshot-failed', `git stash create: ${r.stderr.trim()}`, 500)
-  }
-  const sha = r.stdout.trim()
-  if (sha !== '' && opts?.pinRef !== undefined) {
-    const pin = await runGit(worktreePath, ['update-ref', opts.pinRef, sha])
-    if (pin.exitCode !== 0) {
-      opts.log?.warn('snapshot ref pin failed (snapshot stays gc-exposed)', {
-        pinRef: opts.pinRef,
-        sha,
-        error: pin.stderr.trim(),
-      })
-    }
-  }
-  return sha
-}
-
-/**
  * Roll the worktree back to a previously-captured snapshot sha
  * (P-3-07). Used before a single-node retry or `POST /tasks/:id/resume`
  * so writes from the prior attempt don't compound.
@@ -2743,7 +2703,7 @@ export function isoRefGlob(taskId: string): string {
  * `GIT_INDEX_FILE`. Optionally pins the commit with `update-ref` so gc cannot
  * prune it during a long-running agent.
  *
- * Unlike `gitStashSnapshot` (`git stash create`, which OMITS untracked files),
+ * Unlike historical `git stash create` snapshots, which omit untracked files,
  * this includes untracked — required both for the isolation base (the agent must
  * see the full canonical state incl. untracked upstream outputs) and for the node
  * snapshot (a node's new files are untracked in its iso worktree).

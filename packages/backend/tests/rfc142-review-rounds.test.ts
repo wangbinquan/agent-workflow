@@ -15,6 +15,16 @@
 //     404 task-not-found（RFC-285 B1 与不存在同形）；未知 nodeRunId 404。
 // 如果本文件变红，先对照 design/RFC-142-review-history-echo/design.md D3-D5。
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
@@ -224,8 +234,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
-    const { agents, workflows, tasks } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: CASE_GEN_AGENT_ID,
       name: 'caseGen',
       description: '',
@@ -255,7 +264,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       edges: [],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -263,7 +272,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       version: 1,
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'rounds',
       workflowId,
@@ -276,14 +285,13 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       inputs: '{}',
       startedAt: Date.now(),
     })
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
     return { taskId, task, definition, reviewNode }
   }
 
   async function seedSrc(taskId: string, id: string, marker: string): Promise<void> {
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId,
       nodeId: 'src',
@@ -293,7 +301,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: id,
       portName: 'cases',
       content: PATHS.join('\n'),
@@ -367,7 +375,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       awaitScheduler: true,
     })
 
-    const { nodeRuns, nodeRunOutputs, tasks } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     // 模拟上游重跑完成：iterate 铸出的 fresh pending src 行置 done + 补输出。
     const srcRerun = (
       await db
@@ -381,11 +389,8 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
           ),
         )
     )[0]!
-    await db
-      .update(nodeRuns)
-      .set({ status: 'done', finishedAt: Date.now() })
-      .where(eq(nodeRuns.id, srcRerun.id))
-    await insertOne(db, nodeRunOutputs, {
+    await patchNodeRunFixture(db, { id: srcRerun.id }, { status: 'done', finishedAt: Date.now() })
+    await nodeRunOutputFixture(db, {
       nodeRunId: srcRerun.id,
       portName: 'cases',
       content: PATHS.join('\n'),
@@ -393,7 +398,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
 
     // The no-op owner settles the exact intent but deliberately does not run
     // TaskEngine's pending → running claim used by this direct service fixture.
-    await db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
+    await patchTaskFixture(db, { id: taskId }, { status: 'running' })
 
     const r2 = await dispatchReviewNode({
       db,
@@ -515,8 +520,8 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
   test('单文档评审 → []', async () => {
     const { taskId } = await seed()
     const reviewRunId = ulid()
-    const { nodeRuns, docVersions } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { docVersions } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -611,14 +616,14 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
       edges: [],
     }
     const workflowId = ulid()
-    const { workflows, tasks, taskCollaborators, nodeRuns, docVersions } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { taskCollaborators, docVersions } = tablesOf(db)
+    await workflowFixture(db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
     })
     taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 't142',
       workflowId,
@@ -640,7 +645,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
       addedAt: Date.now(),
     })
     reviewRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',

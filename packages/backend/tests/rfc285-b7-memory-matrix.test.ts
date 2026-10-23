@@ -17,6 +17,7 @@
 // 为此本轮补齐了三块此前没覆盖的格子：workflow scope、RFC-324 D9 的 `write` 授权档、
 // 以及 `annotateMemoryManageRights` 与 `canManageMemory` 之间既存的判据差。
 
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -35,8 +36,7 @@ function actorOfRole(role: 'admin' | 'manager' | 'user', id = `u_${role}`): Acto
 
 async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = 'agt_matrix'
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name: 'matrix-agent',
     ownerUserId,
@@ -47,8 +47,7 @@ async function seedAgent(db: PersistenceDb, ownerUserId: string): Promise<string
 
 async function seedWorkflow(db: PersistenceDb, ownerUserId: string): Promise<string> {
   const id = 'wf_matrix'
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: 'matrix-workflow',
     definition: '{"$schema_version":1,"nodes":[],"edges":[]}',

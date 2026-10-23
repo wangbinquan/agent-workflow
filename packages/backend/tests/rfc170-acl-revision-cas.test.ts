@@ -7,6 +7,7 @@
 // the in-transaction row snapshot. Also locks the referenced-user active check
 // (G5-P5).
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test, beforeEach } from 'bun:test'
@@ -64,8 +65,7 @@ describeEachProvider('RFC-170 §8 — ACL aclRevision CAS', (harness) => {
     owner = actorOfUser(OWNER, 'user')
     admin = actorOfUser(ADMIN, 'admin')
     const id = ulid()
-    const { agents } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id,
       name: 'a1',
       description: '',

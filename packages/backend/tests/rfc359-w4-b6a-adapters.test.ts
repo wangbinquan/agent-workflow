@@ -2,8 +2,9 @@
 // （仓库组图版本核对走统一事务 + 能力矩阵 advisory lock，聚合索引提示与凭据擦除后的存储回收走能力矩阵）、
 // 事件响应规则存储、自定义事件源存储（发布事务末尾的 CAS）。
 
+import { type TaskFixtureSpec, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -57,12 +58,11 @@ async function seedCachedRepo(db: PersistenceDb): Promise<string> {
 async function seedTask(
   db: PersistenceDb,
   owner: string,
-  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  extra: Partial<TaskFixtureSpec> = {},
 ): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -70,7 +70,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,

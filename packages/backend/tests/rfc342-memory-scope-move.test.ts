@@ -4,6 +4,7 @@
 // These tests lock the command boundary, old+new scope authorization, durable
 // event atomicity, mutation races, and the eventual prompt-injection audience.
 
+import { agentFixture, readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -94,8 +95,8 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
     foreignWorkflowId = ulid()
     repoId = ulid()
     repoGroupId = ulid()
-    const { agents, workflows, cachedRepos, repoGroups, resourceGrants } = tablesOf(db)
-    await insertOne(db, agents, {
+    const { cachedRepos, repoGroups, resourceGrants } = tablesOf(db)
+    await agentFixture(db, {
       id: agentId,
       name: `rfc342-agent-${agentId.slice(-6)}`,
       description: '',
@@ -105,7 +106,7 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
       createdAt: NOW,
       updatedAt: NOW,
     })
-    await db.insert(workflows).values([
+    await workflowFixture(db, [
       {
         id: workflowId,
         name: `rfc342-workflow-${workflowId.slice(-6)}`,
@@ -408,8 +409,8 @@ describeEachProvider('RFC-342 memory scope move correctness', (harness) => {
     ).rejects.toThrow(expect.objectContaining({ code: 'memory-scope-target-not-found' }))
     capture.stop()
 
-    const { workflows, memoryScopeMoveEvents } = tablesOf(db)
-    expect((await db.select().from(workflows).where(eq(workflows.id, workflowId))).length).toBe(1)
+    const { memoryScopeMoveEvents } = tablesOf(db)
+    expect((await readWorkflowFixtures(db, { id: workflowId })).length).toBe(1)
     expect((await memoryCatalogOf(db).queries.getById(memory.id))?.memory).toMatchObject({
       scopeType: 'agent',
       scopeId: agentId,

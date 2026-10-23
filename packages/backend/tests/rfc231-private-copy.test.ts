@@ -1,6 +1,12 @@
 // RFC-231 — user resources default private and Workflow/Workgroup copies are
 // exact, actor-owned, reference-safe snapshots.
 
+import {
+  patchAgentFixture,
+  readAgentFixtures,
+  readWorkflowFixtures,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
@@ -269,13 +275,13 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
         { ownerUserId: 'alice', actor: alice },
       )
 
-      const { agents, skills, mcps, plugins, workflows, workgroups } = tablesOf(db)
+      const { skills, mcps, plugins, workgroups } = tablesOf(db)
       const rows = [
-        (await db.select().from(agents).where(eq(agents.id, createdAgent.id)))[0],
+        (await readAgentFixtures(db, { id: createdAgent.id }))[0],
         (await db.select().from(skills).where(eq(skills.id, createdSkill.id)))[0],
         (await db.select().from(mcps).where(eq(mcps.id, createdMcp.id)))[0],
         (await db.select().from(plugins).where(eq(plugins.id, createdPlugin.id)))[0],
-        (await db.select().from(workflows).where(eq(workflows.id, createdWorkflow.id)))[0],
+        (await readWorkflowFixtures(db, { id: createdWorkflow.id }))[0],
         (await db.select().from(workgroups).where(eq(workgroups.id, createdWorkgroup.id)))[0],
       ]
       for (const row of rows) {
@@ -317,8 +323,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       { name: 'tightened-agent', ...AGENT_INPUT },
       { ownerUserId: 'target-owner', actor: owner },
     )
-    const { agents, workflows } = tablesOf(db)
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, target.id))
+    await patchAgentFixture(db, { id: target.id }, { visibility: 'public' })
 
     await expect(
       createWorkflow(
@@ -344,14 +349,12 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
           ownerUserId: 'alice',
           actor: actor('alice'),
           beforeWriteTransaction: async () => {
-            await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, target.id))
+            await patchAgentFixture(db, { id: target.id }, { visibility: 'private' })
           },
         },
       ),
     ).rejects.toMatchObject({ code: 'acl-missing-refs' })
-    expect(
-      (await db.select().from(workflows).where(eq(workflows.name, 'dynamic-save-race')))[0],
-    ).toBe(undefined)
+    expect((await readWorkflowFixtures(db, { name: 'dynamic-save-race' }))[0]).toBe(undefined)
   })
 
   test('production writer inventory stays classified as user-private or builtin-public', async () => {
@@ -366,8 +369,8 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       mcps: { 'modules/resource-catalog/infrastructure/mcpPersistence.ts': 1 },
       plugins: { 'modules/resource-catalog/infrastructure/pluginPersistence.ts': 1 },
       workflows: {
-        'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
-        'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts': 1,
+        // RFC-395 II-a A5: the existing catalog writer moved into one definition participant.
+        'modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts': 1,
       },
       workgroups: {
         'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
@@ -383,7 +386,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       'modules/resource-catalog/infrastructure/pluginPersistence.ts',
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
-      'modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts',
+      'modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts',
       'modules/resource-catalog/infrastructure/workgroupRepository.ts',
     ]
     const sources = new Map(
@@ -425,9 +428,21 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
     expect(sources.get('modules/resource-catalog/infrastructure/workgroupRepository.ts')).toContain(
       '...input.initialAcl',
     )
-    for (const file of ['modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts']) {
-      expect(sources.get(file)).toContain('initialBuiltinResourceAcl')
-    }
+    // RFC-395 II-a A2: the workgroup host is a definition constant, no catalog seed remains.
+    expect(sources.get('modules/resource-catalog/infrastructure/legacy/workflow.ts')).toContain(
+      'initialBuiltinResourceAcl',
+    )
+    const hostLaunch = await readFile(
+      join(
+        BACKEND_SRC,
+        'modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
+      ),
+      'utf8',
+    )
+    expect(hostLaunch).not.toContain('ensureWorkgroupHostWorkflow')
+    expect(sources.get('modules/resource-catalog/infrastructure/legacy/workflow.ts')).toContain(
+      'createWorkflowDefinitionWriteParticipant(tx).insert(',
+    )
     // RFC-359 W4-D19b：房间的「另存为工作流」不再自己 insert(workflows)，改为把提交递给
     // 工作流目录的 create 操作（`composeWorkgroupTaskRoomDynamicWorkflow`）。归属判定因此
     // 收进上面那条 `legacy/workflow.ts` + `initialPrivateResourceAcl` 的断言，不再单列。
@@ -477,13 +492,17 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
       expectedVersion: source.version,
       expectedSnapshotHash: source.snapshotHash,
     }
-    const { workflows, resourceGrants } = tablesOf(db)
-    const countBefore = (await db.select({ id: workflows.id }).from(workflows)).length
+    const { resourceGrants } = tablesOf(db)
+    const countBefore = (
+      await readWorkflowFixtures(db).then((rows) => rows.map((row) => ({ id: row.id })))
+    ).length
 
     await expect(copyWorkflow(db, source.id, request, bob)).rejects.toMatchObject({
       code: 'acl-missing-refs',
     })
-    expect(await db.select({ id: workflows.id }).from(workflows)).toHaveLength(countBefore)
+    expect(
+      await readWorkflowFixtures(db).then((rows) => rows.map((row) => ({ id: row.id }))),
+    ).toHaveLength(countBefore)
 
     await grant(db, 'agent', sourceAgent.id, 'bob')
     const first = await copyWorkflow(db, source.id, request, bob)
@@ -500,9 +519,7 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
     expect(
       await db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, first.id)),
     ).toEqual([])
-    expect(
-      (await db.select().from(workflows).where(eq(workflows.id, first.id)))[0]?.aclRevision,
-    ).toBe(0)
+    expect((await readWorkflowFixtures(db, { id: first.id }))[0]?.aclRevision).toBe(0)
 
     const firstRevision = workflowRevisionOf(first)
     const second = await copyWorkflow(
@@ -524,8 +541,7 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
     await seedUsers(db, ['alice', 'bob'])
     const bob = actor('bob')
     const corruptId = ulid()
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: corruptId,
       name: 'corrupt-private',
       definition: '{not-json',
@@ -543,7 +559,7 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
     ).rejects.toMatchObject({ code: 'workflow-not-found' })
 
     const legacyId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: legacyId,
       name: 'Legacy Flow / 中文',
       description: 'legacy',
@@ -630,7 +646,7 @@ describeEachProvider('RFC-231 Workgroup exact copy', (harness) => {
       expectedVersion: sourceRevision.version,
       expectedSnapshotHash: sourceRevision.snapshotHash,
     }
-    const { workgroups, agents, resourceGrants, workgroupMembers, users } = tablesOf(db)
+    const { workgroups, resourceGrants, workgroupMembers, users } = tablesOf(db)
     const countBefore = (await db.select({ id: workgroups.id }).from(workgroups)).length
 
     await expect(copyWorkgroup(db, source.id, request, bob)).rejects.toMatchObject({
@@ -639,10 +655,7 @@ describeEachProvider('RFC-231 Workgroup exact copy', (harness) => {
     expect(await db.select({ id: workgroups.id }).from(workgroups)).toHaveLength(countBefore)
 
     await grant(db, 'agent', sourceAgent.id, 'bob')
-    await db
-      .update(agents)
-      .set({ name: 'roster-agent-renamed' })
-      .where(eq(agents.id, sourceAgent.id))
+    await patchAgentFixture(db, { id: sourceAgent.id }, { name: 'roster-agent-renamed' })
 
     const copied = await copyWorkgroup(db, source.id, request, bob)
     expect(copied).toMatchObject({

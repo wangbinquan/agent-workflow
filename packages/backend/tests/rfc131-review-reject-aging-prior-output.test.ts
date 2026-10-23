@@ -17,7 +17,13 @@
 //
 // 详见 design/RFC-131-task-question-queue-aging/{design.md §2, plan.md 验收}。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -214,9 +220,8 @@ async function seedDeferredTask(h: Harness): Promise<string> {
   const def = buildDefinition()
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
-  await insertOne(h.db, tasks, {
+  await workflowFixture(h.db, { id: workflowId, name: 'wf', definition: JSON.stringify(def) })
+  await taskFixture(h.db, {
     id: taskId,
     name: 'rfc131-reject-combo',
     workflowId,
@@ -242,10 +247,8 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
     { MOCK_OPENCODE_CLARIFY_BODY: clarifyBody('r1q', CLARIFY_Q, [CLARIFY_ANS, 'R1_ANS_VUE']) },
     () => run(h, taskId),
   )
-  const { tasks, clarifyRounds, nodeRuns } = tablesOf(h.db)
-  expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-    'awaiting_human',
-  )
+  const { clarifyRounds, nodeRuns } = tablesOf(h.db)
+  expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('awaiting_human')
   const r1sess = (
     await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
   )[0]!
@@ -264,21 +267,14 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
     [await selfEntryId(h, taskId, r1sess.intermediaryNodeRunId)],
     actor,
   )
-  await h.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, taskId))
+  await patchTaskFixture(h.db, { id: taskId }, { status: 'pending' })
 
   // ---- runTask#2: P (承接 rerun) produces doc V1 → done+output → REV awaiting_review ----
   await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ doc: DOC_V1 }) }, () => run(h, taskId))
-  expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe(
-    'awaiting_review',
-  )
+  expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('awaiting_review')
 
   // The aging ANCHOR: P now has a top-level done+output run (retryIndex 1, cause clarify-answer).
-  const pDoneOutput = (
-    await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, P)))
-  ).find(
+  const pDoneOutput = (await readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId: P }] })).find(
     (r) => r.status === 'done' && r.parentNodeRunId === null && r.rerunCause === 'clarify-answer',
   )
   expect(pDoneOutput).toBeDefined()

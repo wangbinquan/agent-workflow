@@ -19,13 +19,21 @@
 // retry-index winner) and `nextRetryIndex` would be computed off the wrong
 // baseline, breaking the Prompt-tab attempts switcher's lineage.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -71,8 +79,8 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     const clarifySnapshot = await git(['rev-parse', 'HEAD'])
 
     const agentId = ulid()
-    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
-    await insertOne(db, agents, {
+    const { docVersions } = tablesOf(db)
+    await agentFixture(db, {
       id: agentId,
       name: 'doc',
       description: '',
@@ -100,7 +108,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     }
 
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -109,7 +117,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     })
 
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 'iterate-clarify-rerun-task',
       id: taskId,
       executionLineageId: taskId,
@@ -132,7 +140,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     // — the clarify rerun (minted later) gets the larger id. (Plain ulid() is not
     // monotonic within a millisecond, so we pin explicit ordered ids.)
     const staleRunId = '01A_STALE'
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: staleRunId,
       taskId,
       nodeId: 'doc',
@@ -141,9 +149,9 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
       status: 'done',
       startedAt: Date.now() - 2000,
       finishedAt: Date.now() - 1500,
-      preSnapshot: staleSnapshot,
+      checkpoints: [{ mountPath: '', preSnapshot: staleSnapshot }],
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: staleRunId,
       portName: 'design',
       content: '# stale body — must NOT seed the new doc_version',
@@ -153,7 +161,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     // retryIndex=0, later than the stale row (larger id); this is the row whose
     // output the current pending doc_version (v1) was created from.
     const clarifyRunId = '01B_CLARIFY'
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: clarifyRunId,
       taskId,
       nodeId: 'doc',
@@ -162,9 +170,9 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
       status: 'done',
       startedAt: Date.now() - 1000,
       finishedAt: Date.now() - 500,
-      preSnapshot: clarifySnapshot,
+      checkpoints: [{ mountPath: '', preSnapshot: clarifySnapshot }],
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: clarifyRunId,
       portName: 'design',
       content: '# clarify-rerun body — what the user just iterated on',
@@ -172,7 +180,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
 
     // Review node_run sitting in awaiting_review.
     const reviewNodeRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: reviewNodeRunId,
       taskId,
       nodeId: 'rev_1',
@@ -247,11 +255,10 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
         expectedReviewIteration: 0,
       })
 
-      const { nodeRuns, docVersions } = tablesOf(db)
-      const upRuns = await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, f.taskId), eq(nodeRuns.nodeId, 'doc')))
+      const { docVersions } = tablesOf(db)
+      const upRuns = await readNodeRunFixtures(db, {
+        $and: [{ taskId: f.taskId }, { nodeId: 'doc' }],
+      })
 
       // Three rows now: stale (untouched), clarify-rerun (now canceled with
       // supersede marker), fresh pending.
@@ -279,7 +286,9 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
       expect(fresh.retryIndex).toBe(1)
       expect(fresh.iteration).toBe(0)
       expect(fresh.parentNodeRunId).toBeNull()
-      expect(fresh.preSnapshot).toBe(f.clarifySnapshot) // inherited from clarify-rerun, not stale
+      expect(
+        fresh.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null,
+      ).toBe(f.clarifySnapshot) // inherited from clarify-rerun, not stale
       // Agent has not run yet — started_at must still be null.
       expect(fresh.startedAt).toBeNull()
 
@@ -305,11 +314,9 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
         expectedReviewIteration: 0,
       })
 
-      const { nodeRuns } = tablesOf(db)
-      const upRuns = await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, f.taskId), eq(nodeRuns.nodeId, 'doc')))
+      const upRuns = await readNodeRunFixtures(db, {
+        $and: [{ taskId: f.taskId }, { nodeId: 'doc' }],
+      })
 
       const stale = upRuns.find((r) => r.id === f.staleRunId)!
       const clarify = upRuns.find((r) => r.id === f.clarifyRunId)!

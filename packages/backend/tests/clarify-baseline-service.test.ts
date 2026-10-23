@@ -15,7 +15,14 @@
 // (RFC-132 retired the legacy quick-channel outcome contract; its unified
 // equivalents are locked by rfc128-p5-d-autodispatch.test.ts.)
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -73,8 +80,7 @@ async function seedTask(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -82,7 +88,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -162,8 +168,7 @@ async function seedCrossClarifyTask(
     outputs: [],
   }
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'stub',
     description: '',
@@ -171,7 +176,7 @@ async function seedCrossClarifyTask(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -246,8 +251,7 @@ for (const kind of ['self', 'cross'] as const) {
         const events: Array<{ type: string }> = []
         if (kind === 'self') {
           const { taskId } = await seedTask(db)
-          const { nodeRuns } = tablesOf(db)
-          await insertOne(db, nodeRuns, {
+          await nodeRunFixture(db, {
             id: 'nr_sym_src',
             taskId,
             nodeId: 'designer',
@@ -270,8 +274,7 @@ for (const kind of ['self', 'cross'] as const) {
           return { taskId, round, intermediaryNodeRunId, events }
         }
         const { taskId } = await seedCrossClarifyTask(db)
-        const { nodeRuns } = tablesOf(db)
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: 'nr_sym_src',
           taskId,
           nodeId: 'questioner',
@@ -331,7 +334,7 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
     const db = harness.db
     const { taskId } = await seedTask(db)
     const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: 'nr_source_1',
       taskId,
       nodeId: 'designer',
@@ -362,8 +365,8 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
   test('agent-multi shard child: session row carries shardKey + parent_node_run_id', async () => {
     const db = harness.db
     const { taskId } = await seedTask(db)
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { clarifyRounds } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: 'nr_multi',
       taskId,
       nodeId: 'designer',
@@ -392,7 +395,7 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
         .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
     )[0]
     expect(sess?.askingShardKey).toBe('shard-A')
-    const cnr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId)))[0]
+    const cnr = (await readNodeRunFixtures(db, { id: clarifyNodeRunId }))[0]
     expect(cnr?.shardKey).toBe('shard-A')
     expect(cnr?.parentNodeRunId).toBe('parent-multi')
   })
@@ -429,8 +432,8 @@ describeEachProvider(
     test('deleting the task row cascades away its clarify rounds', async () => {
       const db = harness.db
       const { taskId } = await seedTask(db)
-      const { nodeRuns, tasks, clarifyRounds } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { tasks, clarifyRounds } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: 'nr_cleanup_src',
         taskId,
         nodeId: 'designer',
@@ -467,9 +470,8 @@ describeEachProvider(
     test('node_run_outputs row presence is the trigger for the GENERAL aging cutoff (sanity probe)', async () => {
       const db = harness.db
       const { taskId } = await seedTask(db)
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
       // A done run with outputs — this is what scheduler keys on for cutoff
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: 'nr_with_outputs',
         taskId,
         nodeId: 'designer',
@@ -477,15 +479,14 @@ describeEachProvider(
         retryIndex: 0,
         iteration: 0,
       })
-      await insertOne(db, nodeRunOutputs, {
+      await nodeRunOutputFixture(db, {
         nodeRunId: 'nr_with_outputs',
         portName: 'plan',
         content: 'done output',
       })
-      const rows = await db
-        .select({ id: nodeRunOutputs.nodeRunId })
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, 'nr_with_outputs'))
+      const rows = await readNodeRunOutputFixtures(db, { nodeRunId: 'nr_with_outputs' }).then(
+        (rows) => rows.map((row) => ({ id: row.nodeRunId })),
+      )
       expect(rows.length).toBe(1)
     })
   },
@@ -500,7 +501,7 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
     const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
     const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -531,8 +532,7 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
   test('same (node, loopIter): iteration increments to 1 after another mint', async () => {
     const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -568,8 +568,7 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
   test('loop_iter isolation: same node, different loopIter → both start at iteration=0', async () => {
     const db = harness.db
     const { taskId } = await seedCrossClarifyTask(db)
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -609,8 +608,7 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
       crossClarifyNodeIds: ['cc_a', 'cc_b'],
       questionerNodeIds: ['questioner'],
     })
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: 'nr_q_1',
       taskId,
       nodeId: 'questioner',
@@ -659,8 +657,7 @@ describeEachProvider(
         crossClarifyNodeIds: ['cc_alpha', 'cc_zeta'],
         questionerNodeIds: ['questioner_alpha', 'questioner_zeta'],
       })
-      const { nodeRuns, clarifyRounds } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: 'nr_designer_prior',
         taskId,
         nodeId: 'designer',
@@ -674,7 +671,7 @@ describeEachProvider(
         ['questioner_zeta', 'cc_zeta'],
       ] as const) {
         const runId = `nr_${qid}`
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: runId,
           taskId,
           nodeId: qid,
@@ -694,6 +691,7 @@ describeEachProvider(
           questions: [makeQuestion()],
         })
       }
+      const { clarifyRounds } = tablesOf(db)
       // Answer only cc_alpha (unified quick channel; the designer auto-dispatch parks on the
       // not-ready sibling). cc_zeta still awaiting_human.
       const ccAlphaRunRows = await db
@@ -737,8 +735,7 @@ describeEachProvider(
         crossClarifyNodeIds: ['cc_stop', 'cc_continue'],
         questionerNodeIds: ['questioner_a', 'questioner_b'],
       })
-      const { nodeRuns } = tablesOf(db)
-      await db.insert(nodeRuns).values([
+      await nodeRunFixture(db, [
         {
           id: 'nr_qa',
           taskId,

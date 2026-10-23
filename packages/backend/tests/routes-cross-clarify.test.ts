@@ -18,7 +18,7 @@
 //   5. If-Match mismatch returns 409 cross-clarify-iteration-mismatch.
 //   6. POST fails for cross-clarify with non-admin / non-target actor (auth gate).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -84,21 +84,21 @@ async function seedTask(
   const taskId = opts.taskId ?? `task_${ulid()}`
   const def = defaultDef()
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await db
-    .insert(workflows)
-    .values({
+  await workflowFixture(
+    db,
+    {
       id: workflowId,
       name: 'wf',
       description: '',
       definition: JSON.stringify(def),
       version: 1,
       schemaVersion: 4,
-    })
-    .onConflictDoNothing()
-  await db
-    .insert(tasks)
-    .values({
+    },
+    { onConflict: 'ignore' },
+  )
+  await taskFixture(
+    db,
+    {
       id: taskId,
       name: 'fixture-task',
       workflowId,
@@ -112,8 +112,9 @@ async function seedTask(
       startedAt: Date.now(),
 
       ...(lineage?.(taskId) ?? {}),
-    })
-    .onConflictDoNothing()
+    },
+    { onConflict: 'ignore' },
+  )
   return { taskId }
 }
 
@@ -124,10 +125,9 @@ async function seedCrossClarifySession(
 ): Promise<{ taskId: string; intermediaryNodeRunId: string; sessionId: string }> {
   const { taskId } = await seedTask(db, opts.taskId ? { taskId: opts.taskId } : {}, lineage)
   const questionerRunId = ulid()
-  const { nodeRuns } = tablesOf(db)
   // Seed prior designer + questioner node_runs so the answer's auto-dispatch has
   // runs to inherit when the test submits with directive='continue'.
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: questionerRunId,
     taskId,
     nodeId: 'questioner',
@@ -135,7 +135,7 @@ async function seedCrossClarifySession(
     retryIndex: 0,
     iteration: 0,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: 'designer',
@@ -182,8 +182,7 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
         edges: [],
         outputs: [],
       }
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: `wf_${taskA}`,
         name: 'wf',
         description: '',
@@ -191,7 +190,7 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
         version: 1,
         schemaVersion: 3,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskA,
         name: 't',
         workflowId: `wf_${taskA}`,
@@ -205,7 +204,7 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
         startedAt: Date.now() - 100, // earlier
       })
       const sourceRunId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: sourceRunId,
         taskId: taskA,
         nodeId: 'designer',

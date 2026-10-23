@@ -35,7 +35,7 @@ async function setupDuplicateActives(
       }),
     )
   }
-  // ulids sort lexicographically by insert order — sortedAsc[0] is oldest.
+  // RFC-395 II-a: A1 allocates seq in insertion order; same-millisecond ULIDs need not sort that way.
   const alertId = await insertAlert(h.db, h.taskId, {
     rule: 'U1',
     detail: {
@@ -60,7 +60,7 @@ describeEachProvider('RFC-057 — U1.cancel-older-keep-newest', (provider) => {
   test('happy: 2 awaiting rows → newest kept, older canceled', async () => {
     const setup = await setupDuplicateActives(provider.db, { count: 2 })
     h = setup.h
-    const sorted = [...setup.runIds].sort()
+    const sorted = [...setup.runIds]
     const keep = sorted[sorted.length - 1]!
     const toCancel = sorted.slice(0, -1)
     const res = await h.engine.applyRepairOption({
@@ -81,7 +81,7 @@ describeEachProvider('RFC-057 — U1.cancel-older-keep-newest', (provider) => {
   test('happy variant: 3 rows → newest kept, 2 oldest canceled', async () => {
     const setup = await setupDuplicateActives(provider.db, { count: 3 })
     h = setup.h
-    const sorted = [...setup.runIds].sort()
+    const sorted = [...setup.runIds]
     const keep = sorted[sorted.length - 1]!
     const toCancel = sorted.slice(0, -1)
     const res = await h.engine.applyRepairOption({
@@ -129,7 +129,7 @@ describeEachProvider('RFC-057 — U1.cancel-newer-keep-oldest', (provider) => {
   test('happy: 2 rows → oldest kept, newer canceled', async () => {
     const setup = await setupDuplicateActives(provider.db, { count: 2 })
     h = setup.h
-    const sorted = [...setup.runIds].sort()
+    const sorted = [...setup.runIds]
     const keep = sorted[0]!
     const toCancel = sorted.slice(1)
     const res = await h.engine.applyRepairOption({

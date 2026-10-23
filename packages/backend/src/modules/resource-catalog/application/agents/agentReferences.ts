@@ -15,7 +15,12 @@
 // execution semantics). It is kept as an UNRESOLVED managed ref instead.
 
 import type { AclResourceType, AgentSkillRef } from '@agent-workflow/shared'
-import { decodeAgentSkillRef, resourceRefKey } from '@agent-workflow/shared'
+import {
+  agentReferenceIds,
+  agentSkillReferences,
+  decodeAgentSkillRef,
+  resourceRefKey,
+} from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { RefCheckGroup, ResolvedRefsById } from './referenceTypes'
 
@@ -62,7 +67,7 @@ export interface ResolvedAgentRefs {
 /** Managed skill ids referenced by a stored ref list (project refs excluded) —
  *  the grandfathering set for an update (D15). */
 function managedSkillIdSet(refs: readonly AgentSkillRef[] | undefined): Set<string> {
-  return new Set((refs ?? []).filter((r) => r.kind === 'managed').map((r) => r.skillId))
+  return new Set(agentReferenceIds({ skills: refs }, 'skill'))
 }
 
 /**
@@ -142,13 +147,13 @@ export async function resolveAgentRefsUsable(
   })
 
   // Skills: resolve only the MANAGED tokens (project refs have no DB row / ACL).
-  const managedTokens = input.skills.filter((r) => r.kind === 'managed').map((r) => r.skillId)
+  const managedTokens = agentReferenceIds(input, 'skill')
   const skillRes = await resolver.resolveUsableById(actor, 'skill', managedTokens, {
     grandfatheredIds: existing ? managedSkillIdSet(existing.skills) : undefined,
   })
   const seenSkill = new Set<string>()
   const skills: AgentSkillRef[] = []
-  for (const ref of input.skills) {
+  for (const ref of agentSkillReferences(input)) {
     // NO project demotion (P1-1): preserve the managed token so the RFC-228
     // candidate-integrity gate can reject it as skill-not-found.
     const normalized: AgentSkillRef =

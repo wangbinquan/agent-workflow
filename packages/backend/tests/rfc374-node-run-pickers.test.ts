@@ -1,5 +1,9 @@
 // RFC-374 T7/T10: inverted IDs exercise freshness, rollback, frame/branch projections, memory and real persistence readers.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  createRunHistorySnapshot,
+  createRunSelectionOracleSnapshot,
+} from '@/modules/task-execution/public/queries'
+import { nodeRunOutputFixture, patchTaskFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -12,18 +16,18 @@ import {
   buildFreshestSettledPerNode,
   type NodeRunRow,
 } from '@/services/freshness'
-import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
+import { selectResumeRollbackTargets } from '@/services/task'
 import { selectSyncRollbackTargets } from '@/services/task'
 import { compareNodeRunsForTimeline } from '@/services/reviewRoundStart'
 import { resolveNodeScope } from '@/services/structuralDiff/refSelect'
-import { planFrameBackfill } from '@/modules/task-execution/domain/frameBackfill'
+import { planFrameBackfill } from '@/modules/task-execution/domain/legacyMigration/frameBackfill'
 import { getTaskBranchTrace } from '@/modules/task-execution/application/branchTrace'
 import { loadInjectedSnapshotFromFirstAttempt } from '@/modules/memory/application/injection/injectMemory'
 import {
   deriveWorkgroupRunHistory,
   deriveMemberCurrentRuns,
   deriveBudgetUsed,
-} from '@/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
+} from './helpers/workgroupSelection'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { freshestPriorRunWithOutput } from '@/modules/task-execution/composition/nodeMechanics'
@@ -74,7 +78,7 @@ function row(
   }
 }
 describe('RFC-374 pure selection', () => {
-  test('skip-release evidence chooses the newest changed upstream, even when its ID is smaller', () => {
+  test('skip-release evidence chooses the newest changed upstream, even when its ID is smaller', async () => {
     const definition: WorkflowDefinition = {
       $schema_version: 7,
       inputs: [],
@@ -85,7 +89,7 @@ describe('RFC-374 pure selection', () => {
         { id: 'n', kind: 'agent-single' },
       ],
     }
-    const result = deriveFrontier(
+    const result = await deriveFrontier(
       [
         row('z-upstream', 2, { nodeId: 'u1' }),
         row('a-upstream', 3, { nodeId: 'u2' }),
@@ -105,7 +109,7 @@ describe('RFC-374 pure selection', () => {
     )
     expect(result.pendingAnchors.get('n')).toBe('a-upstream')
   })
-  test('clarify consumption resolves the trigger generation and requires later output', () => {
+  test('clarify consumption resolves the trigger generation and requires later output', async () => {
     const anchor = {
       ...row('z', 1, { status: 'failed' }),
       rerunCause: 'initial',
@@ -118,11 +122,15 @@ describe('RFC-374 pure selection', () => {
       startedAt: null,
       supersededByReview: null,
     }
-    expect(isTargetNodeConsumed('n', 0, anchor.id, [anchor, next], new Set([next.id]))).toBe(true)
-    expect(isTargetNodeConsumed('n', 0, next.id, [anchor, next], new Set([anchor.id]))).toBe(false)
-    expect(isTargetNodeConsumed('n', 0, anchor.id, [anchor, next], new Set())).toBe(false)
+    expect(await isTargetNodeConsumed('n', 0, anchor.id, [anchor, next], new Set([next.id]))).toBe(
+      true,
+    )
+    expect(await isTargetNodeConsumed('n', 0, next.id, [anchor, next], new Set([anchor.id]))).toBe(
+      false,
+    )
+    expect(await isTargetNodeConsumed('n', 0, anchor.id, [anchor, next], new Set())).toBe(false)
   })
-  test('a later revival excludes an interrupted clarify continuation from the workgroup budget', () => {
+  test('a later revival excludes an interrupted clarify continuation from the workgroup budget', async () => {
     const old = {
       ...row('z', 1, { nodeId: '__wg_leader__', status: 'interrupted' }),
       rerunCause: 'clarify-answer',
@@ -133,10 +141,10 @@ describe('RFC-374 pure selection', () => {
       rerunCause: 'revival',
       wgRound: null,
     }
-    expect(deriveBudgetUsed('leader_worker', [next, old])).toBe(1)
-    expect(deriveBudgetUsed('leader_worker', [{ ...next, shardKey: 'other' }, old])).toBe(2)
+    expect(await deriveBudgetUsed('leader_worker', [next, old])).toBe(1)
+    expect(await deriveBudgetUsed('leader_worker', [{ ...next, shardKey: 'other' }, old])).toBe(2)
   })
-  test('all sanctioned freshness pickers prefer mint order, preserving scope and status boundaries', () => {
+  test('all sanctioned freshness pickers prefer mint order, preserving scope and status boundaries', async () => {
     const old = row('z', 1),
       fresh = row('a', 2),
       legacy = row('zz', null),
@@ -146,21 +154,23 @@ describe('RFC-374 pure selection', () => {
     expect(pickLatestRunInFrame(rows, frame)?.id).toBe(fresh.id)
     expect(pickFrameSourceRun(rows, frame)?.id).toBe(fresh.id)
     expect(pickReusableShardRun(rows, { shardKey: null, valueHash: null })?.id).toBe(fresh.id)
-    expect(buildFreshestSettledPerNode(rows, new Set(['n']), frame).get('n')?.id).toBe(fresh.id)
+    expect((await buildFreshestSettledPerNode(rows, new Set(['n']), frame)).get('n')?.id).toBe(
+      fresh.id,
+    )
     expect(pickFrameSourceRun([old, row('0', 3, { status: 'pending' })], frame)?.id).toBe(old.id)
     expect(pickLatestRunInFrame(rows, { containerRunId: 'other', iteration: 0 })).toBeUndefined()
     expect(pickFreshestRun([])).toBeUndefined()
   })
-  test('rollback and timeline decisions retain their existing primary keys', () => {
+  test('rollback and timeline decisions retain their existing primary keys', async () => {
     const old = row('z', 1, { status: 'failed' }),
       fresh = row('a', 2, { status: 'interrupted' })
-    expect(selectResumeRollbackTargets([fresh, old]).map((run) => run.id)).toEqual(['a'])
+    expect((await selectResumeRollbackTargets([fresh, old])).map((run) => run.id)).toEqual(['a'])
     expect(
-      selectSyncRollbackTargets([old, fresh], ['failed', 'interrupted'], () => false).map(
+      (await selectSyncRollbackTargets([old, fresh], ['failed', 'interrupted'], () => false)).map(
         (run) => run.id,
       ),
     ).toEqual(['a'])
-    expect(selectResumeRollbackTargets([old, { ...fresh, status: 'done' }])).toEqual([])
+    expect(await selectResumeRollbackTargets([old, { ...fresh, status: 'done' }])).toEqual([])
     expect(
       compareNodeRunsForTimeline({ ...old, startedAt: 10 }, { ...fresh, startedAt: 10 }),
     ).toBeLessThan(0)
@@ -170,8 +180,8 @@ describe('RFC-374 pure selection', () => {
     expect(
       resolveNodeScope(
         [
-          { ...old, startedAt: 10, preSnapshot: 'old' },
-          { ...fresh, startedAt: 10, preSnapshot: 'new' },
+          { ...old, startedAt: 10, snapshotRef: 'old' },
+          { ...fresh, startedAt: 10, snapshotRef: 'new' },
         ],
         old.id,
       ),
@@ -204,6 +214,7 @@ describe('RFC-374 pure selection', () => {
             outputs: [],
           }
         },
+        history: (taskId, rows) => createRunHistorySnapshot(taskId, rows),
       },
       't',
     )
@@ -224,9 +235,14 @@ describe('RFC-374 pure selection', () => {
       },
     ]
     const records = [
-      { id: 'z', seq: 1, status: 'done', injectedMemoriesJson: '[]' },
-      { id: 'b', seq: 2, status: 'failed', injectedMemoriesJson: JSON.stringify(snapshot) },
-      { id: 'a', seq: 3, status: 'running', injectedMemoriesJson: null },
+      { id: 'z', seq: 1, status: 'done' as const, injectedMemoriesJson: '[]' },
+      {
+        id: 'b',
+        seq: 2,
+        status: 'failed' as const,
+        injectedMemoriesJson: JSON.stringify(snapshot),
+      },
+      { id: 'a', seq: 3, status: 'running' as const, injectedMemoriesJson: null },
     ]
     const unused = async (): Promise<never> => {
       throw new Error('unrelated memory read')
@@ -251,23 +267,29 @@ describe('RFC-374 pure selection', () => {
       await loadInjectedSnapshotFromFirstAttempt(store, { ...ctx, runId: 'missing' }),
     ).toBeNull()
   })
-  test('workgroup history and current member retain running precedence and use seq within it', () => {
+  test('workgroup history and current member retain running precedence and use seq within it', async () => {
     const members = [{ id: 'leader', memberType: 'agent' as const }]
     const runs = [
       { ...row('z', 1, { nodeId: '__wg_leader__' }), rerunCause: 'wg-leader-round', wgRound: 1 },
       { ...row('a', 2, { nodeId: '__wg_leader__' }), rerunCause: 'wg-leader-round', wgRound: 2 },
     ]
     expect(
-      deriveWorkgroupRunHistory(members, 'leader', runs, [], []).map((run) => run.nodeRunId),
+      (await deriveWorkgroupRunHistory(members, 'leader', runs, [], [])).map(
+        (run) => run.nodeRunId,
+      ),
     ).toEqual(['z', 'a'])
-    expect(deriveMemberCurrentRuns(members, 'leader', runs, [], []).leader?.nodeRunId).toBe('a')
+    expect((await deriveMemberCurrentRuns(members, 'leader', runs, [], [])).leader?.nodeRunId).toBe(
+      'a',
+    )
     expect(
-      deriveMemberCurrentRuns(
-        members,
-        'leader',
-        [{ ...runs[0]!, status: 'running' }, runs[1]!],
-        [],
-        [],
+      (
+        await deriveMemberCurrentRuns(
+          members,
+          'leader',
+          [{ ...runs[0]!, status: 'running' }, runs[1]!],
+          [],
+          [],
+        )
       ).leader?.nodeRunId,
     ).toBe('z')
   })
@@ -348,10 +370,10 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     const db = harness.db,
       taskId = await seedSequenceTask(db),
       path = 'plans/current.md'
-    const { tasks, nodeRunOutputs } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      {
         status: 'done',
         // A done workflow publishes its result through an output node. Keep the
         // plan-run freshness oracle separate from that task-boundary result.
@@ -365,12 +387,12 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
           [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]:
             'EXPECTED_ANALYSIS_PLAN_PATH_JSON\n' + JSON.stringify(path),
         }),
-      })
-      .where(eq(tasks.id, taskId))
+      },
+    )
     await mintSequenceRun(db, taskId, { id: 'z', nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID })
     await mintSequenceRun(db, taskId, { id: 'a', nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID })
     await mintSequenceRun(db, taskId, { id: 'final', nodeId: 'final-result' })
-    await db.insert(nodeRunOutputs).values([
+    await nodeRunOutputFixture(db, [
       { nodeRunId: 'a', portName: 'analysis-plan', kind: 'document', content: path },
       { nodeRunId: 'z', portName: 'analysis-plan', kind: 'document', content: 'stale.md' },
       {
@@ -401,18 +423,17 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
     for (const id of ['z', 'b', 'a']) await mintSequenceRun(db, taskId, { id })
-    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: 'z',
       portName: 'out',
       content: 'prior',
       kind: 'document',
     })
-    const current = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, 'a')))[0]!
+    const current = (await readNodeRunFixtures(db, { id: 'a' }))[0]!
     expect(
       (await freshestPriorRunWithOutput(new DrizzleNodeExecutionPersistence(db), current))?.id,
     ).toBe('z')
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: 'b',
       portName: 'out',
       content: 'newer',
@@ -428,12 +449,20 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, {
       id: 'z',
       status: 'pending',
-      overrides: { shardKey: 'one' },
+      overrides: {
+        identity: {
+          shardKey: 'one',
+        },
+      },
     })
     await mintSequenceRun(db, taskId, {
       id: 'a',
       status: 'pending',
-      overrides: { shardKey: 'two' },
+      overrides: {
+        identity: {
+          shardKey: 'two',
+        },
+      },
     })
     const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)),
@@ -441,6 +470,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     const result = await resolveSchedulerRunRow({
       lifecycle: persistence.nodeRuns,
       projections: persistence.nodeExecution,
+      selection: createRunSelectionOracleSnapshot(rows),
       taskId,
       nodeId: 'n',
       ...frame,
@@ -456,10 +486,10 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
   test('T3 sees the last-minted output state, including a newer non-done row', async () => {
     const db = harness.db,
       taskId = await seedSequenceTask(db)
-    const { tasks } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      {
         status: 'done',
         workflowSnapshot: JSON.stringify({
           $schema_version: 2,
@@ -467,8 +497,8 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
           nodes: [{ id: 'out', kind: 'output', label: 'out', inputs: [] }],
           edges: [],
         }),
-      })
-      .where(eq(tasks.id, taskId))
+      },
+    )
     await mintSequenceRun(db, taskId, { id: 'z', nodeId: 'out', status: 'done' })
     await mintSequenceRun(db, taskId, { id: 'a', nodeId: 'out', status: 'failed' })
     const result = await runLifecycleInvariants({

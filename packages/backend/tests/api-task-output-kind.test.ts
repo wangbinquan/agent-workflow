@@ -6,15 +6,19 @@
 //   - NULL column (legacy row / undeclared kind) surfaces as null,
 //   - value (content) is unchanged alongside kind.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import {
   taskNodeRunsProjection,
   loadTaskProjection,
 } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { eq } from 'drizzle-orm'
 import { taskExecutionKind } from '@agent-workflow/shared'
 import { CODE_ROUND_NODE_ID, synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { getExecutionOutcome } from '@/services/execution/outcome'
@@ -26,8 +30,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -36,7 +39,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string 
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -60,8 +63,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string 
 
 async function seedRun(db: PersistenceDb, taskId: string, nodeId = 'n'): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, { id, taskId, nodeId, status: 'done', startedAt: Date.now() })
+  await nodeRunFixture(db, { id, taskId, nodeId, status: 'done', startedAt: Date.now() })
   return id
 }
 
@@ -78,8 +80,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
   test('persisted kind string surfaces verbatim; content unchanged', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     const runId = await seedRun(db, taskId)
-    const { nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: runId,
       portName: 'doc',
       content: 'out/report.md',
@@ -95,8 +96,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
   test('NULL kind (legacy / undeclared) surfaces as null', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     const runId = await seedRun(db, taskId)
-    const { nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: runId,
       portName: 'summary',
       content: 'all good',
@@ -109,10 +109,10 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
   test('RFC-395 II-pre: historical code-round rows retain their task, node and outcome projections', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     const codeRoundId = ulid()
-    const { tasks, nodeRunOutputs } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      {
         status: 'done',
         finishedAt: Date.now(),
         codeRoundId,
@@ -121,10 +121,10 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
           roundSeq: 1,
           title: 'Historical review',
         }),
-      })
-      .where(eq(tasks.id, taskId))
+      },
+    )
     const runId = await seedRun(db, taskId, CODE_ROUND_NODE_ID)
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: runId,
       portName: 'round_summary',
       content: 'historical result',

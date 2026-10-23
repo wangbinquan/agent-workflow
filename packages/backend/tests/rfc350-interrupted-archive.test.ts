@@ -1,3 +1,4 @@
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
@@ -40,7 +41,7 @@ function tmpDirs(): { archiveDir: string; runsDir: string; logsDir: string } {
 }
 
 async function seedBase(db: Db): Promise<void> {
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -49,7 +50,7 @@ async function seedBase(db: Db): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 async function addTask(
@@ -61,8 +62,7 @@ async function addTask(
     parentTaskId?: string
   },
 ): Promise<void> {
-  const { tasks, taskRepos } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: seed.id,
     name: seed.id,
     executionLineageId: seed.parentTaskId ?? seed.id,
@@ -93,7 +93,7 @@ async function addTask(
     rootTaskId: seed.parentTaskId ?? seed.id,
     invocationDepth: seed.parentTaskId === undefined ? 0 : 1,
   })
-  await insertOne(db, taskRepos, {
+  await taskRepoFixture(db, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',

@@ -3,6 +3,7 @@
 // The prepare barrier only pauses the real resource session; it replaces no
 // persistence or apply algorithm. Both providers use the same behavior cases.
 
+import { readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -32,10 +33,8 @@ import type { DbClient } from '@/db/client'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
 import type { IntentApplyInput } from '@/modules/intent/application/ports/intentApplyOperations'
 import { composeIntentApplyOperations } from '@/modules/intent/composition/apply'
-import {
-  composeIntentMaintenanceCommandsForDatabase,
-  composeIntentMaintenanceSnapshotQueriesFor,
-} from '@/modules/intent/composition/maintenance'
+import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
+import { composeIntentMaintenanceCommandsForDatabase } from './helpers/atomicApplyMaintenance'
 import {
   composeIntentApplyResourceBinding,
   createPostgresqlIntentPluginArtifactLifecycle,
@@ -43,10 +42,7 @@ import {
 } from '@/modules/resource-catalog/composition/intentApply'
 import { createResourcePackageApplyActivityRegistry } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import {
-  composePostgresqlResourcePackageApplyMaintenance,
-  composeSqliteResourcePackageApplyMaintenance,
-} from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
@@ -122,17 +118,17 @@ function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => 
       scratchDirectoryName: SCRATCH_DIRECTORY,
       resourcePackages:
         harness.capabilities.isolation === 'exclusive'
-          ? composeSqliteResourcePackageApplyMaintenance({
+          ? composeResourcePackageApplyMaintenance({
               db: harness.db as DbClient,
               appHome,
               pluginsDir,
               activitySource: createResourcePackageApplyActivityRegistry().query,
-            }).command
-          : composePostgresqlResourcePackageApplyMaintenance({
+            }).scene
+          : composeResourcePackageApplyMaintenance({
               db: harness.db as PostgresqlDatabaseClient,
               appHome,
               pluginsDir,
-            }).command,
+            }).scene,
     }),
   }
 }
@@ -355,16 +351,14 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
         }),
       ])
       snapshot = composition.snapshots.activeApplyJournalIds()
-      const { intentApplyJournal, agents } = tablesOf(harness.db)
+      const { intentApplyJournal } = tablesOf(harness.db)
       const [journal] = await harness.db
         .select()
         .from(intentApplyJournal)
         .where(eq(intentApplyJournal.sessionId, command.sessionId))
       expect(journal).toMatchObject({ state: 'prepared', receiptJson: null })
       expect(snapshot).toEqual([journal!.id])
-      expect(
-        await harness.db.select().from(agents).where(eq(agents.name, 'composition-worker')),
-      ).toEqual([])
+      expect(await readAgentFixtures(harness.db, { name: 'composition-worker' })).toEqual([])
     } finally {
       release.resolve()
       await applying.catch(() => undefined)
@@ -384,11 +378,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
     })
     expect(snapshot).toEqual([receipt.journalId])
     expect(composition.snapshots.activeApplyJournalIds()).toEqual([])
-    const { agents, intentSessions, intentApplyJournal, intentProvenance } = tablesOf(harness.db)
-    const [created] = await harness.db
-      .select()
-      .from(agents)
-      .where(eq(agents.id, receipt.applied[0]!.resourceId))
+    const { intentSessions, intentApplyJournal, intentProvenance } = tablesOf(harness.db)
+    const [created] = await readAgentFixtures(harness.db, { id: receipt.applied[0]!.resourceId })
     expect(created).toMatchObject({
       name: 'composition-worker',
       bodyMd: 'Complete the assigned work.',
@@ -417,9 +408,7 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
       { resourceType: 'agent', resourceId: created!.id, sessionId: command.sessionId },
     ])
     expect(await composition.apply.apply(request)).toEqual(receipt)
-    expect(
-      await harness.db.select().from(agents).where(eq(agents.name, 'composition-worker')),
-    ).toHaveLength(1)
+    expect(await readAgentFixtures(harness.db, { name: 'composition-worker' })).toHaveLength(1)
   })
 
   test('boot snapshots recover admitted turns, compensate stale artifacts, then sweep recovered scratch', async () => {

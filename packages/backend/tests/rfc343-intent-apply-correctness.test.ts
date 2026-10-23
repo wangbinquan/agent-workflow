@@ -12,10 +12,11 @@
 // 会话串行锁那两格是**进程内**的（模块级 Map），与库无关；留在双引擎里跑两遍无害，
 // 而且顺带证明了锁的计数不会被并发的另一条引擎腿污染。
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
-import { composeIntentApplyConvergence } from '@/modules/intent/composition/applyMaintenance'
+import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
@@ -35,7 +36,7 @@ import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
-} from '@/modules/intent/domain/journalArtifacts'
+} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   commitSkillVersionInTx,
@@ -224,11 +225,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       )
 
       expect(
-        await composeIntentApplyConvergence({
-          db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
-        }).converge({ activeJournalIds: [] }),
+        await createAtomicApplyRecovery([
+          composeIntentApplyRecoveryScene({
+            db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
+        ]).converge({ intent: [] }),
       ).toEqual({
         failed: 0,
         rolledForward: 0,
@@ -296,11 +299,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       ).toContain('body v1')
       rmSync(staged.stagingDir, { recursive: true, force: true })
       expect(
-        await composeIntentApplyConvergence({
-          db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
-        }).converge({ activeJournalIds: [] }),
+        await createAtomicApplyRecovery([
+          composeIntentApplyRecoveryScene({
+            db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
+        ]).converge({ intent: [] }),
       ).toEqual({
         failed: 0,
         rolledForward: 0,
@@ -327,11 +332,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
 
       cpSync(staged.versionDir, staged.stagingDir, { recursive: true })
       expect(
-        await composeIntentApplyConvergence({
-          db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
-        }).converge({ activeJournalIds: [] }),
+        await createAtomicApplyRecovery([
+          composeIntentApplyRecoveryScene({
+            db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
+        ]).converge({ intent: [] }),
       ).toEqual({
         failed: 0,
         rolledForward: 1,
@@ -355,11 +362,13 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       // The retained audit row is seen again, but the completed exact op is not
       // republished or unmarked as if it were still pending.
       expect(
-        await composeIntentApplyConvergence({
-          db,
-          appHome,
-          pluginsDir: join(appHome, 'plugins'),
-        }).converge({ activeJournalIds: [] }),
+        await createAtomicApplyRecovery([
+          composeIntentApplyRecoveryScene({
+            db,
+            appHome,
+            pluginsDir: join(appHome, 'plugins'),
+          }),
+        ]).converge({ intent: [] }),
       ).toEqual({
         failed: 0,
         rolledForward: 1,

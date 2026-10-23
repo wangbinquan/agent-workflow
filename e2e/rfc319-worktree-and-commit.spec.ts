@@ -27,6 +27,12 @@
 //     执行（design.md D10 保留为纵深防御）。用例把快照按真实形态种进去，再走
 //     公共 resume 接口，验证那段防御真的把工作树带回快照那一刻。
 
+import {
+  readTaskFixturesSql,
+  fixtureSqlParameter,
+  patchNodeRunFixtureSql,
+  readNodeRunCheckpointFixturesSql,
+} from './fixtures/model'
 import { expect, test, type Page } from '@playwright/test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -344,13 +350,13 @@ test('RFC-319 REPO-14b: 带凭据的远端 URL 在接口与任务详情页都只
 
   // ② 任务行本身也绝不许留下凭据（services/task.ts:3037 在 insert 处就脱敏，
   //    RFC-054 W3-4 的既有修复）。这一层塌了，拿到库文件就等于拿到凭据。
-  const stored = querySqlite<{ repo_url: string }>(
+  const stored = querySqlite<{ repoUrl: string }>(
     dbFile,
-    'SELECT repo_url FROM tasks WHERE id = ?',
+    readTaskFixturesSql({ id: fixtureSqlParameter }, { repoUrl: 'repoUrl' }),
     [taskId],
   )
   expect(stored.length, '任务行没查到 ⇒ 播种/启动出了问题').toBe(1)
-  expect(stored[0]?.repo_url, '带凭据的原串被原样落进了 tasks.repo_url').toBe(redactedUrl)
+  expect(stored[0]?.repoUrl, '带凭据的原串被原样落进了 tasks.repo_url').toBe(redactedUrl)
 
   // ③ 详情投影与列表投影都必须脱敏。少任何一处，凭据就从那条通道漏给每个能读任务的人。
   const detail = await getTask(runDaemon, taskId)
@@ -509,16 +515,19 @@ test('RFC-319 REPO-38c: 恢复失败任务时，重试节点的工作树被 pre_
   const dbFile = join(failDaemon.home, 'db.sqlite')
   runSqlite(
     dbFile,
-    `UPDATE node_runs SET pre_snapshot = '${snapshotSha}' WHERE id = '${failedRun!.id}';`,
+    patchNodeRunFixtureSql(
+      { id: failedRun!.id },
+      { checkpoints: [{ mountPath: '', preSnapshot: snapshotSha }] },
+    ),
   )
   // 回读自证：`db.exec()` 对多语句脚本里的约束错误不抛异常，回执不可信
   // （docs/dev-gotchas.md / 协议 §5.3）。
-  const seeded = querySqlite<{ pre_snapshot: string | null }>(
+  const seeded = querySqlite<{ preSnapshot: string | null }>(
     dbFile,
-    'SELECT pre_snapshot FROM node_runs WHERE id = ?',
+    readNodeRunCheckpointFixturesSql({ id: fixtureSqlParameter }, '', 'preSnapshot'),
     [failedRun!.id],
   )
-  expect(seeded[0]?.pre_snapshot, '快照没真的写进 node_runs ⇒ 这次 resume 无从回滚').toBe(
+  expect(seeded[0]?.preSnapshot, '快照没真的写进 node_runs ⇒ 这次 resume 无从回滚').toBe(
     snapshotSha,
   )
 

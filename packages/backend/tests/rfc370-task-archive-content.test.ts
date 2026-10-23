@@ -1,4 +1,11 @@
 // RFC-370 A2: content ACKs must precede archive finalization; recovery uses the same claim.
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -139,7 +146,7 @@ function memoryContent(
 }
 
 async function seedTask(db: PersistenceDb) {
-  const { users, workflows, tasks } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'archive-user',
     username: 'archive-user',
@@ -149,8 +156,8 @@ async function seedTask(db: PersistenceDb) {
     updatedAt: NOW,
   })
   const definition = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
-  await insertOne(db, workflows, { id: 'archive-workflow', name: 'archive-workflow', definition })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'archive-workflow', name: 'archive-workflow', definition })
+  await taskFixture(db, {
     id: ROOT,
     name: ROOT,
     workflowId: 'archive-workflow',
@@ -180,8 +187,10 @@ async function claims(db: PersistenceDb) {
 }
 
 async function taskExists(db: PersistenceDb) {
-  const { tasks } = tablesOf(db)
-  return (await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, ROOT))).length > 0
+  return (
+    (await readTaskFixtures(db, { id: ROOT }).then((rows) => rows.map((row) => ({ id: row.id }))))
+      .length > 0
+  )
 }
 
 function runSweep(db: PersistenceDb, content: TaskArchiveContentPort) {
@@ -371,8 +380,8 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
   test('JSONL keeps the original 2000-row batches and complete event order', async () => {
     const db = harness.db
     await seedTask(db)
-    const { nodeRuns, nodeRunEvents } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { nodeRunEvents } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: 'archive-run',
       taskId: ROOT,
       nodeId: 'n1',
@@ -593,11 +602,7 @@ describeEachProviderHttpApplication(
     test('manual HTTP waits for selected manifest ACK, preserves the claim and uses selected roots', async () => {
       const db = scope.harness.db
       await seedTask(db)
-      const { tasks } = tablesOf(db)
-      await db
-        .update(tasks)
-        .set({ finishedAt: Date.now() - 10 * DAY })
-        .where(eq(tasks.id, ROOT))
+      await patchTaskFixture(db, { id: ROOT }, { finishedAt: Date.now() - 10 * DAY })
       const entered = barrier()
       const release = barrier()
       const store = memoryContent({

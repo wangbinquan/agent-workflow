@@ -1,6 +1,6 @@
+import { agentFixture, patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-359 W12: execute the complete classic catalog bundle before consolidating
 // its daemon wiring. A renamed factory alone cannot prove that its ports work.
@@ -8,7 +8,6 @@ import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 
 import { CreateAgentSchema } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
@@ -39,7 +38,7 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
       user: { id: owner, username: owner, displayName: owner, role: 'admin', status: 'active' },
       source: 'session',
     })
-    const { users, agents } = tablesOf(harness.db)
+    const { users } = tablesOf(harness.db)
     await insertOne(harness.db, users, {
       ...actor.user,
       createdAt: 1,
@@ -67,9 +66,8 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
       ['graph-a', ['graph-leaf']],
       ['graph-b', ['graph-leaf']],
     ] as const) {
-      await insertOne(
+      await agentFixture(
         harness.db,
-        agents,
         createAgentPersistenceValues({
           id,
           agent: CreateAgentSchema.parse({ name: id, dependsOn }),
@@ -103,15 +101,16 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
       updatedAt: updated.updatedAt,
     })
     expect(updated.updatedAt).toBeGreaterThan(created.updatedAt)
-    const before = await first(harness.db.select().from(agents).where(eq(agents.id, created.id)))
+    const before = (await readAgentFixtures(harness.db, { id: created.id }))[0]
     expect(before?.dependsOn).toBe('["graph-a","graph-b"]')
 
     // Both direct dependencies still exist. Only the nested graph now reaches
     // the root, so this failure comes from the save-time traversal.
-    await harness.db
-      .update(agents)
-      .set({ dependsOn: JSON.stringify([created.id]) })
-      .where(eq(agents.id, 'graph-b'))
+    await patchAgentFixture(
+      harness.db,
+      { id: 'graph-b' },
+      { dependsOn: JSON.stringify([created.id]) },
+    )
     await expect(
       catalog.agent.operations.update.invoke(authority, {
         id: created.id,
@@ -128,9 +127,7 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
       code: 'agent-dependency-cycle',
       message: 'agent dependency graph contains a cycle',
     })
-    expect(await first(harness.db.select().from(agents).where(eq(agents.id, created.id)))).toEqual(
-      before,
-    )
+    expect((await readAgentFixtures(harness.db, { id: created.id }))[0]).toEqual(before)
   })
 
   test('create, read and recompose agent, managed skill and workflow using the same database', async () => {

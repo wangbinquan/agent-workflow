@@ -14,7 +14,12 @@
 //  - case 8e ：`:` 开头文件名按字面 pathspec 收录（GIT_LITERAL_PATHSPECS）。
 //  - case 8f ：symlink 端口——归档物化目标内容 + 必达清单追加目标路径。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -117,7 +122,7 @@ describe('RFC-193 symlink port artifact (case 8f)', () => {
       nodeRunId: 'r1',
       portName: 'doc',
       items: [{ sourceAbs: join(home, 'wt', 'link.md'), sourcePath: 'link.md' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     const it = parseArchiveJson(res.archiveJson)!.items[0]!
@@ -139,7 +144,7 @@ describe('RFC-193 symlink port artifact (case 8f)', () => {
       nodeRunId: 'r1',
       portName: 'doc',
       items: [{ sourceAbs: join(home, 'wt', 'link.md'), sourcePath: 'link.md' }],
-      worktreeDirName: '',
+      mountPath: '',
       worktreeRootAbs: join(home, 'wt'),
     })
     expect(res.portFilePaths).toEqual(['link.md'])
@@ -236,8 +241,7 @@ async function seedAgent(
   outputKinds: Record<string, string>,
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -253,13 +257,12 @@ async function seedAgent(
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-rfc193-fi',
     definition: JSON.stringify(definition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc193-fi',
     id: taskId,
     workflowId,
@@ -378,17 +381,14 @@ describe('RFC-193 e2e — K1 必达三跳传播', () => {
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
     })
-    const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     const bRuns = await h.db
       .select()
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'b')))
     const bDone = bRuns.find((r) => r.status === 'done')
     expect(bDone).toBeDefined()
-    const rows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(and(eq(nodeRunOutputs.nodeRunId, bDone!.id), eq(nodeRunOutputs.portName, 'echo')))
+    const rows = await readNodeRunOutputFixtures(h.db, { nodeRunId: bDone!.id, portName: 'echo' })
     expect(rows[0]?.content).toBe('CROSS-NODE CONTENT')
   })
 })

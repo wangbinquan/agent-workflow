@@ -5,6 +5,7 @@
 // logic is mapping extractor state onto the honest `status` field (F-09).
 // RFC-370 §10 V16 — both sides are read through the selected revision content.
 
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { basename } from 'node:path'
 import {
   isSingleRootRepository,
@@ -48,7 +49,7 @@ export function resolveRepoTarget(
   // 任务在窗口内也走这一支，攻击者连 `repo` 参数都不用给。
   const mounts = task.repos.length === 0 ? [''] : task.repos.map((repo) => repo.mountPath)
   if (isSingleRootRepository(mounts)) {
-    if (task.worktreePath === '') {
+    if (isTaskWorkspaceUnbound(task.worktreePath)) {
       throw new NotFoundError(
         'task-worktree-not-ready',
         `task '${task.id}' has no worktree yet (repository preparation has not completed)`,
@@ -69,7 +70,7 @@ export function resolveRepoTarget(
   if (repo === undefined) {
     throw new NotFoundError('file-symbols-repo-not-found', `repo '${repoWire}' not found`)
   }
-  if (repo.worktreePath === '') {
+  if (isTaskWorkspaceUnbound(repo.worktreePath)) {
     throw new NotFoundError(
       'task-worktree-not-ready',
       `task '${task.id}' repo '${repoWire}' has no worktree yet (preparation has not completed)`,

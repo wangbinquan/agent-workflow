@@ -5,6 +5,7 @@
 //  admin read-only audit, in-flight 409, and the route-boundary error codes
 //  `intent-invalid` / `invalid-json` (named here for route-error-code-coverage).
 
+import { patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -248,14 +249,8 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
       commits: Array<{ draftId: string }>
     }
     expect(settledDetail.commits[0]?.draftId).toBe(detail.currentDraft.id)
-    const { agents } = tablesOf(db)
     // 中立面没有 bun:sqlite 的同步终结符：查询回数组，取第一行。
-    const agentRow = (
-      await db
-        .select()
-        .from(agents)
-        .where(eq(agents.id, receipt.applied[0]?.resourceId ?? ''))
-    )[0]
+    const agentRow = (await readAgentFixtures(db, { id: receipt.applied[0]?.resourceId ?? '' }))[0]
     expect(agentRow?.name).toBe('auditor')
     expect(agentRow?.ownerUserId).not.toBeNull()
   })
@@ -651,10 +646,11 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
     const { agents } = tablesOf(db)
     // Mounted labels are a current actor-safe projection, never a historical
     // name leak. Revocation and deletion both keep the neutral mount shell.
-    await db
-      .update(agents)
-      .set({ ownerUserId: strangerUserId, visibility: 'private' })
-      .where(eq(agents.id, target.id))
+    await patchAgentFixture(
+      db,
+      { id: target.id },
+      { ownerUserId: strangerUserId, visibility: 'private' },
+    )
     const revoked = (await (
       await req(ownerToken, `/api/intent-sessions/${session.id}`)
     ).json()) as { mounts: Array<{ displayName: string | null }> }
@@ -823,11 +819,11 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
       expect(created.status).toBe(201)
       ids[name] = ((await created.json()) as { id: string }).id
     }
-    const { agents } = tablesOf(db)
-    await db
-      .update(agents)
-      .set({ ownerUserId: strangerUserId, visibility: 'public' })
-      .where(eq(agents.id, ids['mount-two']!))
+    await patchAgentFixture(
+      db,
+      { id: ids['mount-two']! },
+      { ownerUserId: strangerUserId, visibility: 'public' },
+    )
     const duplicate = await req(strangerToken, '/api/agents', {
       method: 'POST',
       body: JSON.stringify({
@@ -839,7 +835,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
     })
     expect(duplicate.status).toBe(201)
     const duplicateId = ((await duplicate.json()) as { id: string }).id
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, duplicateId))
+    await patchAgentFixture(db, { id: duplicateId }, { visibility: 'public' })
     const created = await req(ownerToken, '/api/intent-sessions', {
       method: 'POST',
       body: JSON.stringify({ message: 'compose from existing agents' }),
@@ -927,7 +923,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
     )
     expect(adminWrite.status).toBe(404)
 
-    await db.update(agents).set({ visibility: 'private' }).where(eq(agents.id, ids['mount-two']!))
+    await patchAgentFixture(db, { id: ids['mount-two']! }, { visibility: 'private' })
 
     const failed = await req(ownerToken, `/api/intent-sessions/${session.id}/mount-approvals`, {
       method: 'POST',
@@ -945,7 +941,7 @@ describeEachProviderHttpApplication('intent session routes', SCOPE_OPTIONS, (sco
     expect(afterFailed.mounts).toEqual([])
     expect(afterFailed.turns.some((turn) => turn.kind === 'mount-approval')).toBe(false)
 
-    await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, ids['mount-two']!))
+    await patchAgentFixture(db, { id: ids['mount-two']! }, { visibility: 'public' })
 
     const applied = await req(ownerToken, `/api/intent-sessions/${session.id}/mount-approvals`, {
       method: 'POST',

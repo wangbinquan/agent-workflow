@@ -1,4 +1,10 @@
 import type { WRAPPER_NODE_KINDS } from '@agent-workflow/shared'
+import type {
+  NodeRunIdentitySnapshot,
+  NodeRunRuntimeStateView,
+  NodeRunCheckpointView,
+  NodeRunInputView,
+} from './nodeRunSnapshot'
 import type { NodeStepOutcome, NodeStepRequest } from './nodeExecution'
 import type { WrapperScopeDescriptor } from './executionScope'
 
@@ -11,16 +17,16 @@ export type WrapperExecutionRequest<K extends WrapperNodeKind = WrapperNodeKind>
   readonly scope: WrapperScopeDescriptor<K>
 }
 
-export interface WrapperRunSnapshot {
-  readonly id: string
+export interface WrapperRunSnapshot
+  extends
+    Pick<NodeRunIdentitySnapshot, 'id'>,
+    Pick<NodeRunRuntimeStateView, 'wrapperProgressJson'>,
+    Pick<NodeRunCheckpointView, 'checkpoints'>,
+    NodeRunInputView {
   readonly status: string
-  readonly wrapperProgressJson: string | null
-  readonly consumedUpstreamRunsJson: string | null
+  /** A historical base in either storage shape keeps the wrapper progress reusable. */
+  readonly hasIsolationBase: boolean
   readonly mergeState: string | null
-  readonly isoBaseSnapshot: string | null
-  readonly isoBaseSnapshotReposJson: string | null
-  readonly isoSubmodulesJson: string | null
-  readonly isoSubmodulesReposJson: string | null
 }
 
 export interface OpenWrapperGeneration<K extends WrapperNodeKind = WrapperNodeKind> {

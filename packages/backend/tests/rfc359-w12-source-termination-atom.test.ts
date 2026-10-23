@@ -1,7 +1,16 @@
 // RFC-359 W12: run these user-visible atom predicates against both existing
 // participants before extracting their duplicated per-target implementation.
+import {
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
@@ -151,18 +160,15 @@ async function apply(harness: ProviderHarness, input = effect()) {
   return await participant.apply(mintSourceTerminationEffectCapability(input), input)
 }
 
-async function seed(
-  db: PersistenceDb,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
-) {
+async function seed(db: PersistenceDb, overrides: Partial<TaskFixtureSpec> = {}) {
   const taskId = `atom-${ulid()}`
   const nodeRunId = `run-${taskId}`
   const intentId = `intent-${taskId}`
   const slotPath = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: 1 },
   ])
-  const { tasks, nodeRuns, taskExecutionIntents, taskExecutionOwners } = tablesOf(db)
-  await insertOne(db, tasks, {
+  const { taskExecutionIntents, taskExecutionOwners } = tablesOf(db)
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-atom',
@@ -184,7 +190,7 @@ async function seed(
     lineageSlotPathJson: slotPath,
     ...overrides,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'node-open',
@@ -237,11 +243,10 @@ async function seed(
 }
 
 async function rows(db: PersistenceDb, taskId: string) {
-  const { tasks, nodeRuns, taskExecutionIntents, taskExecutionOwners, committedEvents } =
-    tablesOf(db)
+  const { taskExecutionIntents, taskExecutionOwners, committedEvents } = tablesOf(db)
   return {
-    task: (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!,
-    runs: await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)),
+    task: (await readTaskFixtures(db, { id: taskId }))[0]!,
+    runs: await readNodeRunFixtures(db, { taskId }),
     intents: await db
       .select()
       .from(taskExecutionIntents)
@@ -274,14 +279,12 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
           reason: 'atom-baseline',
         },
         async (tx) => {
-          const { tasks, nodeRuns } = tablesOf(tx)
           observedStatus = (
-            await tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+            await readTaskFixtures(tx, { id: taskId }).then((rows) =>
+              rows.map((row) => ({ status: row.status })),
+            )
           )[0]?.status
-          await tx
-            .update(nodeRuns)
-            .set({ errorMessage: 'guard-companion' })
-            .where(eq(nodeRuns.taskId, taskId))
+          await patchNodeRunFixture(tx, { taskId }, { errorMessage: 'guard-companion' })
         },
       ),
     ).toBe(true)
@@ -325,12 +328,8 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
       await lifecycle.trySetWithGuard(
         { taskId, to: 'failed', allowedFrom: ['running'], now: 1_000, reason: 'atom-baseline' },
         async (tx) => {
-          const { tasks, nodeRuns } = tablesOf(tx)
-          await tx.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
-          await tx
-            .update(nodeRuns)
-            .set({ errorMessage: 'must-rollback' })
-            .where(eq(nodeRuns.taskId, taskId))
+          await patchTaskFixture(tx, { id: taskId }, { status: 'done' })
+          await patchNodeRunFixture(tx, { taskId }, { errorMessage: 'must-rollback' })
         },
       ),
     ).toBe(false)
@@ -643,8 +642,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     await apply(harness)
     const first = await rows(harness.db, taskId)
     const lateRunId = `late-${taskId}`
-    const { nodeRuns } = tablesOf(harness.db)
-    await insertOne(harness.db, nodeRuns, {
+    await nodeRunFixture(harness.db, {
       id: lateRunId,
       taskId,
       nodeId: 'late',

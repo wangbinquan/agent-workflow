@@ -55,6 +55,7 @@
 //     不依赖前一条留下的任务（Playwright 在任一用例失败后会换 worker 重跑
 //     `beforeAll`，daemon 也就换了一个，跨用例状态依赖会在那一刻凭空消失）。
 
+import { patchTaskFixtureSql } from './fixtures/model'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1273,7 +1274,7 @@ test('RFC-319 TASK-30: 被熔断隔离的任务在恢复事件区里如实标注
     const dbFile = join(home, 'db.sqlite')
     runSqlite(
       dbFile,
-      `UPDATE tasks SET auto_recovery_suspended = 1, auto_recovery_attempts = 9 WHERE id = '${taskId}';
+      `${patchTaskFixtureSql({ id: taskId }, { autoRecoverySuspended: true, autoRecoveryAttempts: 9 })};
        INSERT INTO recovery_events (id, task_id, node_run_id, actor, kind, reason, before_json, after_json, created_at)
        VALUES ('01RFC319TASK30QUARANTINE01', '${taskId}', NULL, 'system', 'quarantine',
                'auto-recovery attempts 9 exceeded 3 per 3600000ms window', NULL, NULL, ${Date.now()});`,

@@ -10,11 +10,12 @@ import {
   deriveMemberCurrentRuns,
   type HostRunLite,
   type MemberLite,
-} from '../src/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
+} from './helpers/workgroupSelection'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   WG_LEADER_NODE_ID,
   WG_MEMBER_NODE_ID,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 
 const LEADER = 'M_leader'
 const A1 = 'M_agent1'
@@ -59,8 +60,8 @@ function msgRun(id: string, shardKey: string, status: string): HostRunLite {
 }
 
 describe('deriveMemberCurrentRuns (RFC-179)', () => {
-  test('leader-round → the leader member', () => {
-    const out = deriveMemberCurrentRuns(members, LEADER, [leaderRun('R1', 'running')], [], [])
+  test('leader-round → the leader member', async () => {
+    const out = await deriveMemberCurrentRuns(members, LEADER, [leaderRun('R1', 'running')], [], [])
     expect(out[LEADER]).toEqual({
       nodeRunId: 'R1',
       status: 'running',
@@ -70,11 +71,11 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A1]).toBeNull()
   })
 
-  test('assignment run → frozen agentOverrideId (shardKey = assignment.id)', () => {
+  test('assignment run → frozen agentOverrideId (shardKey = assignment.id)', async () => {
     // The assignment's current assignee is mutable and must not relabel the
     // already-minted run.
     const assignments = [{ id: 'ASG1', assigneeMemberId: A2 }]
-    const out = deriveMemberCurrentRuns(
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [assignRun('R1', 'ASG1', 'running')],
@@ -90,8 +91,8 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
   // key 里编码的 memberId（mint 时冻结，卡重领/requeue 置空 assignee 都不影响）。
   // 修复前 runKindOf 对 batch 行返回 null ⇒ 批执行期 presence 显示空闲、
   // runHistory 整行丢失（设计门 ②F3）。
-  test('batch run (RFC-215) → member from the shardKey, visible as assignment kind', () => {
-    const out = deriveMemberCurrentRuns(
+  test('batch run (RFC-215) → member from the shardKey, visible as assignment kind', async () => {
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [assignRun('R1', `batch:${A1}:ASG1+ASG2`, 'running')],
@@ -100,7 +101,7 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     )
     expect(out[A1]?.nodeRunId).toBe('R1')
     expect(out[A1]?.kind).toBe('assignment')
-    const history = deriveWorkgroupRunHistory(
+    const history = await deriveWorkgroupRunHistory(
       members,
       LEADER,
       [assignRun('R1', `batch:${A1}:ASG1+ASG2`, 'done')],
@@ -110,8 +111,8 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(history.map((e) => e.nodeRunId)).toContain('R1')
   })
 
-  test('message-turn run → memberId parsed from shardKey', () => {
-    const out = deriveMemberCurrentRuns(
+  test('message-turn run → memberId parsed from shardKey', async () => {
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [msgRun('R1', `msg:${A2}:0`, 'running')],
@@ -122,9 +123,9 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A2]?.kind).toBe('message-turn')
   })
 
-  test('running wins over an older terminal run', () => {
+  test('running wins over an older terminal run', async () => {
     const runs = [assignRun('R1', 'ASG1', 'done'), assignRun('R2', 'ASG1', 'running')]
-    const out = deriveMemberCurrentRuns(
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       runs,
@@ -135,10 +136,10 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A1]?.status).toBe('running')
   })
 
-  test('running still wins even when a later id is terminal', () => {
+  test('running still wins even when a later id is terminal', async () => {
     // R2 has the larger id but is terminal; the running R1 must win.
     const runs = [assignRun('R1', 'ASG1', 'running'), assignRun('R2', 'ASG1', 'failed')]
-    const out = deriveMemberCurrentRuns(
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       runs,
@@ -148,13 +149,13 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A1]?.nodeRunId).toBe('R1')
   })
 
-  test('no running → newest terminal by id', () => {
+  test('no running → newest terminal by id', async () => {
     const runs = [
       assignRun('R1', 'ASG1', 'done'),
       assignRun('R3', 'ASG1', 'failed'),
       assignRun('R2', 'ASG1', 'done'),
     ]
-    const out = deriveMemberCurrentRuns(
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       runs,
@@ -164,15 +165,15 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A1]?.nodeRunId).toBe('R3')
   })
 
-  test('human member and members with no run → null', () => {
-    const out = deriveMemberCurrentRuns(members, LEADER, [], [], [])
+  test('human member and members with no run → null', async () => {
+    const out = await deriveMemberCurrentRuns(members, LEADER, [], [], [])
     expect(out[H1]).toBeNull()
     expect(out[LEADER]).toBeNull()
     expect(out[A1]).toBeNull()
   })
 
-  test('wg-gate holder run on the leader node is excluded', () => {
-    const out = deriveMemberCurrentRuns(
+  test('wg-gate holder run on the leader node is excluded', async () => {
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [leaderRun('R1', 'running', 'wg-gate')],
@@ -182,18 +183,18 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[LEADER]).toBeNull()
   })
 
-  test('two members run concurrently without cross-contamination', () => {
+  test('two members run concurrently without cross-contamination', async () => {
     const assignments = [
       { id: 'ASG1', assigneeMemberId: A1 },
       { id: 'ASG2', assigneeMemberId: A2 },
     ]
     const runs = [assignRun('R1', 'ASG1', 'running'), assignRun('R2', 'ASG2', 'running', 'ag-a2')]
-    const out = deriveMemberCurrentRuns(members, LEADER, runs, assignments, [])
+    const out = await deriveMemberCurrentRuns(members, LEADER, runs, assignments, [])
     expect(out[A1]?.nodeRunId).toBe('R1')
     expect(out[A2]?.nodeRunId).toBe('R2')
   })
 
-  test('message-turn triggerMessageId = newest mention ≤ maxMsgId', () => {
+  test('message-turn triggerMessageId = newest mention ≤ maxMsgId', async () => {
     // shardKey maxMsgId = 'MSG5'; the newest chat that @-mentioned A1 with id ≤ MSG5.
     const messages = [
       { id: 'MSG2', authorMemberId: null, mentionMemberIds: [A1] },
@@ -201,7 +202,7 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
       { id: 'MSG6', authorMemberId: null, mentionMemberIds: [A1] }, // after wake — must NOT be picked
       { id: 'MSG3', authorMemberId: null, mentionMemberIds: [A2] }, // wrong member
     ]
-    const out = deriveMemberCurrentRuns(
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [msgRun('R1', `msg:${A1}:MSG5`, 'running')],
@@ -211,8 +212,8 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A1]?.triggerMessageId).toBe('MSG4')
   })
 
-  test('message-turn with maxMsgId 0 or no mention → triggerMessageId null', () => {
-    const out = deriveMemberCurrentRuns(
+  test('message-turn with maxMsgId 0 or no mention → triggerMessageId null', async () => {
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [msgRun('R1', `msg:${A1}:0`, 'running')],
@@ -222,8 +223,8 @@ describe('deriveMemberCurrentRuns (RFC-179)', () => {
     expect(out[A1]?.triggerMessageId).toBeNull()
   })
 
-  test('assignment run with unknown shardKey (no matching assignment) → ignored', () => {
-    const out = deriveMemberCurrentRuns(
+  test('assignment run with unknown shardKey (no matching assignment) → ignored', async () => {
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [assignRun('R1', 'GHOST', 'running')],
@@ -238,9 +239,9 @@ describe('message-turn shardKey prefix contract (RFC-179 §8.2)', () => {
   // Locks the `msg:${memberId}:${maxMsgId}` format that workgroupRunner.ts:1251
   // mints and workgroupRoom.ts parses. If the engine changes the format, this
   // test (and the message-turn mapping above) goes red on purpose.
-  test('deriveMemberCurrentRuns maps exactly the msg:<memberId>:<maxMsgId> shape', () => {
+  test('deriveMemberCurrentRuns maps exactly the msg:<memberId>:<maxMsgId> shape', async () => {
     const shardKey = `msg:${A1}:01ARZ3NDEKTSV4RRFFQ69G5FAV`
-    const out = deriveMemberCurrentRuns(
+    const out = await deriveMemberCurrentRuns(
       members,
       LEADER,
       [msgRun('R1', shardKey, 'running')],
@@ -249,7 +250,13 @@ describe('message-turn shardKey prefix contract (RFC-179 §8.2)', () => {
     )
     expect(out[A1]?.kind).toBe('message-turn')
     // A shardKey without the msg: prefix must NOT be read as a message-turn owner.
-    const out2 = deriveMemberCurrentRuns(members, LEADER, [msgRun('R2', A1, 'running')], [], [])
+    const out2 = await deriveMemberCurrentRuns(
+      members,
+      LEADER,
+      [msgRun('R2', A1, 'running')],
+      [],
+      [],
+    )
     expect(out2[A1]).toBeNull()
   })
 })
@@ -270,7 +277,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     { id: H1, memberType: 'human', displayName: 'pm' },
   ]
 
-  test('clarify-answer 续跑按 shard 形状归类（assignment / message-turn 双例）并进 memberRuns', () => {
+  test('clarify-answer 续跑按 shard 形状归类（assignment / message-turn 双例）并进 memberRuns', async () => {
     const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
     const runs: HostRunLite[] = [
       {
@@ -301,20 +308,20 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         rerunCause: 'clarify-answer',
       },
     ]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
+    const history = await deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
     expect(history.map((e) => [e.nodeRunId, e.kind])).toEqual([
       ['R1', 'assignment'],
       ['R2', 'assignment'],
       ['R3', 'message-turn'],
     ])
     // 投影同步收编（latent 缺口回归锁：续跑执行中 ≠ 空闲）。
-    const current = deriveMemberCurrentRuns(namedMembers, LEADER, runs, assignments, [])
+    const current = await deriveMemberCurrentRuns(namedMembers, LEADER, runs, assignments, [])
     expect(current[A1]?.nodeRunId).toBe('R2')
     expect(current[A1]?.status).toBe('running')
     expect(current[A2]?.nodeRunId).toBe('R3')
   })
 
-  test('升序 + leader 轮号按消息轮锚定（实现门 P2：重试共享轮号、gate 排除）+ displayName 冻结', () => {
+  test('升序 + leader 轮号按消息轮锚定（实现门 P2：重试共享轮号、gate 排除）+ displayName 冻结', async () => {
     const runs: HostRunLite[] = [
       leaderRun('A1-run', 'failed'), // 协议重试第一次尝试
       leaderRun('A2-run', 'done'), // 同一逻辑轮的重试成功——共享 round 1
@@ -331,7 +338,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     ]
     // B1-msg（round=1，leader 轮 1 的产出）位于 A* 之后、C* 之前（ULID 序）。
     const messages = [{ id: 'B1-msg', authorMemberId: null, mentionMemberIds: [], round: 1 }]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], messages)
+    const history = await deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], messages)
     expect(history.map((e) => e.nodeRunId)).toEqual(['A1-run', 'A2-run', 'C1-run', 'C2-run'])
     // 计数序数会给重试成功的 A2-run 标 2（卡落错误分隔下）；消息锚定共享轮号。
     expect(history.map((e) => e.round)).toEqual([1, 1, 2, null])
@@ -339,20 +346,20 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     expect(history[3]?.displayName).toBe('reviewer')
   })
 
-  test('实现门 P1：open clarify session 的 asking run 投影 awaiting_human（DB 行仍 done）', () => {
+  test('实现门 P1：open clarify session 的 asking run 投影 awaiting_human（DB 行仍 done）', async () => {
     const runs: HostRunLite[] = [leaderRun('L1', 'done'), leaderRun('L2', 'done')]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [], {
+    const history = await deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [], {
       openClarifySourceRunIds: new Set(['L2']),
     })
     expect(history.map((e) => e.status)).toEqual(['done', 'awaiting_human'])
     // 投影同样进 memberRuns → presence 显示「等待回答」。
-    const current = deriveMemberCurrentRuns(namedMembers, LEADER, runs, [], [], {
+    const current = await deriveMemberCurrentRuns(namedMembers, LEADER, runs, [], [], {
       openClarifySourceRunIds: new Set(['L2']),
     })
     expect(current[LEADER]?.status).toBe('awaiting_human')
   })
 
-  test('被移除成员且无冻结 agent id 的历史条目 fail closed', () => {
+  test('被移除成员且无冻结 agent id 的历史条目 fail closed', async () => {
     const assignments = [{ id: 'ASG9', assigneeMemberId: 'M_gone' }]
     const runs: HostRunLite[] = [
       {
@@ -364,22 +371,22 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         rerunCause: 'wg-assignment',
       },
     ]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
+    const history = await deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
     expect(history).toHaveLength(0)
   })
 
-  test('note 派生：仅认结构化 failureCode=clarify-forbidden（RFC-145 禁 errorMessage 机器读；RFC-181 契约互链）', () => {
+  test('note 派生：仅认结构化 failureCode=clarify-forbidden（RFC-145 禁 errorMessage 机器读；RFC-181 契约互链）', async () => {
     const runs: HostRunLite[] = [
       { ...leaderRun('L1', 'failed'), failureCode: 'clarify-forbidden' },
       // 其它失败码 / 无码 → null（errorMessage 是人读 breadcrumb，永不参与判定）。
       { ...leaderRun('L2', 'failed'), failureCode: 'clarify-questions-malformed' },
       { ...leaderRun('L3', 'failed') },
     ]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [])
+    const history = await deriveWorkgroupRunHistory(namedMembers, LEADER, runs, [], [])
     expect(history.map((e) => e.note)).toEqual(['clarify-suppressed', null, null])
   })
 
-  test('assignmentId / triggerMessageId / startedAt·finishedAt 回填', () => {
+  test('assignmentId / triggerMessageId / startedAt·finishedAt 回填', async () => {
     const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
     const messages = [{ id: 'MSG5', authorMemberId: null, mentionMemberIds: [A2] }]
     const runs: HostRunLite[] = [
@@ -403,7 +410,13 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
         rerunCause: 'wg-message-turn',
       },
     ]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, messages)
+    const history = await deriveWorkgroupRunHistory(
+      namedMembers,
+      LEADER,
+      runs,
+      assignments,
+      messages,
+    )
     expect(history[0]).toMatchObject({
       assignmentId: 'ASG1',
       triggerMessageId: null,
@@ -413,7 +426,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
     expect(history[1]).toMatchObject({ assignmentId: null, triggerMessageId: 'MSG5' })
   })
 
-  test('投影等价：memberRuns 恒等于 history 的 per-member 胜者（running 优先否则最新）', () => {
+  test('投影等价：memberRuns 恒等于 history 的 per-member 胜者（running 优先否则最新）', async () => {
     const assignments = [{ id: 'ASG1', assigneeMemberId: A1 }]
     const runs: HostRunLite[] = [
       assignRun('R1', 'ASG1', 'done'),
@@ -421,8 +434,8 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
       leaderRun('L1', 'done'),
       leaderRun('L2', 'pending'),
     ]
-    const history = deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
-    const current = deriveMemberCurrentRuns(namedMembers, LEADER, runs, assignments, [])
+    const history = await deriveWorkgroupRunHistory(namedMembers, LEADER, runs, assignments, [])
+    const current = await deriveMemberCurrentRuns(namedMembers, LEADER, runs, assignments, [])
     // A1：无 running → 最新 id（R2 failed）；leader：无 running → 最新 id（L2 pending）。
     expect(current[A1]?.nodeRunId).toBe('R2')
     expect(current[LEADER]?.nodeRunId).toBe('L2')
@@ -438,7 +451,7 @@ describe('deriveWorkgroupRunHistory (RFC-182)', () => {
 })
 
 describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
-  test('现任 assignee 丢失 → 铸造期 agent 身份唯一回退；歧义则弃条目不误标', () => {
+  test('现任 assignee 丢失 → 铸造期 agent 身份唯一回退；歧义则弃条目不误标', async () => {
     const roster: MemberLite[] = [
       {
         id: A1,
@@ -469,14 +482,14 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
         agentOverrideName: 'wg-coder',
       },
     ]
-    const history = deriveWorkgroupRunHistory(roster, null, runs, assignments, [])
+    const history = await deriveWorkgroupRunHistory(roster, null, runs, assignments, [])
     expect(history).toHaveLength(1)
     expect(history[0]?.memberId).toBe(A1)
     expect(history[0]?.displayName).toBe('coder')
 
     // 卡被他人重认领后：新 assignee 只影响新 run；老 run 仍按铸造期身份归属。
     const reclaimed = [{ id: 'ASG1', assigneeMemberId: A2 }]
-    const withNew = deriveWorkgroupRunHistory(
+    const withNew = await deriveWorkgroupRunHistory(
       roster,
       null,
       [
@@ -518,6 +531,6 @@ describe('RFC-182 实现门 P2 — fc 卡回收后的历史归属', () => {
         agentName: 'wg-coder',
       },
     ]
-    expect(deriveWorkgroupRunHistory(dup, null, runs, assignments, [])).toHaveLength(0)
+    expect(await deriveWorkgroupRunHistory(dup, null, runs, assignments, [])).toHaveLength(0)
   })
 })

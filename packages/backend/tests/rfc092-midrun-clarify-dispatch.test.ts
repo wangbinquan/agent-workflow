@@ -20,12 +20,19 @@
 // argv（参考 scheduler-audit-s05 的 MOCK_OPENCODE_CAPTURE_ARGV_TO 模式：
 // argv[1] 即渲染后的完整 user prompt）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -160,8 +167,7 @@ async function buildHarness(): Promise<Harness> {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -181,13 +187,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf-rfc092-s1',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc092-midrun-clarify',
     id: taskId,
     workflowId,
@@ -219,11 +224,7 @@ async function waitFor<T>(
 }
 
 async function topLevelRuns(db: DbClient, taskId: string, nodeId: string) {
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  const rows = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId }] })
   return rows.filter((r) => r.parentNodeRunId === null)
 }
 
@@ -334,14 +335,10 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
     try {
       // 等到「clarify 会话已停泊 ∧ slow 仍 running」——这是 S-1 的提交窗口。
       const session = await waitFor(async () => {
-        const { clarifyRounds } = tablesOf(h.db)
         const s = (
-          await h.db
-            .select()
-            .from(clarifyRounds)
-            .where(
-              and(eq(clarifyRounds.taskId, taskId), eq(clarifyRounds.status, 'awaiting_human')),
-            )
+          await readClarifyRoundFixtures(h.db, {
+            $and: [{ taskId }, { status: 'awaiting_human' }],
+          })
         )[0]
         if (s === undefined) return undefined
         const slowRuns = await topLevelRuns(h.db, taskId, 'slow')
@@ -349,11 +346,11 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
         return s
       }, 'open clarify session while slow sibling is still running')
 
-      const { tasks, nodeRuns } = tablesOf(h.db)
+      const { nodeRuns } = tablesOf(h.db)
       // RFC-333 T7 将 gate 投影与任务停泊合并为一次 TaskParkTx；slow sibling
       // 仍在同一次活调度调用中运行，所以这里锁定新的 awaiting_human 状态，
       // 后续答案仍由这次调用在 slow settle 后自取，不是另起一次 resume。
-      const midTask = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const midTask = (await readTaskFixtures(h.db, { id: taskId }))[0]!
       expect(midTask.status).toBe('awaiting_human')
 
       // 真实入口提交答案（内部自带 RFC-058 clarify_rounds 双表镜像 + rerun 铸行）。
@@ -381,16 +378,16 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
     }
     await runPromise
 
-    const { tasks, nodeRuns, clarifyRounds } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     // 正确语义（RFC-092 §1.2）：活调度循环在 slow settle 后的 tick 经
     // pending-bypass 自取 rerun 行 → 任务 done，绝不是 'scheduler stalled' 假失败。
-    const taskRow = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const taskRow = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(taskRow.errorMessage ?? '').not.toContain('scheduler stalled')
     expect(taskRow.status).toBe('done')
 
     // rerun 行（统一 dispatch 铸的那一行，被 runOneNode pendingExisting
     // 复用）跑到 done，prompt 注入了 Q&A。
-    const rerun = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunNodeRunId)))[0]!
+    const rerun = (await readNodeRunFixtures(h.db, { id: rerunNodeRunId }))[0]!
     expect(rerun.status).toBe('done')
     expect(rerun.promptText ?? '').toContain('Clarify Q&A')
     expect(rerun.promptText ?? '').toContain('Postgres')

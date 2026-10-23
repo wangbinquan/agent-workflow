@@ -3,6 +3,7 @@
 // actor 的 grant 等级）、identity 行 CAS 与 grants 整体替换、after-write 钩子在同一事务里、非自有类型拒绝、
 // owner+name 唯一键撞库经能力矩阵归类。
 
+import { agentFixture, readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -51,8 +52,7 @@ async function seedAgent(
   ownerUserId: string,
   name = id,
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'd3',
@@ -230,7 +230,7 @@ describeEachProvider('RFC-359 W4-D3 —— resource-catalog ACL 内核', (harnes
       },
     )
     expect(second?.aclRevision).toBe(2)
-    const { resourceGrants, agents } = tablesOf(db)
+    const { resourceGrants } = tablesOf(db)
     expect(
       (await db.select().from(resourceGrants).where(eq(resourceGrants.resourceId, 'agent-a')))[0],
     ).toMatchObject({
@@ -238,7 +238,7 @@ describeEachProvider('RFC-359 W4-D3 —— resource-catalog ACL 内核', (harnes
       level: 'write',
       addedBy: grantee,
     })
-    expect((await db.select().from(agents).where(eq(agents.id, 'agent-a')))[0]).toMatchObject({
+    expect((await readAgentFixtures(db, { id: 'agent-a' }))[0]).toMatchObject({
       aclRevision: 2,
       visibility: 'private',
       updatedAt: NOW + 2,

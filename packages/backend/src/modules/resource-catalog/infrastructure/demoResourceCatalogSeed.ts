@@ -1,6 +1,8 @@
 // RFC-359 W4-B2 —— 演示目录种子的持久化：一份实现，两个 provider 共用。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { workflowCatalogPredicate } from './workflowCatalogPredicate'
+import { createAgentReferenceWriteParticipant } from './agentReferenceWrite'
+import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { eq } from 'drizzle-orm'
@@ -10,7 +12,6 @@ import type {
   PreparedDemoResourceCatalogSeed,
 } from '../application/ports/demoResourceCatalogSeed'
 import type { DemoResourceCatalogSeedReceipt } from '../public/participants'
-import { createAgentPersistenceValues } from './agentPersistence'
 import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 import { createWorkflowPersistenceValues } from './workflowPersistence'
 
@@ -35,13 +36,11 @@ export function createDemoResourceCatalogSeedPersistence(
             .where(eq(agents.id, input.agent.id)),
         )
         if (existingAgent === undefined) {
-          await insertOne(transaction, agents, {
-            ...createAgentPersistenceValues({
-              id: input.agent.id,
-              agent: input.agent.value,
-              ownerUserId: input.marker.ownerUserId,
-              now: input.marker.offeredAt,
-            }),
+          await createAgentReferenceWriteParticipant(transaction).insert({
+            id: input.agent.id,
+            agent: input.agent.value,
+            ownerUserId: input.marker.ownerUserId,
+            now: input.marker.offeredAt,
             visibility: 'public',
           })
           createdAgent = true
@@ -59,7 +58,7 @@ export function createDemoResourceCatalogSeedPersistence(
             transaction
               .select({ name: workflows.name })
               .from(workflows)
-              .where(eq(workflows.id, workflow.id)),
+              .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, workflow.id))),
           )
           if (existing !== undefined) {
             if (existing.name !== workflow.value.name) {
@@ -72,7 +71,7 @@ export function createDemoResourceCatalogSeedPersistence(
             }
             continue
           }
-          await insertOne(transaction, workflows, {
+          await createWorkflowDefinitionWriteParticipant(transaction).insert({
             ...createWorkflowPersistenceValues({
               id: workflow.id,
               workflow: workflow.value,

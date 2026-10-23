@@ -10,11 +10,17 @@
 // after its OWN iso worktree (cwd basename = node-run id). We then assert the
 // wrapper's git_diff port contains the INNER node's file but NOT the sibling's.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -78,8 +84,7 @@ process.exit(0)
 }
 
 async function seedWriter(db: DbClient, name: string): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -110,15 +115,14 @@ async function seedTask(h: Harness, d: WorkflowDefinition): Promise<string> {
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, d)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'wpc',
     workflowId,
@@ -152,8 +156,8 @@ describe('RFC-130 T11 — wrapper-private canonical (AC-10)', () => {
       binaryOverride: ['bun', 'run', shim],
       maxConcurrentNodes: 4,
     })
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
     const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -163,12 +167,7 @@ describe('RFC-130 T11 — wrapper-private canonical (AC-10)', () => {
     expect(innerRun && sibRun && gwRun).toBeTruthy()
 
     const gitDiff = (
-      await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(eq(nodeRunOutputs.nodeRunId, gwRun!.id), eq(nodeRunOutputs.portName, 'git_diff')),
-        )
+      await readNodeRunOutputFixtures(h.db, { nodeRunId: gwRun!.id, portName: 'git_diff' })
     )[0]
     const files = (gitDiff?.content ?? '').split('\n').filter((p) => p.length > 0)
 

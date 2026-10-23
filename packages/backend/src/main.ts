@@ -70,7 +70,7 @@ import { resolveDatabaseProviderRuntime } from './platform/persistence/databaseP
 import { readDatabaseGenerationForBootstrap } from './platform/persistence/generationStore'
 import { loadPostgresqlMigrationHistory } from './platform/persistence/postgresqlMigrationHistory'
 import { resolvePostgresqlHistoricalContract } from './platform/persistence/postgresqlMigrationSequence'
-import { createPostgresqlResourcePackageAtomicApplyOperations } from './platform/persistence/postgresqlResourcePackageAtomicApply'
+import { createResourcePackageAtomicApplyOperations } from './modules/resource-catalog/composition/resourcePackageAtomicApply'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
@@ -226,7 +226,7 @@ async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap
     execution: createPostgresqlResourcePackageExecutionAdapter({
       box,
       provider: resourcePackageProvider,
-      atomicApply: createPostgresqlResourcePackageAtomicApplyOperations({
+      atomicApply: createResourcePackageAtomicApplyOperations({
         db: provider.db,
         box,
       }),

@@ -84,7 +84,13 @@ describe('RFC-345/349 provider-neutral workgroup turn ledger', () => {
     ]) {
       expect(persistence).toContain(table)
     }
-    expect(persistence).toContain('WorkgroupRuntimeConfigSchema.safeParse')
+    expect(persistence).toContain('hostSnapshot.workgroupConfig?.runtime.config')
+    const configDecoder = readFileSync(
+      resolve(backendRoot, '../shared/src/schemas/workgroupRuntime.ts'),
+      'utf8',
+    )
+    expect(configDecoder).toContain('const runtime = WorkgroupRuntimeConfigSchema.safeParse(raw)')
+    expect(configDecoder).toContain('config: runtime.success ? runtime.data : null')
     expect(persistence).toContain('agentFromPersistenceRow')
     expect(persistence).toContain('renderAgentCapabilityCard')
     expect(persistence).toContain('runResourceCatalogTransaction')

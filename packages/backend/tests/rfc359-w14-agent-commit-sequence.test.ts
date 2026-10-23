@@ -2,6 +2,7 @@
 // commit boundary. Keep their entry points and prove the shared sequence with
 // real database rollback, including the still-synchronous bundle participant.
 
+import { readAgentFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
@@ -155,8 +156,7 @@ describeEachProvider('legacy Agent entry points use one atomic commit sequence',
 
   test('an outer update abort preserves every original stored column', async () => {
     const created = await createAgent(harness.db, input('existing-agent'))
-    const { agents } = tablesOf(harness.db)
-    const before = await first(harness.db.select().from(agents).where(eq(agents.id, created.id)))
+    const before = (await readAgentFixtures(harness.db, { id: created.id }))[0]
     const failure = new Error('abort existing Agent update')
     await expect(
       harness.session.transaction(async (tx) => {
@@ -172,9 +172,7 @@ describeEachProvider('legacy Agent entry points use one atomic commit sequence',
         throw failure
       }),
     ).rejects.toBe(failure)
-    expect(await first(harness.db.select().from(agents).where(eq(agents.id, created.id)))).toEqual(
-      before,
-    )
+    expect((await readAgentFixtures(harness.db, { id: created.id }))[0]).toEqual(before)
   })
 
   test('the original beforeWrite hooks run before each commit and the returned read', async () => {

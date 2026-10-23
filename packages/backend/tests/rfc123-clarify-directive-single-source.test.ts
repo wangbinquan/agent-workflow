@@ -20,7 +20,7 @@
 //
 // 若任一变红 = 双向单一事实源契约漂移，先查再放。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import {
@@ -69,8 +69,7 @@ function makeAns(qid = 'q1'): ClarifyAnswer {
 async function insertTask(db: PersistenceDb, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc123',
     description: '',
@@ -78,7 +77,7 @@ async function insertTask(db: PersistenceDb, def: WorkflowDefinition): Promise<s
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -159,8 +158,7 @@ async function seedSelfStopAnswered(
   },
 ): Promise<void> {
   const srcId = opts.srcId ?? 'nr_src'
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: srcId,
     taskId,
     nodeId: 'designer',
@@ -195,18 +193,17 @@ async function seedCrossStopAnswered(
   taskId: string,
   directive: 'stop' | 'continue',
 ): Promise<void> {
-  const { nodeRuns } = tablesOf(db)
   // designer run needed for the 'continue' path's designer rerun (the auto-dispatch inherits it).
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'nr_designer',
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot: 'snap-rfc123',
+    checkpoints: [{ mountPath: '', preSnapshot: 'snap-rfc123' }],
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'nr_qA',
     taskId,
     nodeId: 'qA',
@@ -316,8 +313,7 @@ describeEachProvider(
 
       async function dispatchFresh(db: PersistenceDb, taskId: string) {
         const freshId = `nr_cross1_${Math.random().toString(36).slice(2, 6)}`
-        const { nodeRuns } = tablesOf(db)
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: freshId,
           taskId,
           nodeId: 'cross1',
@@ -325,6 +321,7 @@ describeEachProvider(
           retryIndex: 0,
           iteration: 0,
         })
+        const { nodeRuns } = tablesOf(db)
         const ret = await dispatchCrossClarifyNode({
           db,
           taskId,

@@ -13,6 +13,7 @@
 //   2. 快照期间照常取页，且耗时不被快照拖住（真做一次 VACUUM INTO 计时）；
 //   3. 快照结束后 checkpoint 恢复正常执行（让路是临时的，不是永久关闭）。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -42,7 +43,7 @@ describe('RFC-311 §6.6 — a running backup must not freeze the task list', () 
     try {
       const dbPath = join(home, 'db.sqlite')
       const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-      const { users, workflows, tasks } = tablesOf(db)
+      const { users } = tablesOf(db)
       await insertOne(db, users, {
         id: 'admin',
         username: 'admin',
@@ -51,10 +52,10 @@ describe('RFC-311 §6.6 — a running backup must not freeze the task list', () 
         createdAt: 1,
         updatedAt: 1,
       })
-      await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+      await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
       // 够多的行，让 VACUUM INTO 真的要干活（而不是瞬间返回）。
       for (let i = 0; i < 400; i += 1) {
-        await insertOne(db, tasks, {
+        await taskFixture(db, {
           id: `t${String(i).padStart(4, '0')}`,
           name: `task ${i}`,
           workflowId: 'wf1',

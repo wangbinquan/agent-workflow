@@ -69,6 +69,7 @@ describe('RFC-317 T50 —— taskWorkspacePhase 的四个相', () => {
 
 interface PhaseOwner {
   readonly file: string
+  readonly functionName: string
   readonly why: string
 }
 
@@ -80,7 +81,18 @@ interface PhaseOwner {
  * 报出其中**两条根本不承重**（`taskWorkspacePhase.ts` 压根不含该形态，`task.ts`
  * 改造后也不再共现）。留着它们只会让后来的人以为那两个文件里藏着一份自造判据。
  */
-const PHASE_OWNERS: readonly PhaseOwner[] = []
+const PHASE_OWNERS: readonly PhaseOwner[] = [
+  {
+    file: 'packages/backend/src/modules/source-control/application/workspaceMaintenance.ts',
+    functionName: 'runWorktree',
+    why: 'RFC-395 II-a replaced the existing empty-path check with the shared predicate; GC checks filesystem presence and resumes pruning claims, never derives preparing or a workspace phase.',
+  },
+  {
+    file: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
+    functionName: 'assertTaskWorkflowSyncable',
+    why: '同步工作流的既有前置条件拒绝空路径或已回收任务；它不推导 preparing，也不把缺少准备行的存量任务归为准备中。只豁免这个函数，不放行同文件的其他函数。',
+  },
+]
 
 const TOMBSTONE_NAMES = new Set(['workspacePrunedAt', 'workspacePruningAt', 'workspaceState'])
 
@@ -96,14 +108,16 @@ export function handWrittenPhasePredicates(
   opts: { readonly applyOwners?: boolean } = {},
 ): string[] {
   const hits: string[] = []
-  const owners = new Set((opts.applyOwners ?? true) ? PHASE_OWNERS.map((entry) => entry.file) : [])
+  const owners = (opts.applyOwners ?? true) ? PHASE_OWNERS : []
   for (const unit of units) {
-    if (owners.has(unit.path)) continue
     const scanBody = (body: ts.Node, label: string): void => {
+      if (owners.some((owner) => owner.file === unit.path && owner.functionName === label)) return
       let comparesEmptyWorktree = false
       let readsTombstone = false
       const walk = (node: ts.Node): void => {
-        // 只认 `worktreePath === ''`（「还没建出来」），**不认 `!==`**。
+        // RFC-395 II-a: nested callables are scanned separately, not charged to their factory.
+        if (node !== body && ts.isFunctionLike(node)) return
+        // 只认 `worktreePath === ''` 或正向 shared 判据（「还没建出来」），不认反向存在性检查。
         // 后者是存在性检查，prune/GC 机制本身到处在用（`finishClaimedWorkspacePrune`
         // 判目录还在不在、`setTaskStatus` 的工作区复活闸），那些函数当然也读墓碑列——
         // 把它们一起报出来只会逼人加一堆豁免，判据就此失去意义。
@@ -114,8 +128,34 @@ export function handWrittenPhasePredicates(
           const text = node.getText(unit.source)
           if (/worktreePath\s*===\s*''/.test(text)) comparesEmptyWorktree = true
         }
+        if (
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          node.expression.text === 'isTaskWorkspaceUnbound' &&
+          node.arguments.length === 1 &&
+          ts.isPropertyAccessExpression(node.arguments[0]!) &&
+          node.arguments[0]!.name.text === 'worktreePath'
+        ) {
+          let parent: ts.Node = node
+          while (ts.isParenthesizedExpression(parent.parent)) parent = parent.parent
+          if (
+            !(
+              ts.isPrefixUnaryExpression(parent.parent) &&
+              parent.parent.operator === ts.SyntaxKind.ExclamationToken
+            )
+          )
+            comparesEmptyWorktree = true
+        }
         if (ts.isPropertyAccessExpression(node) && TOMBSTONE_NAMES.has(node.name.text)) {
-          readsTombstone = true
+          // 传给唯一相判据的原始列不是本地重造判据；恢复流程还要另查目录是否存在。
+          const object = ts.isPropertyAssignment(node.parent) ? node.parent.parent : undefined
+          const call = object && ts.isObjectLiteralExpression(object) ? object.parent : undefined
+          const delegatesPhase =
+            call &&
+            ts.isCallExpression(call) &&
+            ts.isIdentifier(call.expression) &&
+            call.expression.text === 'taskWorkspacePhase'
+          if (!delegatesPhase) readsTombstone = true
         }
         ts.forEachChild(node, walk)
       }
@@ -185,6 +225,37 @@ describe('RFC-317 T50 负向 fixture —— 判据真的会咬', () => {
     ).toHaveLength(1)
   })
 
+  test('正向 shared 判据与墓碑共现会报；取反或单独调用不报', () => {
+    for (const condition of [
+      'isTaskWorkspaceUnbound(t.worktreePath) && t.workspacePrunedAt === null',
+      "isTaskWorkspaceUnbound(t.worktreePath) || t.workspaceState === 'pruned'",
+    ])
+      expect(
+        handWrittenPhasePredicates([
+          sourceUnit('packages/backend/src/x.ts', `function f(t: any) { return ${condition} }`),
+        ]),
+      ).toHaveLength(1)
+    for (const condition of [
+      '!isTaskWorkspaceUnbound(t.worktreePath) && t.workspacePrunedAt === null',
+      '!(isTaskWorkspaceUnbound(t.worktreePath)) && t.workspacePruningAt === null',
+      'isTaskWorkspaceUnbound(t.worktreePath)',
+    ])
+      expect(
+        handWrittenPhasePredicates([
+          sourceUnit('packages/backend/src/x.ts', `function f(t: any) { return ${condition} }`),
+        ]),
+      ).toEqual([])
+    const sameFile = PHASE_OWNERS[0]!.file
+    expect(
+      handWrittenPhasePredicates([
+        sourceUnit(
+          sameFile,
+          `function another(t: any) { return isTaskWorkspaceUnbound(t.worktreePath) && t.workspacePrunedAt === null }`,
+        ),
+      ]),
+    ).toHaveLength(1)
+  })
+
   test('分处两个函数 ⇒ 不报（那是正常的分工，不是一条自造判据）', () => {
     expect(
       handWrittenPhasePredicates([
@@ -195,6 +266,46 @@ describe('RFC-317 T50 负向 fixture —— 判据真的会咬', () => {
         ),
       ]),
     ).toEqual([])
+  })
+
+  test('墓碑列只交给 shared 相判据时，后续目录存在性检查不重造阶段', () => {
+    const delegated = `function f(t: any) {
+      const phase = taskWorkspacePhase({ worktreePath: t.worktreePath,
+        workspacePruningAt: t.workspacePruningAt, workspacePrunedAt: t.workspacePrunedAt,
+        hasRepoPrepRow: true })
+      return isTaskWorkspaceUnbound(t.worktreePath)
+    }`
+    expect(handWrittenPhasePredicates([sourceUnit('x.ts', delegated)])).toEqual([])
+    expect(
+      handWrittenPhasePredicates([
+        sourceUnit(
+          'x.ts',
+          delegated.replace(
+            'return isTaskWorkspaceUnbound(t.worktreePath)',
+            'return isTaskWorkspaceUnbound(t.worktreePath) && t.workspacePrunedAt === null',
+          ),
+        ),
+      ]),
+    ).toHaveLength(1)
+  })
+
+  test('RFC-395 II-a: nested callables do not leak predicates into their factory', () => {
+    const separate = `function factory(t: any) {
+      function path() { return isTaskWorkspaceUnbound(t.worktreePath) }
+      function tombstone() { return t.workspacePrunedAt }
+    }`
+    expect(handWrittenPhasePredicates([sourceUnit('x.ts', separate)])).toEqual([])
+    expect(
+      handWrittenPhasePredicates([
+        sourceUnit(
+          'x.ts',
+          separate.replace(
+            'return t.workspacePrunedAt',
+            'return isTaskWorkspaceUnbound(t.worktreePath) && t.workspacePrunedAt === null',
+          ),
+        ),
+      ]),
+    ).toHaveLength(1)
   })
 
   test('只读墓碑列（不比较空路径）⇒ 不报', () => {
@@ -208,7 +319,7 @@ describe('RFC-317 T50 负向 fixture —— 判据真的会咬', () => {
     ).toEqual([])
   })
 
-  test('零账本时，历史 owner 路径也不能绕过判据', () => {
+  test('历史 owner 路径也不能绕过按函数限定的判据', () => {
     const fixture = sourceUnit(
       'packages/backend/src/services/gc.ts',
       `export function f(t: any) { return t.worktreePath === '' && t.workspacePrunedAt === null }`,

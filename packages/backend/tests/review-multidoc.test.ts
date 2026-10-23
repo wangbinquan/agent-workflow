@@ -17,14 +17,23 @@
 // cases hold real writes until the intended winner owns the mutation queue and
 // both requests are in flight; array order alone does not establish the winner.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -174,8 +183,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     reviewNode: WorkflowNode
   }> {
     const caseGenId = ulid()
-    const { agents, workflows, tasks } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -206,7 +214,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       edges: [],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -219,7 +227,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     const lineageSlotPathJson = JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
     ])
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'multidoc',
       workflowId,
@@ -236,36 +244,33 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     })
     // Both providers must start from the original SQLite-materialized row.
     expect(
-      await firstRow(
-        db
-          .select({
-            executionLineageId: tasks.executionLineageId,
-            lineageSlotPathJson: tasks.lineageSlotPathJson,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId)),
-      ),
+      (
+        await readTaskFixtures(db, { id: taskId }).then((rows) =>
+          rows.map((row) => ({
+            executionLineageId: row.executionLineageId,
+            lineageSlotPathJson: row.lineageSlotPathJson,
+          })),
+        )
+      )[0],
     ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
     return { taskId, task, definition, reviewNode }
   }
 
   /** Seed the upstream done run + its `cases` list output, write the case files. */
   async function seedSrc(taskId: string, srcId: string, paths: string[]): Promise<void> {
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: srcId,
       taskId,
       nodeId: 'src',
       status: 'done',
       retryIndex: 0,
       iteration: 0,
-      preSnapshot: null,
       startedAt: Date.now(),
       finishedAt: Date.now(),
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: srcId,
       portName: 'cases',
       content: paths.join('\n'),
@@ -378,31 +383,15 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     expect(result.taskId).toBe(taskId)
     expect(result.resumeRequired).toBe(true)
 
-    const { nodeRunOutputs, nodeRuns } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const accepted = (
-      await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(
-            eq(nodeRunOutputs.nodeRunId, reviewNodeRunId),
-            eq(nodeRunOutputs.portName, 'accepted'),
-          ),
-        )
+      await readNodeRunOutputFixtures(db, { nodeRunId: reviewNodeRunId, portName: 'accepted' })
     )[0]!
     expect(accepted.content).toBe('cases/a.md\ncases/c.md') // order preserved, b excluded
     expect(accepted.kind).toBe('list<path<md>>')
 
     const metaRow = (
-      await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(
-            eq(nodeRunOutputs.nodeRunId, reviewNodeRunId),
-            eq(nodeRunOutputs.portName, 'approval_meta'),
-          ),
-        )
+      await readNodeRunOutputFixtures(db, { nodeRunId: reviewNodeRunId, portName: 'approval_meta' })
     )[0]!
     const meta = JSON.parse(metaRow.content)
     expect(meta.itemCount).toBe(3)
@@ -449,19 +438,11 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       expect((results[1]!.reason as { code?: string }).code).toBe('review-not-awaiting')
     }
 
-    const { docVersions, nodeRunOutputs } = tablesOf(db)
+    const { docVersions } = tablesOf(db)
     const first = (await db.select().from(docVersions).where(eq(docVersions.id, docs[0]!.id)))[0]!
     expect(first.selection).toBe('accepted')
     const accepted = (
-      await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(
-            eq(nodeRunOutputs.nodeRunId, reviewNodeRunId),
-            eq(nodeRunOutputs.portName, 'accepted'),
-          ),
-        )
+      await readNodeRunOutputFixtures(db, { nodeRunId: reviewNodeRunId, portName: 'accepted' })
     )[0]!
     expect(accepted.content).toBe(PATHS.join('\n'))
   })
@@ -498,19 +479,11 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     )
     expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
 
-    const { docVersions, nodeRunOutputs } = tablesOf(db)
+    const { docVersions } = tablesOf(db)
     const second = (await db.select().from(docVersions).where(eq(docVersions.id, docs[1]!.id)))[0]!
     expect(second.selection).toBe('not_accepted')
     const accepted = (
-      await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(
-          and(
-            eq(nodeRunOutputs.nodeRunId, reviewNodeRunId),
-            eq(nodeRunOutputs.portName, 'accepted'),
-          ),
-        )
+      await readNodeRunOutputFixtures(db, { nodeRunId: reviewNodeRunId, portName: 'accepted' })
     )[0]!
     expect(accepted.content).toBe('cases/a.md\ncases/c.md')
   })
@@ -599,7 +572,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     })
     expect(result.reviewIteration).toBe(1)
 
-    const { docVersions, nodeRuns } = tablesOf(db)
+    const { docVersions } = tablesOf(db)
     // every item recorded the round-level reject reason.
     const after = await db
       .select()
@@ -610,10 +583,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
     // upstream src was superseded + a fresh retry_index=1 pending row minted —
     // the rerun path ran (not bypassed by multi-doc).
-    const srcRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'src')))
+    const srcRuns = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId: 'src' }] })
     expect(srcRuns.length).toBe(2)
     const pending = srcRuns.find((r) => r.status === 'pending')
     expect(pending?.retryIndex).toBe(1)

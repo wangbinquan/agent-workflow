@@ -22,8 +22,7 @@
 //  (e) CLAUDE_PLATFORM_OWNED_FLAGS covers every flag literal the spawn module
 //      itself emits — the reserved set cannot silently fall behind the argv.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -53,15 +52,14 @@ import {
 async function seedRun(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -75,7 +73,7 @@ async function seedRun(db: PersistenceDb): Promise<string> {
     startedAt: Date.now(),
   })
   const id = ulid()
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n1', status: 'pending' })
   return id
 }
 

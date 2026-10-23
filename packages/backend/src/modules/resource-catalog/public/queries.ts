@@ -266,3 +266,17 @@ export interface McpDiagnosticsQueries {
     input: McpDiagnosticsSessionRef,
   ): Promise<McpDiagnosticsTranscript>
 }
+
+export { validateAgentDependencies } from '../application/agents/agentDependencyValidation'
+
+export {
+  createAgentExecutionQueries,
+  createWorkflowExecutionQueries,
+  workflowNameExpression,
+} from '../infrastructure/executionResourceQueries'
+export type {
+  AgentExecutionQueries,
+  WorkflowExecutionQueries,
+  WorkflowReferenceSummary,
+  WorkflowExecutionDocument,
+} from '../application/ports/executionResourceQueries'

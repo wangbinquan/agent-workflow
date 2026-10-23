@@ -18424,3 +18424,7 @@ tasks-active 闸失效 / scheduled 闸失效 / launching 闸失效）**每一个
 夜跑」。合一类改动的判据必须落在**推送档**的双引擎测试上；e2e 只作用户可见后果的端到端确认。
 另一条：**孪生对合一后要立刻确认旧那一半真的死了**——`legacy/agent.ts` 的 `deleteAgent` 留着
 不删，就会让打它的老测试继续绿着,给人「这条行为有覆盖」的假象。
+
+### 2026-10-22 RFC-395 II-a A6 补记
+
+资源包 apply 从 `platform/persistence/postgresqlResourcePackageAtomicApply.ts` 迁至 `modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts`，bootstrap 通过 `composition/resourcePackageAtomicApply.ts` 装配。上述测量表的 ~976 行和 verbatim export 属于原记录，不能改写为新路径后沿用旧测量。

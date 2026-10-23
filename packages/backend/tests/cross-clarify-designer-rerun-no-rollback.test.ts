@@ -22,7 +22,8 @@
 // clone / no stash push-pop — the non-flaky class per
 // scheduler-audit-s11-stash-gc-prune-rollback.test.ts; NOT RUN_GIT_NETWORK-gated.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -36,7 +37,7 @@ import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure
 import { createClarifyRound } from '../src/services/clarify/service'
 import { listTaskQuestions, reassignTaskQuestion } from '../src/services/taskQuestions'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
-import { gitStashSnapshot, runGit } from '../src/util/git'
+import { runGit } from '../src/util/git'
 import type { ClarifyAnswer, ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
 
 const actor = { userId: 'u1', role: 'owner' as const }
@@ -137,8 +138,7 @@ async function seedTaskAndDesigner(
   preSnapshot: string,
 ): Promise<void> {
   const def = triadDef()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'stub',
     description: '',
@@ -146,7 +146,7 @@ async function seedTaskAndDesigner(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture-task',
     executionLineageId: taskId,
@@ -163,16 +163,16 @@ async function seedTaskAndDesigner(
     inputs: JSON.stringify({}),
     startedAt: 1,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'nr_designer_done',
     taskId,
     nodeId: 'designer',
     status: 'done',
     retryIndex: 0,
     iteration: 0,
-    preSnapshot,
+    checkpoints: [{ mountPath: '', preSnapshot }],
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: 'nr_questioner_done',
     taskId,
     nodeId: 'questioner',
@@ -194,7 +194,7 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
       // Dirty TRACKED change at snapshot time → non-empty stash sha (the value
       // the designer's pre_snapshot would hold in production).
       writeFileSync(join(repo.path, 'a.txt'), 'snapshot-state\n')
-      const sha = await gitStashSnapshot(repo.path)
+      const sha = await legacyStashSnapshotFixture(repo.path)
       expect(sha).toMatch(/^[a-f0-9]{40}$/)
 
       // The designer's output + a downstream node's output, written ON TOP as

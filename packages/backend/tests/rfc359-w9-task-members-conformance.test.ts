@@ -20,7 +20,7 @@
 // 一条**反向对照**必须有：只断言「都被拒绝」的用例，被一个「永远拒绝」的实现也能满足。
 // 所以每条拒绝旁边都配一条同形的放行。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
@@ -90,8 +90,8 @@ async function seedTask(
 ): Promise<{ id: string; ownerUserId: string | null }> {
   const taskId = `t_${ulid()}`
   const snapshot = JSON.stringify({ $schema_version: 6, inputs: [], nodes: [], edges: [] })
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: `rfc359-w9-members-${taskId}`,
     description: '',
@@ -99,7 +99,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 6,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc359 w9 members',
     workflowId: `wf_${taskId}`,
@@ -149,10 +149,12 @@ async function memberRows(
 }
 
 async function ownerOf(db: PersistenceDb, taskId: string): Promise<string | null> {
-  const { tasks } = tablesOf(db)
   return (
-    (await db.select({ ownerUserId: tasks.ownerUserId }).from(tasks).where(eq(tasks.id, taskId)))[0]
-      ?.ownerUserId ?? null
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({ ownerUserId: row.ownerUserId })),
+      )
+    )[0]?.ownerUserId ?? null
   )
 }
 

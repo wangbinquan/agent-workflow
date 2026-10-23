@@ -1,8 +1,9 @@
 // RFC-371 v2 §2/§5 — task facts offered to run-observability. Task execution is
 // the only owner of task visibility; observation never reads these tables.
 
+import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, asc, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { taskVisibilityCondition, taskVisibilitySubjectOf, visibleTaskIdsFor } from '@/db/query'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -173,7 +174,7 @@ export function createTaskObservationFacts(db: PersistenceDb): ObservationTaskFa
         .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId, retryIndex: nodeRuns.retryIndex })
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id))
+        .orderBy(...runHistoryOrder(db, nodeRuns))
         .limit(MAX_ATTEMPTS)
       return rows.map((row) => ({
         nodeRunId: row.id,

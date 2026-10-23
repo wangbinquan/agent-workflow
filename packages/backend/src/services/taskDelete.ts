@@ -43,21 +43,19 @@
 // their next poll / reconnect. The workflow-style audience-context fast-path
 // for cold connections is a documented follow-up.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { projectStoredTaskRepositorySurface } from '@/platform/persistence/taskRepositorySurface'
+import { createTaskDeletionQueries } from '@/modules/task-execution/public/queries'
+import { createTaskDeletionParticipantInTx } from '@/modules/task-execution/public/participants'
+import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
-import {
-  eq,
-  inArray,
-  sql,
-  type LegacyProviderNeutralDatabase,
-} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+import { type LegacyProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/public/participants'
 import { ConflictError, NotFoundError } from '@/util/errors'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   assertTerminalMaintenanceClaimTx,
   createTerminalMaintenanceStore,
@@ -96,21 +94,8 @@ export async function deleteTask(
   options: Readonly<{ activity: ActiveTaskExecutionParticipant; effects?: TaskDeletionEffects }>,
 ): Promise<DeleteTaskResult> {
   const effects = selectedTaskDeletionEffects(options.effects)
-  const { tasks, taskRepos } = tablesOf(db)
-  const rows = await db
-    .select({
-      id: tasks.id,
-      status: tasks.status,
-      spaceKind: tasks.spaceKind,
-      worktreePath: tasks.worktreePath,
-      repoPath: tasks.repoPath,
-      parentTaskId: tasks.parentTaskId,
-      parentNodeRunId: tasks.parentNodeRunId,
-    })
-    .from(tasks)
-    .where(eq(tasks.id, taskId))
-    .limit(1)
-  const row = rows[0]
+  const queries = createTaskDeletionQueries(db)
+  const row = await queries.read(taskId)
   if (row === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
 
   // Front gates (pre-lock cheap checks).
@@ -144,7 +129,7 @@ export async function deleteTask(
   // Deleting a PARENT while any descendant is non-terminal would cascade-drop
   // live children's rows out from under their schedulers.
   {
-    const active = await findNonTerminalDescendant(db, taskId)
+    const active = await queries.nonTerminalDescendant(taskId)
     if (active !== null) {
       throw new ConflictError(
         'task-has-active-children',
@@ -157,13 +142,7 @@ export async function deleteTask(
   // terminal implies its call rows are settled (boot reap flips crashed rows
   // to interrupted, which is terminal).
   if (row.parentTaskId !== null) {
-    const parent = (
-      await db
-        .select({ status: tasks.status })
-        .from(tasks)
-        .where(eq(tasks.id, row.parentTaskId))
-        .limit(1)
-    )[0]
+    const parent = await queries.status(row.parentTaskId)
     if (parent !== undefined && !isTerminalTaskStatus(parent.status as TaskStatus)) {
       throw new ConflictError(
         'task-parent-active',
@@ -189,23 +168,8 @@ export async function deleteTask(
   // Capture every owned worktree BEFORE deletion (taskRepos cascades away with
   // the rows). Inherited children borrow their parent's isolation and therefore
   // never contribute a cleanup target of their own.
-  const memberTaskRows = await db
-    .select({
-      id: tasks.id,
-      spaceKind: tasks.spaceKind,
-      repoPath: tasks.repoPath,
-      worktreePath: tasks.worktreePath,
-    })
-    .from(tasks)
-    .where(inArray(tasks.id, maintenanceTaskIds))
-  const repoRows = await db
-    .select({
-      taskId: taskRepos.taskId,
-      repoPath: taskRepos.repoPath,
-      worktreePath: taskRepos.worktreePath,
-    })
-    .from(taskRepos)
-    .where(inArray(taskRepos.taskId, maintenanceTaskIds))
+  const { tasks: memberTaskRows, repositories: repoRows } =
+    await queries.workspaces(maintenanceTaskIds)
   const worktrees: WorktreeTarget[] = [
     ...new Map(
       memberTaskRows
@@ -214,7 +178,9 @@ export async function deleteTask(
           const owned = repoRows.filter((repo) => repo.taskId === taskRow.id)
           return owned.length > 0
             ? owned.map((repo) => ({ repoPath: repo.repoPath, worktreePath: repo.worktreePath }))
-            : [{ repoPath: taskRow.repoPath, worktreePath: taskRow.worktreePath }]
+            : projectStoredTaskRepositorySurface(taskRow).repos.map(
+                ({ repoPath, worktreePath }) => ({ repoPath, worktreePath }),
+              )
         })
         .map((target) => [`${target.repoPath}\u0000${target.worktreePath}`, target] as const),
     ).values(),
@@ -223,7 +189,7 @@ export async function deleteTask(
     // 于是这里会用两个空串去调 git，拿到 `fatal: '' is not a working tree`，API 回给
     // 调用方一个**假的** `cleanup: "pending"`——任务与 node_runs 其实已经删干净了，
     // 只是从来就没有工作树要清（四轮门 Codex 契约面实测）。空路径直接不进清理面。
-    .filter((w) => w.worktreePath !== '' && w.repoPath !== '')
+    .filter((w) => !isTaskWorkspaceUnbound(w.worktreePath) && w.repoPath !== '')
 
   // RFC-328: claim the complete terminal tree before the first destructive
   // database or filesystem action.  This is durable, so a crash leaves a
@@ -267,10 +233,9 @@ export async function deleteTask(
         claim: claimBeforeDelete,
         expectedState: 'io-complete',
       })
-      const { tasks, taskCollaborators, taskFeedback } = tablesOf(tx)
-      const fresh = (
-        await tx.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)).limit(1)
-      )[0]
+      const participant = createTaskDeletionParticipantInTx(tx)
+      const collaboration = createTaskDeletionCollaborationParticipantInTx(tx)
+      const fresh = await participant.status(taskId)
       if (fresh === undefined) {
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
@@ -286,21 +251,7 @@ export async function deleteTask(
       // RFC-244: freeze the complete FK-cascade audience inside the deletion
       // transaction. Once the root delete commits neither rows nor memberships
       // remain available to the tasks-list frame gate.
-      const cascadeRows = (await rawRows(
-        tx,
-        sql`
-        WITH RECURSIVE cascade(id) AS (
-          SELECT id FROM tasks WHERE id = ${taskId}
-          UNION
-          SELECT child.id
-          FROM tasks child
-          JOIN cascade parent ON child.parent_task_id = parent.id
-        )
-        SELECT t.id, t.owner_user_id
-        FROM tasks t
-        JOIN cascade c ON c.id = t.id
-      `,
-      )) as Array<{ id: string; owner_user_id: string | null }>
+      const cascadeRows = await participant.cascade(taskId)
       const cascadeIds = cascadeRows.map((item) => item.id)
       const claimedIds = maintenanceMembers.map((member) => member.taskId).sort()
       if (JSON.stringify([...cascadeIds].sort()) !== JSON.stringify(claimedIds)) {
@@ -309,16 +260,10 @@ export async function deleteTask(
           `task tree '${taskId}' changed after terminal maintenance claim`,
         )
       }
-      const memberRows =
-        cascadeIds.length === 0
-          ? []
-          : await tx
-              .select({ taskId: taskCollaborators.taskId, userId: taskCollaborators.userId })
-              .from(taskCollaborators)
-              .where(inArray(taskCollaborators.taskId, cascadeIds))
+      const memberRows = await collaboration.members(cascadeIds)
       deletedAudiences = cascadeRows.map((item) => {
         const visibleUserIds = new Set<string>()
-        if (item.owner_user_id !== null) visibleUserIds.add(item.owner_user_id)
+        if (item.ownerUserId !== null) visibleUserIds.add(item.ownerUserId)
         for (const member of memberRows) {
           if (member.taskId === item.id) visibleUserIds.add(member.userId)
         }
@@ -326,46 +271,10 @@ export async function deleteTask(
       })
       // Explicit task-scoped deletes; committed lifecycle facts intentionally
       // survive task deletion as Event Center audit records.
-      await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, cascadeIds))
-      await tx.delete(tasks).where(eq(tasks.id, taskId))
+      await collaboration.deleteFeedback(cascadeIds)
+      await participant.deleteRoot(taskId)
 
-      // RFC-311 实现门 P1-6/P2-3:`branch_started_at` 是「子树 max(started_at)」的
-      // 物化值,此前只有铸行点向上推进(单调 MAX),删掉一个子任务后父行会**永久**
-      // 停在被删子树的时间戳上。可观察后果:同一份数据在默认视图(快路径按物化列
-      // 排序)与任一过滤视图(旧管线现算)之间行序不同且永不收敛。
-      // 删除是低频操作,在同一事务里沿父链重算即可闭合(链长同 MAX_TREE_DEPTH)。
-      // RFC-359 W6-T28：重算是读—改—写（父自己的 started_at + 子树 MAX 算出新值写回同一行），
-      // 而每任务写锁按**被删的那个** taskId 分片——同一个父下的两个兄弟被同时删掉时，两笔删除
-      // 拿的是两把不同的锁，彼此完全不串行。PG 的 READ COMMITTED 下双方都会读到「对方还在」的
-      // 子树 MAX，后写的那笔于是把父行永久停在一个**已删子树**的时间戳上，正是上面这段注释要
-      // 闭合的那个 bug 换了个入口复发。先锁住父行：第二笔在锁上等，等到的是对方已提交的视图。
-      // 锁序恒定自下而上、沿同一条父链，两笔并发不构成环。
-      let cursor: string | null = row.parentTaskId
-      for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
-        await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, cursor)
-        const parent = (
-          await tx
-            .select({
-              id: tasks.id,
-              parentTaskId: tasks.parentTaskId,
-              startedAt: tasks.startedAt,
-            })
-            .from(tasks)
-            .where(eq(tasks.id, cursor))
-            .limit(1)
-        )[0]
-        if (parent === undefined) break
-        const childMax = (
-          await tx
-            .select({ v: sql<number>`coalesce(max(${tasks.branchStartedAt}), 0)`.mapWith(Number) })
-            .from(tasks)
-            .where(eq(tasks.parentTaskId, parent.id))
-            .limit(1)
-        )[0]
-        const recomputed = Math.max(parent.startedAt ?? 0, childMax?.v ?? 0)
-        await tx.update(tasks).set({ branchStartedAt: recomputed }).where(eq(tasks.id, parent.id))
-        cursor = parent.parentTaskId
-      }
+      await participant.recomputeAncestors(row.parentTaskId)
       return await transitionTerminalMaintenanceClaimTx(tx, {
         claim: claimBeforeDelete,
         to: 'db-finalized',
@@ -401,31 +310,3 @@ export async function deleteTask(
 // RFC-359 T7c：删除认领的崩溃恢复是 provider 中立的一份实现（task-execution infrastructure），
 // 这里只保留 cli/start.ts 与既有测试用的 import 路径。
 export { recoverInterruptedTaskDeletes, type DeleteRecoveryResult }
-
-/**
- * RFC-243 §4.4 — BFS over parent_task_id for any non-terminal descendant.
- * Depth is bounded by maxInvocationDepth at launch time; the walk is defensive
- * against dirty data via a visited set.
- */
-async function findNonTerminalDescendant(
-  db: LegacyProviderNeutralDatabase,
-  rootId: string,
-): Promise<{ id: string; status: string } | null> {
-  const visited = new Set<string>([rootId])
-  let frontier = [rootId]
-  while (frontier.length > 0) {
-    const { tasks } = tablesOf(db)
-    const children = await db
-      .select({ id: tasks.id, status: tasks.status, parentTaskId: tasks.parentTaskId })
-      .from(tasks)
-      .where(inArray(tasks.parentTaskId, frontier))
-    frontier = []
-    for (const c of children) {
-      if (visited.has(c.id)) continue
-      visited.add(c.id)
-      if (!isTerminalTaskStatus(c.status as TaskStatus)) return { id: c.id, status: c.status }
-      frontier.push(c.id)
-    }
-  }
-  return null
-}

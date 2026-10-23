@@ -1,19 +1,22 @@
+import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/public/participants'
+import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq, ne } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import type { WorkgroupTaskRoomClarifyParticipantInTx } from '@/modules/task-execution/public/commands'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 /**
  * RFC-359 W4-D19a —— Collaboration 在工作组任务房事务里的那一半：一份实现，两个 provider 共用。
- * 调用方持有事务；这个参与者只碰 Collaboration 自己的表，不开嵌套事务、不读 TaskExecution / Resource Catalog。
+ * 调用方持有事务；这个参与者只直接访问 Collaboration 自己的表；directive 投影通过 TaskExecution public query 读取同一事务。
  */
 export function createWorkgroupTaskRoomClarifyParticipantInTx(
   transaction: PersistenceTx,
 ): WorkgroupTaskRoomClarifyParticipantInTx {
+  const clarifyDirectives = createTaskClarifyDirectivePersistence(transaction)
   return Object.freeze({
     async loadProjection(taskId) {
-      const { clarifyRounds, taskNodeClarifyDirectives } = tablesOf(transaction)
+      const { clarifyRounds } = tablesOf(transaction)
       const [open, directives] = await Promise.all([
         transaction
           .select({ askingNodeRunId: clarifyRounds.askingNodeRunId })
@@ -25,20 +28,7 @@ export function createWorkgroupTaskRoomClarifyParticipantInTx(
               eq(clarifyRounds.status, 'awaiting_human'),
             ),
           ),
-        transaction
-          .select({
-            nodeId: taskNodeClarifyDirectives.nodeId,
-            shardKey: taskNodeClarifyDirectives.shardKey,
-            directive: taskNodeClarifyDirectives.directive,
-          })
-          .from(taskNodeClarifyDirectives)
-          .where(
-            and(
-              eq(taskNodeClarifyDirectives.taskId, taskId),
-              eq(taskNodeClarifyDirectives.directive, 'stop'),
-              ne(taskNodeClarifyDirectives.shardKey, ''),
-            ),
-          ),
+        clarifyDirectives.listWorkgroupStops(taskId),
       ])
       return Object.freeze({
         askingNodeRunIds: Object.freeze([...new Set(open.map((round) => round.askingNodeRunId))]),
@@ -68,19 +58,17 @@ export function createWorkgroupTaskRoomClarifyParticipantInTx(
         readonly assignmentShardKey: string | null
       }> = []
       for (const round of open) {
-        const changed = await transaction
-          .update(clarifyRounds)
-          .set({ status: 'canceled' })
-          .where(
-            and(
-              eq(clarifyRounds.id, round.id),
-              eq(clarifyRounds.kind, 'self'),
-              eq(clarifyRounds.taskId, input.taskId),
-              eq(clarifyRounds.status, 'awaiting_human'),
-            ),
-          )
-          .returning({ id: clarifyRounds.id })
-        if (changed[0] !== undefined) {
+        const changed = await createClarifyAnswerWritePort(transaction).transition(
+          {
+            roundId: round.id,
+            kind: 'cancel',
+            roundKind: 'self',
+            taskId: input.taskId,
+            expectedStatus: 'awaiting_human',
+          },
+          transaction,
+        )
+        if (changed) {
           parks.push(
             Object.freeze({
               nodeRunId: round.nodeRunId,

@@ -2,12 +2,12 @@
 // atom. SQLite locks the complete reset/resume behavior; the PostgreSQL oracle
 // proves the same claim is compiled against the real PostgreSQL projection.
 
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { describeEachProvider } from './helpers/eachProvider'
@@ -31,9 +31,8 @@ import {
 } from '@/services/runtimeSessionLease'
 
 async function seedTaskRuns(db: PersistenceDb) {
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
+  await taskFixture(db, {
     id: 'task-lease',
     name: 'task-lease',
     workflowId: 'workflow-lease',
@@ -46,7 +45,8 @@ async function seedTaskRuns(db: PersistenceDb) {
     inputs: '{}',
     startedAt: 1,
   })
-  await db.insert(nodeRuns).values(
+  await nodeRunFixture(
+    db,
     ['run-1', 'run-2', 'run-3'].map((id) => ({
       id,
       taskId: 'task-lease',
@@ -159,7 +159,7 @@ describeEachProvider('RFC-349 runtime-session lease provider operations', (harne
       leaseNonceDigest: 'nonce-1',
       leasedAt: 10,
     })
-    const { nodeRunEvents, nodeRuns } = tablesOf(db)
+    const { nodeRunEvents } = tablesOf(db)
     await insertOne(db, nodeRunEvents, {
       nodeRunId: 'run-1',
       ts: 1,
@@ -209,7 +209,7 @@ describeEachProvider('RFC-349 runtime-session lease provider operations', (harne
       leasedAt: 20,
     })
     await expect(confirmRuntimeSessionResume(operations, resumed)).resolves.toBe(true)
-    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-2'))
+    await patchNodeRunFixture(db, { id: 'run-2' }, { status: 'failed' })
     await expect(repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).resolves.toBe(1)
     await expect(releaseRuntimeSessionLease(operations, resumed)).resolves.toBe(false)
   })

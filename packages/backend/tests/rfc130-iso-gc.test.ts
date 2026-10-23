@@ -5,8 +5,7 @@
 // containers of TERMINAL tasks (and iso dirs with no task row = deleted task), and
 // keeps ACTIVE tasks' iso worktrees (they may be in flight).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -17,8 +16,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 async function seedWorkflow(db: PersistenceDb): Promise<string> {
   const id = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id,
     name: 'wf',
     definition: '{}',
@@ -34,8 +32,7 @@ async function seedTask(
   workflowId: string,
   status: 'done' | 'running',
 ): Promise<void> {
-  const { tasks } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: 'x',
     workflowId,

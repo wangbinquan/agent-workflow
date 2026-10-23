@@ -35,6 +35,7 @@
 // 就写在这个文件里当 oracle——它是被替换掉的那段 SQL 的逐字副本，不是重新推导的等价物。
 // 另外用 JS 侧手算的期望值对一遍账，防的是「两个 SQL 形状一起错」。
 
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
@@ -158,7 +159,7 @@ const REPO_SEEDS = [
 ] as const
 
 async function seedBase(db: PersistenceDb): Promise<void> {
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'admin',
     username: 'admin',
@@ -167,15 +168,15 @@ async function seedBase(db: PersistenceDb): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'nightly', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'nightly', definition: '{}' })
 }
 
 async function seedTasks(db: PersistenceDb, seeds: readonly TaskSeed[]): Promise<void> {
   let index = 0
   for (const seed of seeds) {
     index += 1
-    const { tasks, taskRepos, lifecycleAlerts } = tablesOf(db)
-    await insertOne(db, tasks, {
+    const { lifecycleAlerts } = tablesOf(db)
+    await taskFixture(db, {
       id: seed.id,
       name: `task ${seed.id}`,
       workflowId: 'wf1',
@@ -199,7 +200,7 @@ async function seedTasks(db: PersistenceDb, seeds: readonly TaskSeed[]): Promise
       ...(seed.cachedRepoId === undefined ? {} : { cachedRepoId: seed.cachedRepoId }),
     })
     if (seed.taskRepoCachedRepoId !== undefined) {
-      await insertOne(db, taskRepos, {
+      await taskRepoFixture(db, {
         taskId: seed.id,
         repoIndex: 0,
         repoPath: '/repos/r',

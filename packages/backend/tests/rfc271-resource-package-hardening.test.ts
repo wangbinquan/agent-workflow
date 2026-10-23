@@ -4,6 +4,7 @@
 // preview→commit 被“root 必须 local”硬拒。本文件刻意跨越真实边界，覆盖正常、
 // 劫持、篡改、并发漂移与坏行 fail-closed。
 
+import { workflowFixture, agentFixture, patchWorkflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -55,8 +56,7 @@ async function seedWorkflow(
   db: PersistenceDb,
   input: { id: string; name: string; builtin: boolean; owner: string; version?: number },
 ): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: input.id,
     name: input.name,
     description: '',
@@ -377,7 +377,7 @@ secrets: []
           const inputs = [
             { name: 'repository', kind: 'path<dir>', required: true, description: 'repo root' },
           ]
-          await insertOne(source, tablesOf(source).agents, {
+          await agentFixture(source, {
             id: 'SOURCE_AGENT',
             name: 'typed-agent',
             description: '',
@@ -449,11 +449,7 @@ secrets: []
 
           const { workflows } = tablesOf(db)
           const raced = dbWithMidExportWrite(db, workflows, 2, async (handle) => {
-            const { workflows } = tablesOf(handle)
-            await handle
-              .update(workflows)
-              .set({ version: 2, updatedAt: 2 })
-              .where(eq(workflows.id, 'WF1'))
+            await patchWorkflowFixture(handle, { id: 'WF1' }, { version: 2, updatedAt: 2 })
           })
 
           expect(
@@ -478,7 +474,7 @@ secrets: []
         const appHome = mkdtempSync(join(tmpdir(), 'rfc271-closure-fence-'))
         try {
           await seedUser(db, 'u1')
-          const { mcps, agents } = tablesOf(db)
+          const { mcps } = tablesOf(db)
           await insertOne(db, mcps, {
             id: 'M1',
             name: 'tools',
@@ -491,7 +487,7 @@ secrets: []
             createdAt: 1,
             updatedAt: 1,
           } as never)
-          await insertOne(db, agents, {
+          await agentFixture(db, {
             id: 'A1',
             name: 'root',
             description: '',

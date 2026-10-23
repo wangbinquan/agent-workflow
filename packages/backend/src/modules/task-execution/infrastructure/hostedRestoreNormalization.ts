@@ -48,7 +48,12 @@ export function createHostedRestoreTaskNormalization(): HostedRestoreNormalizati
           nodeRunId: run.id,
           to: 'interrupted',
           allowedFrom: ['running'],
-          extra: { finishedAt: now, errorMessage: RESTORE_INTERRUPTION_MESSAGE },
+          extra: {
+            identity: {
+              finishedAt: now,
+              errorMessage: RESTORE_INTERRUPTION_MESSAGE,
+            },
+          },
           reason: 'database-restore',
         })
         const list = changes.get(run.taskId) ?? []

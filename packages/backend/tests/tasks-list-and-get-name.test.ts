@@ -5,8 +5,7 @@
 // This is a thin contract test against the row mappers (no HTTP). The 422
 // validation flow lives in tasks-create-name.test.ts (T5).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { ulid } from 'ulid'
@@ -18,8 +17,7 @@ async function seedTask(db: PersistenceDb, name: string) {
   const wfId = ulid()
   const tId = ulid()
   const now = Date.now()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     description: '',
@@ -29,7 +27,7 @@ async function seedTask(db: PersistenceDb, name: string) {
     createdAt: now,
     updatedAt: now,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: tId,
     name,
     workflowId: wfId,

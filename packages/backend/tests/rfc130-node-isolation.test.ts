@@ -42,7 +42,7 @@ async function initCanon(seed: Record<string, string> = { 'base.txt': 'base\n' }
   return dir
 }
 function canonRepo(dir: string): CanonRepo {
-  return { repoPath: dir, worktreePath: dir, worktreeDirName: '', baseBranch: 'main' }
+  return { repoPath: dir, worktreePath: dir, mountPath: '', baseBranch: 'main' }
 }
 async function head(dir: string): Promise<string> {
   return (await runGit(dir, ['rev-parse', 'HEAD'])).stdout.trim()
@@ -139,8 +139,8 @@ describe('RFC-130 node isolation lifecycle', () => {
     const r1 = await initCanon({ 'x.txt': 'x\n' })
     const r2 = await initCanon({ 'y.txt': 'y\n' })
     const repos: CanonRepo[] = [
-      { repoPath: r1, worktreePath: r1, worktreeDirName: 'r1', baseBranch: 'main' },
-      { repoPath: r2, worktreePath: r2, worktreeDirName: 'r2', baseBranch: 'main' },
+      { repoPath: r1, worktreePath: r1, mountPath: 'r1', baseBranch: 'main' },
+      { repoPath: r2, worktreePath: r2, mountPath: 'r2', baseBranch: 'main' },
     ]
     const h = await createNodeIso({ appHome, taskId: 't4', nodeRunId: 'm', canonRepos: repos })
     writeFileSync(join(h.repos[0]!.isoWorktreePath, 'x.txt'), 'x-edited\n')

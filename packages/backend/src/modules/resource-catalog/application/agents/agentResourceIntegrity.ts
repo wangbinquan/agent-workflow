@@ -5,6 +5,7 @@
 // Every save/launch/runtime boundary consumes the same deterministic issue set
 // so a workgroup cannot be more permissive than a workflow (or vice versa).
 
+import { agentSkillReferences, agentReferenceIds } from '@agent-workflow/shared'
 import type { Agent, Skill } from '@agent-workflow/shared'
 import { PLUGIN_DISABLED_ERROR_CODE } from '../../public/types'
 import type {
@@ -146,7 +147,7 @@ export function evaluateAgentResourceIntegrity(
       if (visited.has(agent.id)) return
       visited.add(agent.id)
 
-      for (const ref of agent.skills) {
+      for (const ref of agentSkillReferences(agent)) {
         if (ref.kind !== 'managed') continue
         const skill = inventory.skills.get(ref.skillId)
         if (skill === undefined) {
@@ -170,7 +171,7 @@ export function evaluateAgentResourceIntegrity(
         }
       }
 
-      for (const refId of agent.mcp ?? []) {
+      for (const refId of agentReferenceIds(agent, 'mcp')) {
         const mcp = inventory.mcps.get(refId)
         if (mcp === undefined) {
           add({
@@ -184,7 +185,7 @@ export function evaluateAgentResourceIntegrity(
         }
       }
 
-      for (const refId of agent.plugins ?? []) {
+      for (const refId of agentReferenceIds(agent, 'plugin')) {
         const plugin = inventory.plugins.get(refId)
         if (plugin === undefined) {
           add({
@@ -209,7 +210,7 @@ export function evaluateAgentResourceIntegrity(
 
       const nextActive = new Set(active)
       nextActive.add(agent.id)
-      for (const dependencyId of agent.dependsOn ?? []) {
+      for (const dependencyId of agentReferenceIds(agent, 'agent')) {
         if (nextActive.has(dependencyId)) {
           add({
             code: 'agent-dependency-cycle',
@@ -305,7 +306,7 @@ export async function getAgentResourceStatus(
     closureAgentIds.add(agentId)
     const agent = inventory.agents.get(agentId)
     if (agent === undefined) continue
-    for (const dependencyId of agent.dependsOn ?? []) {
+    for (const dependencyId of agentReferenceIds(agent, 'agent')) {
       if (!closureAgentIds.has(dependencyId)) pendingAgentIds.push(dependencyId)
     }
   }
@@ -315,16 +316,22 @@ export async function getAgentResourceStatus(
   const visibleAgents = await source.filterVisible(actor, 'agent', closureAgents)
   const visibleAgentIds = new Set(visibleAgents.map((agent) => agent.id))
 
-  const directSkillIds = root.skills.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : []))
+  const directSkillIds = agentSkillReferences(root).flatMap((ref) =>
+    ref.kind === 'managed' ? [ref.skillId] : [],
+  )
   const closureSkillIds = [
     ...new Set(
       closureAgents.flatMap((agent) =>
-        agent.skills.flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
+        agentSkillReferences(agent).flatMap((ref) => (ref.kind === 'managed' ? [ref.skillId] : [])),
       ),
     ),
   ]
-  const closureMcpIds = [...new Set(closureAgents.flatMap((agent) => agent.mcp ?? []))]
-  const closurePluginIds = [...new Set(closureAgents.flatMap((agent) => agent.plugins ?? []))]
+  const closureMcpIds = [
+    ...new Set(closureAgents.flatMap((agent) => agentReferenceIds(agent, 'mcp'))),
+  ]
+  const closurePluginIds = [
+    ...new Set(closureAgents.flatMap((agent) => agentReferenceIds(agent, 'plugin'))),
+  ]
   const closureSkills = closureSkillIds
     .map((id) => inventory.skills.get(id))
     .filter((row): row is InventorySkill => row !== undefined)
@@ -351,17 +358,17 @@ export async function getAgentResourceStatus(
       displayRef('skill', refId, row, row?.available === true, visibleSkillIds.has(refId)),
     )
   }
-  for (const refId of root.mcp ?? []) {
+  for (const refId of agentReferenceIds(root, 'mcp')) {
     const row = inventory.mcps.get(refId)
     references.push(displayRef('mcp', refId, row, row !== undefined, visibleMcpIds.has(refId)))
   }
-  for (const refId of root.plugins ?? []) {
+  for (const refId of agentReferenceIds(root, 'plugin')) {
     const row = inventory.plugins.get(refId)
     references.push(
       displayRef('plugin', refId, row, row?.enabled === true, visiblePluginIds.has(refId)),
     )
   }
-  for (const refId of root.dependsOn ?? []) {
+  for (const refId of agentReferenceIds(root, 'agent')) {
     const row = inventory.agents.get(refId)
     references.push(displayRef('agent', refId, row, true, visibleAgentIds.has(refId)))
   }

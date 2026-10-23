@@ -2,6 +2,7 @@
 // owner 身份批量查询、记忆蒸馏读存储、记忆注入读存储、终态工作区归属、webhook 端点管理、webhook 触发器管理、
 // webhook 派发执行运行时装配。
 
+import { nodeRunFixture, taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -22,6 +23,7 @@ import { createWebhookTriggerAdministration } from '@/modules/integration/infras
 import { DrizzleMemoryDistillReadStore } from '@/modules/memory/infrastructure/memoryDistillReadStore'
 import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
@@ -43,8 +45,7 @@ async function seedUser(db: PersistenceDb): Promise<string> {
 async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
   const id = `t_${ulid()}`
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     description: '',
@@ -52,7 +53,7 @@ async function seedTask(db: PersistenceDb, owner: string): Promise<string> {
     version: 1,
     schemaVersion: 2,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     name: id,
     workflowId,
@@ -163,7 +164,7 @@ describeEachProvider('RFC-359 W4-B4a —— owner 身份与记忆读存储', (ha
       distilled: 0,
     })
 
-    const distill = new DrizzleMemoryDistillReadStore(db)
+    const distill = new DrizzleMemoryDistillReadStore(db, createClarifyAnswerQueries(db))
     expect((await distill.findJob(job1))?.id).toBe(job1)
     expect(await distill.findJob('missing')).toBeNull()
     expect((await distill.listSiblingJobs(debounceKey)).map((row) => row.id)).toEqual([job1, job2])
@@ -186,7 +187,7 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
     const owner = await seedUser(db)
     const taskId = await seedTask(db, owner)
     const repoId = `cr_${ulid()}`
-    const { cachedRepos, taskRepos, memories, nodeRuns } = tablesOf(db)
+    const { cachedRepos, memories } = tablesOf(db)
     await insertOne(db, cachedRepos, {
       id: repoId,
       urlHash: `h_${repoId}`,
@@ -196,14 +197,14 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       lastFetchedAt: 1,
       createdAt: 1,
     })
-    await db.insert(taskRepos).values([
+    await taskRepoFixture(db, [
       {
         taskId,
         repoIndex: 0,
         repoPath: '/tmp/wt/0',
         branch: 'agent-workflow/x',
         worktreePath: '/tmp/wt/0',
-        worktreeDirName: '0',
+        mountPath: '0',
       },
       {
         taskId,
@@ -211,7 +212,7 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
         repoPath: '/tmp/wt/1',
         branch: 'agent-workflow/x',
         worktreePath: '/tmp/wt/1',
-        worktreeDirName: '1',
+        mountPath: '1',
         cachedRepoId: repoId,
       },
     ])
@@ -256,14 +257,14 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       },
     ])
     const runId = ulid()
-    await insertOne(db, nodeRuns, {
+    const [insertedRun] = await nodeRunFixture(db, {
       id: runId,
       taskId,
       nodeId: 'n',
       status: 'done',
       retryIndex: 0,
       iteration: 0,
-      injectedMemoriesJson: '[]',
+      injectedMemories: '[]',
     })
 
     const injection = new DrizzleMemoryInjectionReadStore(db)
@@ -290,7 +291,9 @@ describeEachProvider('RFC-359 W4-B4a —— 记忆注入读存储与终态工作
       shardKey: null,
       reviewIteration: 0,
     })
-    expect(runs).toEqual([{ seq: null, id: runId, status: 'done', injectedMemoriesJson: '[]' }])
+    expect(runs).toEqual([
+      { seq: insertedRun!.seq, id: runId, status: 'done', injectedMemoriesJson: '[]' },
+    ])
 
     const attribution = createWebhookTerminalWorkspaceAttributionQueries(db)
     expect(await attribution.load(taskId)).toEqual({

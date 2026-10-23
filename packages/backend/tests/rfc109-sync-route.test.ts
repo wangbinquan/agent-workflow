@@ -9,11 +9,10 @@
 //   - version TOCTOU (Codex F5) → 409
 //   - success → 200 + task flips pending
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { patchWorkflowFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
 
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -79,8 +78,8 @@ async function seedHarness(
   const daveToken = (await createSession({ db, userId: dave.id })).token
 
   const wfId = `wf-109-${seq}`
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: DEF_A,
@@ -90,7 +89,7 @@ async function seedHarness(
   })
   const taskId = `task-109-${seq}`
   const now = Date.now()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -123,8 +122,7 @@ async function postJson(app: Hono, token: string, path: string, body: unknown): 
   })
 }
 async function bump(db: PersistenceDb, wfId: string, def: string, version: number): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await db.update(workflows).set({ definition: def, version }).where(eq(workflows.id, wfId))
+  await patchWorkflowFixture(db, { id: wfId }, { definition: def, version })
 }
 
 // RFC-359 AC-6：两个引擎各跑一遍。
@@ -190,8 +188,7 @@ describeEachProviderHttpApplication(
     })
 
     test('built-in workflow → syncable:false reason builtin-workflow (Codex F4: banner hidden)', async () => {
-      const { workflows } = tablesOf(h.db)
-      await h.db.update(workflows).set({ builtin: true }).where(eq(workflows.id, h.wfId))
+      await patchWorkflowFixture(h.db, { id: h.wfId }, { builtin: true })
       await bump(h.db, h.wfId, DEF_B, 2)
       const r = await get(h.app, h.bobToken, `/api/tasks/${h.taskId}/workflow-sync-preview`)
       const p = (await r.json()) as WorkflowSyncPreview
@@ -244,8 +241,7 @@ describeEachProviderHttpApplication(
     })
 
     test('built-in workflow → 403 (RFC-104)', async () => {
-      const { workflows } = tablesOf(h.db)
-      await h.db.update(workflows).set({ builtin: true }).where(eq(workflows.id, h.wfId))
+      await patchWorkflowFixture(h.db, { id: h.wfId }, { builtin: true })
       await bump(h.db, h.wfId, DEF_B, 2)
       const r = await postJson(h.app, h.bobToken, `/api/tasks/${h.taskId}/sync-workflow`, {
         expectedVersion: 2,

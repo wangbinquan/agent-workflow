@@ -14,8 +14,15 @@
 //      不命中。已 done 任务的 errorSummary/errorMessage/finishedAt 保持原值，
 //      不被 limit 文案涂掉。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  agentFixture,
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -84,8 +91,7 @@ async function buildHarness(): Promise<Harness> {
 
   const db = createInMemoryDb(MIGRATIONS)
   const workerId = ulid()
-  const { agents, workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: workerId,
     name: 'worker',
     description: 'test',
@@ -105,12 +111,12 @@ async function buildHarness(): Promise<Harness> {
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf-rfc097-cancel',
     definition: JSON.stringify(definition),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc097-cancel-task',
     workflowId,
@@ -125,7 +131,7 @@ async function buildHarness(): Promise<Harness> {
     finishedAt: Date.now() - 30_000,
     errorSummary: 'boom',
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: 'work',
@@ -155,15 +161,11 @@ async function waitFor(cond: () => boolean, what: string): Promise<void> {
   throw new Error(`timeout waiting for ${what}`)
 }
 
-async function seedLimitsTask(
-  db: DbClient,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
-): Promise<string> {
+async function seedLimitsTask(db: DbClient, overrides: Partial<TaskFixtureSpec>): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'wf', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: workflowId, name: 'wf', definition: '{}' })
+  await taskFixture(db, {
     id: taskId,
     name: 'limits-fixture',
     workflowId,
@@ -205,8 +207,8 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     const returned = await cancelViaEngine(h.db, h.taskId)
     expect(returned.status).toBe('canceled')
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const final = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]!
+    const { nodeRuns } = tablesOf(h.db)
+    const final = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
     expect(final.status).toBe('canceled') // 非 done——cancel 赢
     expect(final.errorSummary).toBe('canceled by user')
     expect(final.finishedAt).not.toBeNull()
@@ -238,8 +240,7 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     const r = await enforceLimits(h.db, Date.now())
     expect(r).toEqual({ scanned: 0, canceled: [] })
 
-    const { tasks } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(t.status).toBe('done')
     expect(t.errorSummary).toBeNull()
     expect(t.errorMessage).toBeNull()
@@ -269,11 +270,10 @@ describe('RFC-097 — cancel 赢家语义 + limits 不污染', () => {
     const r = await race
     expect(r.scanned).toBe(1) // 任务确实在扫描集里（竞态真实发生过）
 
-    const { tasks } = tablesOf(h.db)
     // 两层防护殊途同归：cancelTask 对终态抛 task-not-cancelable（被 enforceLimits
     // 分类吞）；即使走到 fallback 也是 trySet 输掉；最后的文案覆写是条件写
     // `WHERE status='canceled'`——对 done 行不命中。原终态字段全部保持。
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(t.status).toBe('done')
     expect(t.errorSummary).toBeNull() // 不是 'task-time-limit-exceeded'
     expect(t.errorMessage).toBeNull()

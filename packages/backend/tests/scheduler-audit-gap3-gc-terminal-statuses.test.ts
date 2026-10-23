@@ -28,8 +28,12 @@
 // worktree"的另一半由 setTaskStatus 的 revival 门保护（pruned→410 / pruning→409 /
 // 目录缺失→补墓碑+410，services/lifecycle.ts），专项锁见 rfc165-workspace-gc.test.ts。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import {
+  type TaskFixtureSpec,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { resolveSubmoduleParams } from '@/services/gitRepoCache'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -69,21 +73,17 @@ async function buildHarness(__db: PersistenceDb): Promise<Harness> {
   }
 }
 
-async function seedTask(
-  h: Harness,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']>,
-): Promise<string> {
+async function seedTask(h: Harness, overrides: Partial<TaskFixtureSpec>): Promise<string> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'fixture-task',
     id: taskId,
     workflowId,
@@ -158,15 +158,14 @@ describeEachProvider(
           appHome: h.appHome,
         })
         const workflowId = ulid()
-        const { workflows, tasks } = tablesOf(h.db)
-        await insertOne(h.db, workflows, {
+        await workflowFixture(h.db, {
           id: workflowId,
           name: 'wf',
           definition: '{}',
           createdAt: Date.now(),
           updatedAt: Date.now(),
         })
-        await insertOne(h.db, tasks, {
+        await taskFixture(h.db, {
           name: 'fixture-task',
           id: taskId,
           workflowId,
@@ -215,7 +214,6 @@ describeEachProvider(
       const taskId = await seedTask(h, {
         status: 'interrupted',
         worktreePath: container,
-        repoCount: 2,
         finishedAt: Date.now() - 10 * DAY_MS,
       })
 
@@ -227,8 +225,7 @@ describeEachProvider(
           (await runGit(h.repoPath, ['worktree', 'add', '-q', '-b', branch, worktreePath, 'HEAD']))
             .exitCode,
         ).toBe(0)
-        const { taskRepos } = tablesOf(h.db)
-        await insertOne(h.db, taskRepos, {
+        await taskRepoFixture(h.db, {
           taskId,
           repoIndex,
           repoPath: h.repoPath,
@@ -236,7 +233,6 @@ describeEachProvider(
           branch,
           baseBranch: 'main',
           mountPath,
-          worktreeDirName: mountPath,
         })
       }
 

@@ -24,11 +24,16 @@
 // 但 shim 支持显式内容控制——hash 语义必须能写"相同内容"）。
 // 确定性：本地 git、无网络、无 sleep。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -132,8 +137,7 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
 
   test('改又改回不出现；改过的保留；重建的保留；持续删除扣除；新文件保留', async () => {
     h = await buildHarness()
-    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    await insertOne(h.db, agents, {
+    await agentFixture(h.db, {
       id: 'agent-writer',
       name: 'writer',
       description: 'test',
@@ -159,12 +163,12 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await insertOne(h.db, workflows, {
+    await workflowFixture(h.db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
     })
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       name: 'rfc098-predirty-task',
       id: taskId,
       workflowId,
@@ -206,14 +210,9 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
         }),
     )
 
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
-    const wgRun = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'wg')))
-    )[0]!
+    const wgRun = (await readNodeRunFixtures(h.db, { $and: [{ taskId }, { nodeId: 'wg' }] }))[0]!
     expect(wgRun.status).toBe('done')
 
     // 机制锁：pre 集恰为进入时的四个脏路径；删除态记哨兵、存在态记 blob sha。
@@ -230,10 +229,10 @@ describe('RFC-098 B3 (S-4) — pre-dirty 差集按 blob hash / deleted 哨兵判
     expect(preDirty['fileA.txt']).toBe(preHashA)
 
     // 行为锁：git_diff 精确等于「wrapper 内真实产生/改写/重建」的路径集。
-    const outs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(and(eq(nodeRunOutputs.nodeRunId, wgRun.id), eq(nodeRunOutputs.portName, 'git_diff')))
+    const outs = await readNodeRunOutputFixtures(h.db, {
+      nodeRunId: wgRun.id,
+      portName: 'git_diff',
+    })
     const paths = (outs[0]?.content ?? '').split('\n').filter((p) => p.length > 0)
     expect([...paths].sort()).toEqual(['fileB.txt', 'fileC.txt', 'fileE.txt'])
   }, 20000)

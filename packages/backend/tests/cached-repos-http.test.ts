@@ -2,7 +2,7 @@
 // POST /api/tasks. Exercises the full HTTP surface so the launcher and
 // /repos management page can rely on the contract.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
@@ -215,8 +215,8 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
     // for private repos, whose tasks.repo_url is stored redacted.
     const wfId = ulid()
     const taskId = ulid()
-    const { workflows, tasks, taskRepos, cachedRepos } = tablesOf(h.db)
-    await insertOne(h.db, workflows, {
+    const { cachedRepos } = tablesOf(h.db)
+    await workflowFixture(h.db, {
       id: wfId,
       name: 'wf',
       definition: '{}',
@@ -224,7 +224,7 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       name: 'fixture-task',
 
       id: taskId,
@@ -245,7 +245,7 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
         { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
       ]),
     })
-    await insertOne(h.db, taskRepos, {
+    await taskRepoFixture(h.db, {
       taskId,
       repoIndex: 0,
       repoPath: r.cached.localPath,
@@ -253,7 +253,6 @@ function registerProviderCachedRepoHttpCases(provider: ProviderHarness): void {
       cachedRepoId: r.cached.id,
       branch: 'agent-workflow/x',
       worktreePath: r.cached.localPath,
-      worktreeDirName: '',
     })
 
     const res = await req(h.app, `/api/cached-repos/${r.cached.id}`, { method: 'DELETE' })

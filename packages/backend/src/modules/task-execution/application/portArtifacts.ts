@@ -1,5 +1,10 @@
+import {
+  legacyPortArchiveRoot,
+  legacyContainerPath,
+  decodeLegacyPortArchiveFile,
+} from '@/platform/content/legacyPortArchive'
 import type { TaskArtifactPathQueries } from './ports/taskArtifactPathQueries'
-import { extname, join } from 'node:path'
+import { extname } from 'node:path'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitPortItems } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 import { parseArchiveJson, truncationNotice } from '../domain/portArtifacts'
@@ -63,7 +68,7 @@ export function* archivePortArtifactPolicy(
   const portFilePaths: string[] = []
   for (let i = 0; i < opts.items.length; i++) {
     const it = opts.items[i]!
-    const containerRel = toContainerRelative(opts.worktreeDirName, it.sourcePath)
+    const containerRel = toContainerRelative(opts.mountPath, it.sourcePath)
     const size = yield* effect(() => content.size(it.source))
     const reference = content.reference(opts, i, extname(it.sourcePath))
     if (size <= WORKTREE_FILE_MAX_BYTES) {
@@ -88,7 +93,7 @@ export function* archivePortArtifactPolicy(
         portFilePaths.push(target.relativePath)
         const last = items[items.length - 1]
         if (last !== undefined) {
-          last.linkTarget = toContainerRelative(opts.worktreeDirName, target.relativePath)
+          last.linkTarget = toContainerRelative(opts.mountPath, target.relativePath)
         }
       } else if (target?.kind === 'outside') {
         log.warn('symlink port target outside worktree — workspace semantics not guaranteed', {
@@ -136,7 +141,14 @@ export function* readPortArtifactPolicy(
       const it = archive.items[idx]!
       if (it.file !== null) {
         if (!wantBytes(idx)) {
-          if (yield* readableExists(() => content.existsArchive(opts.taskId, it.file!))) {
+          if (
+            yield* readableExists(() =>
+              content.existsArchive(
+                opts.taskId,
+                decodeLegacyPortArchiveFile(it.file!).location.value,
+              ),
+            )
+          ) {
             items.push({
               path: it.path,
               body: '',
@@ -148,7 +160,9 @@ export function* readPortArtifactPolicy(
             continue
           }
         } else {
-          const buf = yield* readableBytes(() => content.readArchive(opts.taskId, it.file!))
+          const buf = yield* readableBytes(() =>
+            content.readArchive(opts.taskId, decodeLegacyPortArchiveFile(it.file!).location.value),
+          )
           if (buf !== null) {
             items.push({
               path: it.path,
@@ -268,11 +282,11 @@ export function* readPortArtifactPolicy(
 }
 
 export function portArchiveRootRel(taskId: string, nodeRunId: string): string {
-  return join('runs', taskId, 'ports', nodeRunId)
+  return legacyPortArchiveRoot(taskId, nodeRunId)
 }
 
-export function toContainerRelative(worktreeDirName: string, repoRelPath: string): string {
-  return worktreeDirName === '' ? repoRelPath : join(worktreeDirName, repoRelPath)
+export function toContainerRelative(mountPath: string, repoRelPath: string): string {
+  return legacyContainerPath(mountPath, repoRelPath)
 }
 
 export async function forcedPortPathsForTask(

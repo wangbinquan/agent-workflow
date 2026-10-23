@@ -1,4 +1,36 @@
+export { createNodeRunQueries } from '../infrastructure/nodeRunQueries'
+export type {
+  NodeRunQueries,
+  NodeRunFactsQuery,
+  NodeRunFactSnapshot,
+  NodeRunCheckpointSnapshot,
+  NodeRunDispatchFacts,
+} from '../application/ports/nodeRunQueries'
+export type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
+export type { RunHistoryFacts } from '../infrastructure/runSelection/oracle/historySnapshot'
+export { createRunHistorySnapshot } from '../infrastructure/runSelection/oracle/historySnapshot'
+export { resolveHandlerRun } from '../infrastructure/runSelection/oracle/handlerHistory'
 export { readPortArtifact } from '../composition/portArtifacts'
+export type {
+  RunSelectionReader,
+  RunRef,
+  SelectedRun,
+  RunSlot,
+  Frame,
+  FamilyRef,
+  HistoryFilter,
+  WrapperSlotRef,
+  ShardSetView,
+  ShardSelectionView,
+  ShardRequest,
+  ConsumedEdge,
+} from '../application/ports/runSelection'
+export { createRunSelectionReader } from '../infrastructure/runSelection/oracle/reader'
+export { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
+export { encodeRunSlot, decodeRunSlot, runSlotsEqual } from '../domain/runSelection/slots'
+export { compareRunSequence, aggregatorInputsMatch } from '../domain/runSelection/ordering'
+export { deriveNodeRunRole } from '../domain/nodeRunRole'
+export { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
 export type { PortArtifactReader } from '../application/ports/portArtifactContent'
 export {
   encodePortSegment,
@@ -112,3 +144,87 @@ export {
   validateUploadPlan,
 } from '../domain/uploads'
 export { resolveUniqueUploadNameSync } from '../application/workspaceUploads'
+
+export {
+  decodeTaskSubject,
+  isTurnEngineTaskSubject,
+  definitionAnchorId,
+  definitionHost,
+  projectTaskSubject,
+  taskDefinitionOrigin,
+  taskSubjectWorkflowVersion,
+  TASK_DEFINITION_HOSTS,
+} from '../domain/taskSubject'
+export { createTaskSubjectQueries } from '../composition/taskSubjectQueries'
+
+export {
+  decodeTaskRollbackCheckpoints,
+  projectTaskCheckpoints,
+} from '../infrastructure/taskCheckpointCodec'
+export { inheritTaskPreSnapshots } from '../domain/taskCheckpoint'
+export { repositoryPublicationOrdinal } from '../domain/repositoryExecutionIdentity'
+
+export { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
+/** RFC-395 II-a：节点回滚计划（逐仓目标 + 持久化请求），legacy `services/nodeRollback.ts` 经此取用。 */
+export { taskRollbackPlan } from '../infrastructure/taskRollbackCodec'
+
+export { projectStoredTaskRepositorySummary } from '../infrastructure/taskRepositorySurface'
+export { taskRepositoryNodePaths } from '../domain/taskRepository'
+
+export { decodeTaskWorkgroupConfig, workgroupLaunchMode } from '../domain/taskWorkgroupConfig'
+export { decodeTaskRepositoryMount } from '../infrastructure/taskRepositoryCodec'
+export { taskWorkgroupConfigFromRow } from '../infrastructure/taskWorkgroupConfig'
+
+export {
+  isFresherNodeRun,
+  pickLatestSettledRun,
+  pickLatestRunInFrame,
+  pickFrameSourceRun,
+  isSettledRunStatus,
+  pickReusableShardRun,
+  pickFreshestRun,
+} from '../infrastructure/runSelection/oracle/legacyPickers'
+export {
+  parseConsumedJson,
+  decodeConsumedEdges,
+  encodeConsumedEdges,
+  consumedEdgesFromRecord,
+} from '../infrastructure/runSelection/consumedCodec'
+
+export { nodeRunStatusCondition } from '../infrastructure/nodeRunQueries'
+
+export { createTaskGateQueries } from '../infrastructure/taskGateQueries'
+export type {
+  TaskGateQueries,
+  TaskGateContext,
+  TaskGateDefinitionContext,
+  TaskDispatchContext,
+} from '../application/ports/taskGateQueries'
+export { createNodeOutputQueries } from '../infrastructure/nodeOutputQueries'
+export type { NodeOutputQueries, NodeOutputContent } from '../application/ports/nodeOutputQueries'
+
+export { taskGateOpenCondition, taskGateVisibleCondition } from '../infrastructure/taskGateQueries'
+
+export { createTaskKnowledgeQueries } from '../infrastructure/taskKnowledgeQueries'
+export { createTaskTriggerQueries } from '../infrastructure/taskTriggerQueries'
+
+export { listNodeEventContents, type NodeEventContent } from '../infrastructure/nodeEventQueries'
+
+export type {
+  TaskKnowledgeQueries,
+  TaskKnowledgeContext,
+  TaskDistillationScope,
+  TaskDistillationSource,
+} from '../application/ports/taskKnowledgeQueries'
+export type {
+  TaskTriggerQueries,
+  TaskTerminalWorkspace,
+} from '../application/ports/taskTriggerQueries'
+
+export { createTaskDeletionQueries } from '../infrastructure/taskDeletionQueries'
+export type { TaskDeletionQueries } from '../application/ports/taskDeletion'
+
+export { createTaskDetailQueries } from '../infrastructure/taskDetailQueries'
+export type { TaskDetailQueries } from '../application/ports/taskDetailQueries'
+export { createTaskPreparationQueries } from '../infrastructure/taskPreparationQueries'
+export type { TaskPreparationQueries } from '../application/ports/taskPreparation'

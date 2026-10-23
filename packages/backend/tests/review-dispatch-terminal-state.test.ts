@@ -11,6 +11,14 @@
 //
 // Locks the fix for production task 01KS1N8WVZWE8FTR4K9WSETRNW.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -49,8 +57,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     definition: WorkflowDefinition
     docRunId: string
   }> {
-    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -78,7 +85,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
       ],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -87,7 +94,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     })
 
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 'rfc-052',
       id: taskId,
       workflowId,
@@ -103,7 +110,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
 
     // Upstream agent done with a docpath output.
     const docRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: docRunId,
       taskId,
       nodeId: 'doc',
@@ -113,7 +120,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
       startedAt: Date.now() - 1000,
       finishedAt: Date.now() - 500,
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: docRunId,
       portName: 'docpath',
       content: '# body',
@@ -124,13 +131,13 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
 
   test('returns ok + does NOT touch a done review row + does NOT mint a phantom doc_version', async () => {
     const { taskId, definition } = await seedWorkflow()
-    const { tasks, nodeRuns, docVersions } = tablesOf(db)
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { nodeRuns, docVersions } = tablesOf(db)
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
 
     // Original review row: previously approved (status=done) at v1.
     const approvedRunId = ulid()
     const approvedFinishedAt = Date.now() - 200
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: approvedRunId,
       taskId,
       nodeId: 'rev_1',
@@ -161,7 +168,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     // pre-RFC-052 latestPerNode / dispatchReviewNode interaction picked up
     // and used to reset the approved row.
     const placeholderRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: placeholderRunId,
       taskId,
       nodeId: 'rev_1',
@@ -211,13 +218,13 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
 
   test('still parks a pending review row at awaiting_review (no regression on normal path)', async () => {
     const { taskId, definition } = await seedWorkflow()
-    const { tasks, nodeRuns, docVersions } = tablesOf(db)
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const { nodeRuns, docVersions } = tablesOf(db)
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
 
     // Single review row in `pending` (e.g., post-iterate). Dispatch should
     // pick it, set status=awaiting_review, and create v1.
     const reviewRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',

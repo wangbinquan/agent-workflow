@@ -7,7 +7,7 @@
 // publication boundary: attribution + context are visible at task commit,
 // before scheduler kickoff; non-webhook NULL stays distinct from webhook `{}`;
 // and serialization failure cannot leave a schedulable task behind.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, workflowFixture } from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
@@ -68,8 +68,7 @@ function buildHarness(): Harness {
   const db = createInMemoryDb(MIGRATIONS)
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc269-trigger-context-'))
   const workflowId = 'wf-rfc269-trigger-context'
-  const { workflows } = tablesOf(db)
-  insertOne(db, workflows, {
+  workflowFixture(db, {
     id: workflowId,
     name: 'rfc269-trigger-context',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -268,8 +267,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
           : null,
       ),
     ).toEqual(['task-launch-schedule-metadata-invalid', 'task-launch-webhook-metadata-invalid'])
-    const { tasks } = tablesOf(h.db)
-    expect(await h.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(h.db)).toHaveLength(0)
     const scratchRoot = join(h.appHome, 'scratch')
     expect(existsSync(scratchRoot) ? readdirSync(scratchRoot) : []).toEqual([])
   })
@@ -311,8 +309,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
     ).rejects.toThrow('the frozen task trigger context is invalid')
 
     expect(committed).toBe(false)
-    const { tasks } = tablesOf(h.db)
-    expect(await h.db.select().from(tasks)).toHaveLength(0)
+    expect(await readTaskFixtures(h.db)).toHaveLength(0)
     const scratchRoot = join(h.appHome, 'scratch')
     expect(existsSync(scratchRoot) ? readdirSync(scratchRoot) : []).toEqual([])
   })

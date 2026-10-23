@@ -6,6 +6,16 @@
 // anchored comments, mint a v(n+1) on the new body, and re-stamp the review
 // row's consumed provenance to the new source run. This locks that transaction.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  consumedProducerIds,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -45,8 +55,7 @@ describeEachProvider(
       definition: WorkflowDefinition
       reviewNode: WorkflowNode
     }> {
-      const { agents, workflows, tasks } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: ulid(),
         name: 'doc',
         description: '',
@@ -70,7 +79,7 @@ describeEachProvider(
         edges: [],
       }
       const workflowId = ulid()
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: workflowId,
         name: 'w',
         description: '',
@@ -78,7 +87,7 @@ describeEachProvider(
         version: 1,
       })
       const taskId = ulid()
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -95,14 +104,13 @@ describeEachProvider(
         inputs: '{}',
         startedAt: Date.now(),
       })
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]!
       const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
       return { taskId, task, definition, reviewNode }
     }
 
     async function seedSrc(taskId: string, id: string, cci: number, body: string): Promise<void> {
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id,
         taskId,
         nodeId: 'src',
@@ -112,7 +120,7 @@ describeEachProvider(
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
-      await insertOne(db, nodeRunOutputs, { nodeRunId: id, portName: 'docpath', content: body })
+      await nodeRunOutputFixture(db, { nodeRunId: id, portName: 'docpath', content: body })
     }
 
     test('awaiting review + fresher upstream → v1 superseded, comments dropped, v2 minted, consumed restamped', async () => {
@@ -123,8 +131,8 @@ describeEachProvider(
 
       // The awaiting review row consumed the OLD source.
       const reviewRunId = ulid()
-      const { nodeRuns, docVersions, reviewComments } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { docVersions, reviewComments } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: reviewRunId,
         taskId,
         nodeId: 'rev_1',
@@ -132,7 +140,7 @@ describeEachProvider(
         retryIndex: 0,
         iteration: 0,
         reviewIteration: 0,
-        consumedUpstreamRunsJson: JSON.stringify({ src: '01A_OLD' }),
+        consumedEdges: [{ producerNodeId: 'src', producerRunId: '01A_OLD' }],
         startedAt: Date.now(),
       })
       // A pending v1 doc_version with an anchored comment (mid-review state).
@@ -199,8 +207,8 @@ describeEachProvider(
       expect(allVersions[0]!.versionIndex).toBe(2)
 
       // The review row's provenance is re-stamped to the NEW source run.
-      const reviewAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
-      expect(JSON.parse(reviewAfter.consumedUpstreamRunsJson ?? '{}').src).toBe('01B_NEW')
+      const reviewAfter = (await readNodeRunFixtures(db, { id: reviewRunId }))[0]!
+      expect(consumedProducerIds(reviewAfter.consumedEdges).src).toBe('01B_NEW')
     })
 
     test('a T6 review refresh reuses one stable gate and advances its committed revision without overwriting v1', async () => {
@@ -217,12 +225,12 @@ describeEachProvider(
         iteration: 0,
       })
       expect(opened.kind).toBe('awaiting_review')
-      const { nodeRuns, docVersions, tasks, collaborationGateOperations } = tablesOf(db)
+      const { nodeRuns, docVersions, collaborationGateOperations } = tablesOf(db)
       const firstRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1')))[0]!
       const firstVersion = (
         await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, firstRun.id))
       )[0]!
-      const revisionAfterOpen = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+      const revisionAfterOpen = (await readTaskFixtures(db, { id: taskId }))[0]!
         .lifecycleEventRevision
 
       await seedSrc(taskId, '01B_NEW', 4, '# new body after upstream rerun')
@@ -264,7 +272,7 @@ describeEachProvider(
       ])
       expect(operations.map((operation) => operation.resultGateRevision)).toEqual([1, 2])
       expect(operations.map((operation) => operation.state)).toEqual(['completed', 'completed'])
-      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'awaiting_review',
         lifecycleEventRevision: revisionAfterOpen,
       })
@@ -275,8 +283,8 @@ describeEachProvider(
       await seedSrc(taskId, '01A_OLD', 0, '# old body')
       await seedSrc(taskId, '01B_NEW', 4, '# new body after upstream rerun')
       const reviewRunId = ulid()
-      const { nodeRuns, docVersions, reviewComments, collaborationGateOperations } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { docVersions, reviewComments, collaborationGateOperations } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: reviewRunId,
         taskId,
         nodeId: 'rev_1',
@@ -284,7 +292,7 @@ describeEachProvider(
         retryIndex: 0,
         iteration: 0,
         reviewIteration: 0,
-        consumedUpstreamRunsJson: JSON.stringify({ src: '01A_OLD' }),
+        consumedEdges: [{ producerNodeId: 'src', producerRunId: '01A_OLD' }],
         startedAt: Date.now(),
       })
       const v1Id = ulid()
@@ -375,11 +383,11 @@ describeEachProvider(
         expect(
           await db.select().from(reviewComments).where(eq(reviewComments.id, commentId)),
         ).toHaveLength(1)
-        expect(
-          (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0],
-        ).toMatchObject({
+        expect((await readNodeRunFixtures(db, { id: reviewRunId }))[0]).toMatchObject({
           status: 'awaiting_review',
-          consumedUpstreamRunsJson: JSON.stringify({ src: '01A_OLD' }),
+          consumedEdges: [
+            { producerNodeId: 'src', producerRunId: '01A_OLD', producerShardKey: null },
+          ],
         })
         const operation = (
           await db

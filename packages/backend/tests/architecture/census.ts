@@ -14,6 +14,7 @@
 import { readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
 import { posix, relative, resolve } from 'node:path'
 import ts from 'typescript'
+import { referencedPersistenceTables, tableOwnerContext } from './tableOwnership'
 
 export interface SourceUnit {
   readonly path: string
@@ -1562,11 +1563,7 @@ export function declarationReadsSymbol(input: {
 // 表归属（RFC-317 T41 · R5 · findings DE-01 / DE-02）
 // ---------------------------------------------------------------------------
 //
-// 为什么必须按**前缀声明**归属，而不是按引用推断：按引用推断的话，「一张表只被某个
-// context 引用」就会被当成它归那个 context——而 DE-02 的实测正好是反例，
-// `employeeRoundWorkspaceStates` 明明是 digital-employee 的表，却**只**被
-// development-automation 引用过，按引用推断会得出「它归 development-automation」，
-// 于是最严重的那种越界（另一个 context 独占了你的表）反而不报。
+// 归属来自编译 registry 的显式声明，不能从引用者或表名前缀反推。
 
 export interface TableOwnershipCrossing {
   /** 表符号名。 */
@@ -1577,45 +1574,30 @@ export interface TableOwnershipCrossing {
   readonly file: string
 }
 
-/**
- * 报出「某 context 的表被别的 context 引用」的全部交叉。
- *
- * 只看 `modules/<ctx>/**` 下的文件：`db/schema.ts` 自己、迁移、以及尚未模块化的
- * `services/` / `routes/` 不在判据内——把它们一起纳入会让这条规则一上来就报出几百条，
- * 失去「只减不增」的意义。RFC-294 的方向是这些横向层逐步迁入 module，届时它们自然
- * 进入本判据的视野。
- */
+/** RFC-395 II-a A7：模块账本；横向目录后继使用 referencedPersistenceTables 单独立账。 */
 export function tableOwnershipCrossings(input: {
   readonly units: readonly SourceUnit[]
   readonly tables: readonly string[]
-  /** 表符号 → registry 声明的 bounded context 目录名。 */
   readonly owners: Readonly<Record<string, string>>
+  /** SQL 物理名必须来自 registry，不从 camelCase 猜。 */
+  readonly tableIds?: Readonly<Record<string, string>>
 }): TableOwnershipCrossing[] {
-  const owned = new Map(
-    input.tables.flatMap((table) => {
-      const owner = input.owners[table]
-      return owner === undefined ? [] : [[table, owner] as const]
-    }),
-  )
+  const tables = input.tables.flatMap((schemaSymbol) => {
+    const owner = input.owners[schemaSymbol]
+    return owner === undefined
+      ? []
+      : [{ schemaSymbol, owner, id: input.tableIds?.[schemaSymbol] ?? schemaSymbol }]
+  })
+  const owners = new Map(tables.map((table) => [table.schemaSymbol, table.owner]))
   const out: TableOwnershipCrossing[] = []
   for (const unit of input.units) {
     const location = /^packages\/backend\/src\/modules\/([^/]+)\//.exec(unit.path)
     if (location === null) continue
-    const context = location[1]
-    const seen = new Set<string>()
-    const visit = (node: ts.Node): void => {
-      if (ts.isIdentifier(node) && owned.has(node.text) && owned.get(node.text) !== context) {
-        seen.add(node.text)
-      }
-      ts.forEachChild(node, visit)
-    }
-    visit(unit.source)
-    for (const table of seen) {
-      out.push({
-        table,
-        owner: owned.get(table) ?? '',
-        file: unit.path.replace('packages/backend/src/modules/', ''),
-      })
+    const context = tableOwnerContext(location[1]!)
+    for (const table of referencedPersistenceTables(unit, tables)) {
+      const owner = owners.get(table)!
+      if (tableOwnerContext(owner) === context) continue
+      out.push({ table, owner, file: unit.path.replace('packages/backend/src/modules/', '') })
     }
   }
   return out.sort((a, b) => `${a.table}|${a.file}`.localeCompare(`${b.table}|${b.file}`))

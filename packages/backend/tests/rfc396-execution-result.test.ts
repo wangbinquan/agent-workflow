@@ -1,7 +1,6 @@
 // Real-model acceptance found a designer result masking the later clarified result.
 // Exercise the production read model and execution core, including persisted generations.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
@@ -20,8 +19,7 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
           { id: 'result', kind: 'output', ports: [{ name: 'agent-result' }] },
         ],
       })
-      const { workflows, tasks, nodeRuns, nodeRunOutputs } = tablesOf(harness.db)
-      await insertOne(harness.db, workflows, {
+      await workflowFixture(harness.db, {
         id: 'workflow',
         name: 'graph',
         definition,
@@ -29,7 +27,7 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
         createdAt: 1,
         updatedAt: 1,
       })
-      await insertOne(harness.db, tasks, {
+      await taskFixture(harness.db, {
         id: 'task',
         name: 'graph',
         workflowId: 'workflow',
@@ -44,7 +42,7 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
         finishedAt: 5,
         digitalEmployeeRoundId: 'round',
       })
-      await harness.db.insert(nodeRuns).values([
+      await nodeRunFixture(harness.db, [
         { id: 'designer-run', taskId: 'task', nodeId: 'designer', seq: 1, status: 'done' },
         { id: 'z-old-output', taskId: 'task', nodeId: 'result', seq: 2, status: 'done' },
         { id: 'clarifier-run', taskId: 'task', nodeId: 'clarifier', seq: 3, status: 'done' },
@@ -57,7 +55,7 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
           status: terminal === 'skipped' ? 'skipped' : 'done',
         },
       ])
-      await harness.db.insert(nodeRunOutputs).values([
+      await nodeRunOutputFixture(harness.db, [
         {
           nodeRunId: 'designer-run',
           portName: 'agent-result',

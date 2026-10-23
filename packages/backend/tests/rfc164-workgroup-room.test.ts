@@ -15,6 +15,15 @@
 //     may carry authorUserId/createdByUserId audit columns (design §11 keeps
 //     them out of prompts, not out of the member-gated UI).
 
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  nodeRunFixture,
+  patchAgentFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -86,10 +95,9 @@ async function seedAgent(db: PersistenceDb, name: string): Promise<string> {
     frontmatterExtra: {},
     bodyMd: 'test agent',
   })
-  const { agents } = tablesOf(db)
   // Room fixtures are shared with the task owner. Keep that cross-actor
   // visibility explicit now that canonical creates default to private.
-  await db.update(agents).set({ visibility: 'public' }).where(eq(agents.id, created.id))
+  await patchAgentFixture(db, { id: created.id }, { visibility: 'public' })
   return created.id
 }
 
@@ -146,9 +154,8 @@ describeEachProviderHttpApplication(
 
       const wfId = ulid()
       taskId = ulid()
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
-      await insertOne(db, tasks, {
+      await workflowFixture(db, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
+      await taskFixture(db, {
         id: taskId,
         name: 'room-task',
         workflowId: wfId,
@@ -239,11 +246,12 @@ describeEachProviderHttpApplication(
       frozenConfig.members = frozenConfig.members.map((member) =>
         member.id === 'm-coder' ? { ...member, agentId: coderAgentId } : member,
       )
-      const { tasks, workgroupAssignments, nodeRuns } = tablesOf(db)
-      await db
-        .update(tasks)
-        .set({ workgroupConfigJson: JSON.stringify(frozenConfig) })
-        .where(eq(tasks.id, taskId))
+      const { workgroupAssignments } = tablesOf(db)
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        { workgroupConfigJson: JSON.stringify(frozenConfig) },
+      )
 
       // Seed a dispatched→running assignment for @coder + the host run keyed by it.
       const assignmentId = ulid()
@@ -256,7 +264,7 @@ describeEachProviderHttpApplication(
         status: 'running',
       })
       const runId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: '__wg_member__',
@@ -319,9 +327,8 @@ describeEachProviderHttpApplication(
     test('non-workgroup task → 404 (room endpoints only exist for group tasks)', async () => {
       const wfId = ulid()
       const plainId = ulid()
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
-      await insertOne(db, tasks, {
+      await workflowFixture(db, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
+      await taskFixture(db, {
         id: plainId,
         name: 'plain',
         workflowId: wfId,
@@ -393,8 +400,7 @@ describeEachProviderHttpApplication(
     })
 
     test('terminal task refuses messages (409)', async () => {
-      const { tasks } = tablesOf(db)
-      await db.update(tasks).set({ status: 'done' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { status: 'done' })
       const res = await req(owner.token, `/api/workgroup-tasks/${taskId}/messages`, {
         method: 'POST',
         body: JSON.stringify({ body: 'hello?' }),
@@ -529,9 +535,8 @@ describeEachProviderHttpApplication(
       owner = { id: u.id, token: (await createSession({ db, userId: u.id })).token }
       const wfId = ulid()
       taskId = ulid()
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
-      await insertOne(db, tasks, {
+      await workflowFixture(db, { id: wfId, name: `wf-${wfId}`, definition: '{}' })
+      await taskFixture(db, {
         id: taskId,
         name: 'room5-task',
         workflowId: wfId,
@@ -658,9 +663,8 @@ describeEachProviderHttpApplication(
       await ensureWorkgroupTaskStateRow(db, taskId)
       await casGateStatus(db, taskId, { from: ['idle', 'rejected'], to: 'declared' })
       await casGateStatus(db, taskId, { from: ['declared'], to: 'awaiting_confirmation' })
-      const { tasks, nodeRuns } = tablesOf(db)
-      await db.update(tasks).set({ status: 'awaiting_review' }).where(eq(tasks.id, taskId))
-      await insertOne(db, nodeRuns, {
+      await patchTaskFixture(db, { id: taskId }, { status: 'awaiting_review' })
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: '__wg_leader__',
@@ -675,14 +679,11 @@ describeEachProviderHttpApplication(
 
     test('confirm approve：gate 关+approved、门 run done、系统消息', async () => {
       await openGate()
-      const { tasks, nodeRuns } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       // Atomic confirm now performs the same worktree preflight as every resume.
       // Use an existing directory for this positive path; the missing-worktree
       // rollback contract is locked separately below.
-      await db
-        .update(tasks)
-        .set({ worktreePath: import.meta.dir })
-        .where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { worktreePath: import.meta.dir })
       const res = await req(owner.token, `/api/workgroup-tasks/${taskId}/confirm`, {
         method: 'POST',
         body: JSON.stringify({ decision: 'approve' }),
@@ -699,11 +700,7 @@ describeEachProviderHttpApplication(
 
     test('confirm reject：必带 comment；declaredDone 复位 + rejected 置位', async () => {
       await openGate()
-      const { tasks } = tablesOf(db)
-      await db
-        .update(tasks)
-        .set({ worktreePath: import.meta.dir })
-        .where(eq(tasks.id, taskId))
+      await patchTaskFixture(db, { id: taskId }, { worktreePath: import.meta.dir })
       const noComment = await req(owner.token, `/api/workgroup-tasks/${taskId}/confirm`, {
         method: 'POST',
         body: JSON.stringify({ decision: 'reject' }),
@@ -722,7 +719,7 @@ describeEachProviderHttpApplication(
 
     test('上线前加固：confirm 恢复失败时 gate、holder 与消息全部保持可重试', async () => {
       await openGate()
-      const { workgroupMessages, tasks, nodeRuns } = tablesOf(db)
+      const { workgroupMessages, nodeRuns } = tablesOf(db)
       const beforeMessages = await db
         .select()
         .from(workgroupMessages)
@@ -743,7 +740,7 @@ describeEachProviderHttpApplication(
       })
       expect(res.status).toBe(410)
 
-      const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+      const task = (await readTaskFixtures(db, { id: taskId }))[0]
       const gate = gateViewOf(await loadWorkgroupTaskState(db, taskId))
       expect(task?.status).toBe('awaiting_review')
       expect(gate.approved).toBe(false)
@@ -770,8 +767,7 @@ describeEachProviderHttpApplication(
 
     test('config patch：加成员游标=当前尾（不补历史）、减成员卡转置、leader 不可删、重名拒', async () => {
       const lateAgentId = await seedAgent(db, 'late-joiner')
-      const { workgroupMessages, tasks, workgroupMemberCursors, workgroupAssignments } =
-        tablesOf(db)
+      const { workgroupMessages, workgroupMemberCursors, workgroupAssignments } = tablesOf(db)
       // 先落一条消息作为「历史」
       await insertOne(db, workgroupMessages, {
         id: ulid(),
@@ -794,7 +790,7 @@ describeEachProviderHttpApplication(
       })
       expect(add.status).toBe(200)
       const raw = JSON.parse(
-        (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+        (await readTaskFixtures(db, { id: taskId }))[0]?.workgroupConfigJson ?? '{}',
       ) as { members: Array<{ id: string; displayName: string }>; maxRounds: number }
       expect(raw.maxRounds).toBe(30)
       const late = raw.members.find((m) => m.displayName === 'late')
@@ -917,16 +913,15 @@ describeEachProviderHttpApplication(
         }),
       })
       expect(add.status).toBe(422)
-      const { tasks } = tablesOf(db)
       const raw = JSON.parse(
-        (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+        (await readTaskFixtures(db, { id: taskId }))[0]?.workgroupConfigJson ?? '{}',
       ) as { members: Array<{ displayName: string }> }
       expect(raw.members.some((m) => m.displayName === 'deleted')).toBe(false)
     })
 
     test('上线前加固：运行中的成员不可从 roster 移除', async () => {
       const cardId = ulid()
-      const { workgroupAssignments, tasks } = tablesOf(db)
+      const { workgroupAssignments } = tablesOf(db)
       await insertOne(db, workgroupAssignments, {
         id: cardId,
         taskId,
@@ -945,7 +940,7 @@ describeEachProviderHttpApplication(
       })
       expect(remove.status).toBe(409)
       const raw = JSON.parse(
-        (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+        (await readTaskFixtures(db, { id: taskId }))[0]?.workgroupConfigJson ?? '{}',
       ) as { members: Array<{ id: string }> }
       expect(raw.members.some((m) => m.id === 'm-coder')).toBe(true)
       expect(
@@ -956,8 +951,7 @@ describeEachProviderHttpApplication(
 
     test('上线前加固：无效 config patch 返回 422 时不取消卡片、不写游标、不改 roster', async () => {
       const cardId = ulid()
-      const { workgroupAssignments, workgroupMessages, workgroupMemberCursors, tasks } =
-        tablesOf(db)
+      const { workgroupAssignments, workgroupMessages, workgroupMemberCursors } = tablesOf(db)
       await insertOne(db, workgroupAssignments, {
         id: cardId,
         taskId,
@@ -1009,7 +1003,7 @@ describeEachProviderHttpApplication(
           ?.status,
       ).toBe('dispatched')
       const raw = JSON.parse(
-        (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+        (await readTaskFixtures(db, { id: taskId }))[0]?.workgroupConfigJson ?? '{}',
       ) as { members: Array<{ id: string; displayName: string }> }
       expect(raw.members.some((m) => m.id === 'm-coder')).toBe(true)
       expect(raw.members.some((m) => m.displayName === 'ghost')).toBe(false)
@@ -1025,7 +1019,7 @@ describeEachProviderHttpApplication(
     // RFC-181 A/A2 — autonomous 进 per-task PATCH（对称 on/off + system 消息），
     // false→true 单事务遣散在途 clarify park 并 requeue 卡（design §2.1/§2.1a）。
     test('RFC-207：移除最后一个人工成员 → 遣散在途 clarify park', async () => {
-      const { clarifyRounds, tasks, workgroupAssignments } = tablesOf(db)
+      const { clarifyRounds, workgroupAssignments } = tablesOf(db)
       const { mintNodeRun } = await import('../src/services/nodeRunMint')
 
       // RFC-207 — the autonomous switch this test used to drive is gone. Losing the
@@ -1033,7 +1027,7 @@ describeEachProviderHttpApplication(
       // in-flight ask-back must be dismissed instead of leaving the task parked
       // forever on a question addressed to nobody.
       const cfgNow = JSON.parse(
-        (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workgroupConfigJson ?? '{}',
+        (await readTaskFixtures(db, { id: taskId }))[0]?.workgroupConfigJson ?? '{}',
       ) as { members: Array<{ id: string; memberType: string }> }
       const humanMemberIds = cfgNow.members.filter((m) => m.memberType === 'human').map((m) => m.id)
       expect(humanMemberIds.length).toBeGreaterThan(0)
@@ -1054,11 +1048,17 @@ describeEachProviderHttpApplication(
         updatedAt: Date.now(),
       })
       const clarifyRunId = await mintNodeRun(db, {
+        ...deriveNodeRunRole({ nodeId: '__wg_clarify__', rerunCause: 'clarify-park' }),
         taskId,
         nodeId: '__wg_clarify__',
         status: 'awaiting_human',
         cause: 'clarify-park',
-        overrides: { shardKey: cardId, startedAt: Date.now() },
+        overrides: {
+          identity: {
+            shardKey: cardId,
+            startedAt: Date.now(),
+          },
+        },
       })
       const sessionId = ulid()
       await insertLegacySelfClarify(db, {

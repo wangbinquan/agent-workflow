@@ -16,7 +16,12 @@ export function createHostedResourcePackagePluginRetention(db: PersistenceDb) {
     const retained: string[] = []
     for (const journal of journals)
       for (const artifact of decodeResourcePackageArtifacts(journal.json))
-        if (artifact.kind === 'plugin-install') retained.push(artifact.generationDirectory)
+        if (artifact.kind === 'plugin-install')
+          retained.push(
+            'generationDirectory' in artifact
+              ? artifact.generationDirectory
+              : artifact.generationDir,
+          )
     return retained
   }
 }

@@ -9,6 +9,7 @@
 // the e2e tests) + a tiny workflow: input → designer (agent producing
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
+import { readNodeRunOutputFixtures, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
@@ -351,11 +352,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       author: 'tester',
     })
 
-    const { nodeRunOutputs } = tablesOf(h.db)
-    const outRows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, h.reviewNodeRunId))
+    const outRows = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewNodeRunId })
     const byPort = new Map(outRows.map((r) => [r.portName, r.content]))
     expect(byPort.size).toBe(2)
     // The stub script writes the body with literal "\n" escapes (matches the
@@ -388,7 +385,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     // an upstream that emitted `markdown_file`. Existing harness produces
     // inline markdown; we don't need a second harness for this assertion.
     const pendingPath = 'docs/design-v1.md'
-    const { docVersions, nodeRunOutputs } = tablesOf(h.db)
+    const { docVersions } = tablesOf(h.db)
     await h.db
       .update(docVersions)
       .set({ sourceFilePath: pendingPath })
@@ -403,10 +400,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       author: 'tester',
     })
 
-    const outRows = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, h.reviewNodeRunId))
+    const outRows = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewNodeRunId })
     const byPort = new Map(outRows.map((r) => [r.portName, r.content]))
     expect(byPort.get('approved_doc')).toBe(pendingPath)
     // Must NOT have inlined the body — that's exactly the bug this guards.
@@ -472,10 +466,9 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     // review code now mints a fresh node_run at retry_index+1 and marks the
     // old row canceled with a stable supersede prefix on errorMessage. This
     // preserves the v1 promptText for the Prompt-tab attempts switcher.
-    const upRuns = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'designer')))
+    const upRuns = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId: h.taskId }, { nodeId: 'designer' }],
+    })
     const tops = upRuns.filter((r) => r.parentNodeRunId === null)
     expect(tops.length).toBe(2)
     const old = tops.find((r) => r.retryIndex === 0)
@@ -484,7 +477,9 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(old?.errorMessage).toContain('superseded-by-review-rejected')
     expect(old?.promptText).not.toBeNull() // v1 prompt preserved
     expect(fresh?.status).toBe('pending')
-    expect(fresh?.preSnapshot).toBe(old?.preSnapshot ?? null)
+    expect(
+      fresh?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null,
+    ).toBe(old?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null)
   })
 
   test('reject + scheduler re-run produces a new doc_version v2 with reviewIteration=1', async () => {

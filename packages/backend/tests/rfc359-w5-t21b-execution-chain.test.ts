@@ -4,6 +4,12 @@
 // mock-opencode fixture; task/node state and output rows are never fabricated.
 // Ubuntu push-CI backend shards provide PostgreSQL through eachProvider.ts.
 
+import {
+  agentFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflow/shared'
@@ -50,8 +56,7 @@ describeEachProvider(
         const agentId = ulid()
         const workflowId = ulid()
         const now = Date.now()
-        const { users, agents, workflows, tasks, nodeRuns, nodeRunOutputs, taskExecutionIntents } =
-          tablesOf(harness.db)
+        const { users, nodeRuns, taskExecutionIntents } = tablesOf(harness.db)
         await insertOne(harness.db, users, {
           id: userId,
           username: `execution-${userId}`,
@@ -63,7 +68,7 @@ describeEachProvider(
           createdAt: now,
           updatedAt: now,
         })
-        await insertOne(harness.db, agents, {
+        await agentFixture(harness.db, {
           id: agentId,
           name: 'execution-chain-agent',
           description: 'Real subprocess fixture',
@@ -100,7 +105,7 @@ describeEachProvider(
             },
           ],
         }
-        await insertOne(harness.db, workflows, {
+        await workflowFixture(harness.db, {
           id: workflowId,
           name: 'Execution chain',
           definition: JSON.stringify(definition),
@@ -116,7 +121,9 @@ describeEachProvider(
           },
           userId,
         )
-        expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
+        expect(
+          await readTaskFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+        ).toEqual([])
         const launched = await execution.launch(
           {
             workflowId,
@@ -125,7 +132,7 @@ describeEachProvider(
           },
           { workspacePath, baselineSha },
         )
-        const [task] = await harness.db.select().from(tasks).where(eq(tasks.id, launched.id))
+        const [task] = await readTaskFixtures(harness.db, { id: launched.id })
         expect(task, task?.errorMessage ?? undefined).toMatchObject({
           status: 'done',
           errorMessage: null,
@@ -145,10 +152,9 @@ describeEachProvider(
         const agentRun = runs.find((row) => row.nodeId === 'agent')!
         expect(agentRun.exitCode).toBe(0)
         const outputRun = runs.find((row) => row.nodeId === 'output')!
-        const output = await harness.db
-          .select({ portName: nodeRunOutputs.portName, content: nodeRunOutputs.content })
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, outputRun.id))
+        const output = await readNodeRunOutputFixtures(harness.db, {
+          nodeRunId: outputRun.id,
+        }).then((rows) => rows.map((row) => ({ portName: row.portName, content: row.content })))
         expect(output).toEqual([
           { portName: 'result', content: 'executed on the selected database' },
         ])

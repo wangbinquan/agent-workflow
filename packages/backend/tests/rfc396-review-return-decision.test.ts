@@ -1,3 +1,4 @@
+import { patchTaskFixture, readNodeRunOutputFixtures, readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -30,15 +31,16 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
     test(`${decision} closes the gate, returns the actual decision and replays without upstream reruns`, async () => {
       const db = harness.db
       round = await seedReviewRound(db)
-      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(db)
-      const task = (await db.select().from(tasks).where(eq(tasks.id, round.taskId)))[0]!
+      const { nodeRuns, docVersions } = tablesOf(db)
+      const task = (await readTaskFixtures(db, { id: round.taskId }))[0]!
       const definition = JSON.parse(task.workflowSnapshot)
       definition.nodes.find((node: { kind: string }) => node.kind === 'review').decisionHandling =
         'return-decision'
-      await db
-        .update(tasks)
-        .set({ workflowSnapshot: JSON.stringify(definition) })
-        .where(eq(tasks.id, round.taskId))
+      await patchTaskFixture(
+        db,
+        { id: round.taskId },
+        { workflowSnapshot: JSON.stringify(definition) },
+      )
       const beforeRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, round.taskId))
       const command = createReviewDecisionCommand({ db, appHome: round.appHome })
       const request = {
@@ -67,10 +69,7 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
         .from(docVersions)
         .where(eq(docVersions.reviewNodeRunId, round.reviewRunId))
       expect(docs[0]!.decision).toBe(decision)
-      const outputs = await db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, round.reviewRunId))
+      const outputs = await readNodeRunOutputFixtures(db, { nodeRunId: round.reviewRunId })
       expect(outputs.map((output) => output.portName)).toEqual(['decision_meta'])
       const meta = JSON.parse(outputs[0]!.content)
       expect(meta.decision).toBe(decision)

@@ -21,10 +21,10 @@ import {
   DW_PHASES,
   deriveWorkgroupDispatch,
   initialDwState,
-  isTurnEngineWorkgroupTask,
   parseDwState,
   WORKGROUP_MODES,
-  workgroupModeOf,
+  decodeTaskWorkgroupLaunchConfig,
+  workgroupLaunchMode,
   resolveWorkgroupSwitches,
   workgroupLaunchReadiness,
 } from '../src'
@@ -165,15 +165,15 @@ describe('deriveWorkgroupDispatch — single dispatch oracle (design §3)', () =
     expect(deriveWorkgroupDispatch('dynamic_workflow', undefined)).toBe('dw-generate')
   })
 
-  test('workgroupModeOf reads the mode off raw config JSON; garbage → null', () => {
-    expect(workgroupModeOf(JSON.stringify({ mode: 'dynamic_workflow' }))).toBe('dynamic_workflow')
-    expect(workgroupModeOf(JSON.stringify({ mode: 'leader_worker', extra: 1 }))).toBe(
-      'leader_worker',
-    )
-    expect(workgroupModeOf(JSON.stringify({ mode: 'nope' }))).toBeNull()
-    expect(workgroupModeOf('not json')).toBeNull()
-    expect(workgroupModeOf(null)).toBeNull()
-    expect(workgroupModeOf(undefined)).toBeNull()
+  test('launch mode reads raw config JSON; garbage → null', () => {
+    const modeOf = (stored: string | null | undefined) =>
+      workgroupLaunchMode(decodeTaskWorkgroupLaunchConfig(stored))
+    expect(modeOf(JSON.stringify({ mode: 'dynamic_workflow' }))).toBe('dynamic_workflow')
+    expect(modeOf(JSON.stringify({ mode: 'leader_worker', extra: 1 }))).toBe('leader_worker')
+    expect(modeOf(JSON.stringify({ mode: 'nope' }))).toBeNull()
+    expect(modeOf('not json')).toBeNull()
+    expect(modeOf(null)).toBeNull()
+    expect(modeOf(undefined)).toBeNull()
   })
 
   test('deriveWorkgroupDispatch — mode × phase dispatch matrix (RFC-217: phase now rides workgroup_task_state)', () => {
@@ -186,26 +186,6 @@ describe('deriveWorkgroupDispatch — single dispatch oracle (design §3)', () =
     expect(deriveWorkgroupDispatch('dynamic_workflow', null)).toBe('dw-generate')
     expect(deriveWorkgroupDispatch('leader_worker', null)).toBe('turn-engine')
     expect(deriveWorkgroupDispatch('free_collab', 'executing')).toBe('turn-engine')
-  })
-
-  test('isTurnEngineWorkgroupTask — the generic-recovery guard discriminator (Codex P1)', () => {
-    const dyn = JSON.stringify({ mode: 'dynamic_workflow' })
-    const lw = JSON.stringify({ mode: 'leader_worker' })
-    // not a workgroup task at all → never blocked by the workgroup guards
-    expect(isTurnEngineWorkgroupTask({ workgroupId: null, workgroupConfigJson: lw })).toBe(false)
-    // turn-engine modes → blocked (RFC-164 engine re-entry territory)
-    expect(isTurnEngineWorkgroupTask({ workgroupId: 'wg', workgroupConfigJson: lw })).toBe(true)
-    expect(
-      isTurnEngineWorkgroupTask({
-        workgroupId: 'wg',
-        workgroupConfigJson: JSON.stringify({ mode: 'free_collab' }),
-      }),
-    ).toBe(true)
-    // dynamic_workflow → generically recoverable
-    expect(isTurnEngineWorkgroupTask({ workgroupId: 'wg', workgroupConfigJson: dyn })).toBe(false)
-    // corrupt / missing config on a workgroup task → fail-closed (blocked)
-    expect(isTurnEngineWorkgroupTask({ workgroupId: 'wg', workgroupConfigJson: null })).toBe(true)
-    expect(isTurnEngineWorkgroupTask({ workgroupId: 'wg', workgroupConfigJson: '{{' })).toBe(true)
   })
 })
 

@@ -20,10 +20,8 @@
 // 另保留 `digitalEmployeeExecutionIsLive` 的四条纯判据：它仍是 inspect 报 `pending` 的唯一
 // 依据，`interrupted` 是终态但「daemon 重启打断、自动恢复未停用」那一种必须算活着。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -44,19 +42,19 @@ import { createReactionAdmissionStore } from '@/modules/task-execution/infrastru
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
 
 async function insertTask(db: PersistenceDb, taskId: string): Promise<void> {
-  const { workflows, tasks } = tablesOf(db)
-  await db
-    .insert(workflows)
-    .values({
+  await workflowFixture(
+    db,
+    {
       id: `wf-${taskId}`,
       name: `wf-${taskId}`,
       definition: '{}',
       version: 1,
       createdAt: 1,
       updatedAt: 1,
-    })
-    .onConflictDoNothing()
-  await insertOne(db, tasks, {
+    },
+    { onConflict: 'ignore' },
+  )
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: `wf-${taskId}`,
@@ -180,12 +178,10 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
     }
 
     async function taskRowsForRound(): Promise<string[]> {
-      const { tasks } = tablesOf(harness.db)
       return (
-        await harness.db
-          .select({ id: tasks.id })
-          .from(tasks)
-          .where(eq(tasks.digitalEmployeeRoundId, REACTION_ROUND))
+        await readTaskFixtures(harness.db, { digitalEmployeeRoundId: REACTION_ROUND }).then(
+          (rows) => rows.map((row) => ({ id: row.id })),
+        )
       ).map((row) => row.id)
     }
 

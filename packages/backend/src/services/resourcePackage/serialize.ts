@@ -14,6 +14,11 @@
 // local slug 从资源名派生（小写 + 非法字符换 `-`），冲突时追加序号——slug 只是
 // **包内**的引用键，不承载任何语义，所以派生规则怎么定都行，唯一要求是稳定且唯一。
 
+import {
+  decodeAgentReferenceDocumentForExport,
+  agentReferenceIds,
+  agentSkillReferences,
+} from '@agent-workflow/shared'
 import type { BundleOp, ResourceBundle } from '@agent-workflow/shared'
 import {
   BUNDLE_VERSION,
@@ -124,12 +129,12 @@ export function serializeClosure(
     const row = r.row
     switch (r.type) {
       case 'agent': {
-        const skills = (parseJson(row.skills, []) as unknown[]).map((raw) => {
-          const s = raw as { kind?: string; skillId?: string; name?: string }
-          return s.kind === 'project'
-            ? `project:${s.name ?? ''}`
-            : refWire(slugOfId, String(s.skillId ?? ''), builtinOfId)
-        })
+        const references = decodeAgentReferenceDocumentForExport(row)
+        const skills = agentSkillReferences(references).map((ref) =>
+          ref.kind === 'project'
+            ? `project:${ref.name}`
+            : refWire(slugOfId, ref.skillId, builtinOfId),
+        )
         ops.push({
           opId: nextOpId(),
           kind: 'agent-create',
@@ -148,13 +153,13 @@ export function serializeClosure(
             syncOutputsOnIterate: row.syncOutputsOnIterate !== false,
             permission: parseJson(row.permission, {}),
             skills,
-            dependsOn: (parseJson(row.dependsOn, []) as unknown[]).map((id) =>
+            dependsOn: agentReferenceIds(references, 'agent').map((id) =>
               refWire(slugOfId, String(id), builtinOfId),
             ),
-            mcp: (parseJson(row.mcp, []) as unknown[]).map((id) =>
+            mcp: agentReferenceIds(references, 'mcp').map((id) =>
               refWire(slugOfId, String(id), builtinOfId),
             ),
-            plugins: (parseJson(row.plugins, []) as unknown[]).map((id) =>
+            plugins: agentReferenceIds(references, 'plugin').map((id) =>
               refWire(slugOfId, String(id), builtinOfId),
             ),
             frontmatterExtra: redactFreeJson(

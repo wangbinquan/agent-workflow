@@ -11,8 +11,6 @@
 // 顶注记录过同一形状的教训）。
 
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
-export const DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID = '00000000000000DIGEMPHOST0'
-export const DIGITAL_EMPLOYEE_HOST_WORKFLOW_NAME = '__digital_employee_host__'
 
 /** 与 agent host `__agent_main__` 同族的命名，node_runs dump 里一眼可辨。 */
 export const DIGITAL_EMPLOYEE_INPUT_NODE_ID = '__de_input__'

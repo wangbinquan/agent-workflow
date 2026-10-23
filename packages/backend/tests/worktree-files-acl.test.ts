@@ -16,6 +16,7 @@
 // If either goes red, a regression re-opened cross-task file read or symlink
 // escape in the worktree-files proxy.
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -76,8 +77,8 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
   const admin = await mkUser('root', 'admin')
 
   const workflowId = ulid()
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -87,7 +88,7 @@ async function buildHarness(scope: ProviderHttpApplicationScope): Promise<Harnes
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'fixture',
     workflowId,

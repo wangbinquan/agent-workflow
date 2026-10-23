@@ -73,6 +73,10 @@ describe('RFC-306 §8 — exit conditions vs an inactive port', () => {
 describe('RFC-306 D10 — a skip is reversible, not terminal', () => {
   const row = (over: Partial<Row> = {}): Row =>
     ({
+      containerRunId: null,
+      shardKey: null,
+      wrapperProgressJson: null,
+
       seq: null,
       id: '01A',
       status: 'skipped',
@@ -92,26 +96,30 @@ describe('RFC-306 D10 — a skip is reversible, not terminal', () => {
     edges: [],
   } as unknown as WorkflowDefinition
 
-  test('a FRESH skip stays put (no busy loop)', () => {
+  test('a FRESH skip stays put (no busy loop)', async () => {
     const skipped = row({ consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }) })
     const freshest = new Map<string, Row>([
       ['up', row({ id: '01UP', nodeId: 'up', status: 'done' })],
     ])
-    expect(isDispatchable(skipped, 'agent-single', freshest, [skipped], definition)).toBe(false)
+    expect(await isDispatchable(skipped, 'agent-single', freshest, [skipped], definition)).toBe(
+      false,
+    )
   })
 
-  test('a STALE skip re-dispatches — this is what re-opens a closed branch', () => {
+  test('a STALE skip re-dispatches — this is what re-opens a closed branch', async () => {
     const skipped = row({ consumedUpstreamRunsJson: JSON.stringify({ up: '01UP' }) })
     // The upstream re-ran: a newer settled row exists, so what this skip decided
     // against is no longer the current answer.
     const freshest = new Map<string, Row>([
       ['up', row({ id: '01UP2', nodeId: 'up', status: 'done' })],
     ])
-    expect(isDispatchable(skipped, 'agent-single', freshest, [skipped], definition)).toBe(true)
+    expect(await isDispatchable(skipped, 'agent-single', freshest, [skipped], definition)).toBe(
+      true,
+    )
   })
 
-  test('exhausted stays terminal — the two must not be confused', () => {
+  test('exhausted stays terminal — the two must not be confused', async () => {
     const ex = row({ status: 'exhausted' })
-    expect(isDispatchable(ex, 'wrapper-loop', new Map(), [ex], definition)).toBe(false)
+    expect(await isDispatchable(ex, 'wrapper-loop', new Map(), [ex], definition)).toBe(false)
   })
 })

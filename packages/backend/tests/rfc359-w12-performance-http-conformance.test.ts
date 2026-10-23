@@ -1,7 +1,17 @@
 // RFC-359 AC11: functional evidence for the actual HTTP benchmark graph.
 // These small fixtures establish live query/response behavior, not full-corpus P95.
+import {
+  type TaskFixtureSpec,
+  clarifyRoundFixture,
+  nodeRunFixture,
+  patchClarifyRoundFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   CachedRepoPageSchema,
   OverviewResponseSchema,
@@ -77,12 +87,12 @@ async function json(app: Hono, path: string): Promise<unknown> {
 async function seedTask(
   db: PersistenceDb,
   id: string,
-  status: PersistenceTables['tasks']['$inferInsert']['status'],
-  extra: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  status: TaskFixtureSpec['status'],
+  extra: Partial<TaskFixtureSpec> = {},
 ): Promise<void> {
   const now = Date.now()
-  const { tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, tasks, {
+  const { taskCollaborators } = tablesOf(db)
+  await taskFixture(db, {
     id,
     name: id,
     workflowId: PERF_CORPUS_ENTRY.workflowId,
@@ -195,11 +205,12 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
     const { app } = await fixture(harness)
     const first = TaskCatalogPageSchema.parse(await json(app, '/api/task-catalog?limit=50'))
     const target = first.items[0]!
-    const { tasks, cachedRepos } = tablesOf(harness.db)
-    await harness.db
-      .update(tasks)
-      .set({ name: 'changed after HTTP construction', status: 'running' })
-      .where(eq(tasks.id, target.id))
+    const { cachedRepos } = tablesOf(harness.db)
+    await patchTaskFixture(
+      harness.db,
+      { id: target.id },
+      { name: 'changed after HTTP construction', status: 'running' },
+    )
     await harness.db
       .update(cachedRepos)
       .set({ defaultBranch: 'changed-branch' })
@@ -247,8 +258,8 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
         }),
       ),
     })
-    const { nodeRuns, docVersions, clarifyRounds, workgroupTaskState } = tablesOf(db)
-    await db.insert(nodeRuns).values([
+    const { docVersions, workgroupTaskState } = tablesOf(db)
+    await nodeRunFixture(db, [
       { id: 'http-review-run', taskId: 'http-review', nodeId: 'review', status: 'awaiting_review' },
       { id: 'http-asker-run', taskId: 'http-clarify', nodeId: 'writer', status: 'done' },
       {
@@ -271,7 +282,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       bodyPath: 'http-review.md',
       decision: 'pending',
     })
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: 'http-round',
       taskId: 'http-clarify',
       kind: 'self',
@@ -279,7 +290,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       askingNodeRunId: 'http-asker-run',
       intermediaryNodeId: 'clarify',
       intermediaryNodeRunId: 'http-clarify-run',
-      questionsJson: '[]',
+      questions: '[]',
       status: 'awaiting_human',
     })
     await insertOne(db, workgroupTaskState, {
@@ -295,11 +306,8 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       total: 1,
     })
     await db.update(docVersions).set({ decision: 'approved' }).where(eq(docVersions.id, 'http-doc'))
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, 'http-review-run'))
-    await db
-      .update(clarifyRounds)
-      .set({ status: 'answered', answersJson: '[]' })
-      .where(eq(clarifyRounds.id, 'http-round'))
+    await patchNodeRunFixture(db, { id: 'http-review-run' }, { status: 'done' })
+    await patchClarifyRoundFixture(db, { id: 'http-round' }, { status: 'answered', answers: '[]' })
     await db
       .update(workgroupTaskState)
       .set({ gateStatus: 'approved' })
@@ -417,8 +425,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
   test('overview retains its real owner queries across requests', async () => {
     const { app } = await fixture(harness)
     const before = OverviewResponseSchema.parse(await json(app, '/api/overview'))
-    const { workflows } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, {
+    await workflowFixture(harness.db, {
       id: 'http-extra-workflow',
       name: 'HTTP extra workflow',
       definition: '{"nodes":[],"edges":[],"inputs":[]}',

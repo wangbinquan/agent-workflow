@@ -45,6 +45,7 @@
 //  ③【存得下】`json-text` 列今天合法地存着非法 JSON，两个引擎都逐字节存取。
 //  ④【真库】PostgreSQL 上 jsonb 往返确实不保字节（执行一次，不靠记忆）。
 
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
@@ -180,9 +181,8 @@ describeEachProvider('RFC-359 W6-T23 —— json-text 列在真库上的存取',
   })
 
   test('③b 非规范形态的 JSON 也逐字节存取（这正是 jsonb 会破坏的性质）', async () => {
-    const { workflows, tasks } = tablesOf(harness.db)
-    await insertOne(harness.db, workflows, { id: 'wf-w6t23', name: 'w6t23', definition: '{}' })
-    await insertOne(harness.db, tasks, {
+    await workflowFixture(harness.db, { id: 'wf-w6t23', name: 'w6t23', definition: '{}' })
+    await taskFixture(harness.db, {
       id: 'w6t23-task',
       name: 'w6t23',
       workflowId: 'wf-w6t23',
@@ -203,10 +203,9 @@ describeEachProvider('RFC-359 W6-T23 —— json-text 列在真库上的存取',
       rootTaskId: 'w6t23-task',
       workgroupConfigJson: NON_CANONICAL_JSON,
     })
-    const [row] = await harness.db
-      .select({ config: tasks.workgroupConfigJson })
-      .from(tasks)
-      .where(sql`${tasks.id} = ${'w6t23-task'}`)
+    const [row] = await readTaskFixtures(harness.db, { id: 'w6t23-task' }).then((rows) =>
+      rows.map((row) => ({ config: row.workgroupConfigJson })),
+    )
     expect(row?.config).toBe(NON_CANONICAL_JSON)
   })
 

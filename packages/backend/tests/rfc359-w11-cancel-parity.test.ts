@@ -24,6 +24,13 @@
 // 变异实证两次（一侧一条，落在不同的格上，证明它确实有预言力而不是「都没跑到所以都绿」）：
 //   · 短路 SQLite `cancelTask` 的可取消状态门 ⇒ **只有 sqlite lane 的 B / C 红**；
 //   · 短路 PostgreSQL `cancelCascade` 对子任务的递归 ⇒ **只有 postgresql lane 的 F 红**。
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
@@ -93,7 +100,7 @@ async function seedFixture(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'init'])
 
-  const { users, workflows, tasks, nodeRuns } = tablesOf(db)
+  const { users } = tablesOf(db)
   const existing = await db
     .select({ id: users.id })
     .from(users)
@@ -111,14 +118,14 @@ async function seedFixture(
     })
   }
   const workflowId = ulid()
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `w11-${workflowId}`,
     definition: JSON.stringify(DEFINITION),
   })
 
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'w11',
     workflowId,
@@ -134,7 +141,7 @@ async function seedFixture(
     executionLineageId: taskId,
   })
   const nodeRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'doc',
@@ -147,7 +154,7 @@ async function seedFixture(
   let childTaskId: string | null = null
   if (options.childStatus !== undefined) {
     childTaskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: childTaskId,
       name: 'w11-child',
       workflowId,
@@ -165,14 +172,14 @@ async function seedFixture(
       parentNodeRunId: nodeRunId,
       invocationDepth: 1,
     })
-    await db.update(nodeRuns).set({ childTaskId }).where(eq(nodeRuns.id, nodeRunId))
+    await patchNodeRunFixture(db, { id: nodeRunId }, { childTaskId })
   }
 
   let grandchildTaskId: string | null = null
   if (options.grandchildStatus !== undefined) {
     if (childTaskId === null) throw new Error('grandchildStatus 需要先有 childStatus')
     const childRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: childRunId,
       taskId: childTaskId,
       nodeId: 'doc',
@@ -182,7 +189,7 @@ async function seedFixture(
       startedAt: Date.now() - 700,
     })
     grandchildTaskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: grandchildTaskId,
       name: 'w11-grandchild',
       workflowId,
@@ -200,17 +207,14 @@ async function seedFixture(
       parentNodeRunId: childRunId,
       invocationDepth: 2,
     })
-    await db
-      .update(nodeRuns)
-      .set({ childTaskId: grandchildTaskId })
-      .where(eq(nodeRuns.id, childRunId))
+    await patchNodeRunFixture(db, { id: childRunId }, { childTaskId: grandchildTaskId })
   }
 
   const extraRunIds: string[] = []
   for (const nodeId of options.extraOpenRuns ?? []) {
     const id = ulid()
     extraRunIds.push(id)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id,
       taskId,
       nodeId,
@@ -410,8 +414,7 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     const outcome = await cancelOutcome(harness, seeded)
     expect(outcome.code).toBe('no-throw')
     expect(outcome.status).toBe('canceled')
-    const { tasks } = tablesOf(harness.db)
-    const rows = await harness.db.select().from(tasks)
+    const rows = await readTaskFixtures(harness.db)
     const byId = new Map(rows.map((row) => [row.id, row]))
     expect(byId.get(seeded.childTaskId!)?.status, '子任务').toBe('canceled')
     expect(

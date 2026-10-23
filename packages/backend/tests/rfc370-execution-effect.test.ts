@@ -453,9 +453,11 @@ describe('RFC-370 selected native execution binding', () => {
       {
         nodeRunId: 'run',
         values: {
-          pid: 731,
-          spawnBinaryPath: '/selected-native',
-          spawnLaunchNonce: 'original-native-nonce',
+          runtime: {
+            pid: 731,
+            spawnBinaryPath: '/selected-native',
+            spawnLaunchNonce: 'original-native-nonce',
+          },
         },
       },
     ])

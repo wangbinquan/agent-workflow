@@ -11,6 +11,15 @@
 // Codex design-gate P1 lock: the prior round lives on the SAME reused review
 // node_run (iterate/reject) — inheritance must still find it (not exclude it).
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  upsertNodeRunOutputFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -56,8 +65,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     reviewNode: WorkflowNode
   }> {
     const caseGenId = ulid()
-    const { agents, workflows, tasks } = tablesOf(db)
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: caseGenId,
       name: 'caseGen',
       description: '',
@@ -90,7 +98,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       ],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'w',
       description: '',
@@ -98,7 +106,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       version: 1,
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'multidoc',
       workflowId,
@@ -111,7 +119,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       inputs: '{}',
       startedAt: Date.now(),
     })
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const task = (await readTaskFixtures(db, { id: taskId }))[0]!
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
     return { taskId, task, definition, reviewNode }
   }
@@ -124,33 +132,27 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     body: (p: string) => string,
     iteration = 0,
   ): Promise<void> {
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const existing = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
     if (existing === undefined) {
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: 'src',
         status: 'done',
         retryIndex: 0,
         iteration,
-        preSnapshot: null,
         startedAt: Date.now(),
         finishedAt: Date.now(),
       })
     } else {
-      await db
-        .update(nodeRuns)
-        .set({ status: 'done', finishedAt: Date.now() })
-        .where(eq(nodeRuns.id, runId))
+      await patchNodeRunFixture(db, { id: runId }, { status: 'done', finishedAt: Date.now() })
     }
-    await db
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: runId, portName: 'cases', content: paths.join('\n') })
-      .onConflictDoUpdate({
-        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: { content: paths.join('\n') },
-      })
+    await upsertNodeRunOutputFixture(
+      db,
+      { nodeRunId: runId, portName: 'cases', content: paths.join('\n') },
+      { content: paths.join('\n') },
+    )
     for (const p of paths) {
       const abs = join(worktree, p)
       mkdirSync(dirname(abs), { recursive: true })
@@ -405,8 +407,8 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     // [a,b] (newer, 2000, dropped c). A newest-per-item_index merge would keep
     // gen1's orphan c and let a re-added c inherit it — the P2 bug.
     const revRun = ulid()
-    const { nodeRuns, docVersions } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { docVersions } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: revRun,
       taskId: ctx.taskId,
       nodeId: 'rev_1',

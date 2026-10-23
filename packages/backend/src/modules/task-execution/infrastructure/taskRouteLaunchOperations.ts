@@ -1,3 +1,8 @@
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
+import { definitionAnchorId, projectTaskSubject, type TaskSubject } from '../domain/taskSubject'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
+import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -11,28 +16,26 @@ import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaun
 import {
   UPLOAD_INPUTS_DIR,
   StartTaskSchema,
+  TaskStartOptionsSchema,
+  type TaskStartOptions,
   TaskSchema,
   applySpaceFields,
-  buildClarifyEdges,
   initialDwState,
   migrateWorkflowDefinitionToLatest,
   redactGitUrl,
   type Agent,
   type GitCommitIdentity,
-  type PlannedDirectoryNode,
   type StartAgentTask,
   type StartTask,
   type StartWorkgroupTask,
   type Task,
   type TaskCatalogVisibility,
   type TaskLaunchOrigin,
-  type TaskRepo,
   type TriggerContext,
   type WorkflowDefinition,
   WorkflowDefinitionSchema,
   type Workgroup,
   type WorkgroupRuntimeConfig,
-  WORKFLOW_SCHEMA_VERSION,
   webhookTaskSourceLinkOf,
   workgroupLaunchReadiness,
 } from '@agent-workflow/shared'
@@ -48,8 +51,6 @@ import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/r
 import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
 import {
   AGENT_HOST_INPUT_KEY,
-  AGENT_HOST_WORKFLOW_ID,
-  AGENT_HOST_WORKFLOW_NAME,
   buildAgentHostSnapshot,
   validateAgentLaunchShape,
 } from '@/services/agentLaunch'
@@ -94,16 +95,11 @@ import {
   withSerializableTaskExecution,
 } from './taskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
-import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
-
-// These values are wire-frozen in task snapshots and node-run identities. They
-// are repeated here deliberately: TaskExecution must not import Resource
-// Catalog provider-private workgroup infrastructure merely to launch a task.
-const WORKGROUP_HOST_WORKFLOW_ID = '00000000000000WORKGROUP00'
-const WORKGROUP_HOST_WORKFLOW_NAME = '__workgroup_host__'
-const WG_LEADER_NODE_ID = '__wg_leader__'
-const WG_MEMBER_NODE_ID = '__wg_member__'
-const WG_CLARIFY_NODE_ID = '__wg_clarify__'
+import {
+  buildWorkgroupRuntimeConfig,
+  buildWorkgroupHostSnapshot,
+  resolveWorkgroupCollaborators,
+} from './workgroupRuntimeConfig'
 
 interface RootLaunchMetadata {
   readonly provenance: TaskLaunchProvenance
@@ -260,7 +256,7 @@ export interface TaskRouteWorkspaceParticipant {
       actor: Actor
       authority: TaskExecutionResourceAuthority['authority']
       taskId: string
-      task: StartTask
+      task: TaskStartOptions
       gitCommitIdentity: GitCommitIdentity | null
       sourceTerminationSignal?: AbortSignal
       /**
@@ -276,7 +272,6 @@ export interface TaskRouteWorkspaceParticipant {
 export interface WorkgroupRouteLaunchResources {
   loadVisible(actor: Actor, workgroupId: string): Promise<Workgroup | null>
   loadExistingAgentIds(agentIds: readonly string[]): Promise<readonly string[]>
-  ensureHostWorkflow(): Promise<void>
   readonly integrity: AgentLaunchResourceIntegrityParticipant
 }
 
@@ -339,9 +334,10 @@ export interface TaskRouteLaunchDependencies extends TaskExecutionLaunchParticip
   readonly resourceAuthorityFor: (actor: Actor) => TaskExecutionResourceAuthority
 }
 
-export interface RootTaskLaunchSubject {
-  readonly workflowId: string
-  readonly workflowName: string
+export type RootTaskLaunchSubject = (
+  | { readonly subject: Extract<TaskSubject, { kind: 'workflow' }>; readonly workflowName: string }
+  | { readonly subject: Exclude<TaskSubject, { kind: 'workflow' }>; readonly workflowName?: string }
+) & {
   readonly workflowVersion: number
   readonly workflowSnapshot: WorkflowDefinition
   /**
@@ -358,7 +354,6 @@ export interface RootTaskLaunchSubject {
    * 必填之后，任何新的启动路都要在类型层先回答这个问题。
    */
   readonly builtin: boolean
-  readonly sourceAgent?: Readonly<{ id: string; name: string }>
   readonly workgroup?: Readonly<{
     id: string
     name: string
@@ -373,7 +368,7 @@ export interface RootTaskLaunchRequest {
   readonly resourceAuthority: TaskExecutionResourceAuthority
   readonly invoker: ExecutionInvoker
   readonly guard?: ProtectedMrLaunchGuard
-  readonly task: StartTask
+  readonly task: TaskStartOptions
   readonly subject: RootTaskLaunchSubject
   readonly uploads?: Readonly<{
     parts: readonly TaskRouteMultipartFilePart[]
@@ -457,99 +452,9 @@ export interface TaskExecutionLaunchParticipant {
   ): Promise<Task>
 }
 
-function buildWorkgroupHostSnapshot(config: WorkgroupRuntimeConfig): WorkflowDefinition {
-  const leaderMember = config.members.find((member) => member.id === config.leaderMemberId)
-  const firstAgent = config.members.find((member) => member.memberType === 'agent')
-  const leaderAgentName = leaderMember?.agentName ?? firstAgent?.agentName ?? 'workgroup-member'
-  const memberAgentName = firstAgent?.agentName ?? 'workgroup-member'
-  return WorkflowDefinitionSchema.parse({
-    $schema_version: WORKFLOW_SCHEMA_VERSION,
-    inputs: [],
-    nodes: [
-      { id: WG_LEADER_NODE_ID, kind: 'agent-single', agentName: leaderAgentName },
-      { id: WG_MEMBER_NODE_ID, kind: 'agent-single', agentName: memberAgentName },
-      { id: WG_CLARIFY_NODE_ID, kind: 'clarify', sessionMode: 'isolated' },
-    ],
-    edges: [
-      ...buildClarifyEdges(WG_LEADER_NODE_ID, WG_CLARIFY_NODE_ID),
-      ...buildClarifyEdges(WG_MEMBER_NODE_ID, WG_CLARIFY_NODE_ID),
-    ],
-  })
-}
-
-function resolveWorkgroupCollaborators(
-  explicit: readonly string[] | undefined,
-  group: Workgroup,
-): readonly string[] {
-  const humanUserIds = group.members.flatMap((member) =>
-    member.memberType === 'human' && member.userId !== null ? [member.userId] : [],
-  )
-  return [...new Set([...(explicit ?? []), ...humanUserIds])]
-}
-
-function lineageSlotPath(taskId: string, workflowVersion: number): string {
-  return JSON.stringify([
-    {
-      stableNodeKey: 'task-root',
-      frozenOccurrenceKey: taskId,
-      workflowRevision: workflowVersion,
-    },
-  ])
-}
-
-function taskRepoOf(repository: TaskRouteWorkspaceRepository): TaskRepo {
-  return {
-    repoIndex: repository.repoIndex,
-    repoPath: repository.repoPath,
-    repoUrl: repository.repoUrl === null ? null : redactGitUrl(repository.repoUrl),
-    cachedRepoId: repository.cachedRepoId,
-    baseBranch: repository.baseBranch,
-    branch: repository.branch,
-    workingBranch: repository.workingBranch,
-    baseCommit: repository.baseCommit,
-    worktreePath: repository.worktreePath,
-    worktreeDirName: repository.worktreeDirName,
-    mountPath: repository.mountPath,
-    subdir: repository.subdir,
-    readonly: repository.readonly,
-    readonlyDirtyCount: null,
-    hasSubmodules: repository.hasSubmodules,
-    submoduleInitOk: repository.submoduleInitOk,
-    submoduleInitError: repository.submoduleInitError,
-  }
-}
-
-function fallbackTaskRepo(
-  workspace: TaskRoutePreparedWorkspace,
-  workingBranch: string | undefined,
-): TaskRepo {
-  return {
-    repoIndex: 0,
-    repoPath: workspace.repoPath,
-    repoUrl: workspace.repoUrl === null ? null : redactGitUrl(workspace.repoUrl),
-    cachedRepoId: workspace.cachedRepoId,
-    baseBranch: workspace.baseBranch,
-    branch:
-      workspace.branch === ''
-        ? (workingBranch ?? `agent-workflow/${workspace.taskId}`)
-        : workspace.branch,
-    workingBranch: workingBranch ?? null,
-    baseCommit: workspace.baseCommit,
-    worktreePath: workspace.worktreePath,
-    worktreeDirName: '',
-    mountPath: '',
-    subdir: '',
-    readonly: false,
-    readonlyDirtyCount: null,
-    hasSubmodules: null,
-    submoduleInitOk: null,
-    submoduleInitError: null,
-  }
-}
-
-function taskProjection(input: {
+export function projectLaunchedTask(input: {
   readonly taskId: string
-  readonly task: StartTask
+  readonly task: TaskStartOptions
   readonly subject: RootTaskLaunchSubject
   readonly workspace: TaskRoutePreparedWorkspace
   readonly gitCommitIdentity: GitCommitIdentity | null
@@ -558,37 +463,42 @@ function taskProjection(input: {
   readonly metadata: RootLaunchMetadata
   readonly digitalEmployeeCaseId: string | null
 }): Task {
-  const repositories = input.workspace.repositories.map(taskRepoOf)
-  const repos =
-    repositories.length > 0
-      ? repositories
-      : [fallbackTaskRepo(input.workspace, input.task.workingBranch)]
   const failed = input.workspace.earlyError !== null
   const branch =
     input.workspace.branch === ''
       ? (input.task.workingBranch ?? `agent-workflow/${input.taskId}`)
       : input.workspace.branch
-  const spaceNodes: PlannedDirectoryNode[] = input.workspace.nodePaths.map((path) => ({
-    path,
-    origins: [],
-  }))
+  const repository = projectStoredTaskRepositorySurface(
+    {
+      ...input.workspace,
+      id: input.taskId,
+      branch,
+      workingBranch: input.task.workingBranch ?? null,
+    },
+    input.workspace.repositories.map((repo) =>
+      decodeTaskRepositoryMount({ ...repo, readonlyDirtyCount: null }),
+    ),
+    input.workspace.nodePaths,
+    'redacted',
+    'supplied',
+  )
   return TaskSchema.parse({
     id: input.taskId,
     name: input.task.name,
-    workflowId: input.subject.workflowId,
-    workflowName: input.subject.workflowName,
+    ...projectTaskSubject(input.subject.subject, input.subject.workflowName ?? null),
     workflowSnapshot: input.subject.workflowSnapshot,
     workflowVersion: input.subject.workflowVersion,
-    repoPath: input.workspace.repoPath,
-    repoUrl: input.workspace.repoUrl === null ? null : redactGitUrl(input.workspace.repoUrl),
-    cachedRepoId: input.workspace.cachedRepoId,
-    worktreePath: input.workspace.worktreePath,
-    workspaceState: failed && input.workspace.worktreePath === '' ? 'pruned' : 'available',
-    baseBranch: input.workspace.baseBranch,
-    branch,
-    workingBranch: input.task.workingBranch ?? null,
+    repoPath: repository.repoPath,
+    repoUrl: repository.repoUrl,
+    cachedRepoId: repository.cachedRepoId,
+    worktreePath: repository.worktreePath,
+    workspaceState:
+      failed && isTaskWorkspaceUnbound(input.workspace.worktreePath) ? 'pruned' : 'available',
+    baseBranch: repository.baseBranch,
+    branch: repository.branch,
+    workingBranch: repository.workingBranch,
     autoCommitPush: input.task.autoCommitPush ?? false,
-    baseCommit: input.workspace.baseCommit,
+    baseCommit: repository.baseCommit,
     status: failed ? 'failed' : 'pending',
     inputs: { ...input.inputs },
     maxDurationMs: input.task.maxDurationMs ?? null,
@@ -605,17 +515,18 @@ function taskProjection(input: {
     schemaVersion: 1,
     gitUserName: input.gitCommitIdentity?.name ?? null,
     gitUserEmail: input.gitCommitIdentity?.email ?? null,
-    repoCount: Math.max(1, input.workspace.repositories.length),
-    repos,
-    spaceNodes,
-    repoGroupId: input.workspace.repoGroupId,
-    repoGroupName: input.workspace.repoGroupName,
+    repoCount: repository.repoCount,
+    repos: repository.repos,
+    spaceNodes: repository.spaceNodes,
+    repoGroupId: repository.repoGroupId,
+    repoGroupName: repository.repoGroupName,
     scheduledTaskId: input.metadata.scheduledTaskId,
     workgroupId: input.subject.workgroup?.id ?? null,
     workgroupName: input.subject.workgroup?.name ?? null,
     goal: input.subject.workgroup?.goal ?? null,
-    sourceAgentId: input.subject.sourceAgent?.id ?? null,
-    sourceAgentName: input.subject.sourceAgent?.name ?? null,
+    sourceAgentId: input.subject.subject.kind === 'agent' ? input.subject.subject.sourceId : null,
+    sourceAgentName:
+      input.subject.subject.kind === 'agent' ? input.subject.subject.sourceName : null,
     spaceKind: input.workspace.spaceKind,
     parentTaskId: null,
     parentNodeRunId: null,
@@ -651,30 +562,6 @@ async function activeTaskMembers(
     )
   }
   return userIds
-}
-
-function repoInsertRows(taskId: string, repositories: readonly TaskRouteWorkspaceRepository[]) {
-  return repositories.map((repository) => ({
-    taskId,
-    repoIndex: repository.repoIndex,
-    repoPath: repository.repoPath,
-    repoUrl: repository.repoUrl === null ? null : redactGitUrl(repository.repoUrl),
-    cachedRepoId: repository.cachedRepoId,
-    baseBranch: repository.baseBranch,
-    branch: repository.branch,
-    workingBranch: repository.workingBranch,
-    baseCommit: repository.baseCommit,
-    worktreePath: repository.worktreePath,
-    worktreeDirName: repository.worktreeDirName,
-    mountPath: repository.mountPath,
-    subdir: repository.subdir,
-    readonly: repository.readonly,
-    workspaceProfileVersion: repository.workspaceProfileVersion,
-    workspaceProfileDigest: repository.workspaceProfileDigest,
-    hasSubmodules: repository.hasSubmodules,
-    submoduleInitOk: repository.submoduleInitOk,
-    submoduleInitError: repository.submoduleInitError,
-  }))
 }
 
 async function rollbackWorkspace(
@@ -737,7 +624,7 @@ function createRootLaunch(
       const refClosureJson = await input.resourceAuthority.resources.freezeCallClosure(
         input.resourceAuthority,
         {
-          id: input.subject.workflowId,
+          id: definitionAnchorId(input.subject.subject),
           definition: input.subject.workflowSnapshot,
         },
       )
@@ -820,7 +707,7 @@ function createRootLaunch(
       persistedInputs: Record<string, string>,
     ) => {
       const startedAt = now()
-      const projection = taskProjection({
+      const projection = projectLaunchedTask({
         taskId,
         task: input.task,
         subject: input.subject,
@@ -835,7 +722,6 @@ function createRootLaunch(
       const errorSummary = failed
         ? `worktree creation failed: ${preparedWorkspace.earlyError ?? 'unknown error'}`
         : null
-      const slotPathJson = lineageSlotPath(taskId, input.subject.workflowVersion)
       const branch =
         preparedWorkspace.branch === ''
           ? (input.task.workingBranch ?? `agent-workflow/${taskId}`)
@@ -851,95 +737,84 @@ function createRootLaunch(
         const workspaceLane = await preparedWorkspace.admit(tx)
         if (
           workspaceLane.kind === 'repository-preparation' &&
-          preparedWorkspace.worktreePath !== ''
+          !isTaskWorkspaceUnbound(preparedWorkspace.worktreePath)
         )
           throw new Error('repository-preparation-lane-already-materialized')
-        const {
-          tasks,
-          taskRepos,
-          taskSpaceNodes,
-          taskCollaborators,
-          taskExecutionIntents,
-          workgroupTaskState,
-        } = tablesOf(tx)
-        await insertOne(tx, tasks, {
-          id: taskId,
-          name: input.task.name,
-          workflowId: input.subject.workflowId,
-          // 入口已按 `subject.builtin` 规范化过排版，这里落的就是返回投影用的同一份。
-          workflowSnapshot: JSON.stringify(input.subject.workflowSnapshot),
-          workflowVersion: input.subject.workflowVersion,
-          repoPath: preparedWorkspace.repoPath,
-          repoUrl:
-            preparedWorkspace.repoUrl === null ? null : redactGitUrl(preparedWorkspace.repoUrl),
-          cachedRepoId: preparedWorkspace.cachedRepoId,
-          repoGroupId: preparedWorkspace.repoGroupId,
-          repoGroupName: preparedWorkspace.repoGroupName,
-          worktreePath: preparedWorkspace.worktreePath,
-          baseBranch: preparedWorkspace.baseBranch,
-          branch,
-          baseCommit: preparedWorkspace.baseCommit,
-          status: failed ? 'failed' : 'pending',
-          inputs: JSON.stringify(persistedInputs),
-          maxDurationMs: input.task.maxDurationMs ?? null,
-          maxTotalTokens: input.task.maxTotalTokens ?? null,
-          startedAt,
-          finishedAt: failed ? startedAt : null,
-          errorSummary,
-          errorMessage: preparedWorkspace.earlyError,
-          gitUserName: gitCommitIdentity?.name ?? null,
-          gitUserEmail: gitCommitIdentity?.email ?? null,
-          workingBranch: input.task.workingBranch ?? null,
-          autoCommitPush: input.task.autoCommitPush ?? false,
-          repoCount: Math.max(1, preparedWorkspace.repositories.length),
-          ownerUserId: input.actor.user.id,
-          launchOrigin: metadata.launchOrigin,
-          catalogVisibility: input.internal?.catalogVisibility ?? 'public',
-          scheduledTaskId: metadata.scheduledTaskId,
-          webhookTriggerId: metadata.webhookTriggerId,
-          webhookFireId: metadata.webhookFireId,
-          eventSubscriptionId: metadata.eventSubscriptionId,
-          eventDeliveryId: metadata.eventDeliveryId,
-          triggerContextJson:
-            metadata.triggerContext === null ? null : JSON.stringify(metadata.triggerContext),
-          platformInputPathsJson:
-            input.internal?.platformInputPaths === undefined ||
-            input.internal.platformInputPaths.length === 0
-              ? null
-              : JSON.stringify(input.internal.platformInputPaths),
-          sourceTerminationBinding: metadata.sourceTerminationSnapshot?.binding ?? null,
-          sourceTerminationLaunchRev: metadata.sourceTerminationSnapshot?.launchRevision ?? null,
-          sourceTerminationFence: metadata.sourceTerminationSnapshot?.fence ?? null,
-          sourceTerminationEffectRev: metadata.sourceTerminationSnapshot?.effectRevision ?? null,
-          workgroupId: input.subject.workgroup?.id ?? null,
-          workgroupConfigJson:
-            input.subject.workgroup === undefined
-              ? null
-              : JSON.stringify(input.subject.workgroup.config),
-          sourceAgentId: input.subject.sourceAgent?.id ?? null,
-          sourceAgentName: input.subject.sourceAgent?.name ?? null,
-          digitalEmployeeRoundId: input.internal?.digitalEmployeeLaunch?.actionRunId ?? null,
-          digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null,
-          spaceKind: preparedWorkspace.spaceKind,
-          workspacePrunedAt: failed && preparedWorkspace.worktreePath === '' ? startedAt : null,
-          branchStartedAt: startedAt,
-          rootTaskId: taskId,
-          executionLineageId: taskId,
-          lineageSlotPathJson: slotPathJson,
-          refClosureJson,
+        const { taskCollaborators, taskExecutionIntents, workgroupTaskState } = tablesOf(tx)
+        const { lineageSlotPathJson: slotPathJson } = await createTaskCreationParticipantInTx(
+          tx,
+        ).create({
+          subject: input.subject.subject,
+          core: {
+            id: taskId,
+            name: input.task.name,
+            status: failed ? 'failed' : 'pending',
+            startedAt,
+            finishedAt: failed ? startedAt : null,
+            errorSummary,
+            errorMessage: preparedWorkspace.earlyError,
+            ownerUserId: input.actor.user.id,
+            catalogVisibility: input.internal?.catalogVisibility ?? 'public',
+            workspacePrunedAt:
+              failed && isTaskWorkspaceUnbound(preparedWorkspace.worktreePath) ? startedAt : null,
+            branchStartedAt: startedAt,
+          },
+          definition: {
+            // 入口已按 `subject.builtin` 规范化过排版，这里落的就是返回投影用的同一份。
+            workflowSnapshot: JSON.stringify(input.subject.workflowSnapshot),
+            workflowVersion: input.subject.workflowVersion,
+            inputs: JSON.stringify(persistedInputs),
+            maxDurationMs: input.task.maxDurationMs ?? null,
+            maxTotalTokens: input.task.maxTotalTokens ?? null,
+            workgroupConfigJson:
+              input.subject.workgroup === undefined
+                ? null
+                : JSON.stringify(input.subject.workgroup.config),
+            refClosureJson,
+          },
+          launchContext: {
+            scheduledTaskId: metadata.scheduledTaskId,
+            webhookTriggerId: metadata.webhookTriggerId,
+            webhookFireId: metadata.webhookFireId,
+            eventSubscriptionId: metadata.eventSubscriptionId,
+            eventDeliveryId: metadata.eventDeliveryId,
+            triggerContextJson:
+              metadata.triggerContext === null ? null : JSON.stringify(metadata.triggerContext),
+            platformInputPathsJson:
+              input.internal?.platformInputPaths === undefined ||
+              input.internal.platformInputPaths.length === 0
+                ? null
+                : JSON.stringify(input.internal.platformInputPaths),
+            sourceTerminationBinding: metadata.sourceTerminationSnapshot?.binding ?? null,
+            sourceTerminationLaunchRev: metadata.sourceTerminationSnapshot?.launchRevision ?? null,
+            sourceTerminationFence: metadata.sourceTerminationSnapshot?.fence ?? null,
+            sourceTerminationEffectRev: metadata.sourceTerminationSnapshot?.effectRevision ?? null,
+            digitalEmployeeRoundId: input.internal?.digitalEmployeeLaunch?.actionRunId ?? null,
+            digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null,
+          },
+          workspace: {
+            repoPath: preparedWorkspace.repoPath,
+            repoUrl:
+              preparedWorkspace.repoUrl === null ? null : redactGitUrl(preparedWorkspace.repoUrl),
+            cachedRepoId: preparedWorkspace.cachedRepoId,
+            repoGroupId: preparedWorkspace.repoGroupId,
+            repoGroupName: preparedWorkspace.repoGroupName,
+            worktreePath: preparedWorkspace.worktreePath,
+            baseBranch: preparedWorkspace.baseBranch,
+            branch,
+            baseCommit: preparedWorkspace.baseCommit,
+            gitUserName: gitCommitIdentity?.name ?? null,
+            gitUserEmail: gitCommitIdentity?.email ?? null,
+            workingBranch: input.task.workingBranch ?? null,
+            autoCommitPush: input.task.autoCommitPush ?? false,
+            spaceKind: preparedWorkspace.spaceKind,
+          },
+          launch: { kind: 'root', launchOrigin: metadata.launchOrigin },
+          repos: preparedWorkspace.repositories.map((repo) =>
+            decodeTaskRepositoryMount({ ...repo, readonlyDirtyCount: null }),
+          ),
+          nodePaths: preparedWorkspace.nodePaths,
         })
-        if (preparedWorkspace.repositories.length > 0) {
-          await tx.insert(taskRepos).values(repoInsertRows(taskId, preparedWorkspace.repositories))
-        }
-        if (preparedWorkspace.nodePaths.length > 0) {
-          await tx.insert(taskSpaceNodes).values(
-            preparedWorkspace.nodePaths.map((nodePath) => ({
-              taskId,
-              nodePath,
-              schemaVersion: 1,
-            })),
-          )
-        }
         await tx.insert(taskCollaborators).values(
           activeMembers.map((userId) => {
             const role: 'owner' | 'collaborator' =
@@ -957,13 +832,16 @@ function createRootLaunch(
             JSON.stringify({
               kind: 'launch',
               taskId,
-              workflowId: input.subject.workflowId,
+              workflowId: definitionAnchorId(input.subject.subject),
               workflowVersion: input.subject.workflowVersion,
               continuationSlotKey: 'task-root',
               operationGeneration: 0,
             }),
           ),
-          payloadJson: JSON.stringify({ v: 1, workflowId: input.subject.workflowId }),
+          payloadJson: JSON.stringify({
+            v: 1,
+            workflowId: definitionAnchorId(input.subject.subject),
+          }),
           executionLineageId: taskId,
           continuationSlotKey: 'task-root',
           slotPathJson,
@@ -1095,7 +973,6 @@ export function createAgentRouteLaunch(
         )
       }
       await dependencies.agent.integrity.assertUsable({ rootAgentIds: [recheck.id] })
-      await dependencies.agent.resources.ensureHostWorkflow()
       const form = validateAgentLaunchShape(recheck.inputs, command.payload, {
         multipart: command.uploads !== undefined,
       })
@@ -1128,7 +1005,6 @@ export function createAgentRouteLaunch(
       }
       const candidate = applySpaceFields(
         {
-          workflowId: AGENT_HOST_WORKFLOW_ID,
           name: command.payload.name,
           inputs: taskInputs,
           ...(command.payload.collaboratorUserIds !== undefined &&
@@ -1150,7 +1026,7 @@ export function createAgentRouteLaunch(
         },
         command.payload,
       )
-      const parsed = StartTaskSchema.safeParse(candidate)
+      const parsed = TaskStartOptionsSchema.safeParse(candidate)
       if (!parsed.success) {
         throw new ValidationError('agent-launch-invalid', 'invalid agent launch payload', {
           issues: parsed.error.issues,
@@ -1164,13 +1040,11 @@ export function createAgentRouteLaunch(
         ...(input.deferRepoPreparation === true ? { deferRepoPreparation: true } : {}),
         task: parsed.data,
         subject: {
-          workflowId: AGENT_HOST_WORKFLOW_ID,
-          workflowName: AGENT_HOST_WORKFLOW_NAME,
+          subject: { kind: 'agent', sourceId: recheck.id, sourceName: recheck.name },
           // 合成的单代理宿主：写时冻结规范排版（plan §5hn）。
           builtin: true,
           workflowVersion: 1,
           workflowSnapshot: snapshot,
-          sourceAgent: { id: recheck.id, name: recheck.name },
         },
         ...(command.uploads === undefined
           ? {}
@@ -1268,7 +1142,6 @@ export function createWorkgroupRouteLaunch(
     )
     const candidate = applySpaceFields(
       {
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
         name: command.payload.name,
         inputs: {},
         ...(collaboratorUserIds.length === 0 ? {} : { collaboratorUserIds }),
@@ -1287,13 +1160,12 @@ export function createWorkgroupRouteLaunch(
       },
       command.payload,
     )
-    const parsed = StartTaskSchema.safeParse(candidate)
+    const parsed = TaskStartOptionsSchema.safeParse(candidate)
     if (!parsed.success) {
       throw new ValidationError('workgroup-launch-invalid', 'invalid workgroup launch payload', {
         issues: parsed.error.issues,
       })
     }
-    await dependencies.workgroup.ensureHostWorkflow()
     return await launchRoot({
       actor,
       resourceAuthority: input.resources,
@@ -1302,8 +1174,7 @@ export function createWorkgroupRouteLaunch(
       ...(input.deferRepoPreparation === true ? { deferRepoPreparation: true } : {}),
       task: parsed.data,
       subject: {
-        workflowId: WORKGROUP_HOST_WORKFLOW_ID,
-        workflowName: WORKGROUP_HOST_WORKFLOW_NAME,
+        subject: { kind: 'workgroup', sourceId: group.id },
         // 合成的工作组宿主：写时冻结规范排版（plan §5hn）。
         builtin: true,
         workflowVersion: 1,
@@ -1521,7 +1392,7 @@ export function createTaskExecutionLaunchParticipant(
                 }),
             task: parsed.data,
             subject: {
-              workflowId: snapshot.workflow.id,
+              subject: { kind: 'workflow', sourceId: snapshot.workflow.id },
               workflowName: snapshot.workflow.name,
               workflowVersion: snapshot.workflow.version,
               workflowSnapshot: snapshot.workflow.definition,

@@ -52,9 +52,15 @@
 // If any of these go red, do NOT relax — re-read
 // design/RFC-056-clarify-cross-agent/patch-2026-05-25-questioner-cascade-no-skip.md.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
@@ -205,8 +211,7 @@ function selfClarifyDef(): WorkflowDefinition {
 async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<string> {
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${taskId}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'fixture',
     description: '',
@@ -219,7 +224,7 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<str
   const lineageSlotPathJson = JSON.stringify([
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,
@@ -236,15 +241,14 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<str
   })
   // Both providers start from the original SQLite-materialized row.
   expect(
-    await first(
-      db
-        .select({
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
-        })
-        .from(tasks)
-        .where(eq(tasks.id, taskId)),
-    ),
+    (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({
+          executionLineageId: row.executionLineageId,
+          lineageSlotPathJson: row.lineageSlotPathJson,
+        })),
+      )
+    )[0],
   ).toEqual({ executionLineageId: taskId, lineageSlotPathJson })
   return taskId
 }
@@ -253,12 +257,11 @@ async function seedRun(
   db: PersistenceDb,
   taskId: string,
   nodeId: string,
-  fields: Partial<PersistenceTables['nodeRuns']['$inferInsert']> = {},
+  fields: Partial<NodeRunFixtureSpec> = {},
 ): Promise<string> {
   const id = fields.id ?? `nr_${nodeId}_${Math.random().toString(36).slice(2, 8)}`
   const now = Date.now()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -302,10 +305,10 @@ describeEachProvider(
       const designerV0 = await seedRun(db, taskId, 'designer', {
         id: 'designer_v0',
         retryIndex: 9,
-        preSnapshot: 'snap-designer-v0',
+        checkpoints: [{ mountPath: '', preSnapshot: 'snap-designer-v0' }],
       })
-      const { nodeRunOutputs, nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRunOutputs, {
+      const { nodeRuns } = tablesOf(db)
+      await nodeRunOutputFixture(db, {
         nodeRunId: designerV0,
         portName: 'docpath',
         content: 'docs/tank-battle-design.md',
@@ -316,7 +319,7 @@ describeEachProvider(
         retryIndex: 3,
         // RFC-064: under the unified counter, the questioner's prior round
         // sits at clarifyIteration=1 (was crossClarifyIteration=1 pre-unify).
-        preSnapshot: 'snap-questioner-v1',
+        checkpoints: [{ mountPath: '', preSnapshot: 'snap-questioner-v1' }],
         // Intentionally no node_run_outputs row — this is the "emitted only
         // <workflow-clarify>" state the patch addresses.
       })
@@ -324,7 +327,7 @@ describeEachProvider(
       // Prior session FH7895-equivalent (iteration=0 answered + consumed).
       // node_run for the cross-clarify node MUST exist before the session
       // row references it (FK).
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: 'cross1_iter0',
         taskId,
         nodeId: 'cross1',
@@ -430,7 +433,7 @@ describeEachProvider(
       const agentRunId = await seedRun(db, taskId, 'agent_x', {
         id: 'agent_x_v1',
         retryIndex: 0,
-        preSnapshot: 'snap-x-v1',
+        checkpoints: [{ mountPath: '', preSnapshot: 'snap-x-v1' }],
       })
 
       const sess = await createClarifyRound({
@@ -487,10 +490,10 @@ describeEachProvider(
       await seedRun(db, taskId, 'in')
       const designerV1 = await seedRun(db, taskId, 'designer', {
         retryIndex: 5,
-        preSnapshot: 'snap-d-v1',
+        checkpoints: [{ mountPath: '', preSnapshot: 'snap-d-v1' }],
       })
-      const { nodeRunOutputs, nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRunOutputs, {
+      const { nodeRuns } = tablesOf(db)
+      await nodeRunOutputFixture(db, {
         nodeRunId: designerV1,
         portName: 'docpath',
         content: 'docs/v1.md',

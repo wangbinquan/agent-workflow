@@ -1,3 +1,4 @@
+import { readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -171,7 +172,7 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
       process.env.CLAUDE_CONFIG_DIR = join(root, 'operator-claude-config')
       try {
         const db = harness.db
-        const { runtimes, mcps, mcpRuntimeTestSessions, mcpRuntimeTestTurns, tasks, nodeRuns } =
+        const { runtimes, mcps, mcpRuntimeTestSessions, mcpRuntimeTestTurns, nodeRuns } =
           tablesOf(db)
         await insertOne(db, runtimes, {
           id: 'runtime-claude-fixture',
@@ -290,7 +291,7 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
         for (const receipt of turnReceipts) {
           expect(receipt.binary).toBe(runtimeBinary)
         }
-        expect(await db.select().from(tasks)).toHaveLength(0)
+        expect(await readTaskFixtures(db)).toHaveLength(0)
         expect(await db.select().from(nodeRuns)).toHaveLength(0)
 
         const ended = await service.end(actor, mcp.id, session.id)

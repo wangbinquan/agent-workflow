@@ -28,7 +28,7 @@ export function createFileSkillContentReader(appHome: string): SkillContentReade
       if (!existsSync(skillMdPath)) {
         throw new NotFoundError('skill-md-missing', `SKILL.md not found at ${skillMdPath}`)
       }
-      return readFileSync(realpathInside(root, skillMdPath), 'utf-8')
+      return readFileSync(realpathInside(root, skillMdPath))
     },
     listFiles(reference) {
       const root = resolveFileSkillReadRoot(appHome, reference)
@@ -48,7 +48,7 @@ export function createFileSkillContentReader(appHome: string): SkillContentReade
       if (statSync(real).isDirectory()) {
         throw new ValidationError('skill-file-is-dir', `'${relPath}' is a directory`)
       }
-      return readFileSync(real, 'utf-8')
+      return readFileSync(real)
     },
   } satisfies SkillContentReader)
 }

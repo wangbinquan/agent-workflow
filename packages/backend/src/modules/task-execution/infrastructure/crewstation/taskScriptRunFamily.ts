@@ -349,10 +349,14 @@ export function createHostedTaskScriptRunFamily(input: {
       await request.persistence.patch({
         nodeRunId: request.nodeRunId,
         values: {
-          pid: null,
-          spawnBinaryPath: null,
-          spawnLaunchNonce: null,
-          runtimeParamsJson: request.runtimeParamsJson,
+          runtime: {
+            pid: null,
+            spawnBinaryPath: null,
+            spawnLaunchNonce: null,
+          },
+          config: {
+            runtimeParamsJson: request.runtimeParamsJson,
+          },
         },
         ...request.executionContext(),
       })

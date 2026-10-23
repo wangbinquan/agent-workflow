@@ -15,6 +15,6 @@ export function writeFileSkillTree(targetDir: string, content: SkillTreeFiles): 
     mkdirSync(dirname(dst), { recursive: true })
     writeFileSync(dst, file.content)
   }
-  writeFileSync(join(targetDir, 'SKILL.md'), content.mainContent, 'utf-8')
+  writeFileSync(join(targetDir, 'SKILL.md'), content.mainContent)
   if (!existsSync(join(targetDir, 'SKILL.md'))) throw new Error('SKILL.md was not written')
 }

@@ -6,6 +6,7 @@
 // hosted retention path). Sweeps never wake a paused parent:
 // they only visit parents the platform currently runs, and existence checks
 // answer from the parent's platform state while it is dormant.
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { WorkspaceMaintenanceFilesystem } from '../../application/ports/workspaceMaintenance'
 import type { HostedTaskWorkspaces } from './taskWorkspace'
@@ -24,7 +25,7 @@ export function createHostedWorkspaceMaintenance(input: {
     owner: string,
   ): T => {
     const path = (reference: string) => {
-      if (reference === '') return ''
+      if (isTaskWorkspaceUnbound(reference)) return ''
       const location = parseHostedWorkspaceReference(reference)
       if (location.taskId !== owner) throw new Error('hosted-workspace-owner-mismatch')
       return location.path
@@ -61,8 +62,9 @@ export function createHostedWorkspaceMaintenance(input: {
     },
     isMaterializingTask: input.isMaterializingTask,
     async removeWorkspace(task, repositories) {
-      const owner =
-        task.worktreePath === '' ? task.id : parseHostedWorkspaceReference(task.worktreePath).taskId
+      const owner = isTaskWorkspaceUnbound(task.worktreePath)
+        ? task.id
+        : parseHostedWorkspaceReference(task.worktreePath).taskId
       // Borrowed call/fusion workspaces are the parent's canonical scene. A
       // child GC receipt cannot remove that scene.
       if (owner !== task.id) return false
@@ -75,9 +77,10 @@ export function createHostedWorkspaceMaintenance(input: {
       ])
     },
     async removeIsoContainer(task, taskId) {
-      const owners = task?.worktreePath
-        ? [parseHostedWorkspaceReference(task.worktreePath).taskId]
-        : [...(observedIsoOwners.get(taskId) ?? [])]
+      const owners =
+        task !== null && !isTaskWorkspaceUnbound(task.worktreePath)
+          ? [parseHostedWorkspaceReference(task.worktreePath).taskId]
+          : [...(observedIsoOwners.get(taskId) ?? [])]
       if (owners.length === 0) throw new Error('hosted-isolation-owner-unobserved')
       let removed = false
       for (const owner of owners) {

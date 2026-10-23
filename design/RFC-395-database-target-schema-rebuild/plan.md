@@ -400,3 +400,55 @@ II-b 的工作包：
 - B3：转换器（T12）、迁移回执（T13）、切换与恢复（T14）、旧 epoch 备份恢复。
 - B4：兼容投影与 DTO 对拍（T15，夹具取自 II-a 提交）；守卫与账本（T16）；其余测试与操作手册（T17）。
 - 之后执行 T18。
+
+### 6.11 II-a 交付记录（2026-10-23）
+
+按 §6.10 的包划分完成 A1–A7 的全部开发与用例编写后集中验证一次，单独提交。物理 schema、迁移文件、HTTP API、用户可见行为与持久化字节不变（下列「有意变化」除外）。
+
+| 包 | 交付 |
+| --- | --- |
+| A1 | 目标模型 fixture builder（`packages/backend/tests/helpers/model/`）、幂等 AST codemod 改写测试直写、列去向清单与 builder 覆盖测试；fixture 外直写 / 直读被重塑表的只降棘轮；e2e 裸 SQL 收进单一夹具模块 |
+| A2 | Task 主体五类判定与 `taskSubjectProjection`；D1 宿主工作流停止播种、读侧不再依赖宿主行；单一任务创建 participant；主仓字段单一投影 `projectTaskRepositorySurface`；挂载列表与逐仓 checkpoint 端口；任务定义写端口与工作组配置拆分（解码器 `packages/shared/src/schemas/workgroupRuntime.ts`）；纯 SQL 辅助移入 `platform/persistence/`；守卫 `rfc395-task-definition-boundary` 等 |
+| A3 | `domain/runSelection` + `application/ports/runSelection.ts` + 包装现有 picker 的 oracle（`task-execution/infrastructure/runSelection/**`）；类型化 NodeRun 快照与分组写入；铸行显式传 role；消费边 participant；collaboration / memory 改经 `NodeRunQueries`；守卫 `rfc395-run-selection-boundary` 与选择口径账本；oracle 快照要求完整行或声明范围（K4）；冻结 HEAD SQL 的随机对拍证据（K8） |
+| A4 | 澄清逐题答案模型、单一投影与写端口；memory 经 collaboration public query 读澄清轮次；中立 `ContentRef`（`platform/content/`）与各旧位置 codec；技能内容端口按字节 |
+| A5 | agent 引用单一写者 participant、workflow 定义单一写者、共享依赖收集（`packages/shared/src/resourceReferences.ts`）、单一依赖校验、反查端口；knowledge-evolution 融合种子改经 resource-catalog public participant |
+| A6 | `platform/atomic-apply` 共用状态机；intent 与资源包 apply 改为场景适配器 |
+| A7 | 表归属守卫扩到全部 registry 表：模块间跨域引用 249 → 199 处（被重塑表 75 → 31），其余逐条入只减不增账本；模块外文件 60 处引用中 18 处为全局基础设施（精确列出）、12 处闭合、30 处记账；新增 owner public query / participant（任务门、节点输出、知识、触发、详情、准备、删除、澄清指令等场景合同） |
+
+有意变化（行为层面，需知会）：
+
+- 记忆提炼读取多轮澄清时按 round id 二进制序排列（PostgreSQL `COLLATE "C"` / SQLite BINARY，`platform/persistence/binaryTextOrder.ts`）；HEAD 无 ORDER BY，顺序随执行计划。
+
+保持现状、留待后续功能决定：
+
+- 技能文本视图的 BOM：数据库适配器去掉前导 BOM，文件适配器保留；两者不一致原样保留。
+- 各写者对重复引用的处理不同（普通 API 与 Intent 保留重复；资源包对三类去重、技能不去重），原样保留，作为 II-b 关系表主键的裁决依据。
+
+偏离与债务：
+
+- RFC-294 公共合同新增 38 条过渡债务（`packages/backend/tests/rfc294-architecture-preflight.test.ts` 的 `PUBLIC_SURFACE_DEBT` 末尾、带注释的 RFC-395 II-a 块）：owner 查询 / participant 必须在调用方的会话、事务或同一条语句里执行（`PersistenceDb` / `PersistenceTx` 参数、同语句关联 SQL 片段），另有两个留在 platform 的 DTO 类型；没有用别名或类型改写躲过守卫，HEAD 原有 97 条不变。后继为 RFC-294 S5/S6 在组合根绑定。2026-10-23 已向用户说明这一偏离并给出改为依赖注入的替代方案，未收到反对，按推荐方案提交。
+- 被重塑表仍有 39 处记账访问，`removeWhen` 都要求在 II-b B2 替换对应适配器前收口，收口方式（required SPI 或组合根绑定）需要 RFC-294 层面的裁决：模块间 31 处（`tests/fixtures/rfc395-module-table-ownership-debt.json`）——28 处没有 offered 边（resource-catalog → tasks ×6、source-control ×7、system-operations ×4、development-automation ×4、runtime-management ×2、task-execution → clarify_rounds ×4、collaboration → agents ×1），3 处虽有 offered 边但闭合会形成文件级值依赖环或越出 RFC-376 已提交 DAG（人工门 journal → tasks、code-capability → agents、runtime-management → workflows，测试中精确列为 `OFFERED_BUT_BLOCKED`）；模块外 8 处（`tests/fixtures/rfc395-horizontal-table-ownership-debt.json`）。
+- design §12.2 S3 的会话表集按模块收窄未做：task-execution / resource-catalog / collaboration 分别有 109 / 82 / 34 个文件使用 `tablesOf`，随 II-b 逐 owner 换适配器时收窄。
+
+留给 II-b 的事项：
+
+1. **K1 / K3 / K6（稳定 role 与 canonical slot）推迟到 II-b。** II-a 中标签没有消费者：生产选择与 HEAD 相同，铸行守卫与 HEAD 的拒绝集合相同，`apply` 只校验且无生产调用触发。II-b 增加显式 role / container 列（D5），转换器也必须为存量行推导 role。规则：
+
+   | 行类 | 稳定事实 | role / canonical slot |
+   | --- | --- | --- |
+   | wrapper 每次运行，含级联占位、评审 reject / iterate 重跑 | 任务冻结定义中的 wrapper kind + frame | container / container(node, frame) |
+   | 普通节点，含保留字名称的用户节点与 `__wg_clarify__` 澄清停泊行 | 冻结定义中的普通 kind；不能只凭 id 判为系统行 | node-attempt / node(node, frame)；fanout 内部按拓扑分槽 |
+   | turn-engine 工作组 host | 任务主体 + workgroup engine + host 写者 | synthetic(workgroup-host) / workgroup-host(node, shard) |
+   | 共享 / 广播或逐 shard 的 fanout 行 | parent / frame 对应的 fanout 定义与节点拓扑 | node-attempt / shard(node, iteration, shardKey)，NULL key 仍可为广播 |
+   | fanout 聚合行 | parent / frame + fanout 汇合节点 | node-attempt / aggregator(node, iteration) |
+   | repo-prep / commit-push / merge-resolve / dw / wg gate | 实际系统写者身份，排除同名用户节点 | synthetic(kind) / synthetic(owner, kind, discriminator) |
+   | commit-session，含 cause 为 NULL 的历史行 | 父行是 commit-push 系统行这一结构事实 | synthetic(commit-session) / synthetic(attempt owner, commit-session, discriminator) |
+
+   #70 的历史 host + gate 分组须表达为 canonical slot 上的 reader 查询，不能把 gate 标成 host。待迁移的 `deriveNodeRunRole` 调用：生产 28 处、测试 58 处（以 `rg -n deriveNodeRunRole packages/backend` 为准）。
+2. 聚合行重放判据：目标「记录的已消费 shard 集合 == 当前 shard 选择」与今天「聚合行比所有参与 shard 新」并非无条件等价（① 消费 {A,B}、现只剩 {A} 参与：旧判据真、集合判据假；② 聚合行原地重跑后消费了更晚铸出的 shard：集合相等、旧 seq 更小）。今天聚合行不持久化消费集合；II-a oracle 保留旧比较，II-b 物化与转换器须先由用户裁决（design §5.2、ii0-revision §3.3 曾假定等价）。
+3. `decodeRequestedSource` 有损（local → internal；remote 缺 cached id + url → scratch；requestedRef = 解析后的 base_branch），转换器不能把它当精确来源。
+4. D1 回退窗口：II-a 写过的库在 HEAD 二进制上会隐藏宿主类评审，直到其重新播种；code-round 从不重新播种。
+5. 包与 intent 恢复的 `list()` 每轮（启动 + 每小时）前滚全部已提交行（HEAD 行为，开销在树哈希）；II-b 可加提交完成标记。两个 journal 的同键异载荷：II-b 增加规范请求摘要与身份版本列。
+6. 单个非根成员缺陷族的 4 处候选（call child ×2、调用图展开、工作树文件内容读取）不属于 RFC-395，按 §6.4-12 另行修复。
+
+验证：本地集中验证（2026-10-23）。后端 SQLite 全量三轮：第一轮 4116 过 / 161 败，其中 405 个文件被 A7 引入的模块初始化环连带（collaboration 人工门文件反向 value-import task-execution 的 `public/participants`）；修环与 RFC-376 结构门后第二轮 105 个文件 181 败；三个 Codex 修复线程（守卫与源码锁 / 选择与旅程 / 持久化与一致性）修复后第三轮 5 个文件 6 败，均已修复并单独复验；`rfc220-oauth2-callback-route` 为负载下本地模拟授权服务器的抖动（单独 7/0，前两轮通过）。验证中发现并修复的生产回退：调度采纳 pending 重跑行时读取尚未实现的 slot 标签（澄清 / 评审 / 包装节点旅程不再重跑）、准备重试与 commit 中断恢复的 oracle 范围、任务空间目录多写根与祖先行（已恢复 HEAD 的「只写调用方给出的 nodePaths」）、AtomicApply 返回数组未冻结、评审徽标计数从 1 条 SQL 退化为 3 次查询、收件箱轮询带出整份冻结定义（RFC-311 L1-3）、保存期依赖校验的 `VALIDATE_CALL_POLICY` 调用点丢失。shared 2349/0、frontend 7327/0、system-mocks 102/0。e2e：A1 改动的 24 个 spec 本地冒烟 195 过 / 3 败，均与 II-a 无关——MEM-X8 在 `67ab6b9ae` 的 nightly 已失败；WG-06 是本机 UTC-7 时区下 `util/zip.ts` 固定 mtime 换算为 1979 年触发 `date not in range` 的既有缺陷（UTC 的 CI 不复现）；TASK-X2 是本机真实 runtime 带凭据，使变更叙述生成成功而非预期的失败。本地 PostgreSQL 因 Docker 虚拟机磁盘满中断（满之前约 1849 个 PG 用例无失败），以 CI 的 ubuntu PostgreSQL 分片为准。静态检查：三包 typecheck、eslint、prettier、depcheck、lint:promises 均通过；RFC-294 公共合同与 RFC-376 结构门的静态扫描无未登记项。

@@ -6,6 +6,7 @@
 // `describeEachProvider` 的 lane 交进来（`buildHarness(harness.db, …)`），修复入口统一取
 // `tests/helpers/repairEngine.ts` 的唯一装配点——同一批断言因此同时落在两个真引擎上。
 
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -69,10 +70,9 @@ export async function buildHarness(
       edges: [],
     } as WorkflowDefinition)
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -126,8 +126,7 @@ export async function insertNodeRun(
   },
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId,

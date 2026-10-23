@@ -29,7 +29,7 @@ import type {
 import {
   DEFAULT_DISTILL_POLICY,
   QUARANTINED_SNAPSHOT_AGENT_ID,
-  WorkgroupRuntimeConfigSchema,
+  type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { distillAdmission } from '@/modules/memory/domain/distillAdmission'
 import {
@@ -278,18 +278,12 @@ export function extractAgentIdsFromSnapshot(workflowSnapshot: string): string[] 
  * roster member. The frozen runtime config is therefore the canonical source
  * for every member agent participating in the task.
  */
-export function extractAgentIdsFromWorkgroupConfig(workgroupConfigJson: string | null): string[] {
-  if (workgroupConfigJson === null) return []
-  let raw: unknown
-  try {
-    raw = JSON.parse(workgroupConfigJson)
-  } catch {
-    return []
-  }
-  const parsed = WorkgroupRuntimeConfigSchema.safeParse(raw)
-  if (!parsed.success) return []
+export function extractAgentIdsFromWorkgroupConfig(
+  config: WorkgroupRuntimeConfig | null,
+): string[] {
+  if (config === null) return []
   const ids = new Set<string>()
-  for (const member of parsed.data.members) {
+  for (const member of config.members) {
     if (member.memberType !== 'agent') continue
     if (
       typeof member.agentId === 'string' &&
@@ -354,7 +348,7 @@ export function scopeFromTaskRow(
       : [
           ...new Set([
             ...extractAgentIdsFromSnapshot(taskRow.workflowSnapshot),
-            ...extractAgentIdsFromWorkgroupConfig(taskRow.workgroupConfigJson),
+            ...extractAgentIdsFromWorkgroupConfig(taskRow.workgroupConfig?.runtime.config ?? null),
           ]),
         ]
   // RFC-204: see memoryInject — join on the stored mirror id. The old URL join

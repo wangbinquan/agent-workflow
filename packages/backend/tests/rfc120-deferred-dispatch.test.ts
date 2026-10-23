@@ -20,7 +20,17 @@
 // deferred model); the legacy immediate mint + the flag-based submit split are deleted.
 // The park fixtures below drive the CONTROL channel (seal), mirroring the board flow.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
@@ -58,7 +68,6 @@ import { deriveFrontier } from '../src/modules/task-execution/composition/dagFro
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import {} from '@agent-workflow/shared'
 import type {
   ClarifyQuestion,
   NodeKind,
@@ -129,8 +138,7 @@ async function seedTask(
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc120-t9',
     description: '',
@@ -138,7 +146,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc120-t9',
     workflowId,
@@ -152,11 +160,10 @@ async function seedTask(
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
-  // ULID ids (production-accurate): node_run freshness — and resolveHandlerRun's
-  // lineage window — is pure ULID id-order, so these seeded runs must sort BEFORE
-  // the later-minted dispatch reruns (a non-ULID string id sorts AFTER ULIDs and
-  // would pollute the lineage window).
-  await insertOne(db, nodeRuns, {
+  // Node-run freshness and resolveHandlerRun's lineage window use seq. Seed the
+  // completed designer and questioner BEFORE dispatch so their allocated seq values
+  // precede the later reruns and cannot pollute the lineage window.
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: DESIGNER,
@@ -166,7 +173,7 @@ async function seedTask(
     startedAt: Date.now() - 1000,
   })
   const questionerRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: questionerRunId,
     taskId,
     nodeId: QUESTIONER,
@@ -226,8 +233,7 @@ async function seedTwoSource(
     })
   }
   const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc120-t9-2src',
     description: '',
@@ -235,7 +241,7 @@ async function seedTwoSource(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc120-t9-2src',
     workflowId: `wf_${taskId}`,
@@ -248,7 +254,7 @@ async function seedTwoSource(
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: DESIGNER,
@@ -257,7 +263,7 @@ async function seedTwoSource(
     iteration: 0,
   })
   // fixer prior run (so an override dispatch to it is not rejected as never-run).
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: 'fixer',
@@ -267,7 +273,7 @@ async function seedTwoSource(
   })
   const open = async (q: string, cc: string): Promise<string> => {
     const runId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: runId,
       taskId,
       nodeId: q,
@@ -391,6 +397,14 @@ describe('RFC-120 T9 — frontier park gate', () => {
   function row(nodeId: string, status: string): Row {
     seq += 1
     return {
+      shardKey: null,
+      consumedUpstreamRunsJson: null,
+      supersededByReview: null,
+      wrapperProgressJson: null,
+      mergeState: null,
+
+      seq: null,
+      containerRunId: null,
       id: `01R${String(seq).padStart(4, '0')}`,
       nodeId,
       iteration: 0,
@@ -406,13 +420,13 @@ describe('RFC-120 T9 — frontier park gate', () => {
   const NONE: ReadonlySet<string> = new Set()
   const ups = (m: Record<string, string[]>) => new Map(Object.entries(m))
 
-  test('deferred designer parked → not completed, awaiting_human, downstream blocked', () => {
+  test('deferred designer parked → not completed, awaiting_human, downstream blocked', async () => {
     const { definition, scopeNodes, scopeIds } = defOf([
       { id: DESIGNER, kind: 'agent-single' },
       { id: 'down', kind: 'agent-single' },
     ])
     const rows = [row(DESIGNER, 'done'), row('down', 'pending')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -432,13 +446,13 @@ describe('RFC-120 T9 — frontier park gate', () => {
     expect(f.ready).not.toContain(DESIGNER)
   })
 
-  test('golden-lock: empty deferred set → designer completed, downstream ready', () => {
+  test('golden-lock: empty deferred set → designer completed, downstream ready', async () => {
     const { definition, scopeNodes, scopeIds } = defOf([
       { id: DESIGNER, kind: 'agent-single' },
       { id: 'down', kind: 'agent-single' },
     ])
     const rows = [row(DESIGNER, 'done')]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       definition,
       scopeNodes,
@@ -476,9 +490,14 @@ describeEachProvider(
       // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
       // derives it from scope) — this is what T2 must treat as a valid park.
       await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
-      const { tasks } = tablesOf(db)
       // park the task (the scheduler would do this at quiescence)
-      await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        {
+          status: 'awaiting_human',
+        },
+      )
       const result = await runLifecycleInvariants({
         operations: taskRecoveryOperations(db),
         scope: { taskId },
@@ -498,8 +517,13 @@ describeEachProvider(
         directive: 'continue',
         actor: { userId: 'u1', role: 'owner' },
       })
-      const { tasks } = tablesOf(db)
-      await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        {
+          status: 'awaiting_human',
+        },
+      )
       const result = await runLifecycleInvariants({
         operations: taskRecoveryOperations(db),
         scope: { taskId },
@@ -520,12 +544,12 @@ describeEachProvider(
       // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
       // derives it from scope) — S2 must exempt this valid deferred park.
       await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
-      const { tasks } = tablesOf(db)
       // park + age past the freshness gate (startedAt long ago, no events)
-      await db
-        .update(tasks)
-        .set({ status: 'awaiting_human', startedAt: Date.now() - 60 * 60 * 1000 })
-        .where(eq(tasks.id, taskId))
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        { status: 'awaiting_human', startedAt: Date.now() - 60 * 60 * 1000 },
+      )
       const result = await runStuckTaskDetector({
         operations: taskRecoveryOperations(db),
         stuckThresholdMs: 1000,
@@ -637,11 +661,11 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       gate: { kind: 'questions', ref: `questions:${taskId}` },
       replayed: false,
     })
-    const { taskQuestions, tasks, taskExecutionIntents, nodeRuns } = tablesOf(db)
+    const { taskQuestions, taskExecutionIntents, nodeRuns } = tablesOf(db)
     expect(
       (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
     ).toMatchObject({ dispatchedBy: actor.userId })
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+    expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'pending',
       lifecycleEventRevision: decided.receipt.taskRevision,
     })
@@ -677,7 +701,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
   test('RFC-333 intent fault rolls question stamp, rerun, task release and operation back', async () => {
     const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
-    const { nodeRuns, collaborationGateOperations, taskQuestions, tasks, taskExecutionIntents } =
+    const { nodeRuns, collaborationGateOperations, taskQuestions, taskExecutionIntents } =
       tablesOf(db)
     const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
     const beforeOperations = (await db.select().from(collaborationGateOperations)).length
@@ -719,7 +743,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       expect(
         (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
       ).toMatchObject({ dispatchedAt: null, dispatchedBy: null })
-      expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]).toMatchObject({
+      expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'awaiting_human',
       })
       expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
@@ -825,11 +849,10 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     await bindTriggerRun(db, [entries[0]!.id], runId)
     expect((await loadUndispatchedDesignerTargets(db, taskId)).has(DESIGNER)).toBe(false)
 
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
     // q1's rerun finishes done+output → q1 consumed. Now the node RE-PARKS for the still-
     // undispatched q2 (so a later dispatch of q2 isn't lost to an already-completing task).
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-    await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'result', content: 'x' })
+    await patchNodeRunFixture(db, { id: runId }, { status: 'done' })
+    await nodeRunOutputFixture(db, { nodeRunId: runId, portName: 'result', content: 'x' })
     expect((await loadUndispatchedDesignerTargets(db, taskId)).has(DESIGNER)).toBe(true)
   })
 
@@ -853,10 +876,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // The park set excludes DESIGNER (in-flight q1) → deriveFrontier does NOT bucket it into
     // awaitingHuman; its pending rerun is dispatchable (not stranded).
     const deferred = await loadUndispatchedDesignerTargets(db, taskId)
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await new DrizzleNodeExecutionPersistence(db).list({ taskId })
     const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       liveDef(),
       scopeNodes,
@@ -928,7 +950,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // Dispatch q1 → DESIGNER's cross-clarify-answer rerun is pending (in-flight).
     await dispatchTaskQuestions(db, taskId, [q1.id], actor)
     // A SECOND, separate dispatch of q2 to the same (busy) node is rejected — minting a
-    // second rerun on the same (node, iteration) would conflict via ULID freshness.
+    // second rerun on the same (node, iteration) would conflict with the selected generation.
     let threw: unknown = null
     try {
       await dispatchTaskQuestions(db, taskId, [q2.id], actor)
@@ -974,9 +996,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const d1 = await dispatchTaskQuestions(db, taskId, [q1.id], actor)
     const P = d1.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q1.id], P)
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, P))
-    await insertOne(db, nodeRunOutputs, { nodeRunId: P, portName: 'result', content: 'x' })
+    const { nodeRuns } = tablesOf(db)
+    await patchNodeRunFixture(db, { id: P }, { status: 'done' })
+    await nodeRunOutputFixture(db, { nodeRunId: P, portName: 'result', content: 'x' })
 
     // Now the node is free → dispatching q2 mints a FRESH rerun P2 (no conflict).
     const d2 = await dispatchTaskQuestions(db, taskId, [q2.id], actor)
@@ -1012,8 +1034,8 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const P = d1.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q1.id], P)
     expect((await designerEntries(db, taskId)).find((e) => e.id === q1.id)?.triggerRunId).toBe(P)
-    const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, P))
+    const { nodeRuns } = tablesOf(db)
+    await patchNodeRunFixture(db, { id: P }, { status: 'failed' })
 
     // Dispatching q2 to the SAME node is REJECTED — q1 is still OPEN (failed ≠ consumed). A
     // newer rerun would become the upper bound of q1's lineage window, so a later revival /
@@ -1041,8 +1063,8 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect(designerReruns[0]?.id).toBe(P)
 
     // Once P's revival reaches done+output (q1 consumed), dispatching q2 SUCCEEDS (test c).
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, P))
-    await insertOne(db, nodeRunOutputs, { nodeRunId: P, portName: 'result', content: 'x' })
+    await patchNodeRunFixture(db, { id: P }, { status: 'done' })
+    await nodeRunOutputFixture(db, { nodeRunId: P, portName: 'result', content: 'x' })
     const d2 = await dispatchTaskQuestions(db, taskId, [q2.id], actor)
     expect(d2.reruns.length).toBe(1)
     expect(d2.reruns[0]?.nodeRunId).not.toBe(P)
@@ -1053,7 +1075,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     const { nodeRuns } = tablesOf(db)
     // OTHER (the reassign target B) needs a prior run to be a valid frontier mint target.
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: OTHER,
@@ -1131,9 +1153,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
     expect(result.reruns.length).toBe(1)
     expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
-    const minted = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, result.reruns[0]!.nodeRunId))
-    )[0]
+    const minted = (await readNodeRunFixtures(db, { id: result.reruns[0]!.nodeRunId }))[0]
     expect(minted?.nodeId).toBe(OTHER)
     expect(minted?.agentOverrideName).toBeNull() // 去借壳: OTHER runs its OWN agent
   })
@@ -1173,7 +1193,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     const { nodeRuns } = tablesOf(db)
     // OTHER has a prior node_run + no feedback edge — a valid reassign target.
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: OTHER,
@@ -1205,10 +1225,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect((await designerEntries(db, taskId))[0]?.dispatchedAt).not.toBeNull()
     expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBeNull()
     const otherPending = (
-      await db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, OTHER)))
+      await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId: OTHER }] })
     ).find((r) => r.id === runId && r.status === 'pending')
     expect(otherPending).toBeDefined()
     expect(otherPending?.agentOverrideName).toBeNull() // 去借壳: OTHER runs its own agent
@@ -1262,8 +1279,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
   test('per-node queue is authoritative for deferred (去借壳): the TARGET injects the reassigned question (mint on target, own agent); the origin designer has no queue', async () => {
     const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-    const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: ulid(),
       taskId,
       nodeId: OTHER,
@@ -1286,7 +1302,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // RFC-131 T4 去借壳: effectiveTarget=OTHER is the frontier — mint OTHER running its OWN agent.
     expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
     const targetRunId = result.reruns[0]!.nodeRunId
-    const targetRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, targetRunId)))[0]
+    const targetRun = (await readNodeRunFixtures(db, { id: targetRunId }))[0]
     expect(targetRun?.agentOverrideName).toBeNull() // 去借壳: OTHER runs its own agent
 
     // The ORIGIN DESIGNER is no longer the effective target (the entry moved to OTHER); the
@@ -1335,7 +1351,7 @@ describeEachProviderHttpApplication(
         questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
       })
       const { nodeRuns, taskQuestions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: OTHER,
@@ -1393,8 +1409,7 @@ describeEachProviderHttpApplication(
     test('M1: the override handoff mints the rerun ON the target (RFC-141: no Update-Directive suppression anymore)', async () => {
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: OTHER,
@@ -1459,8 +1474,14 @@ describeEachProviderHttpApplication(
       // RFC-162: add the undispatched designer entry that parks the task (reconcile no longer
       // derives it from scope) — the HTTP dispatch below then stamps + mints + releases it.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
-      const { tasks, nodeRuns } = tablesOf(db)
-      await db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId))
+      const { nodeRuns } = tablesOf(db)
+      await patchTaskFixture(
+        db,
+        { id: taskId },
+        {
+          status: 'awaiting_human',
+        },
+      )
       expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(1) // parked
 
       const entry = (await designerEntries(db, taskId))[0]!
@@ -1578,18 +1599,16 @@ describeEachProviderHttpApplication(
       expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(runId)
       expect(await phaseOf()).toBe('processing') // bound, but run not done yet
 
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
       // Run finishes done + output → awaiting_confirm.
-      await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, runId))
-      await insertOne(db, nodeRunOutputs, { nodeRunId: runId, portName: 'result', content: 'x' })
+      await patchNodeRunFixture(db, { id: runId }, { status: 'done' })
+      await nodeRunOutputFixture(db, { nodeRunId: runId, portName: 'result', content: 'x' })
       expect(await phaseOf()).toBe('awaiting_confirm')
     })
 
     test('M1(re-gate): reassign allowed pre-dispatch (NULL trigger) but rejected post-dispatch (stamped)', async () => {
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-      const { nodeRuns } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: OTHER,
@@ -1640,7 +1659,7 @@ describeEachProviderHttpApplication(
       const entry = (await designerEntries(db, taskId))[0]!
       const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
       const anchorRunId = result.reruns[0]!.nodeRunId
-      const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       const anchorRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, anchorRunId)))[0]!
 
       await bindTriggerRun(db, [entry.id], anchorRunId)
@@ -1650,7 +1669,7 @@ describeEachProviderHttpApplication(
         (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!.phase
 
       // The bound run FAILS → still processing (D3), confirm would reject.
-      await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, anchorRunId))
+      await patchNodeRunFixture(db, { id: anchorRunId }, { status: 'failed' })
       expect(await phaseOf()).toBe('processing')
 
       // The scheduler mints a technical process-retry (same node + iteration, cause
@@ -1661,9 +1680,13 @@ describeEachProviderHttpApplication(
         retryIndex: 1,
         iteration: anchorRow.iteration,
         cause: 'process-retry',
-        overrides: { startedAt: Date.now() },
+        overrides: {
+          identity: {
+            startedAt: Date.now(),
+          },
+        },
       })
-      await insertOne(db, nodeRunOutputs, { nodeRunId: retryId, portName: 'result', content: 'x' })
+      await nodeRunOutputFixture(db, { nodeRunId: retryId, portName: 'result', content: 'x' })
 
       // The entry resolves through the LINEAGE → awaiting_confirm (not stuck).
       expect(await phaseOf()).toBe('awaiting_confirm')
@@ -1691,11 +1714,11 @@ describeEachProviderHttpApplication(
 
       await bindTriggerRun(db, [entry.id], attempt1)
       expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(attempt1)
-      await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, attempt1))
+      await patchNodeRunFixture(db, { id: attempt1 }, { status: 'failed' })
 
       // The scheduler mints a FRESH process-retry (different id, same node+iteration).
       const attempt2 = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: attempt2,
         taskId,
         nodeId: DESIGNER,
@@ -1751,8 +1774,8 @@ describeEachProviderHttpApplication(
       }
       const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
       const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { nodeRuns } = tablesOf(db)
+      await workflowFixture(db, {
         id: `wf_${taskId}`,
         name: 'h3',
         description: '',
@@ -1760,7 +1783,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'h3',
         workflowId: `wf_${taskId}`,
@@ -1774,7 +1797,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       for (const n of [D, E]) {
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: ulid(),
           taskId,
           nodeId: n,
@@ -1790,7 +1813,7 @@ describeEachProviderHttpApplication(
         qid: string,
       ): Promise<string> => {
         const runId = ulid()
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: runId,
           taskId,
           nodeId: q,
@@ -1903,8 +1926,8 @@ describeEachProviderHttpApplication(
       }
       const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
       const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-      const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { nodeRuns, clarifyRounds } = tablesOf(db)
+      await workflowFixture(db, {
         id: `wf_${taskId}`,
         name: 'h2ng',
         description: '',
@@ -1912,7 +1935,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'h2ng',
         workflowId: `wf_${taskId}`,
@@ -1926,7 +1949,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       for (const n of [A, B]) {
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: ulid(),
           taskId,
           nodeId: n,
@@ -1942,7 +1965,7 @@ describeEachProviderHttpApplication(
         qid: string,
       ): Promise<string> => {
         const runId = ulid()
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: runId,
           taskId,
           nodeId: q,
@@ -2139,8 +2162,7 @@ describeEachProviderHttpApplication(
       }
       const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
       const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: `wf_${taskId}`,
         name: 'two-designer',
         description: '',
@@ -2148,7 +2170,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id: taskId,
         name: 'two-designer',
         workflowId: `wf_${taskId}`,
@@ -2162,7 +2184,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now(),
       })
       for (const n of [D1, D2]) {
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: ulid(),
           taskId,
           nodeId: n,
@@ -2173,7 +2195,7 @@ describeEachProviderHttpApplication(
       }
       const open = async (q: string, cc: string, d: string, qid: string): Promise<string> => {
         const runId = ulid()
-        await insertOne(db, nodeRuns, {
+        await nodeRunFixture(db, {
           id: runId,
           taskId,
           nodeId: q,
@@ -2327,8 +2349,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       })
     }
     const def: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes, edges, outputs: [] }
-    const { workflows, tasks, nodeRuns } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: `wf_${taskId}`,
       name: 'rfc120-frontier',
       description: '',
@@ -2336,7 +2357,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       version: 1,
       schemaVersion: 4,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'rfc120-frontier',
       workflowId: `wf_${taskId}`,
@@ -2350,7 +2371,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       startedAt: Date.now(),
     })
     const designerDoneId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: designerDoneId,
       taskId,
       nodeId: DESIGNER,
@@ -2359,7 +2380,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       iteration: 0,
     })
     const downDoneId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: downDoneId,
       taskId,
       nodeId: DOWN,
@@ -2367,11 +2388,11 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
       retryIndex: 0,
       iteration: 0,
       // DOWN consumed DESIGNER's done → a DESIGNER rerun makes this draft stale (RFC-074).
-      consumedUpstreamRunsJson: JSON.stringify({ [DESIGNER]: designerDoneId }),
+      consumedEdges: [{ producerNodeId: DESIGNER, producerRunId: designerDoneId }],
     })
     const open = async (q: string, cc: string, d: string): Promise<string> => {
       const runId = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: runId,
         taskId,
         nodeId: q,
@@ -2474,28 +2495,22 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     const { seed } = await answerAndDispatch(db)
     // Simulate A's frontier rerun completing FRESH (a new done id > the old draft id).
     const designerRerunDone = ulid()
-    const { nodeRuns } = tablesOf(db)
-    await db
-      .update(nodeRuns)
-      .set({ status: 'done' })
-      .where(
-        and(
-          eq(nodeRuns.taskId, seed.taskId),
-          eq(nodeRuns.nodeId, DESIGNER),
-          eq(nodeRuns.status, 'pending'),
-        ),
-      )
-    // (the pending rerun is now done; its ULID is later than designerDoneId → freshest)
+    await patchNodeRunFixture(
+      db,
+      { taskId: seed.taskId, nodeId: DESIGNER, status: 'pending' },
+      { status: 'done' },
+    )
+    // (the pending rerun is now done; it was allocated after designerDoneId and is freshest)
     void designerRerunDone
 
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, seed.taskId))
+    const rows = await new DrizzleNodeExecutionPersistence(db).list({ taskId: seed.taskId })
     const scopeNodes = seed.def.nodes as unknown as WorkflowNode[]
     // BOTH entries are dispatched (dispatched_at set) → NEITHER node is in the deferred
     // park set anymore; DOWN is re-dispatched purely by RFC-074 freshness (its draft
     // consumed DESIGNER's OLD run → stale once DESIGNER reran).
     const deferred = await loadUndispatchedDesignerTargets(db, seed.taskId)
     expect(deferred.size).toBe(0)
-    const f = deriveFrontier(
+    const f = await deriveFrontier(
       rows,
       seed.def,
       scopeNodes,
@@ -2519,8 +2534,8 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     const { seed, entryB } = await answerAndDispatch(db)
     // The cascade mints DOWN's rerun (a fresh pending run on DOWN).
     const downRerunId = ulid()
-    const { nodeRuns, taskQuestions } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { taskQuestions } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: downRerunId,
       taskId: seed.taskId,
       nodeId: DOWN,
@@ -2547,7 +2562,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
   test("CONSUMPTION: A done+output → only A's bound question leaves the queue; B's (downstream) question is untouched", async () => {
     const db = harness.db
     const { seed, entryA, entryB } = await answerAndDispatch(db)
-    const { nodeRuns, taskQuestions, nodeRunOutputs } = tablesOf(db)
+    const { nodeRuns, taskQuestions } = tablesOf(db)
     const designerRerunId = (
       await db
         .select()
@@ -2574,8 +2589,8 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
 
     // A's run finishes done + output → ledger consumption (does NOT over-consume B): the
     // derived-aging queue selection per node is covered by rfc132-select-agent-queue.
-    await db.update(nodeRuns).set({ status: 'done' }).where(eq(nodeRuns.id, designerRerunId))
-    await insertOne(db, nodeRunOutputs, {
+    await patchNodeRunFixture(db, { id: designerRerunId }, { status: 'done' })
+    await nodeRunOutputFixture(db, {
       nodeRunId: designerRerunId,
       portName: 'result',
       content: 'x',
@@ -2616,8 +2631,8 @@ describeEachProvider(
       // the context still builds and the suppress member is gone at runtime.
       const db = harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
-      const { nodeRuns, taskQuestions } = tablesOf(db)
-      await insertOne(db, nodeRuns, {
+      const { taskQuestions } = tablesOf(db)
+      await nodeRunFixture(db, {
         id: ulid(),
         taskId,
         nodeId: OTHER,

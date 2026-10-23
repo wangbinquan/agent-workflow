@@ -76,13 +76,12 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
   {
     what: '人工门节点投影的 18 字段裁剪：决定 / 评审 / 反问三条链路取同一份节点行投影',
     fn: 'humanGateNodeProjectionMember',
-    definedIn: `${B}modules/task-execution/domain/humanGateContinuation.ts`,
+    definedIn: `${B}modules/task-execution/infrastructure/humanGateProjection.ts`,
     consumers: [
       `${B}modules/task-execution/public/participants.ts`,
       `${B}modules/task-execution/infrastructure/taskDecisionParticipant.ts`,
-      `${B}modules/collaboration/infrastructure/review.ts`,
-      `${B}modules/collaboration/infrastructure/clarifyDecision.ts`,
-      `${B}modules/collaboration/infrastructure/taskQuestionDispatch.ts`,
+      // RFC-395 II-a A7: read projections now come through the owner query.
+      `${B}modules/task-execution/infrastructure/nodeRunQueries.ts`,
     ],
     forkedFrom: [
       `${B}modules/task-execution/infrastructure/taskDecisionParticipant.ts`,
@@ -177,12 +176,13 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: '「这条已准备好的包变更属于哪类资源」的七个类型谓词（两个应用引擎曾各揣整族一份）',
     fn: 'preparedPackageMutation',
     definedIn: `${B}modules/resource-catalog/public/types.ts`,
-    consumers: [`${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`],
+    consumers: [`${B}modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts`],
     // `forkedFrom` 是**历史**：当初分叉的两处。其中 legacy 那一处已随合一删除，
     // 判据只要求「两处、且至少一处仍存在」，所以这里照旧记两条。
     forkedFrom: [
       `${B}platform/persistence/sqlite/legacyResourcePackageBundleApply.ts`,
-      `${B}platform/persistence/postgresqlResourcePackageAtomicApply.ts`,
+      // RFC-395 II-a A6: the surviving fork moved with the common apply state machine.
+      `${B}modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts`,
     ],
   },
   {
@@ -364,3 +364,5 @@ describe('RFC-359 —— 孪生体守卫自证有牙', () => {
     expect(referencesIdentifier(aliased, 'runRetentionSweepSlice')).toBe(true)
   })
 })
+
+// 2026-10-22 RFC-395 II-a A6：forkedFrom 保留原始来源；当前恢复在 resourcePackageLegacyRecovery.ts，apply 在 resourcePackageAtomicApply.ts。

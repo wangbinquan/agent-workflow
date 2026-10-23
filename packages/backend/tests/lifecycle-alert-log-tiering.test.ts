@@ -16,8 +16,7 @@
 // a real daemon: `lifecycle.stuck` scanned every 5 min, same 7 alerts, zero
 // state changes, ERROR every tick since May).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { ulid } from 'ulid'
@@ -252,10 +251,9 @@ async function seedOffendingTask(
       : ({ id: 'clr', kind: 'clarify' } as WorkflowNode)
   const def: WorkflowDefinition = { $schema_version: 2, inputs: [], nodes: [node], edges: [] }
   const workflowId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: JSON.stringify(def) })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId,
@@ -268,7 +266,7 @@ async function seedOffendingTask(
     inputs: '{}',
     startedAt: 0,
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: node.id,

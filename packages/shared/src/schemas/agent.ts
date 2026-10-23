@@ -120,12 +120,7 @@ export const AgentNameSchema = z
 /**
  * RFC-223 (PR-1) — a stored cross-resource reference. At rest this is always a
  * resource `id` (ULID) so a rename never mutates the referencing row (D4/D7).
- * The create / import wire ALSO accepts a `name` here: while name↔id stays 1:1
- * (uniqueness not yet relaxed — that is PR-8) the server resolves a name to its
- * single id deterministically (services/agentRefs.ts), so agent.md authored by
- * name and the id-based pickers flow through the same field. The old per-kind
- * `McpNameSchema` / `PluginNameSchema` / `AgentNameSchema` element validation is
- * dropped (an id is not a name-shaped string); only length is bounded.
+ * 普通 API 接受 stable ids；agent.md 的 name selector 经 import-resolve 单独解析。
  */
 export const ResourceRefSchema = z
   .string()
@@ -137,9 +132,8 @@ export const ResourceRefSchema = z
  * A `managed` ref points at a DB-backed skill row by its stable id; a `project`
  * ref names a repo-local (self-discovered) skill that has NO DB row (RFC-178) —
  * it is passed to the CLI verbatim by name. Discriminated on `kind` so the two
- * cannot be confused. On the create / import wire a managed ref's `skillId` may
- * carry a NAME (resolved to id server-side, or demoted to `project` when no
- * managed skill matches — RFC-178); at rest it is always an id.
+ * cannot be confused. Managed skillId always carries a stable id. Portable
+ * name selectors are resolved separately before entering this persistent shape.
  */
 export const AgentSkillRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('managed'), skillId: z.string().min(1).max(128) }),
@@ -164,52 +158,33 @@ export const AgentSkillSelectorSchema = z.union([
 ])
 export type AgentSkillSelector = z.infer<typeof AgentSkillSelectorSchema>
 
-/** The display / selector name carried by a skill ref, ignoring its kind. For a
- *  managed ref this is the raw `skillId` (an id at rest, a name on the import
- *  wire); for a project ref it is the skill name. Used for preview + agent.md. */
+/** Display token: a stable managed id or a project skill name. */
 export function agentSkillRefName(ref: AgentSkillRef): string {
   return ref.kind === 'managed' ? ref.skillId : ref.name
 }
 
 /**
- * RFC-223 (PR-1) — ref ← selector. Resolve a portable selector into a stored
- * ref. `resolveManagedId(name)` returns the managed skill id visible for that
- * name, or undefined.
- *
- * Codex impl-gate P1-1: a MANAGED selector that resolves to no managed skill is
- * NOT silently demoted to a `project` (repo-local) ref. Demoting a missing
- * managed skill into a self-discovered repo skill changes execution semantics
- * (the framework would inject whatever repo-local skill happens to carry that
- * name). Instead the selector is kept as an UNRESOLVED managed ref — `skillId`
- * holds the unresolved name — so downstream resolution / runtime injection
- * surfaces it as a missing managed skill rather than a working project skill.
- * A repo-local skill must be authored explicitly as a `project` selector; that
- * (and picker free-text) is the ONLY user-explicit path to a `project` ref.
+ * Portable conversion contract retained for the RFC-223 conformance suite.
+ * No production caller currently uses these two helpers. Unresolved managed
+ * selectors deliberately return undefined; callers must supply the resolution policy.
  */
 export function skillSelectorToRef(
   selector: AgentSkillSelector,
   resolveManagedId: (name: string) => string | undefined,
-): AgentSkillRef {
+): AgentSkillRef | undefined {
   if (selector.kind === 'project') return { kind: 'project', name: selector.name }
   const id = resolveManagedId(selector.name)
-  return id === undefined
-    ? { kind: 'managed', skillId: selector.name }
-    : { kind: 'managed', skillId: id }
+  return id === undefined ? undefined : { kind: 'managed', skillId: id }
 }
 
-/**
- * RFC-223 (PR-1) — selector ← ref. Produce the portable selector for a stored
- * ref. `resolveManagedName(skillId)` maps a managed id back to its name (+ owner
- * for PR-8); a managed ref whose id no longer resolves is emitted as a `project`
- * selector carrying the raw id (best-effort — the row is gone).
- */
+/** Resolve a stable managed id; a missing row cannot supply a portable name. */
 export function skillRefToSelector(
   ref: AgentSkillRef,
   resolveManagedName: (skillId: string) => { name: string; ownerUsername?: string } | undefined,
-): AgentSkillSelector {
+): AgentSkillSelector | undefined {
   if (ref.kind === 'project') return { kind: 'project', name: ref.name }
   const resolved = resolveManagedName(ref.skillId)
-  if (resolved === undefined) return { kind: 'project', name: ref.skillId }
+  if (resolved === undefined) return undefined
   return { kind: 'managed', name: resolved.name, ownerUsername: resolved.ownerUsername }
 }
 

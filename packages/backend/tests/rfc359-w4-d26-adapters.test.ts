@@ -9,7 +9,7 @@
 // 这套断言两个引擎各跑一遍写面的核心判据：一次创建落定问题行 + prepared 门操作 + 已提交事件；
 // 任务终态一律拒绝且什么都不落；重复 gateRef 的活跃操作按冲突拒绝。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -27,10 +27,9 @@ async function seedTask(
   status: 'running' | 'done' | 'canceled' = 'running',
 ): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
+  await workflowFixture(db, { id: workflowId, name: `wf-${workflowId}`, definition: '{}' })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'd26 manual question task',
     workflowId,

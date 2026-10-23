@@ -8,10 +8,9 @@
 //     DIFFERENT agent's same-named task neither blocks the op nor leaks its id
 //     (R3-3 cross-tenant isolation — the failure PR-8 name-uniqueness would open).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -19,12 +18,13 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
 import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
 import { createWorkgroup } from '../src/services/workgroups'
-import { buildWorkgroupRuntimeConfig } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/launch'
+// RFC-395 II-a: exercise the surviving production builders and constant leaf.
+import { buildWorkgroupRuntimeConfig } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import {
   deriveWorkgroupRunHistory,
   type HostRunLite,
   type MemberLite,
-} from '../src/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
+} from './helpers/workgroupSelection'
 import { extractAgentIdsFromSnapshot } from '../src/modules/memory/application/distill/schedule'
 import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
 import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/constants'
@@ -58,7 +58,7 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
     { id: 'mA2', memberType: 'agent', agentId: 'ag-y', agentName: 'agent-y', displayName: 'A2' },
   ]
 
-  test('agentOverrideId wins over the mutable card assignee', () => {
+  test('agentOverrideId wins over the mutable card assignee', async () => {
     // Card ASG1 was re-claimed by A2 (mutable), but the run was minted under A1.
     const assignments = [{ id: 'ASG1', assigneeMemberId: 'mA2' }]
     const run: HostRunLite = {
@@ -70,11 +70,11 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
       rerunCause: 'wg-assignment',
       agentOverrideId: 'ag-x', // A1's agent
     }
-    const history = deriveWorkgroupRunHistory(members, 'mA1', [run], assignments, [])
+    const history = await deriveWorkgroupRunHistory(members, 'mA1', [run], assignments, [])
     expect(history.find((e) => e.nodeRunId === 'R1')?.memberId).toBe('mA1')
   })
 
-  test('legacy row (agentOverrideName only, no id) fails closed', () => {
+  test('legacy row (agentOverrideName only, no id) fails closed', async () => {
     // The card has since been re-claimed by A2. A legacy run with no frozen id
     // must not inherit that mutable current assignee.
     const assignments = [{ id: 'ASG1', assigneeMemberId: 'mA2' }]
@@ -87,11 +87,11 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
       rerunCause: 'wg-assignment',
       agentOverrideName: 'agent-x',
     }
-    const history = deriveWorkgroupRunHistory(members, 'mA1', [run], assignments, [])
+    const history = await deriveWorkgroupRunHistory(members, 'mA1', [run], assignments, [])
     expect(history.find((e) => e.nodeRunId === 'R2')).toBeUndefined()
   })
 
-  test('M1: agentOverrideId present but off-roster → fail closed, NOT re-bound by name', () => {
+  test('M1: agentOverrideId present but off-roster → fail closed, NOT re-bound by name', async () => {
     // Agent A (ag-a, name "shared") was on the roster when run R3 was minted; A
     // was then removed mid-run and a DIFFERENT agent B (ag-b) took the name
     // "shared". The run froze A's id. Strict-by-id resolution must DROP the run
@@ -111,7 +111,7 @@ describe('deriveWorkgroupRunHistory — id-first agent attribution', () => {
       agentOverrideId: 'ag-a', // A's id — no longer on the roster
       agentOverrideName: 'shared', // the name B now holds (the ABA trap)
     }
-    const history = deriveWorkgroupRunHistory(roster, 'mB', [run], assignments, [])
+    const history = await deriveWorkgroupRunHistory(roster, 'mB', [run], assignments, [])
     // The run must NOT be attributed to B — with strict-by-id it is dropped.
     expect(history.find((e) => e.nodeRunId === 'R3')).toBeUndefined()
   })
@@ -149,11 +149,17 @@ describe('extractAgentIdsFromSnapshot', () => {
 describe('buildMintNodeRunValues — agentOverrideId', () => {
   test('stamps both override name and id', () => {
     const v = buildMintNodeRunValues({
+      ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
       taskId: 't1',
       nodeId: 'n1',
       status: 'pending',
       cause: 'initial',
-      overrides: { agentOverrideName: 'x', agentOverrideId: 'ag-x' },
+      overrides: {
+        config: {
+          agentOverrideName: 'x',
+          agentOverrideId: 'ag-x',
+        },
+      },
     })
     expect(v.agentOverrideName).toBe('x')
     expect(v.agentOverrideId).toBe('ag-x')
@@ -161,6 +167,7 @@ describe('buildMintNodeRunValues — agentOverrideId', () => {
 
   test('defaults to null when not overridden', () => {
     const v = buildMintNodeRunValues({
+      ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
       taskId: 't1',
       nodeId: 'n1',
       status: 'pending',
@@ -200,12 +207,11 @@ describeEachProvider('RFC-223 PR-3a — DB locks', (harness) => {
 
   test('R3-3: a same-named task with a DIFFERENT source_agent_id neither blocks nor leaks', async () => {
     const a = await createAgent(db, AGENT_INPUT('writer'))
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, { id: 'wf', name: 'wf', definition: '{}' })
+    await workflowFixture(db, { id: 'wf', name: 'wf', definition: '{}' })
     // A live task whose display name is 'writer' but whose CANONICAL owner is a
     // different agent id (simulating a cross-tenant / ABA same-name collision).
     const otherTaskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: otherTaskId,
       name: 'other',
       workflowId: 'wf',
@@ -228,7 +234,7 @@ describeEachProvider('RFC-223 PR-3a — DB locks', (harness) => {
     await deleteAgent(db, a.id, ACTOR)
     // sanity: A really is gone; the unrelated task row is untouched.
     expect(a.name).toBe('writer')
-    const row = (await db.select().from(tasks).where(eq(tasks.id, otherTaskId)))[0]
+    const row = (await readTaskFixtures(db, { id: otherTaskId }))[0]
     expect(row?.status).toBe('running')
   })
 })

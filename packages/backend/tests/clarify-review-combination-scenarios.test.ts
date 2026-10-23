@@ -1,5 +1,13 @@
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
+import {
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  readNodeRunFixtures,
+  type NodeRunFixtureRow,
+  consumedProducerIds,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { compareNodeRunMintOrder } from '@agent-workflow/shared'
@@ -217,11 +225,7 @@ function opencodeCmd(): string[] {
 }
 
 async function topLevel(db: DbClient, taskId: string, nodeId: string) {
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db
-    .select()
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, nodeId)))
+  const rows = await readNodeRunFixtures(db, { $and: [{ taskId }, { nodeId }] })
   return rows.filter((r) => r.parentNodeRunId === null)
 }
 
@@ -242,8 +246,7 @@ async function awaitingReviewRun(db: DbClient, taskId: string, nodeId: string) {
 }
 
 async function taskStatus(db: DbClient, taskId: string): Promise<string> {
-  const { tasks } = tablesOf(db)
-  const t = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+  const t = (await readTaskFixtures(db, { id: taskId }))[0]
   return t?.status ?? '??'
 }
 
@@ -465,11 +468,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const revTops = await topLevel(c.db, task.id, 'rev')
     const approvedRun = revTops.find((r) => r.status === 'done')
     expect(approvedRun).toBeDefined()
-    const { nodeRunOutputs } = tablesOf(c.db)
-    const outs = await c.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, approvedRun!.id))
+    const outs = await readNodeRunOutputFixtures(c.db, { nodeRunId: approvedRun!.id })
     const approvedDoc = outs.find((o) => o.portName === 'approved_doc')?.content ?? ''
     expect(approvedDoc).toContain('DESIGN_V2')
     expect(approvedDoc).not.toContain('DESIGN_V1')
@@ -1387,8 +1386,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // The pure-agent chain runs straight to done (v1), each node consuming its
     // upstream's v1 run.
     expect(await taskStatus(c.db, task.id)).toBe('done')
-    const consumedOf = (r: { consumedUpstreamRunsJson: string | null }) =>
-      JSON.parse(r.consumedUpstreamRunsJson ?? '{}') as Record<string, string>
+    const consumedOf = (r: Pick<NodeRunFixtureRow, 'consumedEdges'>) =>
+      consumedProducerIds(r.consumedEdges)
     const doneB1 = (await topLevel(c.db, task.id, 'agentB')).filter((r) => r.status === 'done')
     const doneC1 = (await topLevel(c.db, task.id, 'agentC')).filter((r) => r.status === 'done')
     expect(doneB1.length).toBe(1)
@@ -1407,8 +1406,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       iteration: 0,
       cause: 'clarify-answer',
     })
-    const { tasks } = tablesOf(c.db)
-    await c.db.update(tasks).set({ status: 'pending' }).where(eq(tasks.id, task.id))
+    await patchTaskFixture(c.db, { id: task.id }, { status: 'pending' })
 
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
     expect(await taskStatus(c.db, task.id)).toBe('done')

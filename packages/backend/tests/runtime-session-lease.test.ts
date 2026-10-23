@@ -1,3 +1,10 @@
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
@@ -22,9 +29,8 @@ import {
 const HASH = 'a'.repeat(64)
 
 async function seedTaskRuns(db: PersistenceDb) {
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
-  await insertOne(db, tasks, {
+  await workflowFixture(db, { id: 'workflow-lease', name: 'workflow-lease', definition: '{}' })
+  await taskFixture(db, {
     executionLineageId: 'task-lease',
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: 'task-lease', workflowRevision: null },
@@ -41,7 +47,8 @@ async function seedTaskRuns(db: PersistenceDb) {
     inputs: '{}',
     startedAt: 1,
   })
-  await db.insert(nodeRuns).values(
+  await nodeRunFixture(
+    db,
     ['run-1', 'run-2', 'run-3'].map((id) => ({
       id,
       taskId: 'task-lease',
@@ -126,14 +133,11 @@ describeEachProvider('natural runtime session leases', (harness) => {
     ).rejects.toThrow('runtime-session-conflict')
 
     expect(await markRuntimeSessionResetPending(operations, first)).toBe(true)
-    const { nodeRuns } = tablesOf(db)
     expect(
       (
-        await db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, 'run-1'))
-          .limit(1)
+        await readNodeRunFixtures(db, { id: 'run-1' }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: null })
     const rotated = await rotateRuntimeSessionLease(operations, first, 'native-after-reset')
@@ -151,11 +155,9 @@ describeEachProvider('natural runtime session leases', (harness) => {
     })
     expect(
       (
-        await db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, 'run-1'))
-          .limit(1)
+        await readNodeRunFixtures(db, { id: 'run-1' }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: 'native-after-reset' })
     expect(await releaseRuntimeSessionLease(operations, first)).toBe(false)
@@ -174,7 +176,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       leaseNonceDigest: 'nonce-lineage-1',
       leasedAt: 10,
     })
-    const { nodeRunEvents, nodeRuns } = tablesOf(db)
+    const { nodeRunEvents } = tablesOf(db)
     await insertOne(db, nodeRunEvents, {
       nodeRunId: 'run-1',
       ts: 1,
@@ -213,11 +215,11 @@ describeEachProvider('natural runtime session leases', (harness) => {
     })
     expect(
       (
-        await db
-          .select({ id: nodeRuns.id, sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.nodeId, 'node-a'))
-          .orderBy(nodeRuns.id)
+        await readNodeRunFixtures(
+          db,
+          { nodeId: 'node-a' },
+          { orderBy: [{ field: 'id', direction: 'asc' }] },
+        ).then((rows) => rows.map((row) => ({ id: row.id, sessionId: row.opencodeSessionId })))
       ).filter((row) => row.id === 'run-1' || row.id === 'run-2'),
     ).toEqual([
       { id: 'run-1', sessionId: 'native-lineage-b' },
@@ -263,14 +265,11 @@ describeEachProvider('natural runtime session leases', (harness) => {
       leaseNodeRunId: 'run-1',
       leaseNonceDigest: 'nonce-reset',
     })
-    const { nodeRuns } = tablesOf(db)
     expect(
       (
-        await db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, 'run-1'))
-          .limit(1)
+        await readNodeRunFixtures(db, { id: 'run-1' }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: null })
 
@@ -298,14 +297,11 @@ describeEachProvider('natural runtime session leases', (harness) => {
       leaseNonceDigest: 'nonce-pending',
       resetPending: true,
     })
-    const { nodeRuns } = tablesOf(db)
     expect(
       (
-        await db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, 'run-1'))
-          .limit(1)
+        await readNodeRunFixtures(db, { id: 'run-1' }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: null })
     expect(await releaseRuntimeSessionLease(operations, first)).toBe(false)
@@ -327,8 +323,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
     })
 
     expect(await markRuntimeSessionResetPending(operations, first)).toBe(true)
-    const { nodeRuns } = tablesOf(db)
-    await db.update(nodeRuns).set({ status: 'interrupted' }).where(eq(nodeRuns.id, 'run-1'))
+    await patchNodeRunFixture(db, { id: 'run-1' }, { status: 'interrupted' })
     expect(await repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).toBe(1)
     expect(await getRuntimeSessionLease(operations, 'claude-code', first.sessionId)).toBeUndefined()
     await expect(
@@ -354,21 +349,19 @@ describeEachProvider('natural runtime session leases', (harness) => {
       currentNodeRunId: 'run-1',
       leaseNonceDigest: 'nonce-invalid-unfenced',
     })
-    const { nodeRuns } = tablesOf(db)
-    await db
-      .update(nodeRuns)
-      .set({ status: 'failed', failureCode: 'runtime-session-identity-invalid' })
-      .where(eq(nodeRuns.id, 'run-1'))
+    await patchNodeRunFixture(
+      db,
+      { id: 'run-1' },
+      { status: 'failed', failureCode: 'runtime-session-identity-invalid' },
+    )
 
     expect(await repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).toBe(1)
     expect(await getRuntimeSessionLease(operations, 'claude-code', first.sessionId)).toBeUndefined()
     expect(
       (
-        await db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, 'run-1'))
-          .limit(1)
+        await readNodeRunFixtures(db, { id: 'run-1' }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: null })
   })
@@ -391,14 +384,12 @@ describeEachProvider('natural runtime session leases', (harness) => {
         leaseNodeRunId: 'run-1',
       },
     )
-    const { nodeRuns, runtimeSessionLeases } = tablesOf(db)
+    const { runtimeSessionLeases } = tablesOf(db)
     expect(
       (
-        await db
-          .select({ sessionId: nodeRuns.opencodeSessionId })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, 'run-1'))
-          .limit(1)
+        await readNodeRunFixtures(db, { id: 'run-1' }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ sessionId: row.opencodeSessionId })),
+        )
       )[0],
     ).toEqual({ sessionId: 'native-business-1' })
     await expect(
@@ -444,7 +435,7 @@ describeEachProvider('natural runtime session leases', (harness) => {
       leaseNonceDigest: 'nonce-terminal',
       leasedAt: 30,
     })
-    await db.update(nodeRuns).set({ status: 'failed' }).where(eq(nodeRuns.id, 'run-3'))
+    await patchNodeRunFixture(db, { id: 'run-3' }, { status: 'failed' })
     expect(await repairRuntimeSessionLeasesAfterOrphanReap(operations, true)).toBe(1)
     expect(await releaseRuntimeSessionLease(operations, stranded)).toBe(false)
     expect(

@@ -8,6 +8,12 @@
 // leaves the scheduled row absent/unchanged, so neither serial order can
 // create an orphan.
 
+import {
+  patchAgentFixture,
+  patchWorkflowFixture,
+  readAgentFixtures,
+  readWorkflowFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -148,9 +154,9 @@ describeEachProvider('RFC-223 scheduled create target/delete transaction order',
         },
       ),
     ).rejects.toMatchObject({ code: 'workflow-not-found' })
-    const { scheduledTasks, workflows } = tablesOf(db)
+    const { scheduledTasks } = tablesOf(db)
     expect(await db.select().from(scheduledTasks)).toEqual([])
-    expect(await db.select().from(workflows).where(eq(workflows.id, workflow.id))).toEqual([])
+    expect(await readWorkflowFixtures(db, { id: workflow.id })).toEqual([])
   })
 
   test('agent delete wins after preflight: final INSERT tx returns agent-not-found and writes no orphan', async () => {
@@ -173,9 +179,9 @@ describeEachProvider('RFC-223 scheduled create target/delete transaction order',
         },
       ),
     ).rejects.toMatchObject({ code: 'agent-not-found' })
-    const { scheduledTasks, agents } = tablesOf(db)
+    const { scheduledTasks } = tablesOf(db)
     expect(await db.select().from(scheduledTasks)).toEqual([])
-    expect(await db.select().from(agents).where(eq(agents.id, agent.id))).toEqual([])
+    expect(await readAgentFixtures(db, { id: agent.id })).toEqual([])
   })
 
   test('workgroup delete wins after preflight: final INSERT tx returns workgroup-not-found and writes no orphan', async () => {
@@ -250,8 +256,7 @@ describeEachProvider('RFC-223 scheduled update final target identity/ACL fence',
         {
           actor,
           beforeWriteTx: async () => {
-            const { workflows } = tablesOf(db)
-            await db.update(workflows).set({ builtin: true }).where(eq(workflows.id, workflow.id))
+            await patchWorkflowFixture(db, { id: workflow.id }, { builtin: true })
           },
         },
       ),
@@ -281,11 +286,11 @@ describeEachProvider('RFC-223 scheduled update final target identity/ACL fence',
         {
           actor,
           beforeWriteTx: async () => {
-            const { agents } = tablesOf(db)
-            await db
-              .update(agents)
-              .set({ ownerUserId: 'u-other', visibility: 'private', aclRevision: 1 })
-              .where(eq(agents.id, agent.id))
+            await patchAgentFixture(
+              db,
+              { id: agent.id },
+              { ownerUserId: 'u-other', visibility: 'private', aclRevision: 1 },
+            )
           },
         },
       ),

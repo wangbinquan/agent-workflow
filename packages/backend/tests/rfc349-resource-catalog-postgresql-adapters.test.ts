@@ -159,7 +159,18 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       expect(postgresqlMutationArms).toContain(`export async function ${implementation}`)
       expect(postgresqlMutationParticipants).toContain(`${implementation}({`)
     }
-    for (const table of ['agents', 'skills', 'workflows', 'workgroups']) {
+    // RFC-395 II-a A5: agents/workflows delegate to their single writers on the same transaction.
+    for (const [table, file, factory] of [
+      ['agents', 'agentReferenceWrite', 'createAgentReferenceWriteParticipant'],
+      ['workflows', 'workflowDefinitionWrite', 'createWorkflowDefinitionWriteParticipant'],
+    ]) {
+      const writer = source(`src/modules/resource-catalog/infrastructure/${file}.ts`)
+      expect(postgresqlMutationArms).toContain(`${factory}(input.transaction).insert(`)
+      expect(postgresqlMutationArms).toContain(`${factory}(input.transaction).update(`)
+      expect(writer).toContain(`.insert(${table})`)
+      expect(writer).toContain(`.update(${table})`)
+    }
+    for (const table of ['skills', 'workgroups']) {
       expect(postgresqlMutationArms).toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )
@@ -241,7 +252,12 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(postgresqlMutationArms).toContain('findActiveUsersByIds(')
     expect(postgresqlMutationArms).toContain('assertSelected({')
     expect(postgresqlMutationArms).toContain("visibility: 'private'")
-    expect(postgresqlMutationArms).toContain('createAgentPersistenceValues({')
+    expect(postgresqlMutationArms).toContain(
+      'createAgentReferenceWriteParticipant(input.transaction).insert({',
+    )
+    expect(source('src/modules/resource-catalog/infrastructure/agentReferenceWrite.ts')).toContain(
+      '...createAgentPersistenceValues(input)',
+    )
     expect(postgresqlMutationArms).toContain('createWorkflowPersistenceValues({')
     expect(postgresqlMutations).toContain('builtin: false')
     for (const hook of [

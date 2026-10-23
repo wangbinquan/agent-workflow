@@ -2,6 +2,7 @@
 // `skill_content_entries`. A candidate is its own tree namespace
 // (`candidate:<id>`): never live, a version, staging or trash, so recovery and
 // residue checks ignore it, and deleting the skill removes it with the rest.
+import { candidateTree as legacyCandidateTree } from '@/platform/content/legacySkill'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ValidationError } from '@/util/errors'
@@ -24,7 +25,7 @@ export function candidateTree(candidateId: string): string {
       'skill-candidate-invalid',
       `invalid skill candidate id: ${candidateId}`,
     )
-  return `candidate:${candidateId}`
+  return legacyCandidateTree(candidateId)
 }
 
 function entries(files: readonly SkillTreeFile[]): readonly SkillPackageContentEntry[] | null {

@@ -1,5 +1,5 @@
+import { nodeRunAttemptIndex } from '@/platform/nodeRunAttempt'
 import {
-  newestNodeRun,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   fenceUntrusted,
   isTransientRuntimeFailure,
@@ -627,7 +627,11 @@ async function runHostTurnAttempts<T>(
           nodeId: spec.nodeId,
           status: 'pending',
           cause: isFirstStart ? spec.primaryCause : 'wg-protocol-retry',
-          retryIndex: retryBase + freshMintOffset,
+          retryIndex: nodeRunAttemptIndex({
+            kind: 'offset',
+            base: retryBase,
+            offset: freshMintOffset,
+          }),
           shardKey: spec.shardKey,
           agentOverrideName: spec.agent.name,
           agentOverrideId: spec.agent.id,
@@ -2367,7 +2371,7 @@ async function openCompletionGate(input: {
       nodeId: WORKGROUP_TURN_LEADER_NODE_ID,
       status: 'awaiting_review',
       cause: 'wg-gate',
-      retryIndex: 0,
+      retryIndex: nodeRunAttemptIndex({ kind: 'explicit' }),
       shardKey: null,
       agentOverrideName: null,
       agentOverrideId: null,
@@ -2506,7 +2510,7 @@ async function reviveKilledClarifyContinuations(
   const operations: WorkgroupTurnLedgerOperation[] = []
   for (const group of groups.values()) {
     // Explicit mint order also covers snapshots supplied in a different order.
-    const latest = newestNodeRun(group)
+    const latest = group.find((run) => run.selection.legacyGroupCurrent)
     if (latest === undefined || !isKilledClarifyContinuation(latest)) continue
     const runId = ulid()
     operations.push({
@@ -2520,7 +2524,7 @@ async function reviveKilledClarifyContinuations(
         latest.rerunCause === 'clarify-answer'
           ? 'clarify-answer'
           : 'cross-clarify-questioner-rerun',
-      retryIndex: Math.max(...group.map((run) => run.retryIndex)) + 1,
+      retryIndex: nodeRunAttemptIndex({ kind: 'workgroup-revival', rows: group }),
       shardKey: latest.shardKey,
       agentOverrideName: null,
       agentOverrideId: null,
@@ -2551,7 +2555,7 @@ async function reconcileRunningAssignments(
     const byShard = snapshot.hostRuns.filter(
       (run) => run.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID && run.shardKey === assignment.id,
     )
-    const latest = direct ?? newestNodeRun(byShard)
+    const latest = direct ?? byShard.find((run) => run.selection.current)
     const verdict = decideAssignmentReconcile(latest?.status)
     if (verdict === 'none') continue
     operations.push(

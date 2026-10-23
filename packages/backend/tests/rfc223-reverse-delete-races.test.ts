@@ -4,6 +4,7 @@
 // blocks deletion. Managed-skill deletion additionally proves the fs-staged
 // root/trash/op/lock rollback is complete before the ACL-safe error escapes.
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -49,8 +50,7 @@ async function insertReferencingAgent(
   db: PersistenceDb,
   input: { name: string; mcp?: string[]; plugins?: string[]; skillId?: string },
 ): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name: input.name,
     mcp: JSON.stringify(input.mcp ?? []),

@@ -11,6 +11,14 @@
 // 覆盖验收条款：AC-12（根资源 exact-revision 保护）
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import type { AtomicApplyRecoveryScene, AtomicApplyRow } from '@/platform/contracts/atomicApply'
+import {
+  runMaintenanceJob,
+  type MaintenanceOwnerCommands,
+} from '@/platform/background/maintenanceJobRunner'
+import { maintenanceJobSpec } from '@/platform/background/maintenanceCatalog'
+import { HOUR_MS } from '@/services/daemonCadence'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -21,6 +29,40 @@ import type { ParsedPackage } from '../src/services/resourcePackage/parse'
 
 const BACKEND = resolve(import.meta.dir, '..')
 const read = (rel: string): string => readFileSync(resolve(BACKEND, rel), 'utf8')
+
+function scene<Key extends string>(
+  key: Key,
+  rows: AtomicApplyRow[],
+  calls: string[],
+  warnings: unknown[],
+): AtomicApplyRecoveryScene<Key> {
+  return {
+    key,
+    now: () => 1_000_000,
+    list: async () => rows,
+    compareAndSet: async (row, patch) => {
+      Object.assign(row, patch)
+      return true
+    },
+    recover: async (row) => {
+      calls.push(`${key}:${row.id}`)
+    },
+    errors: {
+      abandoned: 'abandoned',
+      committedIncomplete: 'incomplete',
+      retryable: () => 'retryable',
+    },
+    warn: (error) => {
+      warnings.push(error)
+    },
+    warnScene: (error) => {
+      warnings.push(error)
+    },
+  }
+}
+function row(id: string, state: AtomicApplyRow['state'] = 'prepared'): AtomicApplyRow {
+  return { id, state, preparedArtifactsJson: '[]', receiptJson: null, error: null, updatedAt: 1 }
+}
 
 describe('P2-1 · 重复 opId 必须被 schema 拒绝', () => {
   test('两个 op 共用一个 opId ⇒ 报 bundle-duplicate-op-id', () => {
@@ -84,37 +126,108 @@ describe('P2-4 · 同一条目的互相矛盾决策必须拒绝', () => {
 describe('P2-6 · withApplyLock 的 map 清理必须比较同一个 Promise', () => {
   test('清理时比的是存进 map 的那个 chain，不是 gate', () => {
     // map 里存的是 `prior.then(() => gate)` 派生出来的**新** Promise；拿 `gate` 去比
-    // `applyLocks.get(key)` 恒为 false ⇒ 每个出现过的 serializationKey 都永久留一项。
+    // `locks.get(key)` 恒为 false ⇒ 每个出现过的 serializationKey 都永久留一项。
     // 串行语义仍对，所以只会表现为内存缓慢增长——而 serializationKey 是按资源实例
     // 派生的，基数无上限。
-    const src = read('src/platform/persistence/resourcePackageApplyLock.ts')
+    const src = read('src/platform/atomic-apply/keyedLock.ts')
     expect(src).toContain('const chain = prior.then(() => gate)')
-    expect(src).toContain('applyLocks.get(key) === chain')
-    expect(src).not.toContain('applyLocks.get(key) === gate')
+    expect(src).toContain('locks.get(key) === chain')
+    expect(src).not.toContain('locks.get(key) === gate')
   })
 })
 
 describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
-  test('daemon 维护 worker 为两个 provider 都注入真实收敛命令', () => {
+  // RFC-395 II-a A6：原文本接线断言改为真实 runner 行为，保留活动快照和计数保护。
+  test('runMaintenanceJob(intentRecovery) waits for turns, passes both active lists and sums completed scene work', async () => {
+    const calls: string[] = [],
+      warnings: unknown[] = []
+    const intentRows = [row('i-active'), row('i-stale'), row('i-committed', 'committed')]
+    const packageRows = [
+      row('p-active'),
+      row('p-stale'),
+      row('p-stale-2'),
+      row('p-committed', 'committed'),
+    ]
+    const recovery = createAtomicApplyRecovery([
+      scene('intent', intentRows, calls, warnings),
+      scene('resource-package', packageRows, calls, warnings),
+    ])
+    let release!: () => void
+    const turnDone = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const selected: Pick<MaintenanceOwnerCommands, 'intent' | 'atomicApply'> = {
+      intent: {
+        scratch: {
+          sweep: async () => {
+            throw new Error('unused')
+          },
+        },
+        recovery: {
+          bootTurnIds: async () => {
+            throw new Error('unused')
+          },
+          recover: async (input) => {
+            expect(input).toEqual({ recoverTurnIds: ['turn'] })
+            calls.push('turn-start')
+            await turnDone
+            calls.push('turn-done')
+            return { queuedWorkingSets: 4, orphanedTurns: 5, queuedSessionIds: ['session'] }
+          },
+        },
+      },
+      atomicApply: {
+        converge: async (active) => {
+          expect(active).toEqual({ intent: ['i-active'], 'resource-package': ['p-active'] })
+          expect(calls).toEqual(['turn-start', 'turn-done'])
+          return recovery.converge(active)
+        },
+      },
+    }
+    const owners = new Proxy(selected, {
+      get(target, key) {
+        if (key === 'intent' || key === 'atomicApply') return target[key]
+        throw new Error(`unexpected owner ${String(key)}`)
+      },
+    }) as MaintenanceOwnerCommands
+    const pending = runMaintenanceJob({
+      appHome: '/unused',
+      ownerCommands: owners,
+      job: 'intentRecovery',
+      payload: {
+        recoverTurnIds: ['turn'],
+        activeIntentApplyJournalIds: ['i-active'],
+        activeBundleApplyIds: ['p-active'],
+      },
+    })
+    expect(calls).toEqual(['turn-start'])
+    release()
+    expect(await pending).toEqual({
+      counters: { failed: 3, rolledForward: 2, queuedWorkingSets: 4, orphanedTurns: 5 },
+      delta: { kind: 'intent-queued', sessionIds: ['session'] },
+    })
+    expect(intentRows[0]?.state).toBe('prepared')
+    expect(packageRows[0]?.state).toBe('prepared')
+    expect(calls).toEqual([
+      'turn-start',
+      'turn-done',
+      'intent:i-stale',
+      'intent:i-committed',
+      'resource-package:p-stale',
+      'resource-package:p-stale-2',
+      'resource-package:p-committed',
+    ])
+    expect(warnings).toEqual([])
+  })
+  test('同一 durable job 由 catalog 明确注册 boot + hourly 两种 admission', () => {
     // 只有定义、没有调用点的收敛器等于不存在：一次崩在 pre-stage 与 big tx 之间的
     // daemon 会永久留下插件 generation / 暂存技能目录，且那个 importId 每次重放都答
     // `bundle-apply-unsettled`。
-    const runner = read('src/platform/background/maintenanceJobRunner.ts')
-    const worker = read('src/bootstrap/maintenanceWorkerGraph.ts')
-    const catalog = read('src/platform/background/maintenanceCatalog.ts')
-    expect(runner).toContain("case 'intentRecovery'")
-    expect(worker).toContain('composeSqliteResourcePackageApplyMaintenance')
-    expect(worker).toContain('composePostgresqlResourcePackageApplyMaintenance')
-    expect(worker).toContain('resourcePackageMaintenanceCommand.converge({ activeApplyIds })')
-    // 同一 durable job 由 catalog 明确注册 boot + hourly 两种 admission。
-    const intentRecovery = catalog.slice(
-      catalog.indexOf("key: 'intentRecovery'"),
-      catalog.indexOf("key: 'lifecycleInvariants'"),
-    )
-    expect(intentRecovery).toContain('intervalMs: HOUR_MS')
-    expect(intentRecovery).toContain('bootDelayMs: 0')
+    expect(maintenanceJobSpec('intentRecovery')).toMatchObject({
+      intervalMs: HOUR_MS,
+      bootDelayMs: 0,
+    })
   })
-
   test('committed 分支重放幂等尾，不是只 +1', () => {
     // 一次「DB 已提交、publish 前 SIGKILL」的 run 会留下已入库但**内容未发布**的技能
     // 版本。只 `rolledForward += 1` 等于宣称处理过而实际什么都没做。
@@ -123,7 +236,7 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
     // 收敛命令的 `rollForward` 真的把工件前滚（而不是只记个数），前滚体在两个 provider
     // 的工件恢复实现里。行为面另有 `rfc359-w9-resource-package-skill-recovery-conformance`
     // 的四例（含「账面更新后陈旧代际不得被换回去」）。
-    const command = read('src/modules/resource-catalog/application/resourcePackageMaintenance.ts')
+    const command = read('src/modules/resource-catalog/infrastructure/resourcePackageRecovery.ts')
     const recovery = read(
       'src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts',
     )
@@ -149,17 +262,29 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
 })
 
 describe('P1-6 · 补偿没做干净就不许终态化 failed', () => {
-  test('catch 一侧与收敛器一侧对称：compensated 为假时不 settleFailed', () => {
-    // 补偿抛错（EBUSY 等）却照样标 failed ⇒ 收敛器显式跳过 failed 行 ⇒ 那次残留再也
-    // 不会被重试，而粗粒度 GC 又被任一非终态 run 挡住 ⇒ 永久残留，且 journal 反过来
-    // 宣称「这次什么都没留下」。
-    // RFC-359（plan §5dy）：统一引擎里同一条对称性写成「补偿抛错 ⇒ 走 keepRetryable，
-    // **不** settleFailed」，journal 因此停在非终态、下一轮收敛还会再试。
-    const src = read('src/platform/persistence/postgresqlResourcePackageAtomicApply.ts')
-    expect(src).toContain('await session.compensate({ artifacts, databaseCommitted: false })')
-    expect(src).toContain('await settleFailed(error)')
-    expect(src).toContain('await keepRetryable(error, cleanupError)')
-    expect(src).toContain("log.warn('resource-package-left-retryable'")
+  test('恢复补偿未完成时保留在途状态，下一轮成功后才结算', async () => {
+    // RFC-395 II-a A6：执行时结算由双 provider 机制用例覆盖；这里直接验证恢复状态写入。
+    const entry = row('incomplete')
+    const calls: string[] = [],
+      warnings: unknown[] = []
+    let complete = false
+    const selected = scene('resource-package', [entry], calls, warnings)
+    const recovery = createAtomicApplyRecovery([{ ...selected, recover: async () => complete }])
+    expect(await recovery.converge({ 'resource-package': [] })).toEqual({
+      failed: 0,
+      rolledForward: 0,
+    })
+    expect(entry).toMatchObject({
+      state: 'prepared',
+      updatedAt: 1,
+      error: 'retryable: compensation incomplete',
+    })
+    complete = true
+    expect(await recovery.converge({ 'resource-package': [] })).toEqual({
+      failed: 1,
+      rolledForward: 0,
+    })
+    expect(entry.state).toBe('failed')
   })
 
   test('技能版本 artifact 落的是完整 staged 结构（够 publish 重放，不只够 abort）', () => {
@@ -337,7 +462,7 @@ describe('复合键只能有一个定义（本轮实测的静默剔除事故）'
     expect(commit).toContain('`${workgroupSlug}#${username}`')
     // RFC-359（apply 引擎合一，plan §5dv）：「两端」的 provider 端换成了统一 apply 引擎。
     // 判据仍是同一条——那一端**调这个函数**，不是自己再拼一遍键。
-    const engine = read('src/platform/persistence/postgresqlResourcePackageAtomicApply.ts')
+    const engine = read('src/modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts')
     expect(engine).toContain('humanMemberKey(slot.workgroupSlug, slot.username)')
     expect(engine).toContain('humanMemberKey(mapping.workgroupSlug, mapping.username)')
     expect(engine).not.toMatch(/`\$\{[A-Za-z.]*workgroupSlug\}[^`]*\$\{[A-Za-z.]*username\}`/)

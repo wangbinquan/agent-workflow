@@ -1,11 +1,9 @@
 // RFC-370: selected upload ACKs must precede the real journal receipt and Task admission in both providers.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { readTaskFixtures, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import ts from 'typescript'
 import { StartTaskSchema, WorkflowDefinitionSchema } from '@agent-workflow/shared'
@@ -78,8 +76,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
             receipt = JSON.parse(row!.artifactJson!)
           expect(receipt.uploadPlan.placements).toEqual(['a.txt'])
           expect(receipt.uploads).toBeUndefined()
-          const { tasks } = tablesOf(harness.db)
-          expect(await harness.db.select().from(tasks)).toEqual([])
+          expect(await readTaskFixtures(harness.db)).toEqual([])
           entered.resolve()
           await release.promise
         }
@@ -201,8 +198,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
         nodes: [],
         edges: [],
       })
-      const { workflows, tasks } = tablesOf(harness.db)
-      await insertOne(harness.db, workflows, {
+      await workflowFixture(harness.db, {
         id: workflowId,
         name: workflowId,
         definition: JSON.stringify(definition),
@@ -253,7 +249,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
           inputs: {},
         }),
         subject: {
-          workflowId,
+          subject: { kind: 'workflow' as const, sourceId: workflowId },
           workflowName: workflowId,
           workflowVersion: 1,
           workflowSnapshot: definition,
@@ -278,7 +274,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
           throw new Error('kernel completed before write ACK')
         }),
       ])
-      expect(await harness.db.select().from(tasks)).toEqual([])
+      expect(await readTaskFixtures(harness.db)).toEqual([])
       expect(submitted).toEqual([])
       const binding = factory.bindings[0]!
       expect(existsSync(binding.workspaceRef)).toBe(true)
@@ -290,9 +286,9 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
       expect((await createWorkspacePreparationJournal(harness.db).forTask(result.id))?.state).toBe(
         'admitted',
       )
-      expect(
-        (await harness.db.select().from(tasks).where(eq(tasks.id, result.id)))[0]?.inputs,
-      ).toBe(JSON.stringify({ refs: 'inputs/a.txt' }))
+      expect((await readTaskFixtures(harness.db, { id: result.id }))[0]?.inputs).toBe(
+        JSON.stringify({ refs: 'inputs/a.txt' }),
+      )
       expect(content.entries.get(content.key('inputs', 'a.txt'))).toEqual({
         kind: 'file',
         bytes: Uint8Array.of(65),
@@ -333,8 +329,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
           nodes: [],
           edges: [],
         })
-      const { workflows, tasks } = tablesOf(harness.db)
-      await insertOne(harness.db, workflows, {
+      await workflowFixture(harness.db, {
         id: workflowId,
         name: workflowId,
         definition: JSON.stringify(definition),
@@ -365,7 +360,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
         }),
       ])
       expect(completed).toBe(false)
-      expect(await harness.db.select().from(tasks)).toEqual([])
+      expect(await readTaskFixtures(harness.db)).toEqual([])
       expect(factory.bindings).toHaveLength(1)
       expect(existsSync(join(factory.bindings[0]!.workspaceRef, 'inputs', 'a.txt'))).toBe(false)
       release.resolve()

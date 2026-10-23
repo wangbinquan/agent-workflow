@@ -9,8 +9,7 @@
 //   ③ 人审六态：`unknown`（执行行不在 / 输入不可解析）与 `not-applicable`（没配闸门）分开
 //      （设计门 P2-2）；旧的 null 接口折叠行为逐字不变。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -298,19 +297,19 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
       readonly errorSummary: string | null
       readonly inputs?: string
     }): Promise<void> {
-      const { workflows, tasks } = tablesOf(harness.db)
-      await harness.db
-        .insert(workflows)
-        .values({
+      await workflowFixture(
+        harness.db,
+        {
           id: `wf-${input.id}`,
           name: `wf-${input.id}`,
           definition: '{}',
           version: 1,
           createdAt: 1,
           updatedAt: 1,
-        })
-        .onConflictDoNothing()
-      await insertOne(harness.db, tasks, {
+        },
+        { onConflict: 'ignore' },
+      )
+      await taskFixture(harness.db, {
         id: input.id,
         name: input.id,
         workflowId: `wf-${input.id}`,

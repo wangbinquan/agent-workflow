@@ -13,8 +13,7 @@
 // The happy-path per-repo resolution + prefixed merge are unit-covered in
 // structural-diff-refselect.test.ts and structural-diff-multi-repo-merge.test.ts.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -60,8 +59,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     repos.push(repoPath)
   }
   const db = createInMemoryDb(MIGRATIONS)
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-node',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -113,17 +111,16 @@ describe('RFC-089 P3 — structural node scope, multi-repo', () => {
     // so per-repo compute fails → caught → graceful 'pruned'. The POINT is the
     // multi-repo branch runs at all instead of throwing unsupported.
     const nrId = 'nr-multi'
-    const { nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: nrId,
       taskId: task.id,
       nodeId: 'n1',
       status: 'done',
       startedAt: Date.now(),
-      preSnapshotReposJson: JSON.stringify({
-        [task.repos[0]!.worktreeDirName]: 'deadbeef'.repeat(5),
-        [task.repos[1]!.worktreeDirName]: 'deadbeef'.repeat(5),
-      }),
+      checkpoints: [
+        { mountPath: task.repos[0]!.worktreeDirName, preSnapshot: 'deadbeef'.repeat(5) },
+        { mountPath: task.repos[1]!.worktreeDirName, preSnapshot: 'deadbeef'.repeat(5) },
+      ],
     })
 
     const diff = await getTaskStructuralDiff(h.db, task.id, 'node', nrId)
@@ -138,14 +135,13 @@ describe('RFC-089 P3 — structural node scope, multi-repo', () => {
     h = await buildHarness(2)
     const task = await twoRepoTask(h)
     const nrId = 'nr-readonly'
-    const { nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: nrId,
       taskId: task.id,
       nodeId: 'n1',
       status: 'done',
       startedAt: Date.now(),
-      // no preSnapshotReposJson → the node wrote nothing → readonly per repo.
+      // No checkpoint → the node wrote nothing → readonly per repo.
     })
     const diff = await getTaskStructuralDiff(h.db, task.id, 'node', nrId)
     expect(diff.scope).toBe('node')

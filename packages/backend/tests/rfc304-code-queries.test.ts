@@ -10,6 +10,7 @@
 //   - enabling a capability whose prerequisites are missing SAVES and reports
 //     the resulting readiness, rather than pretending it is now running.
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -47,7 +48,7 @@ describeEachProvider('RFC-304 — the capability matrix a page renders', (harnes
   })
 
   test('a ready cell carries no issues and needs no repairs', async () => {
-    const { webhookEndpoints, agents, capabilityTemplates, webhookTriggers } = tablesOf(db)
+    const { webhookEndpoints, capabilityTemplates, webhookTriggers } = tablesOf(db)
     // Seeded as ROWS rather than as stored facts. It used to hand
     // `upsertCapabilityCell` a `READY_FACTS` object and read the answer back,
     // which asserted only that the query returns what it was given — the cell
@@ -62,7 +63,7 @@ describeEachProvider('RFC-304 — the capability matrix a page renders', (harnes
       secretEnc: 'sealed',
       enabled: true,
     })
-    await insertOne(db, agents, {
+    await agentFixture(db, {
       id: 'agent-1',
       name: 'reviewer-agent',
       bodyMd: 'x',

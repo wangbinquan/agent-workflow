@@ -5,14 +5,18 @@
 // deleted / re-pointed custom runtime, can't re-route a captured session to the
 // wrong driver or binary.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import { describeEachProvider } from './helpers/eachProvider'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { frozenRuntimeOfSession, resolveFrozenRuntime } from './helpers/nodeRunRuntime'
@@ -30,15 +34,14 @@ import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence
 async function seedRun(db: PersistenceDb): Promise<{ db: PersistenceDb; id: string }> {
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -56,7 +59,7 @@ async function seedRun(db: PersistenceDb): Promise<{ db: PersistenceDb; id: stri
     startedAt: Date.now(),
   })
   const id = ulid()
-  await insertOne(db, nodeRuns, { id, taskId, nodeId: 'n1', status: 'pending' })
+  await nodeRunFixture(db, { id, taskId, nodeId: 'n1', status: 'pending' })
   return { db, id }
 }
 
@@ -64,12 +67,10 @@ async function frozenCols(
   db: PersistenceDb,
   id: string,
 ): Promise<{ runtime: unknown; binary: unknown }> {
-  const { nodeRuns } = tablesOf(db)
   const row = (
-    await db
-      .select({ runtime: nodeRuns.runtime, binary: nodeRuns.runtimeBinary })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, id))
+    await readNodeRunFixtures(db, { id }).then((rows) =>
+      rows.map((row) => ({ runtime: row.runtime, binary: row.runtimeBinary })),
+    )
   )[0]
   return { runtime: row?.runtime ?? null, binary: row?.binary ?? null }
 }
@@ -107,8 +108,7 @@ describeEachProvider(
 
     test('an unrecognized frozen protocol re-resolves to opencode (legacy NULL safety)', async () => {
       const { db, id } = await seedRun(harness.db)
-      const { nodeRuns } = tablesOf(db)
-      await db.update(nodeRuns).set({ runtime: 'bogus-runtime' }).where(eq(nodeRuns.id, id))
+      await patchNodeRunFixture(db, { id }, { runtime: 'bogus-runtime' })
       expect((await resolveFrozenRuntime(db, id, null, null)).protocol).toBe('opencode')
     })
   },
@@ -175,15 +175,15 @@ describeEachProvider(
   (harness) => {
     test('frozenRuntimeOfSession returns the (protocol, binary) of the row that captured a session', async () => {
       const { db, id } = await seedRun(harness.db)
-      const { nodeRuns } = tablesOf(db)
-      await db
-        .update(nodeRuns)
-        .set({
+      await patchNodeRunFixture(
+        db,
+        { id },
+        {
           runtime: 'claude-code',
           runtimeBinary: canonicalBinaryPath('my-cc'),
           opencodeSessionId: 'sess-X',
-        })
-        .where(eq(nodeRuns.id, id))
+        },
+      )
       expect(await frozenRuntimeOfSession(db, 'sess-X')).toMatchObject({
         protocol: 'claude-code',
         binary: canonicalBinaryPath('my-cc'),
@@ -195,15 +195,14 @@ describeEachProvider(
       const db = harness.db
       const wfId = ulid()
       const taskId = ulid()
-      const { workflows, tasks, nodeRuns } = tablesOf(db)
-      await insertOne(db, workflows, {
+      await workflowFixture(db, {
         id: wfId,
         name: 'wf',
         definition: '{}',
         createdAt: 0,
         updatedAt: 0,
       })
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         executionLineageId: taskId,
         lineageSlotPathJson: JSON.stringify([
           { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -222,7 +221,7 @@ describeEachProvider(
       })
       // original row R1: ran on a custom claude fork, captured session S.
       const r1 = ulid()
-      await insertOne(db, nodeRuns, {
+      await nodeRunFixture(db, {
         id: r1,
         taskId,
         nodeId: 'n1',
@@ -234,17 +233,16 @@ describeEachProvider(
       // the custom runtime is later DELETED / the agent flipped to opencode.
       // a fresh retry row R2 carries session S and resolves with the inherited pair.
       const r2 = ulid()
-      await insertOne(db, nodeRuns, { id: r2, taskId, nodeId: 'n1', status: 'pending' })
+      await nodeRunFixture(db, { id: r2, taskId, nodeId: 'n1', status: 'pending' })
       const inherited = await frozenRuntimeOfSession(db, 'sess-S')
       const frozen = await resolveFrozenRuntime(db, r2, 'opencode', 'opencode', inherited)
       // re-resolving 'opencode' would have mispaired the claude session S with the
       // opencode driver; inheriting keeps (claude-code, /opt/v1).
       expect(frozen).toMatchObject({ protocol: 'claude-code', binary: canonicalBinaryPath('v1') })
       const row = (
-        await db
-          .select({ runtime: nodeRuns.runtime, binary: nodeRuns.runtimeBinary })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, r2))
+        await readNodeRunFixtures(db, { id: r2 }).then((rows) =>
+          rows.map((row) => ({ runtime: row.runtime, binary: row.runtimeBinary })),
+        )
       )[0]
       expect(row?.runtime).toBe('claude-code')
       expect(row?.binary).toBe(canonicalBinaryPath('v1'))
@@ -350,21 +348,16 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
     expect(
       (await resolveFrozenRuntime(db, id, 'priced-runtime', null)).observationIdentity,
     ).toEqual(identity)
-    const { nodeRuns } = tablesOf(db)
-    await db
-      .update(nodeRuns)
-      .set({ opencodeSessionId: 'priced-native-session' })
-      .where(eq(nodeRuns.id, id))
+    await patchNodeRunFixture(db, { id }, { opencodeSessionId: 'priced-native-session' })
     const inherited = await frozenRuntimeOfSession(db, 'priced-native-session')
     const next = await seedRun(db)
     expect(
       (await resolveFrozenRuntime(db, next.id, 'opencode', null, inherited)).observationIdentity,
     ).toEqual(identity)
     const persisted = (
-      await db
-        .select({ value: nodeRuns.runtimeParamsJson })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, next.id))
+      await readNodeRunFixtures(db, { id: next.id }).then((rows) =>
+        rows.map((row) => ({ value: row.runtimeParamsJson })),
+      )
     )[0]!
     expect(JSON.parse(persisted.value!).__observation).toEqual(identity)
     await createRuntime(registry, { name: 'priced-runtime', protocol: 'opencode', model: 'new' })
@@ -429,37 +422,37 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
       { registrationId: 'id', configurationRevision: -1 },
       { registrationId: 'id', configurationRevision: 1.1 },
     ]) {
-      const { nodeRuns } = tablesOf(db)
-      await db
-        .update(nodeRuns)
-        .set({ runtimeParamsJson: JSON.stringify({ __observation: bad }) })
-        .where(eq(nodeRuns.id, id))
+      await patchNodeRunFixture(
+        db,
+        { id },
+        { runtimeParamsJson: JSON.stringify({ __observation: bad }) },
+      )
       expect(
         (await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity,
       ).toBeUndefined()
     }
     const oldIdentity = { registrationId: 'historical-registration', configurationRevision: 7 }
     for (const acceptedName of [undefined, null, '', '   ', 42, 'x'.repeat(201)]) {
-      const { nodeRuns } = tablesOf(db)
-      await db
-        .update(nodeRuns)
-        .set({
+      await patchNodeRunFixture(
+        db,
+        { id },
+        {
           runtimeParamsJson: JSON.stringify({ __observation: { ...oldIdentity, acceptedName } }),
-        })
-        .where(eq(nodeRuns.id, id))
+        },
+      )
       expect((await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity).toEqual(
         oldIdentity,
       )
     }
-    const { nodeRuns } = tablesOf(db)
-    await db
-      .update(nodeRuns)
-      .set({
+    await patchNodeRunFixture(
+      db,
+      { id },
+      {
         runtimeParamsJson: JSON.stringify({
           __observation: { ...oldIdentity, acceptedName: 'original-name' },
         }),
-      })
-      .where(eq(nodeRuns.id, id))
+      },
+    )
     expect((await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity).toEqual({
       ...oldIdentity,
       acceptedName: 'original-name',

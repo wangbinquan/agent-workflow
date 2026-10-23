@@ -25,7 +25,14 @@
 // 节点行 id 用定长补零字符串（字典序 = 数值序）而非 ulid()，保证「谁更新」
 // 100% 确定——同毫秒 ulid 随机段不保证单调。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -48,10 +55,9 @@ const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 
 async function seedTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, { id: workflowId, name: 'w', definition: SNAPSHOT })
+  await workflowFixture(db, { id: workflowId, name: 'w', definition: SNAPSHOT })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -81,8 +87,7 @@ async function seedRun(
   } = {},
 ): Promise<string> {
   const id = opts.id ?? ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: opts.nodeId ?? 'n',
@@ -98,8 +103,7 @@ async function seedRun(
 }
 
 async function mergeStateOf(db: PersistenceDb, id: string): Promise<string | null> {
-  const { nodeRuns } = tablesOf(db)
-  return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!.mergeState
+  return (await readNodeRunFixtures(db, { id }))[0]!.mergeState
 }
 
 /** 竞争写者版的 merge_state 迁移：persistence 自己开事务，代理保证 UPDATE 前插得进去。 */
@@ -119,14 +123,22 @@ describeEachProvider('RFC-144 merge_state 迁移 —— happy path', (harness) =
     const r = await persistence.transition({
       nodeRunId: id,
       event: { kind: 'begin-isolation' },
-      extra: { isoWorktreePath: '/iso/x', isoBaseSnapshot: 'sha-base' },
+      extra: {
+        runtime: {
+          isoWorktreePath: '/iso/x',
+        },
+        checkpoint: {
+          checkpoints: [{ mountPath: '', isolationBase: 'sha-base' }],
+        },
+      },
     })
     expect(r).toEqual({ from: null, to: 'isolating' })
-    const { nodeRuns } = tablesOf(db)
-    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+    const after = (await readNodeRunFixtures(db, { id }))[0]!
     expect(after.mergeState).toBe('isolating')
     expect(after.isoWorktreePath).toBe('/iso/x')
-    expect(after.isoBaseSnapshot).toBe('sha-base')
+    expect(
+      after.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.isolationBase ?? null,
+    ).toBe('sha-base')
   })
 
   test('全链：NULL→isolating→pending-merge→merged（伴随列逐段 pin）', async () => {
@@ -138,7 +150,11 @@ describeEachProvider('RFC-144 merge_state 迁移 —— happy path', (harness) =
     const r2 = await persistence.transition({
       nodeRunId: id,
       event: { kind: 'mark-pending-merge' },
-      extra: { isoNodeTree: 'sha-tree' },
+      extra: {
+        checkpoint: {
+          checkpoints: [{ mountPath: '', nodeTree: 'sha-tree' }],
+        },
+      },
     })
     expect(r2).toEqual({ from: 'isolating', to: 'pending-merge' })
     const r3 = await persistence.transition({
@@ -146,10 +162,11 @@ describeEachProvider('RFC-144 merge_state 迁移 —— happy path', (harness) =
       event: { kind: 'mark-merged', via: 'live' },
     })
     expect(r3).toEqual({ from: 'pending-merge', to: 'merged' })
-    const { nodeRuns } = tablesOf(db)
-    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+    const after = (await readNodeRunFixtures(db, { id }))[0]!
     expect(after.mergeState).toBe('merged')
-    expect(after.isoNodeTree).toBe('sha-tree')
+    expect(
+      after.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.nodeTree ?? null,
+    ).toBe('sha-tree')
   })
 
   test('冲突链：pending-merge→conflict-human→merged（人工决议）', async () => {
@@ -191,19 +208,34 @@ describeEachProvider('RFC-144 merge_state 迁移 —— happy path', (harness) =
     await persistence.transition({
       nodeRunId: id,
       event: { kind: 'begin-isolation' },
-      extra: { isoWorktreePath: '/iso/old', isoBaseSnapshot: 'sha-old' },
+      extra: {
+        runtime: {
+          isoWorktreePath: '/iso/old',
+        },
+        checkpoint: {
+          checkpoints: [{ mountPath: '', isolationBase: 'sha-old' }],
+        },
+      },
     })
     // 复用行第二次派发：persistIsoBase 重盖 FRESH iso 的基列。
     const r = await persistence.transition({
       nodeRunId: id,
       event: { kind: 'begin-isolation' },
-      extra: { isoWorktreePath: '/iso/new', isoBaseSnapshot: 'sha-new' },
+      extra: {
+        runtime: {
+          isoWorktreePath: '/iso/new',
+        },
+        checkpoint: {
+          checkpoints: [{ mountPath: '', isolationBase: 'sha-new' }],
+        },
+      },
     })
     expect(r).toEqual({ from: 'isolating', to: 'isolating' })
-    const { nodeRuns } = tablesOf(db)
-    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+    const after = (await readNodeRunFixtures(db, { id }))[0]!
     expect(after.isoWorktreePath).toBe('/iso/new')
-    expect(after.isoBaseSnapshot).toBe('sha-new')
+    expect(
+      after.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.isolationBase ?? null,
+    ).toBe('sha-new')
   })
 
   test('reenter-isolation：同行 wrapper 复活开新一代（merged→isolating / conflict-human→isolating）', async () => {
@@ -247,8 +279,7 @@ describeEachProvider('RFC-144 merge_state 迁移 —— CAS 竞态', (harness) =
     await expect(
       // 竞争写者（模拟另一条腿的 merge-back）先把行推到 merged。
       racingPersistence(db, async (tx) => {
-        const { nodeRuns } = tablesOf(tx)
-        await tx.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, id))
+        await patchNodeRunFixture(tx, { id }, { mergeState: 'merged' })
       }).transition({ nodeRunId: id, event: { kind: 'park-conflict-human' } }),
     ).rejects.toMatchObject({ code: 'concurrent-merge-state-transition' })
     // 读—改—写整笔在**一个**事务里，CAS miss 让整笔回滚——注入的竞争写也一起回滚，
@@ -263,22 +294,25 @@ describeEachProvider('RFC-144 merge_state 迁移 —— CAS 竞态', (harness) =
     const id = await seedRun(db, taskId, { mergeState: null, status: 'running' })
     await expect(
       racingPersistence(db, async (tx) => {
-        const { nodeRuns } = tablesOf(tx)
-        await tx
-          .update(nodeRuns)
-          .set({ mergeState: 'isolating', isoWorktreePath: '/iso/winner' })
-          .where(eq(nodeRuns.id, id))
+        await patchNodeRunFixture(
+          tx,
+          { id },
+          { mergeState: 'isolating', isoWorktreePath: '/iso/winner' },
+        )
       }).transition({
         nodeRunId: id,
         event: { kind: 'begin-isolation' },
-        extra: { isoWorktreePath: '/iso/loser' },
+        extra: {
+          runtime: {
+            isoWorktreePath: '/iso/loser',
+          },
+        },
       }),
     ).rejects.toMatchObject({ code: 'concurrent-merge-state-transition' })
-    const { nodeRuns } = tablesOf(db)
     // 同上，整笔回滚。关键是 `/iso/loser` **没**落库：NULL-from 的谓词若写成 `eq(col, null)`
     // 就会恒 false——那样这里也会抛冲突，但真正的 NULL→isolating 也永远做不成；
     // 所以 happy path 的 `begin-isolation` 用例与本例必须同时绿，才证明谓词走的是 IS NULL。
-    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+    const after = (await readNodeRunFixtures(db, { id }))[0]!
     expect(after.mergeState).toBeNull()
     expect(after.isoWorktreePath).toBeNull()
   })
@@ -305,8 +339,7 @@ describeEachProvider('RFC-144 tryTransition —— 域错误折 false', (harness
     const id = await seedRun(db, taskId, { mergeState: 'pending-merge' })
     expect(
       await racingPersistence(db, async (tx) => {
-        const { nodeRuns } = tablesOf(tx)
-        await tx.update(nodeRuns).set({ mergeState: 'merged' }).where(eq(nodeRuns.id, id))
+        await patchNodeRunFixture(tx, { id }, { mergeState: 'merged' })
       }).tryTransition({ nodeRunId: id, event: { kind: 'mark-merged' } }),
     ).toBe(false)
     expect(
@@ -338,13 +371,22 @@ async function mint(
 ): Promise<string> {
   return await withTaskExecutionWrite(db, async (tx) =>
     createNodeRunMintParticipantInTx(tx).mint({
+      ...deriveNodeRunRole({ nodeId: opts.nodeId ?? 'n', rerunCause: 'initial' }),
       id: opts.id,
       taskId,
       nodeId: opts.nodeId ?? 'n',
       iteration: opts.iteration ?? 0,
       status: 'pending',
       cause: 'initial',
-      ...(opts.shardKey === undefined ? {} : { overrides: { shardKey: opts.shardKey } }),
+      ...(opts.shardKey === undefined
+        ? {}
+        : {
+            overrides: {
+              identity: {
+                shardKey: opts.shardKey,
+              },
+            },
+          }),
     }),
   )
 }
@@ -453,6 +495,7 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
     await expect(
       withTaskExecutionWrite(db, async (tx) => {
         await createNodeRunMintParticipantInTx(tx).mint({
+          ...deriveNodeRunRole({ nodeId: 'n', rerunCause: 'initial' }),
           id: mkId(10),
           taskId,
           nodeId: 'n',

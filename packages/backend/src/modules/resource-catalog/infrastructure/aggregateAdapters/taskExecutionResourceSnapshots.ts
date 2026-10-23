@@ -13,6 +13,8 @@
 // 事务由 task-execution 侧的 `snapshotRead` 打开（PG: REPEATABLE READ READ ONLY；
 // SQLite: BEGIN IMMEDIATE，与合一前 `dbTxSync` 同一条边界），闭包递归取数全绑在那一笔上。
 
+import { agentSkillReferences, agentReferenceIds } from '@agent-workflow/shared'
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import type { AclResourceType, Agent, Mcp, Plugin } from '@agent-workflow/shared'
@@ -137,7 +139,12 @@ export function createTaskExecutionResourceSnapshotPorts(
   ): Promise<TaskExecutionWorkflowSnapshot> => {
     const actor = actorFor(authority)
     const { workflows } = tablesOf(tx)
-    const row = await first(tx.select().from(workflows).where(eq(workflows.id, workflowId)))
+    const row = await first(
+      tx
+        .select()
+        .from(workflows)
+        .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, workflowId))),
+    )
     if (row === undefined || !(await canViewResourceForTx(tx, actor, 'workflow', row))) {
       throw new NotFoundError('workflow-not-found', `workflow '${workflowId}' not found`)
     }
@@ -154,12 +161,17 @@ export function createTaskExecutionResourceSnapshotPorts(
     const rows = await tx
       .select()
       .from(workflows)
-      .where(eq(workflows.name, request.name))
+      .where(workflowCatalogPredicate(workflows.id, eq(workflows.name, request.name)))
       .orderBy(asc(workflows.id))
     const hinted =
       request.idHint === undefined
         ? undefined
-        : await first(tx.select().from(workflows).where(eq(workflows.id, request.idHint)))
+        : await first(
+            tx
+              .select()
+              .from(workflows)
+              .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, request.idHint))),
+          )
     const byId = new Map<string, WorkflowRow>()
     for (const row of [...rows, ...(hinted === undefined ? [] : [hinted])]) {
       if (!(await canViewResourceForTx(tx, actor, 'workflow', row))) continue
@@ -250,7 +262,7 @@ export function createTaskExecutionResourceSnapshotPorts(
     const root = agentFromPersistenceRow(rootRow)
     const ordered: Agent[] = [root]
     const seen = new Set<string>([root.id])
-    const queue = root.dependsOn.map((id) => ({ id, path: [root.id] }))
+    const queue = agentReferenceIds(root, 'agent').map((id) => ({ id, path: [root.id] }))
     while (queue.length > 0) {
       const entry = queue.shift()
       if (entry === undefined) break
@@ -273,12 +285,13 @@ export function createTaskExecutionResourceSnapshotPorts(
       const agent = agentFromPersistenceRow(row)
       seen.add(agent.id)
       ordered.push(agent)
-      for (const next of agent.dependsOn) queue.push({ id: next, path: [...entry.path, entry.id] })
+      for (const next of agentReferenceIds(agent, 'agent'))
+        queue.push({ id: next, path: [...entry.path, entry.id] })
     }
 
     const skillRefs: Agent['skills'] = []
     const seenSkillRefs = new Set<string>()
-    for (const ref of ordered.flatMap((agent) => agent.skills)) {
+    for (const ref of ordered.flatMap((agent) => agentSkillReferences(agent))) {
       const key = ref.kind === 'managed' ? `managed:${ref.skillId}` : `project:${ref.name}`
       if (seenSkillRefs.has(key)) continue
       seenSkillRefs.add(key)
@@ -334,7 +347,7 @@ export function createTaskExecutionResourceSnapshotPorts(
       }
       return ids
     }
-    const mcpIds = collectIds((agent) => agent.mcp)
+    const mcpIds = collectIds((agent) => agentReferenceIds(agent, 'mcp'))
     const mcpRows =
       mcpIds.length === 0 ? [] : await tx.select().from(mcps).where(inArray(mcps.id, mcpIds))
     const mcpById = new Map(mcpRows.map((row) => [row.id, mcpFromPersistenceRow(row)]))
@@ -359,7 +372,7 @@ export function createTaskExecutionResourceSnapshotPorts(
       )
     }
 
-    const pluginIds = collectIds((agent) => agent.plugins)
+    const pluginIds = collectIds((agent) => agentReferenceIds(agent, 'plugin'))
     const pluginRows =
       pluginIds.length === 0
         ? []

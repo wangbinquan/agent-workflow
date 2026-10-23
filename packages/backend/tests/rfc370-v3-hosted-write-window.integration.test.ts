@@ -14,10 +14,8 @@
 //   verifies an expand-only successor schema while still refusing real drift.
 //
 // Uses the ephemeral CI PostgreSQL URL only. No local CS database participates.
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchWorkflowFixture, readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { Hono } from 'hono'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { migrateForDeployment } from '@/bootstrap/deployment'
@@ -107,16 +105,14 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       await activate(control)
       first = session.transaction(async (tx) => {
         await control.assertHeld(tx, OWNER)
-        const { workflows } = tablesOf(tx)
-        await insertOne(tx, workflows, { id: 'fenced-1', name: 'Fenced', definition: '{}' })
+        await workflowFixture(tx, { id: 'fenced-1', name: 'Fenced', definition: '{}' })
         holding.resolve()
         await release.promise
       })
       await holding.promise
       const second = session.transaction(async (tx) => {
         await control.assertHeld(tx, OWNER)
-        const { workflows } = tablesOf(tx)
-        await insertOne(tx, workflows, { id: 'fenced-2', name: 'Fenced', definition: '{}' })
+        await workflowFixture(tx, { id: 'fenced-2', name: 'Fenced', definition: '{}' })
       })
       expect(await stillWaiting(second)).toBe('done')
       const renewedUntil = Date.now() + 90_000
@@ -179,16 +175,11 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     })
     const app = new Hono()
     app.post('/configuration', async (c) => {
-      const { workflows } = tablesOf(guarded)
-      await guarded
-        .update(workflows)
-        .set({ name: 'Changed over HTTP' })
-        .where(eq(workflows.id, 'ordinary'))
+      await patchWorkflowFixture(guarded, { id: 'ordinary' }, { name: 'Changed over HTTP' })
       return c.json({ ok: true })
     })
     app.get('/configuration', async (c) => {
-      const { workflows } = tablesOf(guarded)
-      return c.json(await guarded.select().from(workflows).where(eq(workflows.id, 'ordinary')))
+      return c.json(await readWorkflowFixtures(guarded, { id: 'ordinary' }))
     })
     app.onError(errorHandler)
     const admitted = deferred(),
@@ -196,11 +187,9 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     let writing: Promise<void> | undefined, freezing: Promise<void> | undefined
     try {
       await activate(control)
-      const { workflows } = tablesOf(guarded)
-      await insertOne(guarded, workflows, { id: 'ordinary', name: 'Before', definition: '{}' })
+      await workflowFixture(guarded, { id: 'ordinary', name: 'Before', definition: '{}' })
       writing = databaseSessionFor(guarded).transaction(async (tx) => {
-        const { workflows } = tablesOf(tx)
-        await insertOne(tx, workflows, { id: 'admitted', name: 'Admitted', definition: '{}' })
+        await workflowFixture(tx, { id: 'admitted', name: 'Admitted', definition: '{}' })
         admitted.resolve()
         await release.promise
       })
@@ -217,9 +206,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       release.resolve()
       await writing
       await freezing
-      expect(
-        (await guarded.select().from(workflows).where(eq(workflows.id, 'admitted')))[0]?.name,
-      ).toBe('Admitted')
+      expect((await readWorkflowFixtures(guarded, { id: 'admitted' }))[0]?.name).toBe('Admitted')
       const refused = await app.request('/configuration', { method: 'POST' })
       expect(refused.status).toBe(503)
       expect(await refused.json()).toMatchObject({
@@ -255,16 +242,14 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     })
     try {
       await databaseSessionFor(counted).transaction(async (tx) => {
-        const { workflows } = tablesOf(tx)
         for (const id of ['once-1', 'once-2', 'once-3'])
-          await insertOne(tx, workflows, { id, name: id, definition: '{}' })
-        await tx.update(workflows).set({ name: 'renamed' }).where(eq(workflows.id, 'once-1'))
+          await workflowFixture(tx, { id, name: id, definition: '{}' })
+        await patchWorkflowFixture(tx, { id: 'once-1' }, { name: 'renamed' })
       })
       expect(guards).toBe(1)
-      const { workflows } = tablesOf(counted)
-      await insertOne(counted, workflows, { id: 'alone', name: 'alone', definition: '{}' })
+      await workflowFixture(counted, { id: 'alone', name: 'alone', definition: '{}' })
       expect(guards).toBe(2)
-      await counted.select().from(workflows)
+      await readWorkflowFixtures(counted)
       expect(guards).toBe(2)
     } finally {
       await prepared.runtime.close()
@@ -280,11 +265,8 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       await raw('UPDATE agent_workflow_meta.schema_contract SET contract_digest = $1', [
         'sha256:' + 'a'.repeat(64),
       ])
-      const { workflows } = tablesOf(guarded)
-      await insertOne(guarded, workflows, { id: 'after-upgrade', name: 'ok', definition: '{}' })
-      expect(
-        (await guarded.select().from(workflows).where(eq(workflows.id, 'after-upgrade'))).length,
-      ).toBe(1)
+      await workflowFixture(guarded, { id: 'after-upgrade', name: 'ok', definition: '{}' })
+      expect((await readWorkflowFixtures(guarded, { id: 'after-upgrade' })).length).toBe(1)
     } finally {
       await prepared.runtime.close()
     }
@@ -327,8 +309,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         contractDigest: buildLogicalSchemaContract().digest,
         successorContractDigest: successor,
       })
-      const { workflows } = tablesOf(serving.openBootstrapClient())
-      await insertOne(serving.openBootstrapClient(), workflows, {
+      await workflowFixture(serving.openBootstrapClient(), {
         id: 'serving-on-successor',
         name: 'ok',
         definition: '{}',

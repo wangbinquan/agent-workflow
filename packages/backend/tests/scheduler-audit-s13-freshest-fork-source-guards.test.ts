@@ -57,7 +57,10 @@ const REPAIR_SRC = readFileSync(
   join(SRC_ROOT, 'modules', 'task-execution', 'infrastructure', 'taskRouteRepairOperations.ts'),
   'utf-8',
 )
-const FRESHNESS_SRC = readFileSync(join(SRC_ROOT, 'services', 'freshness.ts'), 'utf-8')
+const FRESHNESS_SRC = readFileSync(
+  join(SRC_ROOT, 'modules/task-execution/infrastructure/runSelection/oracle/legacyPickers.ts'),
+  'utf-8',
+)
 
 const FORK_MARKER = 'desc(nodeRuns.retryIndex)'
 const STARTED_AT_FORK_MARKER = 'desc(nodeRuns.startedAt)'
@@ -92,7 +95,7 @@ function srcInventory(needle: string): Record<string, number> {
     if (!entry.isFile() || !entry.name.endsWith('.ts')) continue
     const abs = join(entry.parentPath, entry.name)
     const n = countOccurrences(readFileSync(abs, 'utf-8'), needle)
-    if (n > 0) inventory[relative(SRC_ROOT, abs)] = n
+    if (n > 0) inventory[relative(SRC_ROOT, abs).replaceAll('\\', '/')] = n
   }
   return inventory
 }
@@ -133,11 +136,27 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     expect(NODE_MECHANICS_SRC.includes('createNodeIso(')).toBe(false)
     expect(NODE_MECHANICS_SRC.includes('lastFreshSnapshot')).toBe(false)
     // The shared rollback authority is RETAINED for the RESUME path (D10
-    // defense-in-depth) — it still consumes the per-repo map + empty-sha reset
-    // switch, and never picks rows by retryIndex.
+    // defense-in-depth) — it consumes the checkpoint-list plan, skips empty snapshots,
+    // and never picks rows by retryIndex.
     const rollbackSrc = readFileSync(join(SRC_ROOT, 'services', 'nodeRollback.ts'), 'utf-8')
-    expect(rollbackSrc.includes('preSnapshotReposJson')).toBe(true)
-    expect(rollbackSrc.includes('resetOnEmptySnapshot')).toBe(true)
+    expect(rollbackSrc.includes('run.preSnapshotReposJson')).toBe(false)
+    expect(rollbackSrc.includes('resetOnEmptySnapshot')).toBe(false)
+    expect(rollbackSrc.includes('taskRollbackPlan(target, run)')).toBe(true)
+    const codecSrc = readFileSync(
+      join(SRC_ROOT, 'modules/task-execution/infrastructure/taskRollbackCodec.ts'),
+      'utf-8',
+    )
+    expect(codecSrc.includes('decodeTaskRollbackCheckpoints(')).toBe(true)
+    expect(codecSrc.includes('planTaskCheckpointRollback(repositories, run.checkpoints)')).toBe(
+      true,
+    )
+    const plannerSrc = readFileSync(
+      join(SRC_ROOT, 'modules/task-execution/domain/taskCheckpointRollback.ts'),
+      'utf-8',
+    )
+    expect(plannerSrc.includes('checkpoint.preSnapshot')).toBe(true)
+    // RFC-395 II-a A2: decoded checkpoint references also reject non-string legacy values.
+    expect(plannerSrc.includes("typeof snapshot !== 'string' || snapshot === ''")).toBe(true)
     expect(countOccurrences(rollbackSrc, FORK_MARKER)).toBe(0)
   })
 
@@ -168,10 +187,8 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // RFC-354: the candidate set is narrowed to the retried run's FRAME first
     // (a fan-out child lives in the fan-out generation's frame, never in the
     // retried run's), then the shared picker applies the top-level predicate.
-    expect(cascade.includes('pickFreshestRun(sameFrame.length > 0 ? sameFrame : existing, {')).toBe(
-      true,
-    )
-    expect(cascade.includes('topLevelOnly: true,')).toBe(true)
+    expect(cascade.includes('sameFrame.length > 0 ? sameFrame : existing')).toBe(true)
+    expect(cascade).toMatch(/selection\.familyHistory\([\s\S]*?topLevelOnly: true/u)
     // nextRetry stays the CONSERVATIVE all-rows max+1 (NOT prev.retryIndex+1):
     // legacy pathological rows minted by the old pickers can carry inflated
     // retryIndex on child/inherited rows; the all-rows max avoids a UNIQUE
@@ -195,31 +212,25 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     expect(countOccurrences(REPAIR_SRC, FORK_MARKER)).toBe(0)
   })
 
-  test('G6 whole-src fork inventory: desc(nodeRuns.retryIndex) exists only on the two __repo_prep__ causal-order reads', () => {
-    // The R2 ratchet the audit asks for ("desc(nodeRuns.retryIndex) 不得再出现
-    // 在快照/继承路径"), made global: RFC-092 removed the scheduler.ts entry
-    // (fork #4), RFC-096 removed task.ts (fork #5) and lifecycleRepair/
-    // helpers.ts (fork #6). RFC-287 later added two intentional repository-
-    // preparation reads: prep retries have a strictly increasing retryIndex
-    // and no clarify/parent/iteration fork, so causal order is the contract.
-    // The scoped regex proves both occurrences are tied to __repo_prep__ and
-    // the exact inventory makes any third occurrence flip red.
-    const prepCausalReads = (
-      TASK_SRC +
-      readFileSync(
-        join(
-          SRC_ROOT,
-          'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts',
-        ),
-        'utf8',
-      )
-    ).match(
-      /eq\(nodeRuns\.nodeId, REPO_PREP_NODE_ID\)\)\)\s*\.orderBy\(\s*desc\(nodeRuns\.retryIndex\),\s*engineOf\([\w.]+\)\.descNullsLast\(nodeRuns\.seq\),\s*desc\(nodeRuns\.id\),?\s*\)/g,
+  test('G6 prep sites keep the retry-order oracle query and no private retryIndex SQL sort', () => {
+    const retry = readFileSync(
+      join(SRC_ROOT, 'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts'),
+      'utf8',
     )
-    expect(prepCausalReads).toHaveLength(2)
+    for (const site of [TASK_SRC, retry]) {
+      expect(site).toMatch(/nodeId: REPO_PREP_NODE_ID,\s*order: 'retry-desc',\s*limit: 1/)
+      expect(site).not.toContain(FORK_MARKER)
+    }
+    const query = readFileSync(
+      join(SRC_ROOT, 'modules/task-execution/infrastructure/nodeRunQueries.ts'),
+      'utf8',
+    )
+    expect(query).toContain("input.order === 'retry-desc'")
+    expect(query).toContain('desc(nodeRuns.retryIndex)')
+    expect(query).toContain('descNullsLast(nodeRuns.seq)')
+    expect(query).toContain('desc(nodeRuns.id)')
     expect(srcInventory(FORK_MARKER)).toEqual({
-      'modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts': 1,
-      'services/task.ts': 1,
+      'modules/task-execution/infrastructure/nodeRunQueries.ts': 1,
     })
   })
 
@@ -250,8 +261,21 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // RFC-172 (route 2, S3): the inheritance source is now `scoped` (targetRuns filtered to the
     // dispatch shard for workgroup members; === targetRuns when shardKey is undefined). Still
     // pickFreshestRun + {topLevelOnly:false} — the freshness comparator, NOT a startedAt fork.
-    expect(dispatchSrc.includes('pickFreshestRun(scoped, { topLevelOnly: false })')).toBe(true)
-    expect(SCHEDULER_SRC.includes('pickFreshestRun(parentRows, { topLevelOnly: true })')).toBe(true)
+    const frontier = extractSection(
+      dispatchSrc,
+      'export async function buildFrontierMintPlan(',
+      'const preId = ulid()',
+    )
+    expect(frontier).toMatch(/familyHistory\(taskId, \{\s*nodeId: targetNodeId,/)
+    expect(frontier).toContain('...(shardKey === undefined ? {} : { shardKey })')
+    // RFC-395 II-a A3: constrain history selection; nextRetryIndex retains HEAD's top-level rule.
+    const historySelection = extractSection(frontier, '.familyHistory(taskId, {', 'const byId =')
+    expect(historySelection).not.toContain('topLevelOnly: true,')
+    expect(frontier).toContain('const last = scoped.at(-1)')
+    expect(SCHEDULER_SRC).toContain(
+      '.familyHistory(task.id, { nodeId: node.id, iteration }, { topLevelOnly: true })',
+    )
+    expect(SCHEDULER_SRC).toContain('const parentNodeRunId = parentHistory.at(-1)?.id ?? null')
   })
 
   test("G8 (RFC-096 §4 new heuristic ratchet): in-memory 'retryIndex > ' comparisons exist ONLY in the whitelisted files — any new file flips red for review", () => {
@@ -289,10 +313,11 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // RFC-359 AC-1（第 9 刀）：`retry` 两份合一，`services/task.ts` 的 `retryNode` 整份删除，
     // 上面那条经 review 判定「本处该用 retryIndex」的 `__repo_prep__` 门随之搬进**留下的那一份**
     // （`taskRouteOperations.ts` 的 `retryNodeProjection`）。判定未变，位置变了：
+    // RFC-395 II-a A3：分配器迁到共享值函数；准备重试的边界比较迁到 oracle。
     // 白名单跟着实现走，总数仍是 2。
     expect(srcInventory('retryIndex > ')).toEqual({
-      'modules/task-execution/application/nextRetryIndex.ts': 1,
-      'modules/task-execution/infrastructure/taskRouteOperations.ts': 1,
+      'platform/nodeRunAttempt.ts': 1,
+      'modules/task-execution/infrastructure/runSelection/oracle/pickers.ts': 1,
     })
   })
 })

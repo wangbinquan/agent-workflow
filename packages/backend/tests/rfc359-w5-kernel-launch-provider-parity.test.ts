@@ -1,3 +1,4 @@
+import { agentFixture, readTaskFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
@@ -18,7 +19,6 @@ import { createWorkspacePreparationJournal } from '@/modules/task-execution/infr
 
 import { WORKFLOW_SCHEMA_VERSION, type WorkflowDefinition } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -48,7 +48,7 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
       const agentId = ulid()
       const workflowId = ulid()
       const now = Date.now()
-      const { users, agents, workflows, tasks } = tablesOf(harness.db)
+      const { users } = tablesOf(harness.db)
       await insertOne(harness.db, users, {
         id: userId,
         username: `kernel-${userId}`,
@@ -60,7 +60,7 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
         createdAt: now,
         updatedAt: now,
       })
-      await insertOne(harness.db, agents, {
+      await agentFixture(harness.db, {
         id: agentId,
         name: 'kernel-launch-agent',
         description: 'Kernel launch fixture',
@@ -97,7 +97,7 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
           },
         ],
       }
-      await insertOne(harness.db, workflows, {
+      await workflowFixture(harness.db, {
         id: workflowId,
         name: 'Kernel launch',
         definition: JSON.stringify(definition),
@@ -110,7 +110,9 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
         { appHome, defaultNodeRetries: 0 },
         userId,
       )
-      expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
+      expect(
+        await readTaskFixtures(harness.db).then((rows) => rows.map((row) => ({ id: row.id }))),
+      ).toEqual([])
 
       const launched = await execution.launchViaKernel(
         {
@@ -121,7 +123,7 @@ describeEachProvider('RFC-359 —— 启动内核在两个引擎上各真启动�
         { workspacePath, baselineSha },
       )
 
-      const [row] = await harness.db.select().from(tasks).where(eq(tasks.id, launched.taskId))
+      const [row] = await readTaskFixtures(harness.db, { id: launched.taskId })
       expect(
         row,
         '启动内核在这个引擎上没有把任务行写进去——「内核 + 本引擎」这个组合不成立，' +

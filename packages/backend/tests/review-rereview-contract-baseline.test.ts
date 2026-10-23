@@ -35,7 +35,16 @@ function row(opts: {
   parentNodeRunId?: string | null
 }): Row {
   return {
+    containerRunId: null,
+    shardKey: null,
+    consumedUpstreamRunsJson: null,
+    supersededByReview: null,
+    wrapperProgressJson: null,
+    mergeState: null,
+
     id: opts.id ?? '01X',
+    seq: null,
+    nodeId: 'review',
     retryIndex: opts.retryIndex ?? 0,
     status: opts.status ?? 'done',
     parentNodeRunId: opts.parentNodeRunId ?? null,
@@ -55,7 +64,7 @@ describe('RFC-074 — review re-review contract (A17)', () => {
   // != null) are excluded from BOTH even when they would rank highest.
   // Ids are CAUSAL: the awaiting row was minted after the done row (it is the
   // clarify-bumped successor), so it carries the larger id.
-  test('A17: reuse = freshest top-level; latestDone = freshest done; children excluded', () => {
+  test('A17: reuse = freshest top-level; latestDone = freshest done; children excluded', async () => {
     const done0 = row({ id: '01A_DONE0', cci: 0, status: 'done' })
     const awaiting1 = row({ id: '01B_AWAIT1', cci: 1, status: 'awaiting_review' })
     const childHigh = row({
@@ -64,7 +73,7 @@ describe('RFC-074 — review re-review contract (A17)', () => {
       status: 'done',
       parentNodeRunId: '01B_AWAIT1',
     })
-    const { reuse, latestDone } = pickFreshestReviewRun([done0, awaiting1, childHigh])
+    const { reuse, latestDone } = await pickFreshestReviewRun([done0, awaiting1, childHigh])
     // Freshest top-level overall is the later-minted awaiting row (child excluded).
     expect(reuse?.id).toBe('01B_AWAIT1')
     // Freshest DONE top-level is the done row (awaiting is not done; child excluded).

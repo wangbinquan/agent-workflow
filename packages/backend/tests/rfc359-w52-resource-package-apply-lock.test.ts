@@ -11,7 +11,8 @@
 // `rfc271-bundle-engine` 的源码断言上，随通用 bundle 引擎退役搬到这里（plan §5dy）。
 import { expect, test } from 'bun:test'
 
-import { createResourcePackageApplyLock } from '../src/platform/persistence/resourcePackageApplyLock'
+import { createAtomicApplyLock } from '../src/platform/atomic-apply/keyedLock'
+const createResourcePackageApplyLock = () => createAtomicApplyLock().run
 
 function deferred<T>() {
   let resolve!: (value: T) => void

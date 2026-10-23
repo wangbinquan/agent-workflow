@@ -15,7 +15,7 @@
 // 红→绿对：把 `requireTaskMember` 的 `hasActingMembership` 换回 `hasMembership`，
 // 「observer 不能回答评审」那条立刻绿转红。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -53,9 +53,8 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
 
   async function seedTask(ownerUserId: string): Promise<void> {
     const wfId = `wf-${taskId}`
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, { id: wfId, name: wfId, description: '', definition: '{}' })
-    await insertOne(db, tasks, {
+    await workflowFixture(db, { id: wfId, name: wfId, description: '', definition: '{}' })
+    await taskFixture(db, {
       id: taskId,
       name: 'rfc324-observer-fixture',
       workflowId: wfId,

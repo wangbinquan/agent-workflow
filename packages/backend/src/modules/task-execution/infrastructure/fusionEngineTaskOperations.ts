@@ -1,4 +1,6 @@
 // RFC-387: fusion uses the session's drive and cancellation commands on both engines.
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
@@ -30,16 +32,6 @@ export interface FusionEngineTaskDependencies {
   readonly workspaces: FusionWorkspaceEffects
 }
 
-function taskSlotPath(taskId: string, workflowVersion: number): string {
-  return JSON.stringify([
-    {
-      stableNodeKey: 'task-root',
-      frozenOccurrenceKey: taskId,
-      workflowRevision: workflowVersion,
-    },
-  ])
-}
-
 async function validateCollaborators(
   db: PersistenceDb,
   command: FusionEngineTaskLaunch,
@@ -66,16 +58,11 @@ async function insertFusionTask(
   command: FusionEngineTaskLaunch,
   workspace: FusionWorkspacePreparation,
 ): Promise<string> {
-  const { workflows } = tablesOf(dependencies.db)
-  const workflowRows = await dependencies.db
-    .select({
-      id: workflows.id,
-      definition: workflows.definition,
-      version: workflows.version,
-    })
-    .from(workflows)
-    .where(eq(workflows.id, command.workflowId))
-    .limit(1)
+  const workflowRows = await createWorkflowExecutionQueries(dependencies.db)
+    .documents([command.workflowId])
+    .then((rows) =>
+      rows.map((row) => ({ id: row.id, definition: row.definition, version: row.version })),
+    )
   const workflow = workflowRows[0]
   if (workflow === undefined) {
     throw new ValidationError(
@@ -86,7 +73,6 @@ async function insertFusionTask(
   const memberIds = await validateCollaborators(dependencies.db, command)
   const now = Date.now()
   const intentId = ulid()
-  const slotPathJson = taskSlotPath(command.taskId, workflow.version)
   const eventRefs = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     await admitTransferredWorkspace(tx, {
       kind: 'fusion',
@@ -95,47 +81,61 @@ async function insertFusionTask(
       baseCommit: workspace.baseCommit,
       ownerRef: command.taskId,
     })
-    const { tasks, taskRepos, taskCollaborators, taskExecutionIntents } = tablesOf(tx)
-    await insertOne(tx, tasks, {
-      id: command.taskId,
-      name: command.name,
-      workflowId: workflow.id,
-      workflowSnapshot: layoutBuiltinWorkflowSnapshotJson(workflow.definition),
-      workflowVersion: workflow.version,
-      repoPath: workspace.worktreePath,
-      worktreePath: workspace.worktreePath,
-      baseBranch: 'fusion',
-      branch: 'fusion',
-      baseCommit: workspace.baseCommit,
-      status: 'pending',
-      inputs: JSON.stringify(command.inputs),
-      startedAt: now,
-      ownerUserId: command.ownerUserId,
-      launchOrigin: command.initiator,
-      catalogVisibility: 'public',
-      platformInputPathsJson:
-        command.platformInputPaths.length === 0 ? null : JSON.stringify(command.platformInputPaths),
-      spaceKind: 'internal',
-      branchStartedAt: now,
-      rootTaskId: command.taskId,
-      executionLineageId: command.taskId,
-      lineageSlotPathJson: slotPathJson,
-    })
-    await insertOne(tx, taskRepos, {
-      taskId: command.taskId,
-      repoIndex: 0,
-      repoPath: workspace.worktreePath,
-      repoUrl: null,
-      cachedRepoId: null,
-      baseBranch: 'fusion',
-      branch: 'fusion',
-      workingBranch: null,
-      baseCommit: workspace.baseCommit,
-      worktreePath: workspace.worktreePath,
-      worktreeDirName: '',
-      mountPath: '',
-      subdir: '',
-      readonly: false,
+    const { taskCollaborators, taskExecutionIntents } = tablesOf(tx)
+    const { lineageSlotPathJson: slotPathJson } = await createTaskCreationParticipantInTx(
+      tx,
+    ).create({
+      subject: { kind: 'workflow', sourceId: workflow.id },
+      core: {
+        id: command.taskId,
+        name: command.name,
+        status: 'pending',
+        startedAt: now,
+        ownerUserId: command.ownerUserId,
+        catalogVisibility: 'public',
+        branchStartedAt: now,
+      },
+      definition: {
+        workflowSnapshot: layoutBuiltinWorkflowSnapshotJson(workflow.definition),
+        workflowVersion: workflow.version,
+        inputs: JSON.stringify(command.inputs),
+      },
+      launchContext: {
+        platformInputPathsJson:
+          command.platformInputPaths.length === 0
+            ? null
+            : JSON.stringify(command.platformInputPaths),
+      },
+      workspace: {
+        repoPath: workspace.worktreePath,
+        worktreePath: workspace.worktreePath,
+        baseBranch: 'fusion',
+        branch: 'fusion',
+        baseCommit: workspace.baseCommit,
+        spaceKind: 'internal',
+      },
+      launch: { kind: 'root', launchOrigin: command.initiator },
+      repos: [
+        {
+          ordinal: 0,
+          repoPath: workspace.worktreePath,
+          repoUrl: null,
+          cachedRepoId: null,
+          baseBranch: 'fusion',
+          branch: 'fusion',
+          workingBranch: null,
+          baseCommit: workspace.baseCommit,
+          worktreePath: workspace.worktreePath,
+          mountPath: '',
+          subdir: '',
+          readonly: false,
+          readonlyDirtyCount: null,
+          hasSubmodules: null,
+          submoduleInitOk: null,
+          submoduleInitError: null,
+        },
+      ],
+      nodePaths: [''],
     })
     await tx.insert(taskCollaborators).values(
       memberIds.map((userId) => ({

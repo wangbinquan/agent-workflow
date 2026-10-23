@@ -61,6 +61,7 @@ import { mountWebhookIngressRoutes } from '@/routes/webhooks'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { createHttpRequestApp, type AppHttpProviderCore } from '@/server'
 import { createProductionOverviewQuery } from './productionOverview'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 export interface ProductionPerformanceApplicationInput {
   readonly db: PersistenceDb
@@ -130,6 +131,7 @@ export async function createProductionPerformanceApplication(
     ],
   })
   const memoryOperations = composeMemoryOperationsFor({
+    clarifyAnswers: createClarifyAnswerQueries(db),
     systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),

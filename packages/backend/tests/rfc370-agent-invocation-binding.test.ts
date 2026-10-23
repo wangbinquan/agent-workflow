@@ -188,9 +188,11 @@ describe('RFC-370 complete native invocation binding', () => {
       {
         nodeRunId: 'node-run',
         values: {
-          pid: 719,
-          spawnBinaryPath: 'selected-binary',
-          spawnLaunchNonce: 'original-nonce',
+          runtime: {
+            pid: 719,
+            spawnBinaryPath: 'selected-binary',
+            spawnLaunchNonce: 'original-nonce',
+          },
         },
       },
     ])

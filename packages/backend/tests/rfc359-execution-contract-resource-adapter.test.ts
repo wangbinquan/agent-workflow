@@ -1,4 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -55,7 +55,7 @@ describeEachProvider('RFC-359 执行合同资源读取（双引擎，单一实�
   }> {
     const id = ulid()
     const { agents } = tablesOf(h.db)
-    await insertOne(h.db, agents, {
+    await agentFixture(h.db, {
       id,
       name: 'Implementer',
       description: 'seeded by rfc359-execution-contract-resource-adapter',
@@ -75,8 +75,7 @@ describeEachProvider('RFC-359 执行合同资源读取（双引擎，单一实�
 
   async function seedWorkflow(definition: string, version = 4): Promise<string> {
     const id = ulid()
-    const { workflows } = tablesOf(h.db)
-    await insertOne(h.db, workflows, {
+    await workflowFixture(h.db, {
       id,
       name: 'Contract workflow',
       description: 'w',

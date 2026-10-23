@@ -34,9 +34,10 @@
 // context.recordArtifact`）是源码层文本断言：漏掉 await 不会让任何既有测试变红，
 // 而 `bun run lint:promises` 挡得住裸调用、挡不住显式 `void`。
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { createIntentApplyJournalConvergence } from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
+import { createIntentApplyRecoveryScene } from '@/modules/intent/infrastructure/intentApplyRecovery'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -51,7 +52,7 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import type { IntentJournalArtifactV1 } from '@/modules/intent/domain/journalArtifacts'
+import type { IntentJournalArtifactV1 } from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
 import {
   createIntentApplyEngine,
   type ApplyIntentFaults,
@@ -342,15 +343,14 @@ function applyPortFor(
         ...(options.faults === undefined ? {} : { faults: options.faults }),
       }),
     converge: (convergeOptions) =>
-      createIntentApplyJournalConvergence({
-        db: harness.db,
-        artifacts: artifacts as never,
-        log: silentLog(),
-      }).converge({
-        activeJournalIds: [
-          ...operations.activeJournalIds(),
-          ...(convergeOptions?.activeJournalIds ?? []),
-        ],
+      createAtomicApplyRecovery([
+        createIntentApplyRecoveryScene({
+          db: harness.db,
+          artifacts: artifacts as never,
+          log: silentLog(),
+        }),
+      ]).converge({
+        intent: [...operations.activeJournalIds(), ...(convergeOptions?.activeJournalIds ?? [])],
       }),
     prestaged: () => prestaged,
   }

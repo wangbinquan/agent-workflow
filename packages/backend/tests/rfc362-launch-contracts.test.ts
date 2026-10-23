@@ -318,7 +318,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
     const deferred = await materializer.prepare({
       authority: f.identity.authority,
       taskId: ulid(),
-      task: { workflowId: 'oracle', name: 'deferred', inputs: {}, cachedRepoId: f.row.id },
+      task: { name: 'deferred', inputs: {}, cachedRepoId: f.row.id },
       gitCommitIdentity: null,
       defer: true,
     })
@@ -328,7 +328,7 @@ describeEachProvider('RFC-362 real source snapshot and existing Git mechanisms',
     expect(existsSync(f.options.appHome)).toBe(false)
     const scratch = await materializer.prepare({
       taskId: ulid(),
-      task: { workflowId: 'oracle', name: 'scratch', inputs: {}, scratch: true },
+      task: { name: 'scratch', inputs: {}, scratch: true },
       gitCommitIdentity: null,
       defer: true,
     })

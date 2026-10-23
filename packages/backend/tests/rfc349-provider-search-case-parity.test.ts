@@ -50,20 +50,14 @@ const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
     'nodeRuns.errorMessage':
       "按运行时写死的机器标记 '%child-unkillable%' 找无法回收子进程的证据；标记是常量，精确匹配才对",
   },
-  'modules/resource-catalog/infrastructure/mcpRepository.ts': {
-    'agents.mcp': '按 `%"<mcpId>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
-  },
-  'modules/resource-catalog/infrastructure/pluginRepository.ts': {
-    'agents.plugins': '同上，按 `%"<pluginId>"%` 找引用',
-  },
   'modules/resource-catalog/infrastructure/legacy/agent.ts': {
     'agents.dependsOn':
       'RFC-359 W11 中立事务使代理删除进入 PG 执行面；按 ULID 在 JSON 数组里预筛，再经 includes(id) 精确复核依赖引用，与 MCP/plugin 引用同一契约',
   },
   // RFC-359 W4-D23b：这份反查随技能删除路径迁到中立事务后进入 PG 执行面，守卫因此第一次看到它。
   // 判据与上面两条同源：按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对。
-  'modules/resource-catalog/infrastructure/legacy/resourceRefs.ts': {
-    'args.column': '按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
+  'modules/resource-catalog/infrastructure/referenceLookup.ts': {
+    'agents[kind]': '按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
   },
 }
 
@@ -152,7 +146,7 @@ describe('RFC-349 user search stays case-insensitive on both providers', () => {
       ]),
     )
     for (const file of surface) {
-      for (const match of file.text.matchAll(/(?:^|[^i\w])like\(\s*([\w.]+)/gu)) {
+      for (const match of file.text.matchAll(/(?:^|[^i\w])like\(\s*([\w.]+(?:\[[\w]+\])?)/gu)) {
         const column = match[1]!
         if (DELIBERATE_EXACT_CASE[file.path]?.[column] !== undefined) {
           stale.get(file.path)?.delete(column)

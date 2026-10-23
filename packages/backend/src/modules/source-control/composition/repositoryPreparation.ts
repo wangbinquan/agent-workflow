@@ -11,7 +11,7 @@ import { createPublicRepositorySourceSeal } from '../infrastructure/publicReposi
 import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import type { PlannedSpaceLayout } from '../infrastructure/workspaceMaterializer'
-import type { GitCommitIdentity, StartTask } from '@agent-workflow/shared'
+import type { GitCommitIdentity, TaskStartOptions } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -94,7 +94,7 @@ export function composeRepositoryPreparation(input: {
         )
       },
       async prepare(request: {
-        task: StartTask
+        task: TaskStartOptions
         taskId: string
         gitCommitIdentity: GitCommitIdentity | null
         signal?: AbortSignal

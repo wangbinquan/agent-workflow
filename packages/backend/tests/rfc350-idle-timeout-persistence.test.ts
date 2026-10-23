@@ -10,6 +10,13 @@
 //
 // 对应 design.md §2.1 / §4 与 proposal.md 的 AC-3 / AC-4 / AC-7 / AC-8 / AC-14。
 
+import {
+  nodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -25,7 +32,7 @@ const NOW = 1_788_278_400_000
 type Db = PersistenceDb
 
 async function seedBase(db: Db): Promise<void> {
-  const { users, workflows } = tablesOf(db)
+  const { users } = tablesOf(db)
   await insertOne(db, users, {
     id: 'u1',
     username: 'u1',
@@ -34,7 +41,7 @@ async function seedBase(db: Db): Promise<void> {
     createdAt: NOW,
     updatedAt: NOW,
   })
-  await insertOne(db, workflows, { id: 'wf1', name: 'wf', definition: '{}' })
+  await workflowFixture(db, { id: 'wf1', name: 'wf', definition: '{}' })
 }
 
 interface TaskSeed {
@@ -56,8 +63,7 @@ interface TaskSeed {
 }
 
 async function addTask(db: Db, seed: TaskSeed): Promise<void> {
-  const { tasks, taskRepos } = tablesOf(db)
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: seed.id,
     name: seed.id,
     workflowId: 'wf1',
@@ -79,7 +85,7 @@ async function addTask(db: Db, seed: TaskSeed): Promise<void> {
     ...(seed.deletedAt === undefined ? {} : { deletedAt: seed.deletedAt }),
     ...(seed.errorSummary === undefined ? {} : { errorSummary: seed.errorSummary }),
   })
-  await insertOne(db, taskRepos, {
+  await taskRepoFixture(db, {
     taskId: seed.id,
     repoIndex: 0,
     repoPath: '/tmp/never-read',
@@ -99,8 +105,8 @@ async function addRun(
     eventTs?: readonly number[]
   },
 ): Promise<void> {
-  const { nodeRuns, nodeRunEvents } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  const { nodeRunEvents } = tablesOf(db)
+  await nodeRunFixture(db, {
     id: input.id,
     taskId: input.taskId,
     nodeId: 'n1',
@@ -347,8 +353,9 @@ describeEachProvider('RFC-350 收割写入', (harness) => {
     }
     // 返回值就是「这一行是不是被本次收割认领了」——审计只在 true 时才写。
     expect(claimed).toEqual({ ours: true, theirs: false, running: false })
-    const { tasks } = tablesOf(db)
-    const rows = await db.select({ id: tasks.id, errorSummary: tasks.errorSummary }).from(tasks)
+    const rows = await readTaskFixtures(db).then((rows) =>
+      rows.map((row) => ({ id: row.id, errorSummary: row.errorSummary })),
+    )
     const byId = new Map(rows.map((r) => [r.id, r.errorSummary]))
     expect(byId.get('ours')).toBe('task-idle-timeout')
     expect(byId.get('theirs')).toBe('task-time-limit-exceeded')

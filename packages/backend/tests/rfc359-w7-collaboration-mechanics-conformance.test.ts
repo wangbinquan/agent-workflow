@@ -11,6 +11,17 @@
 // `collaborationWorkgroupClarify.ts`（RFC-172/181 反问许可与自治遣散）、
 // `clarify/queue.ts`（澄清队列上下文）与 `review.ts`（评审提示上下文）。
 
+import {
+  clarifyRoundFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchTaskFixture,
+  readClarifyRoundFixtures,
+  readNodeRunFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, expect, test } from 'bun:test'
@@ -100,8 +111,7 @@ async function seedTask(
 ): Promise<string> {
   const taskId = `t_${ulid()}`
   const snapshot = JSON.stringify(definition())
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: `wf_${taskId}`,
     name: 'rfc359-w7-mechanics',
     description: '',
@@ -109,7 +119,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 6,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc359 w7 mechanics',
     workflowId: `wf_${taskId}`,
@@ -139,8 +149,7 @@ async function seedRun(
   overrides: { status?: string; shardKey?: string | null } = {},
 ): Promise<string> {
   const id = `nr_${ulid()}`
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId,
@@ -185,11 +194,9 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         definition: orphanDefinition,
       }),
     ).toEqual({ kind: 'no-questioner' })
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select({ status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, runId))
+    const rows = await readNodeRunFixtures(db, { id: runId }).then((rows) =>
+      rows.map((row) => ({ status: row.status })),
+    )
     expect(rows[0]?.status).toBe('pending')
   })
 
@@ -206,11 +213,9 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         definition: definition(),
       }),
     ).toEqual({ kind: 'awaiting' })
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select({ status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, runId))
+    const rows = await readNodeRunFixtures(db, { id: runId }).then((rows) =>
+      rows.map((row) => ({ status: row.status })),
+    )
     expect(rows[0]?.status).toBe('pending')
   })
 
@@ -218,7 +223,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const runId = await seedRun(db, taskId, CROSS, { status: 'pending' })
-    const { taskNodeClarifyDirectives, nodeRuns } = tablesOf(db)
+    const { taskNodeClarifyDirectives } = tablesOf(db)
     await insertOne(db, taskNodeClarifyDirectives, {
       taskId,
       nodeId: ASKER,
@@ -235,10 +240,9 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         definition: definition(),
       }),
     ).toEqual({ kind: 'short-circuit-stop' })
-    const rows = await db
-      .select({ status: nodeRuns.status, finishedAt: nodeRuns.finishedAt })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, runId))
+    const rows = await readNodeRunFixtures(db, { id: runId }).then((rows) =>
+      rows.map((row) => ({ status: row.status, finishedAt: row.finishedAt })),
+    )
     expect(rows[0]?.status).toBe('done')
     expect(rows[0]?.finishedAt).not.toBeNull()
   })
@@ -308,16 +312,16 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const mechanics = createCollaborationRuntimeMechanics(db)
     expect(await mechanics.isTaskClarifySuppressed({ taskId: agentsOnly })).toBe(true)
 
-    const { tasks } = tablesOf(db)
-    await db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      db,
+      { id: agentsOnly },
+      {
         workgroupConfigJson: JSON.stringify({
           members: [{ memberType: 'agent' }, { memberType: 'human' }],
           clarifyBudget: 2,
         }),
-      })
-      .where(eq(tasks.id, agentsOnly))
+      },
+    )
     // 不带 nodeId：只判「有没有人可问」
     expect(await mechanics.isTaskClarifySuppressed({ taskId: agentsOnly })).toBe(false)
     expect(
@@ -340,8 +344,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const mechanics = createCollaborationRuntimeMechanics(db)
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
-    const { clarifyRounds, tasks } = tablesOf(db)
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: `cr_${ulid()}`,
       taskId,
       kind: 'self',
@@ -351,7 +354,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: WG_CLARIFY,
       intermediaryNodeRunId: parkRun,
       iteration: 0,
-      questionsJson: '[]',
+      questions: '[]',
       status: 'awaiting_human',
       createdAt: Date.now(),
     })
@@ -361,15 +364,16 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     ).toBe(true)
 
     // 预算 0 ⇒ 直接抑制（无需数已问次数）
-    await db
-      .update(tasks)
-      .set({
+    await patchTaskFixture(
+      db,
+      { id: taskId },
+      {
         workgroupConfigJson: JSON.stringify({
           members: [{ memberType: 'agent' }, { memberType: 'human' }],
           clarifyBudget: 0,
         }),
-      })
-      .where(eq(tasks.id, taskId))
+      },
+    )
     expect(
       await mechanics.isTaskClarifySuppressed({ taskId, nodeId: WG_LEADER, shardKey: null }),
     ).toBe(true)
@@ -413,7 +417,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
     const assignmentId = `wga_${ulid()}`
-    const { workgroupAssignments, clarifyRounds, nodeRuns } = tablesOf(db)
+    const { workgroupAssignments } = tablesOf(db)
     await insertOne(db, workgroupAssignments, {
       id: assignmentId,
       taskId,
@@ -426,7 +430,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       updatedAt: Date.now(),
     })
     const openRoundId = `cr_${ulid()}`
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: openRoundId,
       taskId,
       kind: 'self',
@@ -436,14 +440,14 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: WG_CLARIFY,
       intermediaryNodeRunId: parkRun,
       iteration: 0,
-      questionsJson: '[]',
+      questions: '[]',
       status: 'awaiting_human',
       createdAt: Date.now(),
     })
     // 已答轮不受影响
     const answeredRun = await seedRun(db, taskId, WG_CLARIFY)
     const answeredRoundId = `cr_${ulid()}`
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: answeredRoundId,
       taskId,
       kind: 'self',
@@ -453,8 +457,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: WG_CLARIFY,
       intermediaryNodeRunId: answeredRun,
       iteration: 0,
-      questionsJson: '[]',
-      answersJson: '[]',
+      questions: '[]',
+      answers: '[]',
       status: 'answered',
       createdAt: Date.now(),
       answeredAt: Date.now(),
@@ -468,18 +472,16 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       canceledParkRuns: [{ nodeRunId: parkRun, nodeId: WG_CLARIFY }],
       requeuedAssignments: [{ id: assignmentId, to: 'dispatched' }],
     })
-    const rounds = await db
-      .select({ id: clarifyRounds.id, status: clarifyRounds.status })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.taskId, taskId))
+    const rounds = await readClarifyRoundFixtures(db, { taskId }).then((rows) =>
+      rows.map((row) => ({ id: row.id, status: row.status })),
+    )
     expect(Object.fromEntries(rounds.map((row) => [row.id, row.status]))).toEqual({
       [openRoundId]: 'canceled',
       [answeredRoundId]: 'answered',
     })
-    const parked = await db
-      .select({ status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, parkRun))
+    const parked = await readNodeRunFixtures(db, { id: parkRun }).then((rows) =>
+      rows.map((row) => ({ status: row.status })),
+    )
     expect(parked[0]?.status).toBe('canceled')
     const assignment = await db
       .select({ status: workgroupAssignments.status, nodeRunId: workgroupAssignments.nodeRunId })
@@ -496,7 +498,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
     const assignmentId = `wga_${ulid()}`
-    const { workgroupAssignments, clarifyRounds } = tablesOf(db)
+    const { workgroupAssignments } = tablesOf(db)
     await insertOne(db, workgroupAssignments, {
       id: assignmentId,
       taskId,
@@ -509,7 +511,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: `cr_${ulid()}`,
       taskId,
       kind: 'self',
@@ -519,7 +521,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: WG_CLARIFY,
       intermediaryNodeRunId: parkRun,
       iteration: 0,
-      questionsJson: '[]',
+      questions: '[]',
       status: 'awaiting_human',
       createdAt: Date.now(),
     })
@@ -545,8 +547,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
     const roundId = `cr_${ulid()}`
-    const { clarifyRounds } = tablesOf(db)
-    await insertOne(db, clarifyRounds, {
+    await clarifyRoundFixture(db, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -556,7 +557,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: WG_CLARIFY,
       intermediaryNodeRunId: parkRun,
       iteration: 0,
-      questionsJson: '[]',
+      questions: '[]',
       status: 'awaiting_human',
       createdAt: Date.now(),
     })
@@ -568,10 +569,9 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         throw new Error('rollback-probe')
       }),
     ).rejects.toThrow('rollback-probe')
-    const rows = await db
-      .select({ status: clarifyRounds.status })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.id, roundId))
+    const rows = await readClarifyRoundFixtures(db, { id: roundId }).then((rows) =>
+      rows.map((row) => ({ status: row.status })),
+    )
     expect(rows[0]?.status).toBe('awaiting_human')
   })
 
@@ -594,8 +594,7 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       questions: [question('q1'), question('q2')],
     })
     expect(receipt.intermediaryNodeRunId.length).toBeGreaterThan(0)
-    const { clarifyRounds, nodeRuns, tasks } = tablesOf(db)
-    const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
+    const rounds = await readClarifyRoundFixtures(db, { taskId })
     expect(rounds).toHaveLength(1)
     expect(rounds[0]).toMatchObject({
       kind: 'self',
@@ -605,16 +604,14 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeRunId: receipt.intermediaryNodeRunId,
       status: 'awaiting_human',
     })
-    expect(JSON.parse(rounds[0]!.questionsJson).map((q: { id: string }) => q.id)).toEqual([
-      'q1',
-      'q2',
-    ])
-    const park = await db
-      .select({ status: nodeRuns.status, nodeId: nodeRuns.nodeId })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, receipt.intermediaryNodeRunId))
+    expect(JSON.parse(rounds[0]!.questions).map((q: { id: string }) => q.id)).toEqual(['q1', 'q2'])
+    const park = await readNodeRunFixtures(db, { id: receipt.intermediaryNodeRunId }).then((rows) =>
+      rows.map((row) => ({ status: row.status, nodeId: row.nodeId })),
+    )
     expect(park[0]).toEqual({ status: 'awaiting_human', nodeId: CLARIFY })
-    const task = await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+    const task = await readTaskFixtures(db, { id: taskId }).then((rows) =>
+      rows.map((row) => ({ status: row.status })),
+    )
     expect(task[0]?.status).toBe('awaiting_human')
   })
 
@@ -632,11 +629,9 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: CROSS,
       questions: [question('q1')],
     })
-    const { clarifyRounds } = tablesOf(db)
-    const rounds = await db
-      .select()
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.intermediaryNodeRunId, receipt.intermediaryNodeRunId))
+    const rounds = await readClarifyRoundFixtures(db, {
+      intermediaryNodeRunId: receipt.intermediaryNodeRunId,
+    })
     expect(rounds[0]).toMatchObject({
       kind: 'cross',
       intermediaryNodeId: CROSS,
@@ -670,8 +665,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const askingRun = await seedRun(db, taskId, ASKER)
     const parkRun = await seedRun(db, taskId, CLARIFY, { status: 'awaiting_human' })
     const roundId = `cr_${ulid()}`
-    const { clarifyRounds, taskQuestions } = tablesOf(db)
-    await insertOne(db, clarifyRounds, {
+    const { taskQuestions } = tablesOf(db)
+    await clarifyRoundFixture(db, {
       id: roundId,
       taskId,
       kind: 'self',
@@ -680,8 +675,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: CLARIFY,
       intermediaryNodeRunId: parkRun,
       iteration: 0,
-      questionsJson: JSON.stringify([question('q1')]),
-      answersJson: JSON.stringify([
+      questions: JSON.stringify([question('q1')]),
+      answers: JSON.stringify([
         {
           questionId: 'q1',
           selectedOptionIndices: [0],
@@ -756,8 +751,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const taskId = await seedTask(db)
     const askingRun = await seedRun(db, taskId, ASKER)
     const parkRun = await seedRun(db, taskId, CLARIFY, { status: 'done' })
-    const { clarifyRounds, taskQuestions } = tablesOf(db)
-    await insertOne(db, clarifyRounds, {
+    const { taskQuestions } = tablesOf(db)
+    await clarifyRoundFixture(db, {
       id: `cr_${ulid()}`,
       taskId,
       kind: 'self',
@@ -766,8 +761,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       intermediaryNodeId: CLARIFY,
       intermediaryNodeRunId: parkRun,
       iteration: 0,
-      questionsJson: JSON.stringify([question('q1')]),
-      answersJson: JSON.stringify([
+      questions: JSON.stringify([question('q1')]),
+      answers: JSON.stringify([
         {
           questionId: 'q1',
           selectedOptionIndices: [0],
@@ -862,8 +857,8 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     expect(missingUpstream.kind).toBe('failed')
 
     const writerRun = await seedRun(db, taskId, WRITER, { status: 'done' })
-    const { nodeRunOutputs, docVersions, nodeRuns, tasks } = tablesOf(db)
-    await insertOne(db, nodeRunOutputs, {
+    const { docVersions } = tablesOf(db)
+    await nodeRunOutputFixture(db, {
       nodeRunId: writerRun,
       portName: 'out',
       content: '# Draft\n\nreview me\n',
@@ -880,14 +875,15 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       versionIndex: 1,
       decision: 'pending',
     })
-    const reviewRuns = await db
-      .select({ id: nodeRuns.id, status: nodeRuns.status })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.nodeId, REVIEW))
+    const reviewRuns = await readNodeRunFixtures(db, { nodeId: REVIEW }).then((rows) =>
+      rows.map((row) => ({ id: row.id, status: row.status })),
+    )
     expect(reviewRuns).toHaveLength(1)
     expect(reviewRuns[0]?.status).toBe('awaiting_review')
     expect(versions[0]?.reviewNodeRunId).toBe(reviewRuns[0]!.id)
-    const task = await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId))
+    const task = await readTaskFixtures(db, { id: taskId }).then((rows) =>
+      rows.map((row) => ({ status: row.status })),
+    )
     expect(task[0]?.status).toBe('awaiting_review')
 
     // 幂等：同一轮再派发一次不产生第二个版本

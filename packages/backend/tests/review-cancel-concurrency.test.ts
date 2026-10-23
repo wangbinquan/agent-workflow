@@ -1,6 +1,19 @@
+import {
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunFixture,
+  patchNodeRunOutputFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  consumedProducerIds,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { queryWrite, first as firstRow, queryRows } from '@/platform/persistence/queryHelpers'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 // Review mutations and user cancellation share one task-scoped FIFO.  These
@@ -113,13 +126,13 @@ async function seedHarness<Database extends PersistenceDb>(
     ],
     edges: [],
   }
-  const { workflows, tasks, nodeRuns, nodeRunOutputs, docVersions, reviewComments } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { docVersions, reviewComments } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'review-cancel-lock',
     definition: JSON.stringify(definition),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'review-cancel-lock',
     workflowId,
@@ -136,7 +149,7 @@ async function seedHarness<Database extends PersistenceDb>(
     // 于是夹具自己补齐——两个引擎从同一行出发。
     ...taskRootLineage(taskId),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: upstreamRunId,
     taskId,
     nodeId: 'writer',
@@ -146,12 +159,12 @@ async function seedHarness<Database extends PersistenceDb>(
     startedAt: Date.now() - 20,
     finishedAt: Date.now() - 10,
   })
-  await insertOne(db, nodeRunOutputs, {
+  await nodeRunOutputFixture(db, {
     nodeRunId: upstreamRunId,
     portName: 'doc',
     content: '# body inline',
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: reviewRunId,
     taskId,
     nodeId: 'review',
@@ -293,7 +306,8 @@ function decide(
   })
 }
 
-/** Delay only review.ts's `{ archiveJson }` select after the doc claim. */
+// RFC-395 II-a A7: upstreamPortArchiveJson now reads the exact five-field output port projection.
+/** Delay that port read after the doc claim, preserving the original ordering witness. */
 function delayArchiveSelect(db: DbClient, onBlocked: () => void, release: Promise<void>): DbClient {
   const wrapBuilder = (builder: object): object => {
     const proxy: object = new Proxy(builder, {
@@ -330,22 +344,45 @@ function delayArchiveSelect(db: DbClient, onBlocked: () => void, release: Promis
         const isArchiveSelect =
           typeof fields === 'object' &&
           fields !== null &&
-          Object.keys(fields).length === 1 &&
-          Object.hasOwn(fields, 'archiveJson')
+          Object.keys(fields).length === 5 &&
+          ['nodeRunId', 'portName', 'content', 'kind', 'archiveJson'].every((key) =>
+            Object.hasOwn(fields, key),
+          )
         return isArchiveSelect ? wrapBuilder(builder) : builder
       }
     },
   }) as DbClient
 }
 
-function observeDbSelect(db: DbClient, onSelect: () => void): DbClient {
+function observeDbSelect(db: DbClient, onSelect: () => void | Promise<void>): DbClient {
+  // RFC-395 II-a A1: fixture writes are async; finish the scheduler claim before the observed read.
+  const wrapBuilder = (builder: object, ready: Promise<void>): object =>
+    new Proxy(builder, {
+      get(target, property) {
+        if (property === 'then') {
+          return (
+            onFulfilled?: ((value: unknown) => unknown) | null,
+            onRejected?: ((reason: unknown) => unknown) | null,
+          ) =>
+            ready
+              .then(() => Promise.resolve(target as unknown as PromiseLike<unknown>))
+              .then(onFulfilled, onRejected)
+        }
+        const value = Reflect.get(target, property, target)
+        if (typeof value !== 'function') return value
+        return (...args: unknown[]) => {
+          const next = Reflect.apply(value, target, args) as unknown
+          return typeof next === 'object' && next !== null ? wrapBuilder(next, ready) : next
+        }
+      },
+    })
   return new Proxy(db, {
     get(target, property) {
       const value = Reflect.get(target, property, target)
       if (property !== 'select' || typeof value !== 'function') return value
       return (...args: unknown[]) => {
-        onSelect()
-        return Reflect.apply(value, target, args) as unknown
+        const ready = Promise.resolve(onSelect())
+        return wrapBuilder(Reflect.apply(value, target, args) as object, ready)
       }
     },
   }) as DbClient
@@ -374,13 +411,12 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
           return (...args: unknown[]) => {
             lost = true
             onLost()
-            const { tasks } = tablesOf(db)
             // 在目标 UPDATE 的 CAS 之前把行挪走：CAS 必然 miss，而它的伴随 outbox 写也不该出现。
-            queryWrite(
-              db.update(tasks).set({ status: 'awaiting_human' }).where(eq(tasks.id, taskId)),
-            )
+            // RFC-395 II-a A1: await the builder write before executing the losing CAS.
             const method = Reflect.get(target, property, target) as (...inner: unknown[]) => unknown
-            return Reflect.apply(method, target, args)
+            return patchTaskFixture(db, { id: taskId }, { status: 'awaiting_human' }).then(() =>
+              Reflect.apply(method, target, args),
+            )
           }
         }
         const value = Reflect.get(target, property, target)
@@ -430,17 +466,22 @@ function loseFirstCancelCas(db: DbClient, taskId: string, onLost: () => void): D
  * 「换到另一个状态」是**读当前值再翻**，不是固定轮换：搅动与 CAS 之间不再隔着事务边界，
  * 固定轮换会与 CAS 的期望值对上号，几轮之后反而让 CAS 赢了。
  */
-function starveTaskCancelCas(db: DbClient, taskId: string, onAttempt: () => void): () => void {
-  return () => {
-    const { tasks } = tablesOf(db)
-    const current = firstRow(
-      db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)),
-    )?.status
+function starveTaskCancelCas(
+  db: DbClient,
+  taskId: string,
+  onAttempt: () => void,
+): () => Promise<void> {
+  return async () => {
+    const current = (
+      await readTaskFixtures(db, { id: taskId }).then((rows) =>
+        rows.map((row) => ({ status: row.status })),
+      )
+    )[0]?.status
     // 只搅动仍可取消的目标；父任务先落终态之后就不再动它。
     if (current !== 'awaiting_review' && current !== 'awaiting_human') return
     onAttempt()
     const next = current === 'awaiting_review' ? 'awaiting_human' : 'awaiting_review'
-    queryWrite(db.update(tasks).set({ status: next }).where(eq(tasks.id, taskId)))
+    await patchTaskFixture(db, { id: taskId }, { status: next })
   }
 }
 
@@ -461,11 +502,8 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
       expect(cancelResult.status).toBe('fulfilled')
       expectRejectedCode(decisionResult, 'task-terminal')
-      const { tasks, nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } =
-        tablesOf(h.db)
-      expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
-        'canceled',
-      )
+      const { nodeRuns, docVersions, reviewComments, memoryDistillJobs } = tablesOf(h.db)
+      expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
       expect(
         (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
       ).toBe('canceled')
@@ -480,9 +518,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
         .from(reviewComments)
         .where(eq(reviewComments.docVersionId, h.docVersionId))
       expect(comments.map((row) => row.commentText)).toEqual(['original'])
-      expect(
-        await h.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId)),
-      ).toHaveLength(0)
+      expect(await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })).toHaveLength(0)
       expect(
         await h.db
           .select()
@@ -503,11 +539,8 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
     expect(decisionResult.status).toBe('fulfilled')
     expect(cancelResult.status).toBe('fulfilled')
-    const { tasks, nodeRuns, docVersions, reviewComments, nodeRunOutputs, memoryDistillJobs } =
-      tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
-      'canceled',
-    )
+    const { nodeRuns, docVersions, reviewComments, memoryDistillJobs } = tablesOf(h.db)
+    expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
     expect(
       (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
     ).toBe('done')
@@ -517,10 +550,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     expect(doc.decision).toBe('approved')
     expect(doc.commentsJson).toContain('original')
     expect(await h.db.select().from(reviewComments)).toHaveLength(0)
-    const reviewOutputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+    const reviewOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
     expect(reviewOutputs.map((row) => row.portName).sort()).toEqual([
       'approval_meta',
       'approved_doc',
@@ -537,13 +567,14 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
   test('cancel first makes queued stale-source dispatch perform zero refresh writes', async () => {
     const h = (current = await seedHarness(harness.db))
-    const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(h.db)
-    await h.db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: JSON.stringify({ writer: h.upstreamRunId }) })
-      .where(eq(nodeRuns.id, h.reviewRunId))
+    const { docVersions } = tablesOf(h.db)
+    await patchNodeRunFixture(
+      h.db,
+      { id: h.reviewRunId },
+      { consumedEdges: [{ producerNodeId: 'writer', producerRunId: h.upstreamRunId }] },
+    )
     const freshUpstreamRunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: freshUpstreamRunId,
       taskId: h.taskId,
       nodeId: 'writer',
@@ -553,7 +584,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
       startedAt: Date.now() - 2,
       finishedAt: Date.now() - 1,
     })
-    await insertOne(h.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(h.db, {
       nodeRunId: freshUpstreamRunId,
       portName: 'doc',
       content: '# fresh upstream body',
@@ -594,9 +625,10 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     expect(docs[0]?.versionIndex).toBe(1)
     expect(created).toHaveLength(0)
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]
-        ?.consumedUpstreamRunsJson,
-    ).toBe(JSON.stringify({ writer: h.upstreamRunId }))
+      consumedProducerIds(
+        (await readNodeRunFixtures(h.db, { id: h.reviewRunId }))[0]?.consumedEdges,
+      ),
+    ).toEqual({ writer: h.upstreamRunId })
   })
 
   test.each(['add', 'update', 'delete'] as const)(
@@ -734,9 +766,9 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
   test('decision WS is emitted only after outputs and the lifecycle transition are complete', async () => {
     const h = (current = await seedNativeHarness())
     let stateAtEvent: { runStatus: string | undefined; outputCount: number } | undefined
-    const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), (event) => {
+    const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), async (event) => {
       if (event.type !== 'review.decision_made') return
-      const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
+      const { nodeRuns } = tablesOf(h.db)
       stateAtEvent = {
         runStatus: queryRows(
           h.db
@@ -745,9 +777,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
             .where(eq(nodeRuns.id, h.reviewRunId))
             .limit(1),
         )[0]?.status,
-        outputCount: queryRows(
-          h.db.select().from(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId)),
-        ).length,
+        outputCount: (await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })).length,
       }
     })
     try {
@@ -781,22 +811,24 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     const h = (current = await seedNativeHarness())
     const sourcePath = 'doc.md'
     writeFileSync(join(h.worktreePath, sourcePath), '# fresh upstream body')
-    const { nodeRunOutputs, nodeRuns, docVersions, tasks } = tablesOf(h.db)
-    await h.db
-      .update(nodeRunOutputs)
-      .set({ content: sourcePath, kind: 'path<md>' })
-      .where(eq(nodeRunOutputs.nodeRunId, h.upstreamRunId))
-    await h.db
-      .update(nodeRuns)
-      .set({ consumedUpstreamRunsJson: JSON.stringify({ writer: h.upstreamRunId }) })
-      .where(eq(nodeRuns.id, h.reviewRunId))
+    const { nodeRuns, docVersions } = tablesOf(h.db)
+    await patchNodeRunOutputFixture(
+      h.db,
+      { nodeRunId: h.upstreamRunId },
+      { content: sourcePath, kind: 'path<md>' },
+    )
+    await patchNodeRunFixture(
+      h.db,
+      { id: h.reviewRunId },
+      { consumedEdges: [{ producerNodeId: 'writer', producerRunId: h.upstreamRunId }] },
+    )
     await h.db
       .update(docVersions)
       .set({ sourceFilePath: sourcePath })
       .where(eq(docVersions.id, h.docVersionId))
     await Bun.sleep(2)
     const freshUpstreamRunId = ulid()
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: freshUpstreamRunId,
       taskId: h.taskId,
       nodeId: 'writer',
@@ -806,7 +838,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       startedAt: Date.now() - 2,
       finishedAt: Date.now() - 1,
     })
-    await insertOne(h.db, nodeRunOutputs, {
+    await nodeRunOutputFixture(h.db, {
       nodeRunId: freshUpstreamRunId,
       portName: 'doc',
       content: sourcePath,
@@ -828,13 +860,13 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     let dispatchTouchedDb = false
     let schedulerClaimed = false
     const dispatch = dispatchReviewNode({
-      db: observeDbSelect(h.db, () => {
+      db: observeDbSelect(h.db, async () => {
         dispatchTouchedDb = true
         if (!schedulerClaimed) {
           schedulerClaimed = true
           // dispatchReviewNode normally runs after the scheduler has claimed
           // pending → running. This direct service fixture models that entry.
-          queryWrite(h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId)))
+          await patchTaskFixture(h.db, { id: h.taskId }, { status: 'running' })
         }
       }),
       taskId: h.taskId,
@@ -880,8 +912,8 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
 
   test('cancel retries when a non-coordinator writer wins CAS into another cancelable state', async () => {
     const h = (current = await seedNativeHarness())
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, h.taskId))
+    const { nodeRuns } = tablesOf(h.db)
+    await patchTaskFixture(h.db, { id: h.taskId }, { status: 'running' })
     let firstCasLost = false
 
     const result = await cancelViaEngine(
@@ -893,9 +925,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
 
     expect(firstCasLost).toBe(true)
     expect(result.status).toBe('canceled')
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
-      'canceled',
-    )
+    expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
     expect(
       (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
     ).toBe('canceled')
@@ -929,11 +959,12 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
   test('parent cancel releases the parent mutation lock before waiting on an active child', async () => {
     const h = (current = await seedNativeHarness())
     const childId = ulid()
-    const { tasks } = tablesOf(h.db)
     const workflowId = (
-      await h.db.select({ workflowId: tasks.workflowId }).from(tasks).where(eq(tasks.id, h.taskId))
+      await readTaskFixtures(h.db, { id: h.taskId }).then((rows) =>
+        rows.map((row) => ({ workflowId: row.workflowId })),
+      )
     )[0]!.workflowId
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       id: childId,
       name: 'active child',
       workflowId,
@@ -991,19 +1022,18 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
 
     letChildSettle()
     await Promise.all([parentProbe, schedulerSettled, cancel])
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]?.status).toBe(
-      'canceled',
-    )
+    expect((await readTaskFixtures(h.db, { id: childId }))[0]?.status).toBe('canceled')
   })
 
   test('parent cascade surfaces child cancel starvation instead of reporting success', async () => {
     const h = (current = await seedNativeHarness())
     const childId = ulid()
-    const { tasks } = tablesOf(h.db)
     const workflowId = (
-      await h.db.select({ workflowId: tasks.workflowId }).from(tasks).where(eq(tasks.id, h.taskId))
+      await readTaskFixtures(h.db, { id: h.taskId }).then((rows) =>
+        rows.map((row) => ({ workflowId: row.workflowId })),
+      )
     )[0]!.workflowId
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       id: childId,
       name: 'starved child',
       workflowId,
@@ -1028,20 +1058,16 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     })
 
     expect(cancelCasAttempts).toBeGreaterThanOrEqual(8)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
-      'canceled',
-    )
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]?.status).not.toBe(
-      'canceled',
-    )
+    expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
+    expect((await readTaskFixtures(h.db, { id: childId }))[0]?.status).not.toBe('canceled')
   })
 
   test.each(['failed', 'interrupted'] as const)(
     'RFC-202 keeps an awaiting review writable while its task is revivable (%s)',
     async (taskStatus) => {
       const h = (current = await seedNativeHarness())
-      const { tasks, reviewComments, nodeRuns } = tablesOf(h.db)
-      await h.db.update(tasks).set({ status: taskStatus }).where(eq(tasks.id, h.taskId))
+      const { reviewComments, nodeRuns } = tablesOf(h.db)
+      await patchTaskFixture(h.db, { id: h.taskId }, { status: taskStatus })
 
       await updateReviewCommentText(
         h.db,

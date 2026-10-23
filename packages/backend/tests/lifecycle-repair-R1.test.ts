@@ -1,6 +1,7 @@
 // LOCKS: RFC-057 — R1 repair options (approved doc_version but review run not done).
 // 3 options × 3 cases = 9 tests.
 
+import { readNodeRunOutputFixtures, readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -102,11 +103,7 @@ describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
     expect(res.outcome).toBe('success')
     expect(await readNodeRunStatus(h.db, reviewRunId)).toBe('done')
 
-    const { nodeRunOutputs } = tablesOf(h.db)
-    const outputs = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, reviewRunId))
+    const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: reviewRunId })
     const ports = outputs.map((o) => o.portName).sort()
     expect(ports).toContain('approved_doc')
     expect(ports).toContain('approval_meta')
@@ -182,17 +179,13 @@ describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
       }),
     ).rejects.toThrow('injected failure before approval_meta upsert')
     expect(await readNodeRunStatus(h.db, seeded.reviewRunId)).toBe('awaiting_review')
-    const { nodeRunOutputs } = tablesOf(h.db)
     // RFC-359 AC-1（第 8 刀）：**崩在两次 upsert 之间不留半成品**。合并前那份实现不在事务里
     // 写，于是崩完库里躺着一个只有 `approved_doc` 的评审 run——运维看到的是「批准了但没有
     // 批准元数据」的中间态。留下的这份把整个 apply 放在一笔事务里，崩了就整笔回滚。
     expect(
-      (
-        await h.db
-          .select()
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, seeded.reviewRunId))
-      ).map((row) => row.portName),
+      (await readNodeRunOutputFixtures(h.db, { nodeRunId: seeded.reviewRunId })).map(
+        (row) => row.portName,
+      ),
     ).toEqual([])
 
     await h.engine.applyRepairOption({
@@ -204,12 +197,7 @@ describeEachProvider('RFC-057 — R1.approve-run', (provider) => {
 
     expect(await readNodeRunStatus(h.db, seeded.reviewRunId)).toBe('done')
     expect(
-      (
-        await h.db
-          .select()
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, seeded.reviewRunId))
-      )
+      (await readNodeRunOutputFixtures(h.db, { nodeRunId: seeded.reviewRunId }))
         .map((row) => row.portName)
         .sort(),
     ).toEqual(['approval_meta', 'approved_doc'])
@@ -435,10 +423,8 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       }
       expect(code, '已取消的任务上点修复必须被拒，而不是把它改回去').toBe('repair-preflight-stale')
 
-      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
-      expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
-        'canceled',
-      )
+      const { nodeRuns, docVersions } = tablesOf(h.db)
+      expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
       expect(
         (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, seeded.reviewRunId)))[0]?.status,
       ).toBe('canceled')
@@ -446,10 +432,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
         (await h.db.select().from(docVersions).where(eq(docVersions.id, seeded.dvId)))[0]?.decision,
       ).toBe('approved')
       expect(
-        await h.db
-          .select()
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, seeded.reviewRunId)),
+        await readNodeRunOutputFixtures(h.db, { nodeRunId: seeded.reviewRunId }),
         '被拒的修复一行都不该写',
       ).toHaveLength(0)
     },
@@ -474,18 +457,13 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       })
       await cancelViaEngine(h.db, h.taskId)
 
-      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
-      expect((await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)))[0]?.status).toBe(
-        'canceled',
-      )
+      const { nodeRuns, docVersions } = tablesOf(h.db)
+      expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
       const run = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, seeded.reviewRunId))
       )[0]!
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, seeded.dvId)))[0]!
-      const outputs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, seeded.reviewRunId))
+      const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: seeded.reviewRunId })
       if (optionId === 'R1.approve-run') {
         expect(run.status, '已经 done 的评审 run 不该被取消清扫拉走').toBe('done')
         expect(doc.decision).toBe('approved')

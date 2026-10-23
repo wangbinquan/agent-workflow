@@ -3,6 +3,7 @@
 // either database client. Exercise their real queries and runtime delegation
 // through the same harness before retiring their misleading SQLite names.
 
+import { workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -184,7 +185,7 @@ describeEachProvider('RFC-359 W12 — shared compatibility inputs', (harness) =>
 
   test('owner/name conditions match null and named owners and honor the excluded row', async () => {
     const { workflows } = tablesOf(harness.db)
-    await harness.db.insert(workflows).values([
+    await workflowFixture(harness.db, [
       { id: 'compat_unowned', name: 'Same name', definition: '{}', ownerUserId: null },
       { id: 'compat_owned', name: 'Same name', definition: '{}', ownerUserId: 'compat_owner' },
     ])

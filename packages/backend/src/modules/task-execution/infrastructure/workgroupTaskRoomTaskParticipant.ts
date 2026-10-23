@@ -1,5 +1,9 @@
 // RFC-349 — TaskExecution-owned half of Resource Catalog task-room atoms.
 
+import { projectWorkgroupRunSelections } from './runSelection/workgroupProjection'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
+import { createTaskDefinitionWriteParticipantInTx } from './taskDefinitionWriteParticipant'
+import { decodeTaskSubject, type StoredTaskSubject } from '../domain/taskSubject'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   CANCELABLE_TASK_STATUSES,
@@ -27,17 +31,22 @@ import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleComm
 const HOST_NODE_IDS = ['__wg_leader__', '__wg_member__'] as const
 
 function taskSnapshot(
-  row: Omit<WorkgroupTaskRoomTaskSnapshot, 'status'> & { readonly status: string },
+  row: Omit<WorkgroupTaskRoomTaskSnapshot, 'status' | 'subject'> &
+    StoredTaskSubject & { readonly status: string },
 ): WorkgroupTaskRoomTaskSnapshot {
-  return Object.freeze({ ...row, status: row.status as TaskStatus })
+  return Object.freeze({
+    ...row,
+    subject: decodeTaskSubject(row),
+    status: row.status as TaskStatus,
+  })
 }
 
 function hostRunSnapshot(
-  row: Omit<WorkgroupTaskRoomHostRunSnapshot, 'status' | 'failureCode'> & {
+  row: Omit<WorkgroupTaskRoomHostRunSnapshot, 'status' | 'failureCode' | 'selection'> & {
     readonly status: string
     readonly failureCode: string | null
   },
-): WorkgroupTaskRoomHostRunSnapshot {
+): Omit<WorkgroupTaskRoomHostRunSnapshot, 'selection'> {
   return Object.freeze({
     ...row,
     status: row.status as NodeRunStatus,
@@ -53,7 +62,11 @@ const taskProjection = (db: object) => {
     ownerUserId: tasks.ownerUserId,
     status: tasks.status,
     workgroupId: tasks.workgroupId,
-    workgroupConfigJson: tasks.workgroupConfigJson,
+    workflowId: tasks.workflowId,
+    codeRoundId: tasks.codeRoundId,
+    sourceAgentId: tasks.sourceAgentId,
+    sourceAgentName: tasks.sourceAgentName,
+    workgroupConfig: taskWorkgroupConfigSelection(db),
     workflowSnapshot: tasks.workflowSnapshot,
     triggerContextJson: tasks.triggerContextJson,
   }
@@ -185,20 +198,20 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
         })
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.nodeId, [...HOST_NODE_IDS])))
-      return Object.freeze(rows.map(hostRunSnapshot))
+      return Object.freeze(await projectWorkgroupRunSelections(rows.map(hostRunSnapshot)))
     },
     async replaceConfig(
       input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['replaceConfig']>[0],
     ) {
-      const { tasks, taskCollaborators } = tablesOf(tx)
-      const changed = await tx
-        .update(tasks)
-        .set({ workgroupConfigJson: input.nextConfigJson })
-        .where(
-          and(eq(tasks.id, input.taskId), eq(tasks.workgroupConfigJson, input.expectedConfigJson)),
-        )
-        .returning({ id: tasks.id })
-      if (changed[0] === undefined) return false
+      const { taskCollaborators } = tablesOf(tx)
+      const changed = await createTaskDefinitionWriteParticipantInTx(
+        tx,
+      ).replaceWorkgroupRuntimeConfig({
+        taskId: input.taskId,
+        expectedRevision: input.expectedConfigJson,
+        nextConfig: input.nextConfigJson,
+      })
+      if (!changed) return false
       if (input.newCollaborators.length > 0) {
         await tx
           .insert(taskCollaborators)
@@ -238,8 +251,10 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
             to: 'canceled',
             allowedFrom: ['awaiting_human'],
             extra: {
-              finishedAt: input.occurredAt,
-              errorMessage: 'wg-clarify-disabled',
+              identity: {
+                finishedAt: input.occurredAt,
+                errorMessage: 'wg-clarify-disabled',
+              },
             },
             reason: 'wg-clarify-disabled',
           })
@@ -266,28 +281,13 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
       if (task === undefined || task.status !== input.expectedStatus) return null
       const closed = await closeHolders(tx, input.taskId, input.closeHolder, input.occurredAt)
       const nextRevision = task.lifecycleEventRevision + 1
-      const changed = await tx
-        .update(tasks)
-        .set({
-          status: 'pending',
-          finishedAt: null,
-          errorSummary: null,
-          errorMessage: null,
-          failedNodeId: null,
-          lifecycleEventRevision: nextRevision,
-          ...(input.workflowSnapshot === undefined
-            ? {}
-            : { workflowSnapshot: input.workflowSnapshot }),
-        })
-        .where(
-          and(
-            eq(tasks.id, input.taskId),
-            eq(tasks.status, input.expectedStatus),
-            eq(tasks.lifecycleEventRevision, task.lifecycleEventRevision),
-          ),
-        )
-        .returning({ id: tasks.id })
-      if (changed[0] === undefined) return null
+      const changed = await createTaskDefinitionWriteParticipantInTx(tx).continueWorkgroupTask({
+        taskId: input.taskId,
+        expectedStatus: input.expectedStatus,
+        expectedLifecycleRevision: task.lifecycleEventRevision,
+        snapshot: input.workflowSnapshot,
+      })
+      if (!changed) return null
       const intentId = ulid()
       // RFC-359 W4-D19b —— 意图类别必须是 `gate-continuation`：两个部署形态的续跑驱动方
       // （单进程的 `human-gate-continuation` worker、多进程 daemon 的同名 worker）都只认这一类，

@@ -15,13 +15,20 @@
 //     bodies — the lifecycle-grep-guard count `KERNEL_DIRECT_WRITES = 3` and the
 //     s10 `RAW_TRANSACTION_SITES` ledger stay untouched by construction).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  type NodeRunFixtureRow,
+} from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { asc, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { allowedFromForMergeEvent, MERGE_STATES } from '@agent-workflow/shared'
 import type { MergeState, NodeRunTransitionEvent } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -51,9 +58,9 @@ const ABANDONABLE = allowedFromForMergeEvent({ kind: 'abandon', reason: 'derive-
 const NOT_ABANDONABLE = MERGE_STATES.filter((s) => !ABANDONABLE.includes(s))
 
 async function seed(db: DbClient, fence: 'closed' | 'merged' | null = null): Promise<void> {
-  const { workflows, tasks, nodeRuns, users, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, { id: 'wf', name: 'wf', description: '', definition: '{}' })
-  await insertOne(db, tasks, {
+  const { users, taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, { id: 'wf', name: 'wf', description: '', definition: '{}' })
+  await taskFixture(db, {
     id: TASK,
     name: 't',
     workflowId: 'wf',
@@ -68,7 +75,7 @@ async function seed(db: DbClient, fence: 'closed' | 'merged' | null = null): Pro
     sourceTerminationFence: fence,
   })
   const base = { taskId: TASK, retryIndex: 0, startedAt: NOW, finishedAt: NOW }
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     {
       ...base,
       id: REVIEW,
@@ -136,9 +143,8 @@ async function pair(fence: 'closed' | 'merged' | null = null): Promise<[DbClient
   return [a, b]
 }
 
-function dump(db: DbClient): PersistenceTables['nodeRuns']['$inferSelect'][] {
-  const { nodeRuns } = tablesOf(db)
-  return queryRows(db.select().from(nodeRuns).orderBy(asc(nodeRuns.id)))
+async function dump(db: DbClient): Promise<NodeRunFixtureRow[]> {
+  return await readNodeRunFixtures(db, undefined, { orderBy: [{ field: 'id', direction: 'asc' }] })
 }
 
 interface Refusal {
@@ -175,8 +181,8 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
     [{ kind: 'reject-review' }, { reviewIteration: 1 }],
   ])('%p — same return value, same rows', async (event, extra) => {
     const [a, b] = await pair()
-    const before = dump(a)
-    expect(dump(b)).toEqual(before)
+    const before = await dump(a)
+    expect(await dump(b)).toEqual(before)
 
     const viaAsync = await transitionNodeRunStatus({ db: a, nodeRunId: REVIEW, event, extra })
     const viaTx = dbTxSync(b, (tx) =>
@@ -185,8 +191,8 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
 
     expect(viaTx).toEqual(viaAsync)
     expect(viaAsync.from).toBe('awaiting_review')
-    const afterA = dump(a)
-    expect(dump(b)).toEqual(afterA)
+    const afterA = await dump(a)
+    expect(await dump(b)).toEqual(afterA)
     expect(afterA).not.toEqual(before) // the fixture really moved a row
     expect(afterA.find((r) => r.id === REVIEW)!.status).toBe(viaAsync.to)
   })
@@ -215,21 +221,21 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
       )
       expect(rb).toEqual(ra)
       expect(ra.code).toBe('illegal-node-run-transition')
-      expect(dump(b)).toEqual(dump(a))
+      expect(await dump(b)).toEqual(await dump(a))
     }
     // fence: a closed MR/PR refuses re-opening the review row (→ pending)
     {
       const [a, b] = await pair('closed')
       const event: NodeRunTransitionEvent = { kind: 'iterate-review' }
-      const before = dump(a)
+      const before = await dump(a)
       const ra = await refusalOf(() => transitionNodeRunStatus({ db: a, nodeRunId: REVIEW, event }))
       const rb = await refusalOf(() =>
         dbTxSync(b, (tx) => transitionNodeRunStatusTx({ tx, nodeRunId: REVIEW, event })),
       )
       expect(rb).toEqual(ra)
       expect(ra.code).toBe('task-source-terminal-closed')
-      expect(dump(a)).toEqual(before)
-      expect(dump(b)).toEqual(before)
+      expect(await dump(a)).toEqual(before)
+      expect(await dump(b)).toEqual(before)
     }
   })
 })
@@ -240,6 +246,7 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
 // `nodeRunMintProgram`，异步解释）。判据一条没少：新行、被退役的同代旧行、以及同样的拒绝。
 describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retired merge states)', () => {
   const args: MintNodeRunArgs = {
+    ...deriveNodeRunRole({ nodeId: 'doc', rerunCause: 'review-iterate' }),
     taskId: TASK,
     nodeId: 'doc',
     status: 'pending',
@@ -247,18 +254,19 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     retryIndex: 1,
     iteration: 0,
     overrides: {
-      parentNodeRunId: null,
-      preSnapshot: 'deadbeef',
-      startedAt: null,
-      envelopeNonce: '0123456789abcdef',
+      identity: {
+        parentNodeRunId: null,
+        startedAt: null,
+        envelopeNonce: '0123456789abcdef',
+      },
+      checkpoint: {
+        checkpoints: [{ mountPath: '', preSnapshot: 'deadbeef' }],
+      },
     },
   }
 
-  function normalised(
-    db: DbClient,
-    mintedId: string,
-  ): PersistenceTables['nodeRuns']['$inferSelect'][] {
-    return dump(db).map((r) => ({ ...r, id: r.id === mintedId ? '<minted>' : r.id }))
+  async function normalised(db: DbClient, mintedId: string): Promise<NodeRunFixtureRow[]> {
+    return (await dump(db)).map((r) => ({ ...r, id: r.id === mintedId ? '<minted>' : r.id }))
   }
 
   test('same rows after the mint — the new row AND every prior generation (untouched, derived superseded)', async () => {
@@ -272,8 +280,8 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     )
     expect(idA).not.toBe(idB) // fresh ULIDs — everything else must match
 
-    const rowsA = normalised(a, idA)
-    expect(normalised(b, idB)).toEqual(rowsA)
+    const rowsA = await normalised(a, idA)
+    expect(await normalised(b, idB)).toEqual(rowsA)
 
     // RFC-369: the mint writes no prior generation; the abandonable prior generation of
     // the SAME (task, node, iteration) is derived superseded — in both databases alike —
@@ -288,7 +296,9 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     const minted = byId.get('<minted>')!
     expect(minted.status).toBe('pending')
     expect(minted.retryIndex).toBe(1)
-    expect(minted.preSnapshot).toBe('deadbeef')
+    expect(minted.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot).toBe(
+      'deadbeef',
+    )
     expect(minted.envelopeNonce).toBe('0123456789abcdef')
     expect(minted.startedAt).toBeNull()
   })
@@ -311,8 +321,8 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
       eb = err
     }
     expect((ea as Error).message).toBe((eb as Error).message)
-    expect(dump(a)).toEqual(dump(b))
-    expect(dump(a).find((r) => r.id === DOC_PRIOR)!.mergeState).toBe(ABANDONABLE[0]!)
+    expect(await dump(a)).toEqual(await dump(b))
+    expect((await dump(a)).find((r) => r.id === DOC_PRIOR)!.mergeState).toBe(ABANDONABLE[0]!)
   })
 })
 

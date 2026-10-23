@@ -2,12 +2,19 @@
 // matches/roots stop materializing and the recursive seed becomes page-local.
 // This small default-provider suite exercises real DB rows and the production
 // page factory. It does not measure latency or change the HTTP acceptance budget.
+import { readStoredTaskRows } from './helpers/model/storedRows'
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+  readTaskFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { asc, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -37,7 +44,7 @@ const STATUSES = [
   'awaiting_human',
 ] as const
 
-type TaskInsert = PersistenceTables['tasks']['$inferInsert']
+type TaskInsert = TaskFixtureSpec
 
 function fixtureTasks(): TaskInsert[] {
   const rows: TaskInsert[] = []
@@ -86,7 +93,20 @@ function fixtureTasks(): TaskInsert[] {
       finishedAt: index % 2 ? null : startedAt + 17,
       errorSummary: index % 3 ? null : `error-${id}`,
       failedNodeId: index % 4 ? null : `node-${index}`,
-      repoCount: (index % 4) + 1,
+      repos: Array.from({ length: (index % 4) + 1 }, (_, repoIndex) => ({
+        repoIndex,
+        mountPath: index % 4 === 0 ? '' : 'repo-' + repoIndex,
+        repoPath:
+          id === 'c04' && repoIndex === 0
+            ? '/fixture/sidecar'
+            : index % 5 === 0
+              ? '/fixture/percent%_repo'
+              : '/fixture/' + id,
+        repoUrl: id === 'c04' && repoIndex === 0 ? 'https://example.invalid/NEEDLE' : null,
+        worktreePath: '/fixture/worktree/' + id,
+        baseBranch: 'main',
+        branch: 'task/' + id,
+      })),
       scheduledTaskId: index % 4 ? null : `schedule-${index}`,
       launchOrigin: index % 3 === 0 ? 'webhook' : index % 3 === 1 ? 'manual' : 'event',
       workgroupId: null,
@@ -157,7 +177,7 @@ function fixtureTasks(): TaskInsert[] {
 }
 
 async function seed(db: PersistenceDb): Promise<void> {
-  const { users, workflows, tasks, lifecycleAlerts, taskRepos } = tablesOf(db)
+  const { users, lifecycleAlerts } = tablesOf(db)
   await insertOne(db, users, {
     id: VIEWER.userId,
     username: VIEWER.userId,
@@ -167,11 +187,11 @@ async function seed(db: PersistenceDb): Promise<void> {
     createdAt: 1,
     updatedAt: 1,
   })
-  await db.insert(workflows).values([
+  await workflowFixture(db, [
     { id: 'wf01', name: 'Mixed Workflow', definition: '{}', createdAt: 1, updatedAt: 1 },
     { id: 'wf02', name: 'Quiet Flow', definition: '{}', createdAt: 1, updatedAt: 1 },
   ])
-  for (const row of fixtureTasks()) await insertOne(db, tasks, row)
+  for (const row of fixtureTasks()) await taskFixture(db, row)
   const alerts: ReadonlyArray<readonly [string, string, number | null]> = [
     ['a01', 'r01', null],
     ['a02', 'r01', null],
@@ -191,20 +211,11 @@ async function seed(db: PersistenceDb): Promise<void> {
       resolvedAt,
     })
   }
-  await insertOne(db, taskRepos, {
-    taskId: 'c04',
-    repoIndex: 0,
-    repoPath: '/fixture/sidecar',
-    repoUrl: 'https://example.invalid/NEEDLE',
-    worktreePath: '/fixture/worktree/c04',
-    baseBranch: 'main',
-    branch: 'task/c04',
-  })
 }
 
 async function fixtureRowsDigest(db: PersistenceDb): Promise<string> {
-  const { tasks } = tablesOf(db)
-  const rows = await db.select().from(tasks).orderBy(tasks.id)
+  // RFC-395 II-a: the frozen hash is over stored columns, not the fixture DTO with repos.
+  const rows = await readStoredTaskRows(db)
   return createHash('sha256').update(JSON.stringify(rows)).digest('hex')
 }
 
@@ -235,17 +246,16 @@ function scenarios(): TaskOperationsRawQuery[] {
 }
 
 async function storedJson(db: PersistenceDb): Promise<string> {
-  const { tasks } = tablesOf(db)
   return JSON.stringify(
-    await db
-      .select({
-        id: tasks.id,
-        workflowSnapshot: tasks.workflowSnapshot,
-        inputs: tasks.inputs,
-        workgroupConfigJson: tasks.workgroupConfigJson,
-      })
-      .from(tasks)
-      .orderBy(asc(tasks.id)),
+    await readTaskFixtures(db, undefined, { orderBy: [{ field: 'id', direction: 'asc' }] }).then(
+      (rows) =>
+        rows.map((row) => ({
+          id: row.id,
+          workflowSnapshot: row.workflowSnapshot,
+          inputs: row.inputs,
+          workgroupConfigJson: row.workgroupConfigJson,
+        })),
+    ),
   )
 }
 
@@ -379,8 +389,7 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
 
   test('the retained recursive UNION terminates a repeated parent and counts each matched row once', async () => {
     await seed(harness.db)
-    const { tasks } = tablesOf(harness.db)
-    await harness.db.update(tasks).set({ parentTaskId: 'c09' }).where(eq(tasks.id, 'c09'))
+    await patchTaskFixture(harness.db, { id: 'c09' }, { parentTaskId: 'c09' })
     expect(await fixtureRowsDigest(harness.db)).toBe(
       'd7ace4653b9b868b0ba5e78b9d30a7031be13115a4f858925e75b13736e57498',
     )

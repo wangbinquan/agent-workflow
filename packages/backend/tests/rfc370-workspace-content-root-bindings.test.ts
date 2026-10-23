@@ -1,5 +1,4 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -80,8 +79,7 @@ describeEachProviderHttpApplication(
       const id = randomUUID()
       const snapshot = '{"$schema_version":4,"inputs":[],"nodes":[],"edges":[],"outputs":[]}'
       const reference = `logical:workspace:${id}`
-      const { workflows, tasks } = tablesOf(scope.harness.db)
-      await insertOne(scope.harness.db, workflows, {
+      await workflowFixture(scope.harness.db, {
         id,
         name: id,
         description: '',
@@ -89,7 +87,7 @@ describeEachProviderHttpApplication(
         version: 1,
         schemaVersion: 4,
       })
-      await insertOne(scope.harness.db, tasks, {
+      await taskFixture(scope.harness.db, {
         id,
         name: id,
         workflowId: id,

@@ -7,6 +7,7 @@
 //   - visibility is checked on that exact id before ACL/mutation behavior;
 //   - rename keeps the canonical id URL stable.
 
+import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
@@ -72,8 +73,8 @@ describeEachProviderHttpApplication(
         { base: 'workgroups', id: ulid(), name: 'route-workgroup' },
       ]
       const [agent, skill, mcp, group] = resources
-      const { agents, skills, mcps, workgroups } = tablesOf(db)
-      await insertOne(db, agents, {
+      const { skills, mcps, workgroups } = tablesOf(db)
+      await agentFixture(db, {
         id: agent!.id,
         name: agent!.name,
         ownerUserId: alice.id,

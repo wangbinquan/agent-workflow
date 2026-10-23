@@ -1,9 +1,13 @@
 // RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
 
+import { listNodeEventContents } from '@/modules/task-execution/public/queries'
+import { createTaskKnowledgeQueries } from '@/modules/task-execution/public/queries'
+import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
+import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
+import { and, asc, eq, inArray, lte } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
@@ -19,6 +23,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   constructor(
     private readonly db: PersistenceDb,
+    private readonly clarifyAnswers: ClarifyAnswerQueries,
     /**
      * RFC-367 test seam; production omits it and gets the real
      * `memory_distill_events` writer. (It replaces the old `capture` argument,
@@ -30,37 +35,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async findTaskScope(taskId: string) {
-    const { tasks, cachedRepos } = tablesOf(this.db)
-    const row = (
-      await this.db
-        .select({
-          workflowSnapshot: tasks.workflowSnapshot,
-          workgroupConfigJson: tasks.workgroupConfigJson,
-          workflowId: tasks.workflowId,
-          cachedRepoId: tasks.cachedRepoId,
-          cachedRepoMatch: cachedRepos.id,
-          // RFC-366 admission facts — same row, no extra query.
-          launchOrigin: tasks.launchOrigin,
-          catalogVisibility: tasks.catalogVisibility,
-          spaceKind: tasks.spaceKind,
-        })
-        .from(tasks)
-        .leftJoin(cachedRepos, eq(cachedRepos.id, tasks.cachedRepoId))
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-    )[0]
-    return row === undefined
-      ? null
-      : {
-          workflowSnapshot: row.workflowSnapshot,
-          workgroupConfigJson: row.workgroupConfigJson,
-          workflowId: row.workflowId,
-          cachedRepoId: row.cachedRepoId,
-          cachedRepoExists: row.cachedRepoMatch !== null,
-          launchOrigin: row.launchOrigin,
-          catalogVisibility: row.catalogVisibility,
-          spaceKind: row.spaceKind,
-        }
+    return createTaskKnowledgeQueries(this.db).distillationScope(taskId)
   }
 
   async enqueue(input: Parameters<MemoryDistillWorkStore['enqueue']>[0]): Promise<void> {
@@ -188,19 +163,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async listClarifySources(ids: readonly string[]) {
-    if (ids.length === 0) return []
-    const { clarifyRounds } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: clarifyRounds.id,
-        taskId: clarifyRounds.taskId,
-        intermediaryNodeId: clarifyRounds.intermediaryNodeId,
-        askingNodeRunId: clarifyRounds.askingNodeRunId,
-        questionsJson: clarifyRounds.questionsJson,
-        answersJson: clarifyRounds.answersJson,
-      })
-      .from(clarifyRounds)
-      .where(and(eq(clarifyRounds.kind, 'self'), inArray(clarifyRounds.id, [...ids])))
+    return this.clarifyAnswers.listSelfSources(ids)
   }
 
   async listReviewSources(ids: readonly string[]) {
@@ -249,64 +212,42 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   // RFC-366 agent-run 源：结算的那一行 node_run 本身。
   async listAgentRunSources(ids: readonly string[]) {
-    if (ids.length === 0) return []
-    const { nodeRuns } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: nodeRuns.id,
-        taskId: nodeRuns.taskId,
-        nodeId: nodeRuns.nodeId,
-        status: nodeRuns.status,
-        startedAt: nodeRuns.startedAt,
-        finishedAt: nodeRuns.finishedAt,
-        errorMessage: nodeRuns.errorMessage,
-        failureCode: nodeRuns.failureCode,
-        promptText: nodeRuns.promptText,
-        promptPath: nodeRuns.promptPath,
-        opencodeSessionId: nodeRuns.opencodeSessionId,
-        injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
-      })
-      .from(nodeRuns)
-      .where(inArray(nodeRuns.id, [...ids]))
+    return createNodeRunQueries(this.db).listFields({ runIds: ids }, [
+      'id',
+      'taskId',
+      'nodeId',
+      'status',
+      'startedAt',
+      'finishedAt',
+      'errorMessage',
+      'failureCode',
+      'promptText',
+      'promptPath',
+      'opencodeSessionId',
+      'injectedMemoriesJson',
+    ])
   }
 
   // RFC-366：`active=false` 的端口行是被后续写覆盖掉的历史值，喂给蒸馏器只会制造
   // 「这个 agent 前后说了两套」的假象，所以只取活的。
   async listNodeRunOutputs(ids: readonly string[]) {
     if (ids.length === 0) return []
-    const { nodeRunOutputs } = tablesOf(this.db)
-    return await this.db
-      .select({
-        nodeRunId: nodeRunOutputs.nodeRunId,
-        portName: nodeRunOutputs.portName,
-        content: nodeRunOutputs.content,
-        kind: nodeRunOutputs.kind,
-      })
-      .from(nodeRunOutputs)
-      .where(and(inArray(nodeRunOutputs.nodeRunId, [...ids]), eq(nodeRunOutputs.active, true)))
-      .orderBy(asc(nodeRunOutputs.nodeRunId), asc(nodeRunOutputs.portName))
+
+    return await createNodeOutputQueries(this.db)
+      .listActiveContents([...ids])
+      .then((rows) =>
+        rows.map((row) => ({
+          nodeRunId: row.nodeRunId,
+          portName: row.portName,
+          content: row.content,
+          kind: row.kind,
+        })),
+      )
   }
 
   // RFC-366 task-run 源：任务本身的收尾快照。
   async listTaskRunSources(ids: readonly string[]) {
-    if (ids.length === 0) return []
-    const { tasks } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: tasks.id,
-        name: tasks.name,
-        status: tasks.status,
-        startedAt: tasks.startedAt,
-        finishedAt: tasks.finishedAt,
-        runningMs: tasks.runningMs,
-        errorSummary: tasks.errorSummary,
-        errorMessage: tasks.errorMessage,
-        failedNodeId: tasks.failedNodeId,
-        inputs: tasks.inputs,
-        workflowSnapshot: tasks.workflowSnapshot,
-      })
-      .from(tasks)
-      .where(inArray(tasks.id, [...ids]))
+    return createTaskKnowledgeQueries(this.db).distillationSources(ids)
   }
 
   /**
@@ -318,76 +259,28 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
    * 在未结算的行上还是 null。
    */
   async listTaskNodeStatuses(taskIds: readonly string[]) {
-    if (taskIds.length === 0) return []
-    const { nodeRuns } = tablesOf(this.db)
-    const rows = await this.db
-      .select({
-        taskId: nodeRuns.taskId,
-        nodeId: nodeRuns.nodeId,
-        status: nodeRuns.status,
-        retryIndex: nodeRuns.retryIndex,
-        finishedAt: nodeRuns.finishedAt,
-        id: nodeRuns.id,
-      })
-      .from(nodeRuns)
-      .where(inArray(nodeRuns.taskId, [...taskIds]))
-      .orderBy(engineOf(this.db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id))
-    const seen = new Set<string>()
-    const latest: {
-      taskId: string
-      nodeId: string
-      nodeRunId: string
-      status: string
-      retryIndex: number
-      finishedAt: number | null
-    }[] = []
-    for (const row of rows) {
-      const key = `${row.taskId}\u0000${row.nodeId}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      latest.push({
-        taskId: row.taskId,
-        nodeId: row.nodeId,
-        nodeRunId: row.id,
-        status: row.status,
-        retryIndex: row.retryIndex,
-        finishedAt: row.finishedAt,
-      })
-    }
-    return latest.reverse()
+    return (await createNodeRunQueries(this.db).latestPerNode(taskIds)).map((row) => ({
+      taskId: row.taskId,
+      nodeId: row.nodeId,
+      nodeRunId: row.id,
+      status: row.status,
+      retryIndex: row.retryIndex,
+      finishedAt: row.finishedAt,
+    }))
   }
 
   async listNodeRuns(ids: readonly string[]) {
-    if (ids.length === 0) return []
-    const { nodeRuns } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: nodeRuns.id,
-        promptText: nodeRuns.promptText,
-        promptPath: nodeRuns.promptPath,
-        startedAt: nodeRuns.startedAt,
-        opencodeSessionId: nodeRuns.opencodeSessionId,
-      })
-      .from(nodeRuns)
-      .where(inArray(nodeRuns.id, [...ids]))
+    return createNodeRunQueries(this.db).listFields({ runIds: ids }, [
+      'id',
+      'promptText',
+      'promptPath',
+      'startedAt',
+      'opencodeSessionId',
+    ])
   }
 
   async listNodeRunEvents(ids: readonly string[]) {
-    if (ids.length === 0) return []
-    const { nodeRunEvents } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: nodeRunEvents.id,
-        nodeRunId: nodeRunEvents.nodeRunId,
-        ts: nodeRunEvents.ts,
-        kind: nodeRunEvents.kind,
-        payload: nodeRunEvents.payload,
-        sessionId: nodeRunEvents.sessionId,
-        parentSessionId: nodeRunEvents.parentSessionId,
-      })
-      .from(nodeRunEvents)
-      .where(inArray(nodeRunEvents.nodeRunId, [...ids]))
-      .orderBy(asc(nodeRunEvents.ts), asc(nodeRunEvents.id))
+    return listNodeEventContents(this.db, ids)
   }
 
   async listApprovedMemories(

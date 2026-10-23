@@ -1,26 +1,59 @@
 // RFC-359 W4-B1 批 2f —— node run 执行投影（快照 / 输出 / 事件）：一份实现，两个 provider 共用。
 // 写路径是产品里最热的（agent 每吐一行就 appendEvents 一次）：统一写事务 + owner 围栏 + 聚合根行锁。
 
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { alias } from '@/platform/persistence/tableAlias'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
-import { and, asc, count, eq, inArray, isNotNull, isNull, not, notLike, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  eq,
+  exists,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  not,
+  notLike,
+  sql,
+} from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { MERGE_STATES, RerunCauseSchema, type MergeStateOrNull } from '@agent-workflow/shared'
 import type {
   NodeExecutionPersistence,
   NodeExecutionQuery,
   NodeExecutionSnapshot,
 } from '../application/ports/nodeExecutionPersistence'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
-import { structurallySupersededCondition } from './nodeRunSupersession'
+import { encodePendingSubResolves } from './taskCheckpointCodec'
+import { projectNodeRunSnapshot } from './nodeRunSnapshot'
+import { nodeRunProjectionWriteColumns } from './nodeRunWriteProtocol'
+import { taskCheckpointMountPaths } from './taskCheckpointPersistence'
+import { structurallySupersededCondition } from './runSelection/oracle/supersessionSql'
+import { createRunSelectionParticipantInTx } from './runSelection/oracle/participant'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
   withTaskExecutionWrite,
 } from './ownedTaskExecution'
+
+function snapshotColumns(db: PersistenceDb) {
+  const { nodeRuns } = tablesOf(db)
+  const child = alias(nodeRuns, 'nr_container_child')
+  return {
+    ...getTableColumns(nodeRuns),
+    hasContainerChildren: exists(
+      db
+        .select({ one: sql`1` })
+        .from(child)
+        .where(and(eq(child.taskId, nodeRuns.taskId), eq(child.containerRunId, nodeRuns.id))),
+    ).mapWith(Boolean),
+  }
+}
 
 function whereQuery(db: PersistenceDb, input: NodeExecutionQuery) {
   const { nodeRuns } = tablesOf(db)
@@ -44,23 +77,6 @@ function whereQuery(db: PersistenceDb, input: NodeExecutionQuery) {
   }
   if (input.excludeSuperseded === true) conditions.push(not(structurallySupersededCondition(db)))
   return and(...conditions)
-}
-
-type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
-
-function mergeStateOf(value: string | null): MergeStateOrNull {
-  if (value === null || (MERGE_STATES as readonly string[]).includes(value)) {
-    return value as MergeStateOrNull
-  }
-  throw new Error(`invalid persisted node merge state '${value}'`)
-}
-
-function snapshotOf(row: NodeRunRow): NodeExecutionSnapshot {
-  return {
-    ...row,
-    mergeState: mergeStateOf(row.mergeState),
-    rerunCause: row.rerunCause === null ? null : RerunCauseSchema.parse(row.rerunCause),
-  }
 }
 
 async function fencedTaskId(
@@ -92,19 +108,29 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
 
   async read(nodeRunId: string): Promise<NodeExecutionSnapshot | null> {
     const { nodeRuns } = tablesOf(this.db)
-    const rows = await this.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-    return rows[0] === undefined ? null : snapshotOf(rows[0])
+    const rows = await this.db
+      .select(snapshotColumns(this.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, nodeRunId))
+      .limit(1)
+    const row = rows[0]
+    if (row === undefined) return null
+    return projectNodeRunSnapshot(
+      row,
+      await taskCheckpointMountPaths(this.db, row.taskId),
+      row.hasContainerChildren,
+    )
   }
 
   async list(input: NodeExecutionQuery): Promise<readonly NodeExecutionSnapshot[]> {
     const { nodeRuns } = tablesOf(this.db)
-    return (
-      await this.db
-        .select()
-        .from(nodeRuns)
-        .where(whereQuery(this.db, input))
-        .orderBy(engineOf(this.db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id))
-    ).map(snapshotOf)
+    const mounts = await taskCheckpointMountPaths(this.db, input.taskId)
+    const rows = await this.db
+      .select(snapshotColumns(this.db))
+      .from(nodeRuns)
+      .where(whereQuery(this.db, input))
+      .orderBy(...runHistoryOrder(this.db, nodeRuns))
+    return rows.map((row) => projectNodeRunSnapshot(row, mounts, row.hasContainerChildren))
   }
 
   async listOutputs(nodeRunId: string) {
@@ -152,11 +178,40 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
       )
       if (taskId === null) return false
       const { nodeRuns } = tablesOf(tx)
+      const pendingSubResolves = input.values.checkpoint?.pendingSubResolves
+      const values = nodeRunProjectionWriteColumns(
+        input.values,
+        input.values.checkpoint?.checkpoints === undefined
+          ? []
+          : await taskCheckpointMountPaths(tx, taskId),
+      )
+      if (pendingSubResolves !== undefined) {
+        const [row] = await tx
+          .select({
+            isoSubmodulesJson: nodeRuns.isoSubmodulesJson,
+            isoSubmodulesReposJson: nodeRuns.isoSubmodulesReposJson,
+          })
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, input.nodeRunId))
+          .limit(1)
+        if (row === undefined) return false
+        Object.assign(
+          values,
+          encodePendingSubResolves(
+            row,
+            pendingSubResolves.map((repo) => repo.mountPath),
+            pendingSubResolves,
+          ),
+        )
+      }
       const rows = await tx
         .update(nodeRuns)
-        .set(input.values)
+        .set(values)
         .where(eq(nodeRuns.id, input.nodeRunId))
         .returning({ id: nodeRuns.id })
+      if (rows.length === 1 && input.selection !== undefined) {
+        await createRunSelectionParticipantInTx().apply(tx, [input.selection])
+      }
       return rows.length === 1
     })
   }

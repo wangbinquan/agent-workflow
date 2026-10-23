@@ -143,6 +143,15 @@ describe('RFC-311 T21 — 生产代码只能通过双读拿 prompt', () => {
           if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue
           // 允许:`promptText: nodeRuns.promptText`(把列取回来交给双读)。
           if (/promptText:\s*nodeRuns\.promptText/.test(line)) continue
+          // RFC-395 II-a A3: the owner snapshot carries both stored columns to the existing dual reader.
+          // Only this exact projection is allowed; another use in this file still fails.
+          if (
+            relative(srcDir, full).replaceAll('\\', '/') ===
+              'modules/task-execution/infrastructure/nodeRunSnapshot.ts' &&
+            trimmed === 'promptText: row.promptText,' &&
+            text.includes('promptText: row.promptText,\n    promptPath: row.promptPath,')
+          )
+            continue
           if (/\.promptText\b/.test(line)) {
             offenders.push(`${relative(srcDir, full)}:${i + 1}  ${trimmed}`)
           }

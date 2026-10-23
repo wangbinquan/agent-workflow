@@ -11,7 +11,7 @@
 //     making it a side channel is lost the first time it can throw.
 //   · retention actually deletes, and deletes only what is past the window.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture } from './helpers/model'
 import { tablesOf, inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eventually, eventuallyAtLeast } from './helpers/eventually'
@@ -52,8 +52,7 @@ async function harness(scope: ProviderHttpApplicationScope): Promise<Harness> {
     password: 'pw12345678',
   })
   const ownedAgentId = 'rfc247-audit-owner-agent'
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ownedAgentId,
     name: 'RFC 247 audit owner agent',
     ownerUserId: user.id,

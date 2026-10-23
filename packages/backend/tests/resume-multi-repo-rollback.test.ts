@@ -16,6 +16,8 @@
 //   5. assert the file reverts to the snapshot-time body (rollback applied
 //      the stash) — proves the helper followed the right code path.
 
+import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
+import { nodeRunFixture, patchTaskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -29,7 +31,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { getTask } from '@/services/task'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { gitStashSnapshot, runGit } from '../src/util/git'
+import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -58,8 +60,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     repos.push(repoPath)
   }
   const db = createInMemoryDb(MIGRATIONS)
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf-rb',
     name: 'wf',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
@@ -107,21 +108,21 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     // Snapshot-time body: a non-trivial mutation against HEAD so the stash
     // is non-empty and the apply step is meaningful.
     writeFileSync(join(task.worktreePath, 'data.txt'), 'SNAPSHOT-TIME\n')
-    const snapSha = await gitStashSnapshot(task.worktreePath)
+    const snapSha = await legacyStashSnapshotFixture(task.worktreePath)
     expect(snapSha).not.toBe('') // non-empty stash captured
     // Mutate again to a different bad state — resume must throw away this
     // body and restore the snapshot-time body.
     writeFileSync(join(task.worktreePath, 'data.txt'), 'POST-MUTATION\n')
 
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    const { nodeRuns } = tablesOf(h.db)
+    await nodeRunFixture(h.db, {
       id: 'nr-single',
       taskId: task.id,
       nodeId: 'fake-node',
       status: 'failed',
-      preSnapshot: snapSha,
+      checkpoints: [{ mountPath: '', preSnapshot: snapSha }],
     })
-    await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, task.id))
+    await patchTaskFixture(h.db, { id: task.id }, { status: 'failed' })
 
     await createResumeEngine(h.db, {
       appHome: h.appHome,
@@ -160,26 +161,25 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     // Snapshot-time body per repo (different content so we can tell them apart).
     writeFileSync(join(r0.worktreePath, 'data.txt'), 'SNAP-A\n')
     writeFileSync(join(r1.worktreePath, 'data.txt'), 'SNAP-B\n')
-    const shaA = await gitStashSnapshot(r0.worktreePath)
-    const shaB = await gitStashSnapshot(r1.worktreePath)
+    const shaA = await legacyStashSnapshotFixture(r0.worktreePath)
+    const shaB = await legacyStashSnapshotFixture(r1.worktreePath)
     expect(shaA).not.toBe('')
     expect(shaB).not.toBe('')
     // Mutate each further.
     writeFileSync(join(r0.worktreePath, 'data.txt'), 'MUTATED-A\n')
     writeFileSync(join(r1.worktreePath, 'data.txt'), 'MUTATED-B\n')
 
-    const { nodeRuns, tasks } = tablesOf(h.db)
-    await insertOne(h.db, nodeRuns, {
+    await nodeRunFixture(h.db, {
       id: 'nr-multi',
       taskId: task.id,
       nodeId: 'fake-node',
       status: 'failed',
-      preSnapshotReposJson: JSON.stringify({
-        [r0.worktreeDirName]: shaA,
-        [r1.worktreeDirName]: shaB,
-      }),
+      checkpoints: [
+        { mountPath: r0.worktreeDirName, preSnapshot: shaA },
+        { mountPath: r1.worktreeDirName, preSnapshot: shaB },
+      ],
     })
-    await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, task.id))
+    await patchTaskFixture(h.db, { id: task.id }, { status: 'failed' })
 
     await createResumeEngine(h.db, {
       appHome: h.appHome,
@@ -209,7 +209,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
     )
-    const { nodeRuns, tasks } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     // Garbage in repos_json AND provide a legacy single-stash fallback. The
     // helper logs a warn and falls through to the single-stash branch,
     // which rolls `task.worktreePath` (the parent dir — not a git repo
@@ -225,7 +225,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
       preSnapshotReposJson: '{not valid json',
       preSnapshot: '', // empty sha → helper short-circuits on legacy path
     })
-    await h.db.update(tasks).set({ status: 'failed' }).where(eq(tasks.id, task.id))
+    await patchTaskFixture(h.db, { id: task.id }, { status: 'failed' })
 
     // Should NOT throw.
     await createResumeEngine(h.db, {

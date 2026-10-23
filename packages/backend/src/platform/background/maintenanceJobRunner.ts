@@ -1,3 +1,4 @@
+import type { AtomicApplyConvergenceReceipt } from '@/platform/contracts/atomicApply'
 import type { MaintenanceJobKey } from '@agent-workflow/shared'
 import type {
   DatabaseBackupMaintenance,
@@ -223,6 +224,11 @@ export interface MaintenanceOwnerCommands {
   readonly workspace: WorkspaceMaintenanceCommand
   readonly developmentAutomation: DevelopmentAutomationMaintenanceCommands
   readonly digitalEmployee: DigitalEmployeeMaintenanceCommands
+  readonly atomicApply: {
+    converge(
+      activeByScene: Readonly<Record<'intent' | 'resource-package', readonly string[]>>,
+    ): Promise<AtomicApplyConvergenceReceipt>
+  }
   readonly intent: IntentMaintenanceCommands
   readonly pluginGenerationGc: {
     readonly command: PluginGenerationGcCommand
@@ -405,13 +411,15 @@ export async function runMaintenanceJob(input: {
       const payload = parseMaintenanceJobPayload(job, input.payload)
       const result = await ownerCommands.intent.recovery.recover({
         recoverTurnIds: payload.recoverTurnIds,
-        activeIntentApplyJournalIds: payload.activeIntentApplyJournalIds,
-        activeBundleApplyIds: payload.activeBundleApplyIds,
+      })
+      const applies = await ownerCommands.atomicApply.converge({
+        intent: payload.activeIntentApplyJournalIds,
+        'resource-package': payload.activeBundleApplyIds,
       })
       return {
         counters: {
-          failed: result.failed,
-          rolledForward: result.rolledForward,
+          failed: applies.failed,
+          rolledForward: applies.rolledForward,
           queuedWorkingSets: result.queuedWorkingSets,
           orphanedTurns: result.orphanedTurns,
         },

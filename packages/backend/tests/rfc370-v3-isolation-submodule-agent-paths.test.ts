@@ -91,7 +91,7 @@ async function canonWithSubmodule(): Promise<string> {
 const canonRepo = (dir: string): CanonRepo => ({
   repoPath: dir,
   worktreePath: dir,
-  worktreeDirName: '',
+  mountPath: '',
   baseBranch: 'main',
 })
 

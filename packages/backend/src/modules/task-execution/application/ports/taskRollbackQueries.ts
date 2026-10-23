@@ -1,7 +1,7 @@
 /** Provider-neutral projection required before a node-run workspace rollback. */
 export interface TaskRollbackRepositorySnapshot {
   readonly worktreePath: string
-  readonly worktreeDirName: string
+  readonly mountPath: string
 }
 
 export interface TaskRollbackTargetSnapshot {

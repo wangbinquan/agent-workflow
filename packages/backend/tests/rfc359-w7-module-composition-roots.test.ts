@@ -5,14 +5,22 @@
 // 绑定出现在 CallExpression 的 callee 位置」。这里补的这一批此前的形态是零引用或源码文本锁——
 // 装配点那行字在、工厂一次没跑。每条断言都落在真库上，跨两个引擎各跑一遍。
 
+import {
+  type TaskFixtureSpec,
+  nodeRunFixture,
+  readNodeRunFixtures,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { initialDwState } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
@@ -73,16 +81,15 @@ async function seedActor(db: PersistenceDb, role: 'admin' | 'user' = 'admin'): P
 async function seedTask(
   db: PersistenceDb,
   taskId: string,
-  overrides: Partial<PersistenceTables['tasks']['$inferInsert']> = {},
+  overrides: Partial<TaskFixtureSpec> = {},
 ): Promise<string> {
   const workflowId = `wf_${ulid()}`
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: `wf-${workflowId.slice(-6).toLowerCase()}`,
     definition: JSON.stringify({ $schema_version: 2, nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId,
@@ -94,7 +101,6 @@ async function seedTask(
     status: 'running',
     inputs: '{}',
     startedAt: T0,
-    repoCount: 1,
     ...overrides,
   })
   return workflowId
@@ -104,26 +110,24 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
   test('legacy 代码读端口：两个别名各构造一次，任务 / 节点运行 / 能力参数都读真库', async () => {
     const taskId = `t_${ulid()}`
     await seedTask(harness.db, taskId, { spaceKind: 'local', baseCommit: 'abc123' })
-    const { taskRepos, nodeRuns } = tablesOf(harness.db)
-    await insertOne(harness.db, taskRepos, {
+    await taskRepoFixture(harness.db, {
       taskId,
       repoIndex: 0,
       repoPath: '/srv/repos/x',
       branch: `agent-workflow/${taskId}`,
       mountPath: 'main',
-      worktreeDirName: 'main',
       worktreePath: '/tmp/wt/main',
       baseCommit: 'abc123',
     })
     const nodeRunId = `nr_${ulid()}`
-    await insertOne(harness.db, nodeRuns, {
+    await nodeRunFixture(harness.db, {
       id: nodeRunId,
       taskId,
       nodeId: 'n1',
       status: 'running',
       retryIndex: 0,
       startedAt: T0,
-      preSnapshot: 'stash-hash',
+      checkpoints: [{ mountPath: '', preSnapshot: 'stash-hash' }],
     })
 
     const sqlite = composeLegacyCodeReadProviders(asSqlite(harness.db))
@@ -139,7 +143,8 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
     ])
     expect(await sqlite.workspace.findNodeRun(nodeRunId)).toMatchObject({
       id: nodeRunId,
-      preSnapshot: 'stash-hash',
+      // RFC-395 II-a: the read port exposes per-mount checkpoints.
+      checkpoints: [{ mountPath: '', preSnapshot: 'stash-hash' }],
     })
     expect(await sqlite.workspace.findNodeRun(`nr_${ulid()}`)).toBeNull()
     // 能力参数：没有 repo_capability_config 行时是 null（一跳 join 真的跑过）。
@@ -323,13 +328,11 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
         await command.recover({ activeTaskIds: [], webhookClaims: 'all', now: T0 + 2_000 }),
       ).toMatchObject({ completed: 1, failed: 0 })
       expect(existsSync(workspace)).toBe(false)
-      const { tasks } = tablesOf(harness.db)
       expect(
         (
-          await harness.db
-            .select({ prunedAt: tasks.workspacePrunedAt })
-            .from(tasks)
-            .where(eq(tasks.id, taskId))
+          await readTaskFixtures(harness.db, { id: taskId }).then((rows) =>
+            rows.map((row) => ({ prunedAt: row.workspacePrunedAt })),
+          )
         )[0]?.prunedAt,
       ).toBe(T0 + 2_000)
     } finally {
@@ -347,7 +350,7 @@ describeEachProvider(
       await seedTask(harness.db, taskId)
       expect(await persistence.loadTask(`t_${ulid()}`)).toBeNull()
       expect(await persistence.loadTask(taskId)).toEqual({
-        workgroupConfigJson: null,
+        workgroupConfig: null,
         triggerContextJson: null,
         dwStateJson: null,
       })
@@ -376,8 +379,7 @@ describeEachProvider(
       const taskId = `t_${ulid()}`
       await seedTask(harness.db, taskId)
       const nodeRunId = `nr_${ulid()}`
-      const { nodeRuns } = tablesOf(harness.db)
-      await insertOne(harness.db, nodeRuns, {
+      await nodeRunFixture(harness.db, {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
@@ -390,12 +392,10 @@ describeEachProvider(
           transaction as unknown as Parameters<typeof createNodeRunLifecycleParticipantInTx>[0],
         )
         expect(typeof participant).toBe('object')
-        const { nodeRuns } = tablesOf(transaction)
         // 参与者绑的是这一个事务句柄：在事务里读回刚写的节点运行行。
-        const rows = await transaction
-          .select({ id: nodeRuns.id })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.taskId, taskId))
+        const rows = await readNodeRunFixtures(transaction, { taskId }).then((rows) =>
+          rows.map((row) => ({ id: row.id })),
+        )
         expect(rows.map((row) => row.id)).toEqual([nodeRunId])
       })
     })

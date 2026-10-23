@@ -736,7 +736,9 @@ function TaskCreationSharedSchemaContract(context: TaskCreationSharedSchemaContr
     if (relaunchTaskQ.data === undefined) return
     if (actor.isPending) return
     const task = relaunchTaskQ.data
-    const kind = taskExecutionKind(task)
+    const subjectKind = taskExecutionKind(task)
+    // RFC-395: keep the existing digital-employee workflow presentation and relaunch target.
+    const kind = subjectKind === 'digital-employee' ? 'workflow' : subjectKind
     // RFC-304: a code-round task is not relaunchable from this wizard. Its
     // subject is a work item's round, not a resource a user picks — re-running
     // it means asking the work item for another round, which is a /code action

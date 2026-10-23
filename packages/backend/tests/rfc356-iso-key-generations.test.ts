@@ -40,7 +40,7 @@ async function initRepo(): Promise<string> {
 }
 
 function canonRepoOf(worktreePath: string) {
-  return { repoPath: worktreePath, worktreePath, worktreeDirName: '', baseBranch: 'main' }
+  return { repoPath: worktreePath, worktreePath, mountPath: '', baseBranch: 'main' }
 }
 
 describe('RFC-356 · 选键：常态零成本，有残留才回收', () => {
@@ -173,8 +173,8 @@ describe('RFC-356 · 选键：常态零成本，有残留才回收', () => {
       taskId: 'TM',
       baseKey: 'KM',
       canonRepos: [
-        { repoPath: repoA, worktreePath: repoA, worktreeDirName: 'a', baseBranch: 'main' },
-        { repoPath: repoB, worktreePath: repoB, worktreeDirName: 'b', baseBranch: 'main' },
+        { repoPath: repoA, worktreePath: repoA, mountPath: 'a', baseBranch: 'main' },
+        { repoPath: repoB, worktreePath: repoB, mountPath: 'b', baseBranch: 'main' },
       ],
     })
     expect(chosen.key).toBe('KM')

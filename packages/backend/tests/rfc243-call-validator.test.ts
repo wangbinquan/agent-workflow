@@ -14,8 +14,7 @@
 //   - the dw admission guard: a generated definition may never contain call
 //     nodes (workgroups are closure leaves — design §5.4-7).
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -51,8 +50,7 @@ async function seedWorkflow(
   name: string,
   definition: WorkflowDefinition,
 ): Promise<void> {
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, { id, name, definition: JSON.stringify(definition) })
+  await workflowFixture(db, { id, name, definition: JSON.stringify(definition) })
 }
 
 /** Child with one text input `topic` and one output port `result`. */

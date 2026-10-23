@@ -5,6 +5,7 @@
 // resolveTaskRole precedence (D17: owner > user > admin) is locked too —
 // review/clarify attribution snapshots depend on it.
 
+import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test, beforeEach } from 'bun:test'
@@ -75,8 +76,8 @@ describeEachProvider('resourceAcl — visibility matrix', (harness) => {
     }
     const privId = ulid()
     const pubId = ulid()
-    const { agents, resourceGrants } = tablesOf(db)
-    await db.insert(agents).values([
+    const { resourceGrants } = tablesOf(db)
+    await agentFixture(db, [
       { id: privId, name: `priv-${privId}`, ownerUserId: ownerId, visibility: 'private' },
       { id: pubId, name: `pub-${pubId}`, ownerUserId: ownerId, visibility: 'public' },
     ])
@@ -153,9 +154,9 @@ describeEachProvider('resourceAcl — visibility matrix', (harness) => {
   })
 
   test('grant is per resource type — an agent grant does not leak to a workflow with the same id', async () => {
-    const { workflows } = tablesOf(db)
-    await insertOne(db, workflows, {
-      id: privateAgent.id, // deliberately reuse the id across tables
+    await workflowFixture(db, {
+      id: privateAgent.id,
+      // deliberately reuse the id across tables
       name: 'wf-同id',
       definition: '{}',
       ownerUserId: ownerId,

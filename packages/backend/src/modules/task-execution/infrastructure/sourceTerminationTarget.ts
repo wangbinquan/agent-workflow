@@ -109,7 +109,12 @@ async function cancelOpenNodeRuns(
       tx,
       nodeRunId: row.id,
       event: { kind: 'mark-canceled', reason: cause },
-      extra: { finishedAt: now, errorMessage: cause },
+      extra: {
+        identity: {
+          finishedAt: now,
+          errorMessage: cause,
+        },
+      },
     })
   }
   return rows.map((row) => ({ nodeRunId: row.id, nodeId: row.nodeId, status: 'canceled', cause }))

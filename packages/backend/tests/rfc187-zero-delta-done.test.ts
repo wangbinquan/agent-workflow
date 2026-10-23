@@ -141,7 +141,20 @@ describe('RFC-187 §4 — source locks', () => {
       resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'taskMechanicsState.ts'),
       'utf8',
     )
-    expect(mechanicsState).toContain('readonly baseCommit: string | null')
+    // RFC-395 II-a A2: per-repository base comes from the shared TaskRepo contract.
+    expect(mechanicsState).toContain('readonly repos: TaskRepositoryMount[]')
+    const repositoryContract = readFileSync(
+      resolve(import.meta.dir, '../src/platform/taskRepository.ts'),
+      'utf8',
+    )
+    expect(repositoryContract).toContain(
+      "TaskRepositoryMount extends Omit<TaskRepo, 'repoIndex' | 'worktreeDirName'>",
+    )
+    const taskRepo = readFileSync(
+      resolve(import.meta.dir, '../../shared/src/schemas/task.ts'),
+      'utf8',
+    )
+    expect(taskRepo).toContain('baseCommit: z.string().nullable()')
     expect(nodeMechanics).toContain('state.repos.filter((r) => r.baseCommit !== null)')
   })
 })

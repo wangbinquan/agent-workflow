@@ -9,6 +9,9 @@
 // 事务是中立的 `PersistenceTx`：调用方（task-execution 的 park 原子）在
 // `withTaskExecutionSerializable` 体内把它交进来，本文件只做 collaboration 自己的投影与记账。
 
+import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+import type { ConsumedInputsParticipantInTx } from '@/modules/task-execution/public/participants'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
@@ -94,7 +97,10 @@ async function parkGateNodeRun(
     readonly nodeRunId: string
     readonly allowedFrom: 'pending' | 'running'
     readonly event: 'park-review' | 'park-human'
-    readonly extra: Readonly<{ startedAt: number | null; consumedUpstreamRunsJson?: string | null }>
+    readonly extra: Readonly<{
+      identity: { startedAt: number | null }
+      inputs?: { consumedUpstreamRunsJson?: string | null }
+    }>
   },
 ): Promise<void> {
   await nodeRunLifecycle.set({
@@ -111,23 +117,20 @@ async function projectReviewGateOpen(
   tx: PersistenceTx,
   nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
   nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
+  consumedInputs: ConsumedInputsParticipantInTx<PersistenceTx>,
   manifest: ReviewGateOpenManifest,
 ): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
-    const { nodeRuns } = tablesOf(tx)
-    const existing = await tx
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, node.id))
-      .limit(1)
-    if (existing[0] !== undefined) {
+    const existing = await createNodeRunQueries(tx).readFields(node.id, ['id'])
+    if (existing !== null) {
       throw new HumanGateOperationError(
         'human-gate-operation-stale',
         `review-open node projection '${node.id}' already exists`,
       )
     }
     await nodeRunMint.mint({
+      ...deriveNodeRunRole({ nodeId: node.nodeId, rerunCause: 'review-park' }),
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -136,33 +139,30 @@ async function projectReviewGateOpen(
       containerRunId: node.containerRunId,
       iteration: node.iteration,
       overrides: {
-        reviewIteration: node.reviewIteration,
-        consumedUpstreamRunsJson: node.consumedUpstreamRunsJson,
-        startedAt: node.startedAt,
+        identity: { reviewIteration: node.reviewIteration, startedAt: node.startedAt },
+        inputs: { consumedUpstreamRunsJson: node.consumedUpstreamRunsJson },
       },
     })
   } else {
-    const { nodeRuns, docVersions, reviewComments } = tablesOf(tx)
+    const { docVersions, reviewComments } = tablesOf(tx)
     const existing = (
-      await tx
-        .select({
-          id: nodeRuns.id,
-          taskId: nodeRuns.taskId,
-          nodeId: nodeRuns.nodeId,
-          iteration: nodeRuns.iteration,
-          reviewIteration: nodeRuns.reviewIteration,
-          status: nodeRuns.status,
-          consumedUpstreamRunsJson: nodeRuns.consumedUpstreamRunsJson,
-        })
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.id, node.id),
-            eq(nodeRuns.taskId, node.taskId),
-            eq(nodeRuns.nodeId, node.nodeId),
-          ),
-        )
-        .limit(1)
+      await createNodeRunQueries(tx).listFields(
+        {
+          runIds: [node.id],
+          taskId: node.taskId,
+          nodeId: node.nodeId,
+          limit: 1,
+        },
+        [
+          'id',
+          'taskId',
+          'nodeId',
+          'iteration',
+          'reviewIteration',
+          'status',
+          'consumedUpstreamRunsJson',
+        ],
+      )
     )[0]
     const expectedStatus = node.mode === 'reuse-pending' ? 'pending' : 'awaiting_review'
     if (
@@ -184,8 +184,12 @@ async function projectReviewGateOpen(
         allowedFrom: 'pending',
         event: 'park-review',
         extra: {
-          startedAt: node.startedAt,
-          consumedUpstreamRunsJson: node.consumedUpstreamRunsJson,
+          identity: {
+            startedAt: node.startedAt,
+          },
+          inputs: {
+            consumedUpstreamRunsJson: node.consumedUpstreamRunsJson,
+          },
         },
       })
     } else {
@@ -229,10 +233,9 @@ async function projectReviewGateOpen(
           })
           .where(inArray(docVersions.id, currentPendingIds))
       }
-      await tx
-        .update(nodeRuns)
-        .set({ consumedUpstreamRunsJson: node.consumedUpstreamRunsJson })
-        .where(eq(nodeRuns.id, node.id))
+      await consumedInputs.record(tx, node.id, {
+        legacyJson: node.consumedUpstreamRunsJson,
+      })
     }
   }
 
@@ -295,19 +298,15 @@ export async function projectClarifyGateOpen(
 ): Promise<void> {
   const node = manifest.node
   if (node.mode === 'mint') {
-    const { nodeRuns } = tablesOf(tx)
-    const existing = await tx
-      .select({ id: nodeRuns.id })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, node.id))
-      .limit(1)
-    if (existing[0] !== undefined) {
+    const existing = await createNodeRunQueries(tx).readFields(node.id, ['id'])
+    if (existing !== null) {
       throw new HumanGateOperationError(
         'human-gate-operation-stale',
         `clarify-open node projection '${node.id}' already exists`,
       )
     }
     await nodeRunMint.mint({
+      ...deriveNodeRunRole({ nodeId: node.nodeId, rerunCause: node.cause }),
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -316,28 +315,24 @@ export async function projectClarifyGateOpen(
       containerRunId: node.containerRunId,
       iteration: node.runIteration,
       overrides: {
-        parentNodeRunId: node.parentNodeRunId,
-        shardKey: node.shardKey,
-        startedAt: node.startedAt,
+        identity: {
+          parentNodeRunId: node.parentNodeRunId,
+          shardKey: node.shardKey,
+          startedAt: node.startedAt,
+        },
       },
     })
   } else {
-    const { nodeRuns } = tablesOf(tx)
-    const existing = (
-      await tx
-        .select({
-          taskId: nodeRuns.taskId,
-          nodeId: nodeRuns.nodeId,
-          status: nodeRuns.status,
-          iteration: nodeRuns.iteration,
-          parentNodeRunId: nodeRuns.parentNodeRunId,
-          shardKey: nodeRuns.shardKey,
-          startedAt: nodeRuns.startedAt,
-        })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.id, node.id))
-        .limit(1)
-    )[0]
+    const existing =
+      (await createNodeRunQueries(tx).readFields(node.id, [
+        'taskId',
+        'nodeId',
+        'status',
+        'iteration',
+        'parentNodeRunId',
+        'shardKey',
+        'startedAt',
+      ])) ?? undefined
     const expectedStatus =
       node.mode === 'reuse-pending'
         ? 'pending'
@@ -364,7 +359,11 @@ export async function projectClarifyGateOpen(
         nodeRunId: node.id,
         allowedFrom: node.mode === 'reuse-pending' ? 'pending' : 'running',
         event: 'park-human',
-        extra: { startedAt: node.startedAt },
+        extra: {
+          identity: {
+            startedAt: node.startedAt,
+          },
+        },
       })
     }
   }
@@ -526,6 +525,9 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
     private readonly journal: HumanGateOperationJournal,
     private readonly nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
     private readonly nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
+    // RFC-395 II-a：消费边写入由 task-execution 注入——本文件被其生命周期持久化 import，
+    // 反向 value import 会形成文件级依赖环。
+    private readonly consumedInputs: ConsumedInputsParticipantInTx<PersistenceTx>,
   ) {}
 
   async listPreparedManualQuestionParksTx(taskId: string): Promise<readonly string[]> {
@@ -673,7 +675,13 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
           )
         }
       }
-      await projectReviewGateOpen(this.tx, this.nodeRunMint, this.nodeRunLifecycle, reviewManifest)
+      await projectReviewGateOpen(
+        this.tx,
+        this.nodeRunMint,
+        this.nodeRunLifecycle,
+        this.consumedInputs,
+        reviewManifest,
+      )
       collaborationEventRef = await appendHumanGateOpenedCommittedEvent(this.tx, {
         family: 'review',
         gate: {

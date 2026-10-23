@@ -1,6 +1,6 @@
 // RFC-339 — task-execution-owned pre-drive merge recovery mechanics.
 
-import { isSingleRootRepository } from '@agent-workflow/shared'
+import { taskCheckpointRefs } from '../domain/taskCheckpoint'
 import { type Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
@@ -28,7 +28,6 @@ import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPe
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import {
   isolatedRunBinding,
-  parseIsoJsonMap,
   parseIsoSubmodules,
   resolveMergeConflicts,
   type SchedulerState,
@@ -37,14 +36,14 @@ import type { ExecutionMergeRecovery } from '../application/recovery/executionMe
 
 async function replaySubmodulesMissing(
   scope: IsolationWorkspaceScope,
-  repos: ReadonlyArray<{ worktreePath: string; worktreeDirName: string }>,
+  repos: ReadonlyArray<{ worktreePath: string; mountPath: string }>,
   persisted: Record<string, { subBases: Record<string, string> }>,
 ): Promise<string | null> {
   for (const repo of repos) {
     if (!(await scope.submodulePresence(repo.worktreePath))) continue
-    const entry = persisted[repo.worktreeDirName]
+    const entry = persisted[repo.mountPath]
     if (entry === undefined || Object.keys(entry.subBases).length === 0) {
-      return repo.worktreeDirName || 'repo'
+      return repo.mountPath || 'repo'
     }
   }
   return null
@@ -97,7 +96,7 @@ async function scopeBaseHeads(
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
     const h = await scope.head(repo.worktreePath)
-    taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
+    taskBaseHeads[repo.mountPath] = h.stdout.trim()
   }
   return taskBaseHeads
 }
@@ -120,19 +119,12 @@ async function replayPendingMerge(
   log: Logger,
 ): Promise<void> {
   const { taskId } = state
-  const baseSnapshots: Record<string, string> = {}
-  const nodeTrees: Record<string, string> = {}
-  if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
-    if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
-    if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
-  } else {
-    Object.assign(baseSnapshots, parseIsoJsonMap(r.isoBaseSnapshotReposJson))
-    Object.assign(nodeTrees, parseIsoJsonMap(r.isoNodeTreeReposJson))
-  }
+  const baseSnapshots = taskCheckpointRefs(r.checkpoints, 'isolationBase')
+  const nodeTrees = taskCheckpointRefs(r.checkpoints, 'nodeTree')
   if (Object.keys(nodeTrees).length === 0) {
     throw new Error(`pending-merge replay: node_tree missing for run ${r.id}`)
   }
-  const submodules = parseIsoSubmodules(r, state.repos)
+  const submodules = parseIsoSubmodules(r.checkpoints)
   const missingSub = await replaySubmodulesMissing(scope, state.repos, submodules)
   if (missingSub !== null) {
     throw new Error(
@@ -209,13 +201,7 @@ async function completeInterruptedRun(
   log: Logger,
 ): Promise<void> {
   const { taskId } = state
-  const baseSnapshots: Record<string, string> = isSingleRootRepository(
-    state.repos.map((repo) => repo.mountPath),
-  )
-    ? r.isoBaseSnapshot === null
-      ? {}
-      : { '': r.isoBaseSnapshot }
-    : parseIsoJsonMap(r.isoBaseSnapshotReposJson)
+  const baseSnapshots = taskCheckpointRefs(r.checkpoints, 'isolationBase')
   try {
     if (Object.keys(baseSnapshots).length === 0) {
       throw new Error(`interrupted merge-back: iso base snapshot missing for run ${r.id}`)
@@ -226,7 +212,7 @@ async function completeInterruptedRun(
       workspaceRef: r.isoWorktreePath,
       baseSnapshots,
       taskBaseHeads,
-      submodules: restoredSubmodules(parseIsoSubmodules(r, state.repos)),
+      submodules: restoredSubmodules(parseIsoSubmodules(r.checkpoints)),
       forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
     })
     // No node trees supplied: the assembly snapshots the kept iso, pins the
@@ -343,18 +329,11 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
     const h = await scope.head(repo.worktreePath)
-    taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
+    taskBaseHeads[repo.mountPath] = h.stdout.trim()
   }
   for (const r of rows) {
-    const baseSnapshots: Record<string, string> = {}
-    const nodeTrees: Record<string, string> = {}
-    if (isSingleRootRepository(state.repos.map((repo) => repo.mountPath))) {
-      if (r.isoBaseSnapshot !== null) baseSnapshots[''] = r.isoBaseSnapshot
-      if (r.isoNodeTree !== null) nodeTrees[''] = r.isoNodeTree
-    } else {
-      Object.assign(baseSnapshots, parseIsoJsonMap(r.isoBaseSnapshotReposJson))
-      Object.assign(nodeTrees, parseIsoJsonMap(r.isoNodeTreeReposJson))
-    }
+    const baseSnapshots = taskCheckpointRefs(r.checkpoints, 'isolationBase')
+    const nodeTrees = taskCheckpointRefs(r.checkpoints, 'nodeTree')
     const handle = await restoreTaskIsolation(state, {
       // Round 6 P2 (same as replayPendingMerge): rebuild the PHYSICAL iso
       // identity from the persisted path — this is also what makes the
@@ -368,7 +347,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
       // RFC-210: the human-resolve completion re-merges, so it needs the same
       // per-submodule bases the original merge-back had.
-      submodules: restoredSubmodules(parseIsoSubmodules(r, state.repos)),
+      submodules: restoredSubmodules(parseIsoSubmodules(r.checkpoints)),
     })
     const outcome = await state.writeSem.run(() =>
       completeIsolatedHumanConflict(handle, nodeTrees, log),

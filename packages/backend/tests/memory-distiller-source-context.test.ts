@@ -1,3 +1,4 @@
+import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
@@ -40,10 +41,11 @@ import { appHome } from '../src/util/paths'
 import { createInMemoryDb } from '../src/db/client'
 import { MIGRATIONS } from './migration-freeze'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 function createMemoryDistillTestContext(db: PersistenceDb, root = appHome()) {
   return {
-    store: new DrizzleMemoryDistillWorkStore(db),
+    store: new DrizzleMemoryDistillWorkStore(db, createClarifyAnswerQueries(db)),
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
@@ -59,8 +61,7 @@ interface Seeded {
 
 async function seedTask(db: PersistenceDb): Promise<Seeded> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify({ schemaVersion: 1, name: 'wf', nodes: [], edges: [] }),
@@ -70,7 +71,7 @@ async function seedTask(db: PersistenceDb): Promise<Seeded> {
   })
 
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -94,8 +95,7 @@ async function seedSourceAgentNodeRun(
   opts: { promptText?: string; opencodeSessionId?: string | null; startedAt?: number } = {},
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'agent-1',
@@ -117,8 +117,7 @@ async function seedClarifySession(
   sourceRunId: string,
 ): Promise<{ clarifyId: string; clarifyRunId: string }> {
   const clarifyRunId = ulid()
-  const { nodeRuns, clarifyRounds } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: clarifyRunId,
     taskId,
     nodeId: 'clarify-1',
@@ -129,7 +128,7 @@ async function seedClarifySession(
   })
 
   const clarifyId = ulid()
-  await insertOne(db, clarifyRounds, {
+  await clarifyRoundFixture(db, {
     kind: 'self' as const,
     id: clarifyId,
     taskId,
@@ -139,8 +138,8 @@ async function seedClarifySession(
     intermediaryNodeId: 'clarify-1',
     intermediaryNodeRunId: clarifyRunId,
     iteration: 0,
-    questionsJson: JSON.stringify([{ id: 'q1', kind: 'open', text: 'which db?' }]),
-    answersJson: JSON.stringify([{ questionId: 'q1', text: 'postgres' }]),
+    questions: JSON.stringify([{ id: 'q1', kind: 'open', text: 'which db?' }]),
+    answers: JSON.stringify([{ questionId: 'q1', text: 'postgres' }]),
     status: 'answered',
   })
   return { clarifyId, clarifyRunId }
@@ -340,8 +339,8 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
     relPath = 'docs/v1.md',
   ): Promise<string> {
     const reviewRunId = ulid()
-    const { nodeRuns, docVersions } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    const { docVersions } = tablesOf(db)
+    await nodeRunFixture(db, {
       id: reviewRunId,
       taskId,
       nodeId: 'review-1',
@@ -468,7 +467,7 @@ describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () =
     const orphanRunId = ulid()
     const clarifyRunId = ulid()
     const { nodeRuns } = tablesOf(db)
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: clarifyRunId,
       taskId,
       nodeId: 'clarify-1',
@@ -489,8 +488,8 @@ describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () =
       intermediaryNodeId: 'clarify-1',
       intermediaryNodeRunId: clarifyRunId,
       iteration: 0,
-      questionsJson: '[]',
-      answersJson: '[]',
+      questions: '[]',
+      answers: '[]',
       status: 'answered',
       createdAt: Date.now(),
     })

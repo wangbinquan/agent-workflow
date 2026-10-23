@@ -1,7 +1,9 @@
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
+import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
+import type { RunSelectionReader } from './ports/runSelection'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
 
-import { isStructurallySuperseded, type SupersessionRow } from '../domain/nodeRunSupersession'
 import type { NodeExecutionPersistence } from './ports/nodeExecutionPersistence'
 import type { NodeRunLifecyclePersistence } from './ports/nodeRunLifecyclePersistence'
 import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
@@ -14,10 +16,10 @@ export interface SchedulerRunRowCandidate {
   readonly reviewIteration: number
   readonly shardKey: string | null
   readonly parentNodeRunId: string | null
-  /** RFC-354 — optional so hand-built fixtures keep compiling; real rows always carry it. */
-  readonly containerRunId?: string | null
+  /** RFC-354 — every candidate declares its frame, including the top-level null frame. */
+  readonly containerRunId: string | null
   readonly scopePath?: string
-  readonly preSnapshot?: string | null
+  readonly checkpointInheritance?: readonly TaskRepositoryCheckpoint[]
   readonly continuationSlotKey?: string | null
   readonly lineageSlotPathJson?: string | null
   readonly operationGeneration?: number
@@ -26,6 +28,7 @@ export interface SchedulerRunRowCandidate {
 export interface ResolveSchedulerRunRowInput<R extends SchedulerRunRowCandidate> {
   readonly lifecycle: NodeRunLifecyclePersistence
   readonly projections: NodeExecutionPersistence
+  readonly selection: RunSelectionReader
   readonly taskId: string
   readonly nodeId: string
   /** RFC-354 — the frame the node is dispatched in; null at the top scope. */
@@ -50,16 +53,6 @@ export interface ResolvedSchedulerRunRow<R> {
   readonly adopted: boolean
 }
 
-function freshest<R extends { readonly id: string; readonly seq: number | null }>(
-  rows: readonly R[],
-): R | undefined {
-  let current: R | undefined
-  for (const row of rows) {
-    if (current === undefined || compareNodeRunMintOrder(row, current) > 0) current = row
-  }
-  return current
-}
-
 function schedulerMintCause(
   latestExisting: { readonly status: NodeRunStatus } | undefined,
 ): Extract<RerunCause, 'initial' | 'stale-redispatch' | 'revival'> {
@@ -76,42 +69,20 @@ function schedulerMintCause(
   }
 }
 
-/**
- * RFC-369 §4.5 —— 候选 pending 行里已被同帧更新一代结构性取代的那些。调用方按
- * `{taskId, nodeId, iteration}` 取行、不按帧过滤，所以判定必须带帧维度，且比较集合是**全部**
- * `rows`（§3(a) 不约束更新一代是否顶层）；nodeId / iteration 在这一调用里恒定。
- */
-export function supersededPendingRows<R extends SchedulerRunRowCandidate>(input: {
-  readonly nodeId: string
-  readonly iteration: number
-  readonly rows: readonly R[]
-}): ReadonlySet<string> {
-  const asSupersession = (row: R): SupersessionRow => ({
-    id: row.id,
-    seq: row.seq,
-    nodeId: input.nodeId,
-    iteration: input.iteration,
-    containerRunId: row.containerRunId ?? null,
-    parentNodeRunId: row.parentNodeRunId,
-    shardKey: row.shardKey,
-  })
-  const all = input.rows.map(asSupersession)
-  const superseded = new Set<string>()
-  for (const row of input.rows) {
-    if (row.parentNodeRunId !== null || row.status !== 'pending') continue
-    if (isStructurallySuperseded(asSupersession(row), all)) superseded.add(row.id)
-  }
-  return superseded
-}
-
 /** Provider-neutral form of the scheduler's four shared run-row preludes. */
 export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>(
   input: ResolveSchedulerRunRowInput<R>,
 ): Promise<ResolvedSchedulerRunRow<R>> {
   const topLevelRows = input.rows.filter(
-    (row) => row.parentNodeRunId === null && (row.containerRunId ?? null) === input.containerRunId,
+    (row) => row.parentNodeRunId === null && row.containerRunId === input.containerRunId,
   )
-  const latestExisting = freshest(topLevelRows)
+  const slot = {
+    kind: 'node' as const,
+    nodeId: input.nodeId,
+    frame: { containerRunId: input.containerRunId, iteration: input.iteration },
+  }
+  const selected = await input.selection.current(input.taskId, slot)
+  const latestExisting = topLevelRows.find((row) => row.id === selected?.id)
 
   if (input.preResolve !== undefined) {
     const adopted = await input.preResolve(latestExisting)
@@ -124,7 +95,11 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
   // （白跑一轮、节点失败），不采纳它、就地终结为 canceled，没有可采纳的行就走下面的新铸路径。
   // 调用方按 {taskId, nodeId, iteration} 取行、不按帧过滤：判定与「不采纳」跨帧生效，但只终结
   // **本帧**的行（别的帧由它自己的调度器收尾）；终结时行已被别处改走（取消 / 并发收尾）就跳过。
-  const superseded = supersededPendingRows(input)
+  const superseded = new Set(
+    (await input.selection.slotHistory(input.taskId, slot, { statusIn: ['pending'] }))
+      .filter((row) => row.structurallySuperseded)
+      .map((row) => row.id),
+  )
   const canceled = new Set<string>()
   for (const row of topLevelRows) {
     if (!superseded.has(row.id)) continue
@@ -133,7 +108,13 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
       await input.lifecycle.transition({
         nodeRunId: row.id,
         event: { kind: 'cancel-by-supersede', reason: 'superseded-by-newer-generation' },
-        extra: { finishedAt: Date.now() },
+        // Cancellation changes status, not mint order. HEAD still selects this row
+        // until a newer top-level attempt is minted (including the AC-8 child case).
+        extra: {
+          identity: {
+            finishedAt: Date.now(),
+          },
+        },
         ...(input.executionContext === undefined
           ? {}
           : { executionContext: input.executionContext }),
@@ -149,13 +130,35 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     canceled.add(row.id)
     input.broadcastCanceled?.(row.id)
   }
-  const pendingExisting = freshest(
-    topLevelRows.filter((row) => row.status === 'pending' && !superseded.has(row.id)),
-  )
+  const pending = (await input.selection.slotHistory(input.taskId, slot, { statusIn: ['pending'] }))
+    .filter((row) => !superseded.has(row.id))
+    .at(-1)
+  const pendingExisting = topLevelRows.find((row) => row.id === pending?.id)
   if (pendingExisting !== undefined) {
     await input.projections.patch({
       nodeRunId: pendingExisting.id,
-      values: { consumedUpstreamRunsJson: input.consumedUpstreamJson },
+      selection: {
+        kind: 'select',
+        taskId: input.taskId,
+        // RFC-395 II-a: the node-scoped reader answers this explicit slot; no task label is needed.
+        slot,
+        run: {
+          id: pendingExisting.id,
+          taskId: input.taskId,
+          slot,
+          containerRunId: pendingExisting.containerRunId,
+          parentNodeRunId: pendingExisting.parentNodeRunId,
+          shardKey: pendingExisting.shardKey,
+        },
+        expectedRevision: 0,
+        generationSeq: 0,
+        cause: 'scheduler-adopt',
+      },
+      values: {
+        inputs: {
+          consumedUpstreamRunsJson: input.consumedUpstreamJson,
+        },
+      },
       ...(input.executionContext === undefined ? {} : { executionContext: input.executionContext }),
     })
     input.broadcastPending?.(pendingExisting.id)
@@ -167,8 +170,16 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     }
   }
 
-  const retryIndex = input.rows.reduce((max, row) => Math.max(max, row.retryIndex), -1) + 1
+  const retryIndex = nodeRunAttemptIndex({ kind: 'max-plus-one', rows: input.rows })
   const nodeRunId = await input.lifecycle.mint({
+    ...deriveNodeRunRole({
+      nodeId: input.nodeId,
+      rerunCause: schedulerMintCause(
+        latestExisting !== undefined && canceled.has(latestExisting.id)
+          ? { status: 'canceled' }
+          : latestExisting,
+      ),
+    }),
     taskId: input.taskId,
     nodeId: input.nodeId,
     status: 'pending',
@@ -189,19 +200,25 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
             shardKey: latestExisting.shardKey,
             parentNodeRunId: latestExisting.parentNodeRunId,
             containerRunId: latestExisting.containerRunId ?? null,
-            preSnapshot: latestExisting.preSnapshot ?? null,
+            checkpointInheritance: latestExisting.checkpointInheritance ?? [],
             continuationSlotKey: latestExisting.continuationSlotKey ?? null,
             lineageSlotPathJson: latestExisting.lineageSlotPathJson ?? null,
             operationGeneration: latestExisting.operationGeneration ?? 0,
           },
     overrides: {
-      ...(input.inheritReviewIteration
-        ? { reviewIteration: latestExisting?.reviewIteration ?? 0 }
-        : {}),
-      shardKey: latestExisting?.shardKey ?? null,
-      parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
-      consumedUpstreamRunsJson: input.consumedUpstreamJson,
-      ...(input.clearAgentOverride ? { agentOverrideName: null } : {}),
+      identity: {
+        ...(input.inheritReviewIteration
+          ? { reviewIteration: latestExisting?.reviewIteration ?? 0 }
+          : {}),
+        shardKey: latestExisting?.shardKey ?? null,
+        parentNodeRunId: latestExisting?.parentNodeRunId ?? null,
+      },
+      inputs: {
+        consumedUpstreamRunsJson: input.consumedUpstreamJson,
+      },
+      config: {
+        ...(input.clearAgentOverride ? { agentOverrideName: null } : {}),
+      },
     },
     ...(input.executionContext === undefined ? {} : { executionContext: input.executionContext }),
   })

@@ -1,3 +1,4 @@
+import { nodeRunFixture, patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ulid } from 'ulid'
@@ -251,7 +252,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     const h = await setup()
     await seedUser(h.db, 'alice', 'Alice A', 'alice-a@example.test')
     const first = await launch(h, 'first', 'alice')
-    const { users, tasks } = tablesOf(h.db)
+    const { users } = tablesOf(h.db)
     await h.db
       .update(users)
       .set({
@@ -263,9 +264,9 @@ describe('RFC-320 task Git identity snapshot', () => {
       .where(eq(users.id, 'alice'))
     const second = await launch(h, 'second', 'alice')
 
-    const rows = await h.db
-      .select({ id: tasks.id, name: tasks.gitUserName, email: tasks.gitUserEmail })
-      .from(tasks)
+    const rows = await readTaskFixtures(h.db).then((rows) =>
+      rows.map((row) => ({ id: row.id, name: row.gitUserName, email: row.gitUserEmail })),
+    )
     expect(rows.find((row) => row.id === first.id)).toMatchObject({
       name: 'Alice A',
       email: 'alice-a@example.test',
@@ -286,8 +287,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     expect(error).toBeInstanceOf(UserAccessError)
     expect((error as UserAccessError).kind).toBe('validation')
     expect((error as UserAccessError).code).toBe('git-identity-email-missing')
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks)).length).toBe(0)
+    expect((await readTaskFixtures(h.db)).length).toBe(0)
   })
 
   test('missing Git name rejects a human task even when displayName exists', async () => {
@@ -297,8 +297,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     expect(error).toBeInstanceOf(UserAccessError)
     expect((error as UserAccessError).kind).toBe('validation')
     expect((error as UserAccessError).code).toBe('git-identity-name-missing')
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks)).length).toBe(0)
+    expect((await readTaskFixtures(h.db)).length).toBe(0)
   })
 
   test('task snapshot overrides daemon Git environment without mutating process.env', async () => {
@@ -374,7 +373,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     const h = await setup()
     await seedUser(h.db, 'alice', 'Parent Owner', 'parent@example.test')
     const parent = await launch(h, 'parent', 'alice')
-    const { users, tasks, nodeRuns } = tablesOf(h.db)
+    const { users } = tablesOf(h.db)
     await h.db
       .update(users)
       .set({
@@ -387,8 +386,8 @@ describe('RFC-320 task Git identity snapshot', () => {
 
     const childId = ulid(),
       runId = ulid()
-    await h.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, parent.id))
-    await insertOne(h.db, nodeRuns, {
+    await patchTaskFixture(h.db, { id: parent.id }, { status: 'running' })
+    await nodeRunFixture(h.db, {
       id: runId,
       taskId: parent.id,
       nodeId: 'call',
@@ -397,7 +396,7 @@ describe('RFC-320 task Git identity snapshot', () => {
       iteration: 0,
       retryIndex: 0,
     })
-    const parentRow = (await h.db.select().from(tasks).where(eq(tasks.id, parent.id)))[0]!
+    const parentRow = (await readTaskFixtures(h.db, { id: parent.id }))[0]!
     await launchTestTask(
       { workflowId: h.workflowId, name: 'child identity', inputs: parent.inputs },
       {
@@ -449,7 +448,7 @@ describe('RFC-320 task Git identity snapshot', () => {
         },
       },
     )
-    const child = (await h.db.select().from(tasks).where(eq(tasks.id, childId)))[0]!
+    const child = (await readTaskFixtures(h.db, { id: childId }))[0]!
     expect({ name: child.gitUserName, email: child.gitUserEmail }).toEqual({
       name: 'Parent Owner',
       email: 'parent@example.test',

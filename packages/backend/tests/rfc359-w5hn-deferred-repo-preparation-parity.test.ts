@@ -26,6 +26,7 @@
 // `composeDeferredRepositoryPreparation`）。判据因此**不只看落行**，还要看完整的 G7 闭环：
 // 任务先 `pending`、第 0 步跑完转 `failed`、git 原文留在行上、并且留下一条可重试的
 // `__repo_prep__` 合成节点行——缺任何一环，AC-11 的「重试准备仓库」就是个死按钮。
+import { readNodeRunFixtures, readTaskFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -38,7 +39,7 @@ import { ulid } from 'ulid'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/gitHttpRemote'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 
 const TOKEN = 'i'.repeat(64)
@@ -149,12 +150,7 @@ describeEachProviderHttpApplication(
     async function waitForPrepared(taskId: string): Promise<Record<string, unknown>> {
       const deadline = Date.now() + 40_000
       for (;;) {
-        const { tasks } = tablesOf(scope.harness.db)
-        const rows = await scope.harness.db
-          .select()
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .limit(1)
+        const rows = await readTaskFixtures(scope.harness.db, { id: taskId }, { limit: 1 })
         const row = rows[0] as unknown as Record<string, unknown> | undefined
         if (row !== undefined && String(row['worktreePath'] ?? '') !== '') return row
         if (row !== undefined && row['status'] === 'failed') {
@@ -175,11 +171,10 @@ describeEachProviderHttpApplication(
         String(terminal['errorMessage'] ?? ''),
         '行上必须留着 git 原文——点开就知道卡在哪，而不是一句无从下手的「启动失败」',
       ).toMatch(/fatal|could not|unable|Connection refused|refused/i)
-      const { nodeRuns } = tablesOf(scope.harness.db)
-      const prepRuns = await scope.harness.db
-        .select({ id: nodeRuns.id, status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
+      const prepRuns = await readNodeRunFixtures(scope.harness.db, {
+        taskId,
+        nodeId: REPO_PREP_NODE_ID,
+      }).then((rows) => rows.map((row) => ({ id: row.id, status: row.status })))
       expect(
         prepRuns.map((run) => run.status),
         '必须留下一条 __repo_prep__ 合成节点行且落 failed——AC-11 的「重试准备仓库」复用的就是它',
@@ -223,13 +218,10 @@ describeEachProviderHttpApplication(
       const row = await waitForPrepared(String(created['id']))
       expect(String(row['worktreePath'] ?? ''), '第 0 步必须把工作树建出来').not.toBe('')
       expect(String(row['branch'] ?? ''), '第 0 步必须把分支落定').not.toBe('')
-      const { nodeRuns } = tablesOf(scope.harness.db)
-      const prepRuns = await scope.harness.db
-        .select({ status: nodeRuns.status })
-        .from(nodeRuns)
-        .where(
-          and(eq(nodeRuns.taskId, String(created['id'])), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)),
-        )
+      const prepRuns = await readNodeRunFixtures(scope.harness.db, {
+        taskId: String(created['id']),
+        nodeId: REPO_PREP_NODE_ID,
+      }).then((rows) => rows.map((row) => ({ status: row.status })))
       expect(
         prepRuns.map((run) => run.status),
         '成功那半同样留下一条 __repo_prep__ 合成行，且落 done',

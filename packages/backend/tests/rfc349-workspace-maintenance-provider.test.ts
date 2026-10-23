@@ -1,5 +1,5 @@
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
@@ -13,7 +13,6 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 
 import { describeEachProvider } from './helpers/eachProvider'
@@ -152,15 +151,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const workspace = join(appHome, 'scratch', taskId)
     mkdirSync(workspace, { recursive: true })
     writeFileSync(join(workspace, 'result.md'), 'durable workspace')
-    const { workflows, tasks, taskExecutionMaintenanceClaims } = tablesOf(db)
-    await insertOne(db, workflows, {
+    const { taskExecutionMaintenanceClaims } = tablesOf(db)
+    await workflowFixture(db, {
       id: workflowId,
       name: 'workspace maintenance fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'terminal scratch task',
       workflowId,
@@ -196,7 +195,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
 
     expect(existsSync(workspace)).toBeFalse()
     expect(invalidated).toEqual([workspace])
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect(row.workspacePruningAt).toBe(10_000)
     expect(row.workspacePrunedAt).toBe(10_000)
     expect(
@@ -269,15 +268,14 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const taskId = ulid()
     const workspace = join(appHome, 'scratch', taskId)
     mkdirSync(workspace, { recursive: true })
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'workspace recovery fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'claimed scratch task',
       workflowId,
@@ -317,7 +315,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       healed: 0,
     })
     expect(existsSync(workspace)).toBeFalse()
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect(row.workspacePrunedAt).toBe(1_000)
   })
 
@@ -329,15 +327,14 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const taskId = ulid()
     const isoRoot = join(appHome, 'iso', taskId)
     mkdirSync(join(isoRoot, 'attempt-1'), { recursive: true })
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'iso maintenance fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'terminal remote task',
       workflowId,
@@ -370,7 +367,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       }),
     ).resolves.toEqual({ scanned: 1, removed: 1, skipped: 0 })
     expect(existsSync(isoRoot)).toBeFalse()
-    const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const row = (await readTaskFixtures(db, { id: taskId }))[0]!
     expect(row.workspacePruningAt).toBeNull()
     expect(row.workspacePrunedAt).toBeNull()
   })
@@ -379,15 +376,14 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const db = harness.db
     const workflowId = ulid()
     const taskId = ulid()
-    const { workflows, tasks } = tablesOf(db)
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'iso lease CAS fixture',
       definition: '{}',
       createdAt: 1,
       updatedAt: 1,
     })
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: taskId,
       name: 'terminal task with a replaced ISO claim',
       workflowId,
@@ -406,12 +402,8 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     const store = new DrizzleWorkspaceMaintenanceStore(db)
 
     await expect(store.releaseIsoClaim(taskId, 100)).resolves.toBeFalse()
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workspacePruningAt).toBe(
-      200,
-    )
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.workspacePruningAt).toBe(200)
     await expect(store.releaseIsoClaim(taskId, 200)).resolves.toBeTrue()
-    expect(
-      (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.workspacePruningAt,
-    ).toBeNull()
+    expect((await readTaskFixtures(db, { id: taskId }))[0]?.workspacePruningAt).toBeNull()
   })
 })

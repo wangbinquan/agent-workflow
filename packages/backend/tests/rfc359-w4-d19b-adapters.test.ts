@@ -4,6 +4,7 @@
 // 这一刀之前 PostgreSQL 跑的是一条几乎没有行为覆盖的路径（SQLite / legacy 侧有 13 个行为套件，PG 侧只有 3 个
 // 源码形状锁）。这里给房间补上两引擎同跑的行为断言：房间聚合读、可见性 404、发言写入与终态拒绝；附源码锁。
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -80,14 +81,14 @@ async function seedWorkgroupTask(
 ): Promise<string> {
   const taskId = ulid()
   const workflowId = ulid()
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: `rfc359-d19b-${workflowId.slice(-8).toLowerCase()}`,
     definition: '{}',
     builtin: true,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rfc359 d19b room',
     workflowId,

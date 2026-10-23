@@ -14,8 +14,7 @@
 // frontend's useClarifyWs hook tests landing in PR-C) catch that — here
 // we lock the payload shape end-to-end through the runtime path.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -52,8 +51,7 @@ async function seedTask(db: PersistenceDb): Promise<{ taskId: string; sourceRunI
     outputs: [],
   }
   const wfId = `wf_${ulid()}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: JSON.stringify(def),
@@ -61,7 +59,7 @@ async function seedTask(db: PersistenceDb): Promise<{ taskId: string; sourceRunI
     version: 1,
     schemaVersion: 3,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 'fixture-task',
 
     id: taskId,
@@ -80,7 +78,7 @@ async function seedTask(db: PersistenceDb): Promise<{ taskId: string; sourceRunI
     startedAt: Date.now(),
   })
   const sourceRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: sourceRunId,
     taskId,
     nodeId: 'designer',

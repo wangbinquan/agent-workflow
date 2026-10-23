@@ -1,6 +1,7 @@
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-257 — 路由错误码逐个行为触发（route-error-code-coverage 锁要求每个新
 // code 被测试点名——点名的正确姿势是把那条错误路径真的走一遍并断言 code）。
+import { patchWorkflowFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
@@ -55,8 +56,8 @@ async function scopedHarness(scope: ProviderHttpApplicationScope) {
   })
   const { token } = await createSession({ db, userId: admin.id })
   const workflowId = ulid()
-  const { workflows, webhookEndpoints } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { webhookEndpoints } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -102,8 +103,8 @@ async function harness(opts?: { unsupportedDispatcher?: boolean }) {
     dispatchSubscription: async () => {},
   }
   const workflowId = ulid()
-  const { workflows, webhookEndpoints } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { webhookEndpoints } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     description: '',
@@ -266,11 +267,7 @@ describeEachProviderHttpApplication('RFC-257 · 触发器面错误码', SCOPE_OP
 
   test('event-automation-rules:override-owner grant/revoke controls cross-owner mutation', async () => {
     const h = await scopedHarness(scope)
-    const { workflows } = tablesOf(h.db)
-    await h.db
-      .update(workflows)
-      .set({ visibility: 'public' })
-      .where(sql`${workflows.id} = ${h.workflowId}`)
+    await patchWorkflowFixture(h.db, { id: h.workflowId }, { visibility: 'public' })
 
     const created = await h.call('POST', '/api/webhook-triggers', {
       name: 'owned-trigger',

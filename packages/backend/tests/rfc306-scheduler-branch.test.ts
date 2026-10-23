@@ -19,7 +19,15 @@
 // own chain and its own output node. It is the smallest graph in which "the
 // wrong branch ran" is observable rather than inferred.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readAgentFixtures,
+  readNodeRunOutputFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -71,8 +79,7 @@ async function seedAgent(
   branchPorts?: string[],
 ): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'test',
@@ -90,8 +97,9 @@ async function seedAgent(
 }
 
 async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<string> {
-  const { agents, workflows, tasks } = tablesOf(h.db)
-  const rows = await h.db.select({ id: agents.id, name: agents.name }).from(agents)
+  const rows = await readAgentFixtures(h.db).then((rows) =>
+    rows.map((row) => ({ id: row.id, name: row.name })),
+  )
   const byName = new Map(rows.map((r) => [r.name, r.id]))
   const canonical: WorkflowDefinition = {
     ...definition,
@@ -104,14 +112,14 @@ async function seedTask(h: Harness, definition: WorkflowDefinition): Promise<str
   }
   const workflowId = ulid()
   const taskId = ulid()
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonical),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'rfc306',
     workflowId,
@@ -201,8 +209,7 @@ function twoBranchDefinition(opts: { joinMode?: 'any' | 'all' } = {}): WorkflowD
 
 /** Freshest TOP-LEVEL row per node → its status (rows come back unordered). */
 async function statusByNode(db: DbClient, taskId: string): Promise<Map<string, string>> {
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const rows = await readNodeRunFixtures(db, { taskId })
   const freshest = new Map<string, { id: string; status: string }>()
   for (const r of rows) {
     if (r.parentNodeRunId !== null) continue
@@ -241,8 +248,8 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
         }),
     )
 
-    const { tasks, nodeRuns, nodeRunOutputs } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('done')
 
     const st = await statusByNode(h.db, taskId)
@@ -258,10 +265,7 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
     const judgeRun = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
       (r) => r.nodeId === 'judge',
     )
-    const ports = await h.db
-      .select()
-      .from(nodeRunOutputs)
-      .where(eq(nodeRunOutputs.nodeRunId, judgeRun?.id ?? ''))
+    const ports = await readNodeRunOutputFixtures(h.db, { nodeRunId: judgeRun?.id ?? '' })
     const allClear = ports.find((p) => p.portName === 'all_clear')
     expect(allClear?.active).toBe(false)
     expect(allClear?.content).toBe('code has issues, not releasing')
@@ -301,8 +305,7 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
         }),
     )
 
-    const { tasks } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('done')
     const st = await statusByNode(h.db, taskId)
     // An EMPTY port is not a closed branch — the greeter still runs.
@@ -342,10 +345,9 @@ describe('RFC-306 — a closed branch skips its subgraph', () => {
         }),
     )
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('failed')
-    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const rows = await readNodeRunFixtures(h.db, { taskId })
     const judgeRows = rows.filter((r) => r.nodeId === 'judge')
     expect(judgeRows.some((r) => r.failureCode === 'branch-port-not-declared')).toBe(true)
 
@@ -397,8 +399,7 @@ describe('RFC-306 — join semantics at a merge point', () => {
     const st = await statusByNode(h.db, taskId)
     expect(st.get('greeter')).toBe('skipped')
     expect(st.get('merge')).toBe('done') // one live leg is enough
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
   })
 
   test("AC-5: joinMode 'all' propagates the skip through the merge", async () => {
@@ -427,8 +428,7 @@ describe('RFC-306 — join semantics at a merge point', () => {
     expect(st.get('fixer')).toBe('done')
     expect(st.get('greeter')).toBe('skipped')
     expect(st.get('merge')).toBe('skipped') // one dead leg is enough
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
   })
 })
 
@@ -475,7 +475,6 @@ describe('RFC-306 — human gates on a closed branch', () => {
     expect(st.get('rev')).toBe('skipped')
     // The whole point: nobody is waiting on a human.
     expect([...st.values()]).not.toContain('awaiting_review')
-    const { tasks } = tablesOf(h.db)
-    expect((await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('done')
+    expect((await readTaskFixtures(h.db, { id: taskId }))[0]?.status).toBe('done')
   })
 })

@@ -1,12 +1,13 @@
 // RFC-374: shared real persistence fixtures; assertions never depend on an absolute allocated seq.
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { taskFixture, workflowFixture } from './model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/nodeRunSeqBackfillStore'
+import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
@@ -14,13 +15,12 @@ import type { NodeRunMintInput } from '@/modules/task-execution/application/port
 export async function seedSequenceTask(db: PersistenceDb): Promise<string> {
   const workflowId = ulid(),
     id = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: workflowId,
     definition: '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[],"outputs":[]}',
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id,
     executionLineageId: id,
     lineageSlotPathJson: JSON.stringify([
@@ -47,6 +47,7 @@ export async function mintSequenceRun(
 ): Promise<string> {
   return databaseSessionFor(db).transaction((tx) =>
     createNodeRunMintParticipantInTx(tx).mint({
+      ...deriveNodeRunRole({ nodeId: input.nodeId ?? 'n', rerunCause: input.cause ?? 'initial' }),
       taskId,
       nodeId: 'n',
       iteration: 0,

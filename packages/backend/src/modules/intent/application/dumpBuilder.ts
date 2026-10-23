@@ -27,6 +27,8 @@ import type {
   Workgroup,
 } from '@agent-workflow/shared'
 import {
+  agentReferenceIds,
+  agentSkillReferences,
   privilegedNodeLensFor,
   maskFreeJsonSecrets,
   INTENT_REDACTED,
@@ -375,12 +377,10 @@ async function outEdgesOf(
   if (cur.resourceType === 'agent') {
     const agent = await loadAgentDetail(catalog, cur.resourceId)
     if (agent !== null) {
-      for (const dep of agent.dependsOn) add('agent', dep)
-      for (const m of agent.mcp) add('mcp', m)
-      for (const p of agent.plugins) add('plugin', p)
-      for (const s of agent.skills) {
-        if (s.kind === 'managed') add('skill', s.skillId)
-      }
+      for (const dep of agentReferenceIds(agent, 'agent')) add('agent', dep)
+      for (const m of agentReferenceIds(agent, 'mcp')) add('mcp', m)
+      for (const p of agentReferenceIds(agent, 'plugin')) add('plugin', p)
+      for (const id of agentReferenceIds(agent, 'skill')) add('skill', id)
     }
   } else if (cur.resourceType === 'workflow') {
     const wf = await loadWorkflowDetail(catalog, cur.resourceId)
@@ -544,7 +544,7 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
       if (ref.resourceType === 'agent') {
         const agent = await loadAgentDetail(catalog, ref.resourceId)
         if (agent === null) throw new NotFoundError('agent-not-found', 'agent not found')
-        const skills: Array<AgentSkillSelector | string> = agent.skills.map((s) =>
+        const skills: Array<AgentSkillSelector | string> = agentSkillReferences(agent).map((s) =>
           s.kind === 'managed'
             ? catalog.skills.has(s.skillId)
               ? handleFor('skill', s.skillId)
@@ -556,13 +556,13 @@ export async function buildIntentDump(input: IntentDumpInput): Promise<IntentDum
           description: agent.description,
           ...(Object.keys(agent.permission).length > 0 ? { permission: agent.permission } : {}),
           skills: skills as AgentSkillSelector[] | string[],
-          dependsOn: agent.dependsOn.map((id) =>
+          dependsOn: agentReferenceIds(agent, 'agent').map((id) =>
             catalog.agents.has(id) ? handleFor('agent', id) : 'hidden-dependency',
           ),
-          mcp: agent.mcp.map((id) =>
+          mcp: agentReferenceIds(agent, 'mcp').map((id) =>
             catalog.mcps.has(id) ? handleFor('mcp', id) : 'hidden-dependency',
           ),
-          plugins: agent.plugins.map((id) =>
+          plugins: agentReferenceIds(agent, 'plugin').map((id) =>
             catalog.plugins.has(id) ? handleFor('plugin', id) : 'hidden-dependency',
           ),
           ...(agent.inputs !== undefined && agent.inputs.length > 0

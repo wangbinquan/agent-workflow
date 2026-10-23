@@ -6,6 +6,8 @@
 // number，于是同一段代码在两侧行为不同。这里统一 `Number()` 归一，并把「不是有限数」
 // 当缺陷抛——让它红在这一行，而不是流进 zod 报一个看不懂的形状错。
 
+import { projectStoredTaskRepositorySummary } from '../taskRepositorySurface'
+import { decodeTaskSubject, projectTaskSubject } from '../../domain/taskSubject'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   FailureCode,
@@ -86,6 +88,7 @@ export interface OperationsSqlRow {
   open_alert_count: number | null
   scheduled_task_id: string | null
   launch_origin: string | null
+  code_round_id: string | null
   workgroup_id: string | null
   workgroup_name: string | null
   space_kind: string | null
@@ -195,43 +198,65 @@ export async function mapRows(
     })),
   )
 
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    workflowId: row.workflow_id,
-    workflowName: row.workflow_name,
-    repoPath: row.repo_path,
-    repoUrl: row.repo_url,
-    cachedRepoId: row.cached_repo_id,
-    status: row.status,
-    startedAt: numeric(row.started_at, 'started_at'),
-    finishedAt: nullableNumeric(row.finished_at, 'finished_at'),
-    errorSummary: row.error_summary,
-    ...(failureCodes.has(row.id) ? { failureCode: failureCodes.get(row.id) ?? null } : {}),
-    repoCount: numeric(row.repo_count, 'repo_count'),
-    openAlertCount: numeric(row.open_alert_count ?? 0, 'open_alert_count'),
-    scheduledTaskId: row.scheduled_task_id,
-    workgroupId: row.workgroup_id,
-    workgroupName: row.workgroup_name,
-    spaceKind: row.space_kind,
-    parentTaskId: row.parent_task_id,
-    invocationDepth: numeric(row.invocation_depth, 'invocation_depth'),
-    sourceAgentName: row.source_agent_name,
-    sourceAgentId: row.source_agent_id,
-    ownerUserId: row.owner_user_id,
-    owner: row.owner_user_id === null ? null : (owners.get(row.owner_user_id) ?? null),
-    childCount: childCounts.get(row.id) ?? 0,
-    executionClock: {
-      runningMs: numeric(row.running_ms, 'running_ms'),
-      runningSince: nullableNumeric(row.running_since, 'running_since'),
-    },
-    listContext: {
-      matchKind: row.match_kind,
-      parentAvailability:
-        row.parent_task_id === null ? 'none' : kind === 'children' ? 'visible' : 'unavailable',
-      qualifyingChildCount: numeric(row.qualifying_child_count, 'qualifying_child_count'),
-      matchingDescendantCount: numeric(row.matching_descendant_count, 'matching_descendant_count'),
-      branchStartedAt: numeric(row.branch_started_at, 'branch_started_at'),
-    },
-  }))
+  return rows.map((row) => {
+    const repository = projectStoredTaskRepositorySummary(
+      {
+        repoPath: row.repo_path,
+        repoUrl: row.repo_url,
+        cachedRepoId: row.cached_repo_id,
+        repoCount: numeric(row.repo_count, 'repo_count'),
+      },
+      'stored',
+    )
+    return {
+      id: row.id,
+      name: row.name,
+      ...projectTaskSubject(
+        decodeTaskSubject({
+          workflowId: row.workflow_id,
+          codeRoundId: row.code_round_id,
+          workgroupId: row.workgroup_id,
+          sourceAgentId: row.source_agent_id,
+          sourceAgentName: row.source_agent_name,
+        }),
+        row.workflow_name,
+      ),
+      repoPath: repository.repoPath,
+      repoUrl: repository.repoUrl,
+      cachedRepoId: repository.cachedRepoId,
+      status: row.status,
+      startedAt: numeric(row.started_at, 'started_at'),
+      finishedAt: nullableNumeric(row.finished_at, 'finished_at'),
+      errorSummary: row.error_summary,
+      ...(failureCodes.has(row.id) ? { failureCode: failureCodes.get(row.id) ?? null } : {}),
+      repoCount: repository.repoCount,
+      openAlertCount: numeric(row.open_alert_count ?? 0, 'open_alert_count'),
+      scheduledTaskId: row.scheduled_task_id,
+      workgroupId: row.workgroup_id,
+      workgroupName: row.workgroup_name,
+      spaceKind: row.space_kind,
+      parentTaskId: row.parent_task_id,
+      invocationDepth: numeric(row.invocation_depth, 'invocation_depth'),
+      sourceAgentName: row.source_agent_name,
+      sourceAgentId: row.source_agent_id,
+      ownerUserId: row.owner_user_id,
+      owner: row.owner_user_id === null ? null : (owners.get(row.owner_user_id) ?? null),
+      childCount: childCounts.get(row.id) ?? 0,
+      executionClock: {
+        runningMs: numeric(row.running_ms, 'running_ms'),
+        runningSince: nullableNumeric(row.running_since, 'running_since'),
+      },
+      listContext: {
+        matchKind: row.match_kind,
+        parentAvailability:
+          row.parent_task_id === null ? 'none' : kind === 'children' ? 'visible' : 'unavailable',
+        qualifyingChildCount: numeric(row.qualifying_child_count, 'qualifying_child_count'),
+        matchingDescendantCount: numeric(
+          row.matching_descendant_count,
+          'matching_descendant_count',
+        ),
+        branchStartedAt: numeric(row.branch_started_at, 'branch_started_at'),
+      },
+    }
+  })
 }

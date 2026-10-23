@@ -39,6 +39,14 @@
 //        所以这里锁的是「这串语句配中立原语在两个引擎上都真的同生共死」，再由下面的源码层
 //        `await` 完整性守卫兜住第 ③ 档（漏 await 不会让任何行为测试变红）。
 
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  readTaskFixtures,
+  taskFixture,
+  taskRepoFixture,
+  readTaskRepoFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readFileSync } from 'node:fs'
@@ -91,8 +99,8 @@ async function seedTask(
   const doneRunId = `run-done-${ulid()}`
   const intentId = `intent-${ulid()}`
   const status = overrides.status ?? 'done'
-  const { tasks, nodeRuns, taskExecutionIntents } = tablesOf(db)
-  await insertOne(db, tasks, {
+  const { taskExecutionIntents } = tablesOf(db)
+  await taskFixture(db, {
     id: taskId,
     name: taskId,
     workflowId: 'workflow-w10',
@@ -118,7 +126,7 @@ async function seedTask(
     executionLineageId: taskId,
     lineageSlotPathJson: SLOT_PATH(taskId),
   })
-  await db.insert(nodeRuns).values([
+  await nodeRunFixture(db, [
     {
       id: openRunId,
       taskId,
@@ -333,11 +341,11 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const boom = new Error('rfc359-w10-rollback-probe')
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        await tx
-          .update(tasks)
-          .set({ sourceTerminationFence: 'closed', sourceTerminationEffectRev: 5 })
-          .where(eq(tasks.id, seeded.taskId))
+        await patchTaskFixture(
+          tx,
+          { id: seeded.taskId },
+          { sourceTerminationFence: 'closed', sourceTerminationEffectRev: 5 },
+        )
         await revokeExactOwnerInTx(tx, {
           owner: { taskId: seeded.taskId, ...owner },
           expectedRevision: owner.revision,
@@ -354,7 +362,12 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
           tx,
           nodeRunId: seeded.openRunId,
           event: { kind: 'mark-canceled', reason: 'probe' },
-          extra: { finishedAt: Date.now(), errorMessage: 'probe' },
+          extra: {
+            identity: {
+              finishedAt: Date.now(),
+              errorMessage: 'probe',
+            },
+          },
         })
         throw boom
       }),
@@ -406,11 +419,7 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
-        const { tasks } = tablesOf(tx)
-        await tx
-          .update(tasks)
-          .set({ sourceTerminationFence: 'merged' })
-          .where(eq(tasks.id, seeded.taskId))
+        await patchTaskFixture(tx, { id: seeded.taskId }, { sourceTerminationFence: 'merged' })
         // 期望 revision 比库里的老一格 —— 精确 owner CAS 必须不命中。
         await revokeExactOwnerInTx(tx, {
           owner: { taskId: seeded.taskId, ...owner },
@@ -467,12 +476,13 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const seeded = await seedTask(h.db, { status: 'running', openRunStatus: 'running' })
 
     await databaseSessionFor(h.db).transaction(async (tx) => {
-      const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
-      await tx
-        .update(tasks)
-        .set({ worktreePath: '/tmp/prepared', branch: 'prepared', repoCount: 1 })
-        .where(eq(tasks.id, seeded.taskId))
-      await insertOne(tx, taskRepos, {
+      const { taskSpaceNodes } = tablesOf(tx)
+      await patchTaskFixture(
+        tx,
+        { id: seeded.taskId },
+        { worktreePath: '/tmp/prepared', branch: 'prepared' },
+      )
+      await taskRepoFixture(tx, {
         taskId: seeded.taskId,
         repoIndex: 0,
         repoPath: '/tmp/prepared/repo',
@@ -491,23 +501,23 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
         to: 'done',
         allowedFrom: ['running'],
         reason: 'repo-prep-done',
-        extra: { finishedAt: 42 },
+        extra: {
+          identity: {
+            finishedAt: 42,
+          },
+        },
       })
     })
 
-    const { tasks, taskRepos, taskSpaceNodes, nodeRuns } = tablesOf(h.db)
+    const { taskSpaceNodes, nodeRuns } = tablesOf(h.db)
     expect(
       (
-        await h.db
-          .select({ worktreePath: tasks.worktreePath })
-          .from(tasks)
-          .where(eq(tasks.id, seeded.taskId))
-          .limit(1)
+        await readTaskFixtures(h.db, { id: seeded.taskId }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ worktreePath: row.worktreePath })),
+        )
       )[0]?.worktreePath,
     ).toBe('/tmp/prepared')
-    expect(
-      (await h.db.select().from(taskRepos).where(eq(taskRepos.taskId, seeded.taskId))).length,
-    ).toBe(1)
+    expect((await readTaskRepoFixtures(h.db, { taskId: seeded.taskId })).length).toBe(1)
     expect(
       (await h.db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, seeded.taskId)))
         .length,
@@ -531,12 +541,13 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
-        const { tasks, taskRepos, taskSpaceNodes } = tablesOf(tx)
-        await tx
-          .update(tasks)
-          .set({ worktreePath: '/tmp/prepared', branch: 'prepared', repoCount: 1 })
-          .where(eq(tasks.id, seeded.taskId))
-        await insertOne(tx, taskRepos, {
+        const { taskSpaceNodes } = tablesOf(tx)
+        await patchTaskFixture(
+          tx,
+          { id: seeded.taskId },
+          { worktreePath: '/tmp/prepared', branch: 'prepared' },
+        )
+        await taskRepoFixture(tx, {
           taskId: seeded.taskId,
           repoIndex: 0,
           repoPath: '/tmp/prepared/repo',
@@ -555,24 +566,26 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
           to: 'done',
           allowedFrom: ['running'],
           reason: 'repo-prep-done',
-          extra: { finishedAt: 42 },
+          extra: {
+            identity: {
+              finishedAt: 42,
+            },
+          },
         })
       }),
     ).rejects.toMatchObject({ code: 'illegal-node-run-transition' })
 
-    const { tasks, taskRepos, taskSpaceNodes } = tablesOf(h.db)
+    const { taskSpaceNodes } = tablesOf(h.db)
     expect(
       (
-        await h.db
-          .select({ worktreePath: tasks.worktreePath })
-          .from(tasks)
-          .where(eq(tasks.id, seeded.taskId))
-          .limit(1)
+        await readTaskFixtures(h.db, { id: seeded.taskId }, { limit: 1 }).then((rows) =>
+          rows.map((row) => ({ worktreePath: row.worktreePath })),
+        )
       )[0]?.worktreePath,
       'tasks 的路径回写必须回滚——否则「有工作树但没有成员仓」这种不存在的状态会落库',
     ).toBe(`/tmp/worktree/${seeded.taskId}`)
     expect(
-      (await h.db.select().from(taskRepos).where(eq(taskRepos.taskId, seeded.taskId))).length,
+      (await readTaskRepoFixtures(h.db, { taskId: seeded.taskId })).length,
       'task_repos 必须回滚',
     ).toBe(0)
     expect(
@@ -586,8 +599,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const taskId = `task-${ulid()}`
     const intentId = `intent-${ulid()}`
     await databaseSessionFor(h.db).transaction(async (tx) => {
-      const { tasks, taskExecutionIntents } = tablesOf(tx)
-      await insertOne(tx, tasks, {
+      const { taskExecutionIntents } = tablesOf(tx)
+      await taskFixture(tx, {
         id: taskId,
         name: taskId,
         workflowId: 'workflow-w10',
@@ -629,9 +642,13 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       })
     })
 
-    const { tasks, taskExecutionIntents, committedEvents } = tablesOf(h.db)
+    const { taskExecutionIntents, committedEvents } = tablesOf(h.db)
     expect(
-      (await h.db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length,
+      (
+        await readTaskFixtures(h.db, { id: taskId }).then((rows) =>
+          rows.map((row) => ({ id: row.id })),
+        )
+      ).length,
     ).toBe(1)
     expect(
       (
@@ -661,8 +678,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     const intentId = `intent-${ulid()}`
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
-        const { tasks, taskExecutionIntents } = tablesOf(tx)
-        await insertOne(tx, tasks, {
+        const { taskExecutionIntents } = tablesOf(tx)
+        await taskFixture(tx, {
           id: taskId,
           name: taskId,
           workflowId: 'workflow-w10',
@@ -707,9 +724,13 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       }),
     ).rejects.toThrow('rfc359-w10-launch-rollback-probe')
 
-    const { tasks, taskExecutionIntents, committedEvents } = tablesOf(h.db)
+    const { taskExecutionIntents, committedEvents } = tablesOf(h.db)
     expect(
-      (await h.db.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, taskId))).length,
+      (
+        await readTaskFixtures(h.db, { id: taskId }).then((rows) =>
+          rows.map((row) => ({ id: row.id })),
+        )
+      ).length,
       '任务行必须回滚——合一前这条原子性正是「手工回滚可能删掉一条既存任务」的替代品',
     ).toBe(0)
     expect(

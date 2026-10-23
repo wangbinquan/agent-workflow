@@ -165,10 +165,9 @@ const KERNEL_DIRECT_WRITES = 3
 const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   // 内核：`transitionNodeRunStatus` 与 `setNodeRunStatus` 各一处，外加 CAS 的重试写。
   'platform/persistence/sqlite/taskLifecycle.ts': KERNEL_DIRECT_WRITES,
-  // Provider-specific terminal sweeps: parked clarify run + remaining human gates.
-  'modules/collaboration/infrastructure/humanGateTerminalSweep.ts': 2,
-  // clarify 封存：把已回答的澄清 run 收成 'done'。
-  'modules/collaboration/infrastructure/clarify/seal.ts': 1,
+  // RFC-395 II-a A7：原 terminal sweep 的 2 处 + clarify seal 的 1 处迁入 owner。
+  // 写点、CAS 与调用方事务不变，精确总数仍为 3。
+  'modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts': 3,
   // PostgreSQL task-execution lifecycle kernels. Each owns a closed transition
   // in its provider transaction; exact counts prevent this from becoming a
   // general-purpose write escape hatch.

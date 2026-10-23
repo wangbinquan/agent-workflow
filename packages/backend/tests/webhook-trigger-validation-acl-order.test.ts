@@ -19,8 +19,7 @@
 //   但 RFC-260 已经把 webhook 的**读**面下放给了全体用户，写面下放是可预见的演进；
 //   没有这条锁，那一天泄漏会静默变成真漏洞。因此测试直接在**服务层**构造一个
 //   role='user' 的 actor，绕开路由权限矩阵，精确断言函数自身的顺序契约。
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture } from './helpers/model'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
@@ -60,8 +59,7 @@ async function seedFixture(providerHarness: ProviderHarness): Promise<{
     password: 'longEnoughPassword',
   })
   const workflowId = ulid()
-  const { workflows } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'classified-workflow',
     description: '',

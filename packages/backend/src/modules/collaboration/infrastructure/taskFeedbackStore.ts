@@ -1,5 +1,6 @@
 // RFC-359 W4-B3 —— 任务反馈存储：一份实现，两个 provider 共用。
 
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, desc, eq } from 'drizzle-orm'
@@ -36,13 +37,10 @@ export class DrizzleTaskFeedbackStore implements TaskFeedbackStore {
   constructor(private readonly db: PersistenceDb) {}
 
   async loadTaskIdentity(taskId: string) {
-    const { tasks } = tablesOf(this.db)
     const row = (
-      await this.db
-        .select({ id: tasks.id, ownerUserId: tasks.ownerUserId })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
+      await createTaskGateQueries(this.db)
+        .listContexts([taskId])
+        .then((rows) => rows.map((row) => ({ id: row.id, ownerUserId: row.ownerUserId })))
     )[0]
     return row ?? null
   }

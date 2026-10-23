@@ -48,7 +48,14 @@
 // a per-call plan (fixtures/scenario-opencode.ts); no sleeps, no network; temp
 // dirs cleaned in afterEach.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  agentFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  consumedProducerIds,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   migrateWorkflowDefinitionToLatest,
@@ -96,8 +103,7 @@ function buildHarness(): Harness {
 }
 
 async function seedAgent(db: DbClient, name: string, outputs: string[]): Promise<void> {
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id: ulid(),
     name,
     description: 'test',
@@ -117,13 +123,12 @@ async function seedWorkflowAndTask(
   const canonicalDefinition = await canonicalizeWorkflowAgentIds(h.db, definition)
   const workflowId = ulid()
   const taskId = ulid()
-  const { workflows, tasks } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
     definition: JSON.stringify(canonicalDefinition),
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     name: 'rfc354-nested-failure-task',
     id: taskId,
     workflowId,
@@ -263,8 +268,8 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('failed')
     // Two gates can catch this, and which one fires is an implementation
     // detail; what the user is promised is that the task STOPS and says the
@@ -325,8 +330,8 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorMessage ?? '').toContain('wrapper-loop-exhausted')
 
@@ -402,8 +407,7 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
-    const { tasks } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorMessage ?? '').toContain('wrapper-output-boundary-missing')
     // A git wrapper exposes exactly `git_diff`; an inner agent's own ports never
@@ -467,8 +471,7 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
-    const { tasks } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('failed')
     expect(task?.errorMessage ?? '').toContain('wrapper-output-boundary-missing')
     expect(task?.errorMessage ?? '').toContain('shardWorker.result')
@@ -625,14 +628,13 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('done')
 
-    const runsOfB = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'workerB')))
+    const runsOfB = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId }, { nodeId: 'workerB' }],
+    })
     expect(runsOfB.length).toBe(1)
     const consumerRun = runsOfB[0]!
     // The two workers live in different generations — sibling scopes, no
@@ -647,10 +649,7 @@ describe('RFC-354 — nested failure modes', () => {
     // … and yet the value crossed, and the dependency is recorded against the
     // neighbouring WRAPPER's generation row rather than the producing run.
     expect(consumerRun.promptText ?? '').toContain('A-SECRET')
-    const consumed = JSON.parse(consumerRun.consumedUpstreamRunsJson ?? '{}') as Record<
-      string,
-      string
-    >
+    const consumed = consumedProducerIds(consumerRun.consumedEdges) as Record<string, string>
     expect(Object.keys(consumed)).toEqual(['loopA'])
   }, 30000)
 
@@ -714,14 +713,12 @@ describe('RFC-354 — nested failure modes', () => {
 
     await drive(h, taskId)
 
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const task = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const task = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(task?.status).toBe('done')
 
-    const consumers = await h.db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'workerB')))
+    const consumers = await readNodeRunFixtures(h.db, {
+      $and: [{ taskId }, { nodeId: 'workerB' }],
+    })
     expect(consumers.length).toBe(2)
     const byScope = new Map(consumers.map((row) => [row.scopePath, row.promptText ?? '']))
     expect([...byScope.keys()].sort()).toEqual(['outer:0/loopB:0', 'outer:1/loopB:0'])

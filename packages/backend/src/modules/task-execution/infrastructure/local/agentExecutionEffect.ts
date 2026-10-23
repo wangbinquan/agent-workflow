@@ -166,9 +166,11 @@ export function bindLocalAgentExecutionEffect(input: {
       await task.nodeExecution().patch({
         nodeRunId,
         values: {
-          pid: native.pid,
-          spawnBinaryPath: native.spawnBinaryPath,
-          spawnLaunchNonce: native.launchNonce ?? null,
+          runtime: {
+            pid: native.pid,
+            spawnBinaryPath: native.spawnBinaryPath,
+            spawnLaunchNonce: native.launchNonce ?? null,
+          },
         },
       })
     },

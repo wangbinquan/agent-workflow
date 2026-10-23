@@ -37,9 +37,10 @@
 // 资源会话在两侧都是**注入的接口**，所以这里用替身驱动真实管线：测的是 intent 的编排，
 // 不是 resource-catalog 的六条提交臂。
 
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { createIntentApplyJournalConvergence } from '@/modules/intent/infrastructure/intentApplyArtifactLifecycle'
+import { createIntentApplyRecoveryScene } from '@/modules/intent/infrastructure/intentApplyRecovery'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -58,7 +59,7 @@ import type {
   IntentApplyInput,
   IntentApplyReceipt,
 } from '@/modules/intent/application/ports/intentApplyOperations'
-import type { IntentJournalArtifactV1 } from '@/modules/intent/domain/journalArtifacts'
+import type { IntentJournalArtifactV1 } from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
 import {
   createIntentApplyEngine,
   type ApplyIntentFaults,
@@ -300,15 +301,14 @@ function applyPortFor(harness: ProviderHarness, options: ApplyHarnessOptions = {
       })
     },
     converge: (log, convergeOptions) =>
-      createIntentApplyJournalConvergence({
-        db: harness.db,
-        artifacts: artifacts as never,
-        log,
-      }).converge({
-        activeJournalIds: [
-          ...operations.activeJournalIds(),
-          ...(convergeOptions?.activeJournalIds ?? []),
-        ],
+      createAtomicApplyRecovery([
+        createIntentApplyRecoveryScene({
+          db: harness.db,
+          artifacts: artifacts as never,
+          log,
+        }),
+      ]).converge({
+        intent: [...operations.activeJournalIds(), ...(convergeOptions?.activeJournalIds ?? [])],
       }),
     calls,
   }
@@ -699,9 +699,9 @@ describeEachProvider(
       } as PersistenceTables['users']['$inferInsert'])
     })
 
-    test('①（已合一）journal 的工件信封两侧同形：裸数组', async () => {
+    test('①（已合一）journal 的工件信封两侧同形：显式 scene / version', async () => {
       // RFC-359 §5dz：合一之前 SQLite 那台写的是带版本号的信封
-      // （`{ version: 1, artifacts: [...] }`），PG 写裸数组。现在只剩一台引擎，两侧同形。
+      // （`{ version: 1, artifacts: [...] }`），PG 写裸数组。RFC-395 A6 改为统一版本信封。
       const fixture = await seedSession(harness, 'w7-envelope')
       const port = applyPortFor(harness, { artifact: AGENT_ARTIFACT })
       const receipt = await port.apply(command(fixture))

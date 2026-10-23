@@ -17,9 +17,6 @@
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 import type { LaunchSpaceFields } from '@agent-workflow/shared'
 
-export const CODE_ROUND_HOST_WORKFLOW_ID = '00000000000000CODEROUND00'
-export const CODE_ROUND_HOST_WORKFLOW_NAME = '__code_round_host__'
-
 /**
  * The one node of a round's synthesized snapshot. Named like the agent host's
  * `__agent_main__` so the two read as the same family in a node_runs dump.

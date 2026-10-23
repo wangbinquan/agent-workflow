@@ -36,7 +36,7 @@ import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
   type IntentJournalArtifact,
-} from '@/modules/intent/domain/journalArtifacts'
+} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
 import {
   createIntentApplyArtifactLifecycle,
   decodeIntentApplyRecoveryArtifacts,
@@ -223,11 +223,11 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
   test('plugin-install 前滚：没落地的发布判 false 并记 retryable，落地了的判 true 且静默', async () => {
     const lifecycle = lifecycleFor(harness)
 
-    // `plugins` 表里没有这一行 ⇒ 发布没落地 ⇒ 该行仍可重试。
+    // RFC-395 II-a A6：提交后已经删除的插件不用继续发布；存在行但缺内容仍须重试。
     const missing = recordingLog()
     const orphan = pluginInstallArtifact('never-published', generationDir('never-published'))
-    await expect(lifecycle.rollForward([orphan] as never[], missing.log)).resolves.toBe(false)
-    expect(missing.warnings()).toEqual(['intent-apply-artifact-roll-forward-retryable'])
+    await expect(lifecycle.rollForward([orphan] as never[], missing.log)).resolves.toBe(true)
+    expect(missing.warnings()).toEqual([])
 
     const now = Date.now()
     const cachedPath = generationDir('published')
@@ -254,6 +254,15 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
       ),
     ).resolves.toBe(true)
     expect(published.warnings()).toEqual([])
+    rmSync(cachedPath, { recursive: true, force: true })
+    const absentContent = recordingLog()
+    await expect(
+      lifecycle.rollForward(
+        [pluginInstallArtifact('published', cachedPath)] as never[],
+        absentContent.log,
+      ),
+    ).resolves.toBe(false)
+    expect(absentContent.warnings()).toEqual(['intent-apply-artifact-roll-forward-retryable'])
   })
 })
 
@@ -262,6 +271,22 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
 // ─────────────────────────────────────────────────────────────────────────────
 
 describeEachProvider('RFC-359 Intent apply 工件生命周期 · 旧词汇兼容面', (harness) => {
+  beforeEach(async () => {
+    const { skills } = tablesOf(harness.db)
+    await insertOne(harness.db, skills, {
+      id: 'skill-1',
+      name: 'skill-one',
+      description: '',
+      managedPath: '/tmp/skill-1/files',
+      contentVersion: 2,
+      reservationState: 'ready',
+      versionState: 'snapshot-authoritative',
+      ownerUserId: 'rfc359-w7-owner',
+      visibility: 'private',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+  })
   // 合一之前这一条是「实测分叉①：托管根之外的 generationDir —— PG 拒绝，SQLite 照删」。
   // 取并集的结果是**两个 provider 都拒绝**：那道包含性检查是强侧独有的能力，不是 provider 差异。
   test('托管根之外的 generationDir —— 两个 provider 都拒绝补偿，目录原样还在', async () => {

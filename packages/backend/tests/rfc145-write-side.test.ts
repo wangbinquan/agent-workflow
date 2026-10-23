@@ -6,7 +6,7 @@
 // 且 errorMessage 文案与 RFC-145 之前逐字节相同（机器地位取消、人读价值保留）。
 // supersede 双列的写侧断言在 reviews-iterate-mints-new-run（T4 锁更新时并入）。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -60,8 +60,8 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
 
   test('无信封输出 → 行落 failureCode=envelope-missing，errorMessage 文案零变更', async () => {
     const agentId = ulid()
-    const { agents, workflows, tasks, nodeRuns } = tablesOf(h.db)
-    await insertOne(h.db, agents, {
+    const { nodeRuns } = tablesOf(h.db)
+    await agentFixture(h.db, {
       id: agentId,
       name: 'a',
       description: '',
@@ -81,14 +81,14 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
     }
     const workflowId = ulid()
     const taskId = ulid()
-    await insertOne(h.db, workflows, {
+    await workflowFixture(h.db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(def),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    await insertOne(h.db, tasks, {
+    await taskFixture(h.db, {
       id: taskId,
       name: 'fixture',
       workflowId,
@@ -108,7 +108,7 @@ describe('RFC-145 写侧 — runner 正向声明 failure_code', () => {
       binaryOverride: ['bun', 'run', h.mockPath],
     })
 
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]!
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(t.status).toBe('failed')
     const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const failed = rows.filter((r) => r.nodeId === 'A' && r.status === 'failed')

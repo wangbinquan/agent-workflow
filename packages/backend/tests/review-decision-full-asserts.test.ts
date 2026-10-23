@@ -5,6 +5,17 @@
 // this file asserts the FULL delta for each path so a refactor can't
 // silently drop a field.
 
+import {
+  agentFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+  patchNodeRunOutputFixture,
+  patchTaskFixture,
+  readNodeRunOutputFixtures,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
@@ -214,9 +225,8 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     const db = harness.db
     const committedEvents = await installCommittedEventDeliveryHarness(db)
-    const { agents, workflows, tasks, nodeRuns, nodeRunOutputs, docVersions, reviewComments } =
-      tablesOf(db)
-    await insertOne(db, agents, {
+    const { docVersions, reviewComments } = tablesOf(db)
+    await agentFixture(db, {
       id: ulid(),
       name: 'doc',
       description: '',
@@ -243,13 +253,13 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       ],
     }
     const workflowId = ulid()
-    await insertOne(db, workflows, {
+    await workflowFixture(db, {
       id: workflowId,
       name: 'wf',
       definition: JSON.stringify(definition),
     })
     const taskId = ulid()
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       name: 't',
       id: taskId,
       executionLineageId: taskId,
@@ -269,7 +279,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     // Upstream agent done.
     const agentRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: agentRunId,
       taskId,
       nodeId: 'doc',
@@ -279,7 +289,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       startedAt: Date.now() - 1000,
       finishedAt: Date.now() - 900,
     })
-    await insertOne(db, nodeRunOutputs, {
+    await nodeRunOutputFixture(db, {
       nodeRunId: agentRunId,
       portName: 'docpath',
       content: opts?.sourceFilePath !== undefined ? opts.sourceFilePath : '# body inline',
@@ -287,7 +297,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     // Review row awaiting decision.
     const reviewRunId = ulid()
-    await insertOne(db, nodeRuns, {
+    await nodeRunFixture(db, {
       id: reviewRunId,
       taskId,
       nodeId: 'rev_1',
@@ -368,7 +378,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       })
       await h.committedEvents.drain()
 
-      const { nodeRuns, docVersions, nodeRunOutputs, memoryDistillJobs } = tablesOf(h.db)
+      const { nodeRuns, docVersions, memoryDistillJobs } = tablesOf(h.db)
       // node_run: status=done, finishedAt set ≥ before
       const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
       expect(nr.status).toBe('done')
@@ -385,10 +395,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(dv.commentsJson).toBe('[]')
 
       // nodeRunOutputs: approved_doc + approval_meta
-      const outs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+      const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
       const byPort = new Map(outs.map((o) => [o.portName, o.content]))
       expect(byPort.has('approved_doc')).toBe(true)
       expect(byPort.has('approval_meta')).toBe(true)
@@ -420,14 +427,12 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       // Pre-write the source file (resolver expects it to exist for read path).
       mkdirSync(join(h.repoPath, 'docs'), { recursive: true })
       writeFileSync(join(h.repoPath, 'docs/design.md'), '# design body')
-      const { nodeRunOutputs } = tablesOf(h.db)
       // Re-write the upstream port to be a path string (not inline body).
-      await h.db
-        .update(nodeRunOutputs)
-        .set({ content: 'docs/design.md' })
-        .where(
-          and(eq(nodeRunOutputs.nodeRunId, h.agentRunId), eq(nodeRunOutputs.portName, 'docpath')),
-        )
+      await patchNodeRunOutputFixture(
+        h.db,
+        { nodeRunId: h.agentRunId, portName: 'docpath' },
+        { content: 'docs/design.md' },
+      )
 
       await submitReviewDecision({
         db: h.db,
@@ -438,10 +443,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         author: 'tester',
       })
 
-      const outs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+      const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
       const approved = outs.find((o) => o.portName === 'approved_doc')!
       // approved_doc must mirror the source's shape — a path, not inline body.
       expect(approved.content).toBe('docs/design.md')
@@ -485,10 +487,9 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(remainingRowComments.length).toBe(0)
 
       // Upstream: original agent row canceled + retry=1 minted pending
-      const agentRows = await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
+      const agentRows = await readNodeRunFixtures(h.db, {
+        $and: [{ taskId: h.taskId }, { nodeId: 'doc' }],
+      })
       expect(agentRows.length).toBe(2)
       const original = agentRows.find((r) => r.id === h.agentRunId)!
       expect(original.status).toBe('canceled')
@@ -557,11 +558,8 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         expectedReviewIteration: 0,
         author: 'tester',
       })
-      const { nodeRunOutputs, memoryDistillJobs } = tablesOf(h.db)
-      const outsBefore = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+      const { memoryDistillJobs } = tablesOf(h.db)
+      const outsBefore = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
 
       const replay = await submitReviewDecision({
         db: h.db,
@@ -578,10 +576,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         replayed: true,
       })
 
-      const outsAfter = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+      const outsAfter = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
       expect(outsAfter.length).toBe(outsBefore.length)
       expect(await h.db.select().from(memoryDistillJobs)).toHaveLength(1)
     })
@@ -680,7 +675,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(results[0]!.status).toBe('fulfilled')
       expectRejectedWithCode(results[1]!, 'review-not-awaiting')
 
-      const { nodeRuns, docVersions, reviewComments, nodeRunOutputs } = tablesOf(h.db)
+      const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
       const reviewRun = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId))
       )[0]!
@@ -699,10 +694,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
       expect(upstream).toHaveLength(1)
       expect(upstream[0]!.status).toBe('done')
-      const outputs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+      const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
       expect(outputs.map((row) => row.portName).sort()).toEqual(['approval_meta', 'approved_doc'])
       expect(await taskDistillJobs()).toHaveLength(1)
     })
@@ -736,7 +728,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(results[0]!.status).toBe('fulfilled')
       expectRejectedWithCode(results[1]!, 'review-not-awaiting')
 
-      const { nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
+      const { nodeRuns, docVersions } = tablesOf(h.db)
       const reviewRun = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId))
       )[0]!
@@ -754,10 +746,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(upstream).toHaveLength(2)
       expect(upstream.filter((row) => row.status === 'canceled')).toHaveLength(1)
       expect(upstream.filter((row) => row.status === 'pending')).toHaveLength(1)
-      const outputs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+      const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
       expect(outputs).toHaveLength(0)
       expect(await taskDistillJobs()).toHaveLength(1)
     })
@@ -841,14 +830,11 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
           replayed: true,
         })
       }
-      const { docVersions, nodeRunOutputs } = tablesOf(h.db)
+      const { docVersions } = tablesOf(h.db)
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(doc.decision).toBe('approved')
       expect(doc.decidedBy).toBe('first')
-      const outputs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId))
+      const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
       expect(outputs).toHaveLength(2)
       expect(await taskDistillJobs()).toHaveLength(1)
     })
@@ -986,14 +972,15 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
           },
         ],
       }
-      const { tasks, nodeRuns, docVersions, nodeRunOutputs } = tablesOf(h.db)
-      await h.db
-        .update(tasks)
-        .set({ workflowSnapshot: JSON.stringify(definition) })
-        .where(eq(tasks.id, h.taskId))
+      const { nodeRuns, docVersions } = tablesOf(h.db)
+      await patchTaskFixture(
+        h.db,
+        { id: h.taskId },
+        { workflowSnapshot: JSON.stringify(definition) },
+      )
 
       const siblingRunId = ulid()
-      await insertOne(h.db, nodeRuns, {
+      await nodeRunFixture(h.db, {
         id: siblingRunId,
         taskId: h.taskId,
         nodeId: 'rev_2',
@@ -1054,10 +1041,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       )[0]!
       expect(siblingDoc.decision).toBe('rejected')
       expect(siblingDoc.decisionReason).toContain('invalidated by sibling reject')
-      const siblingOutputs = await h.db
-        .select()
-        .from(nodeRunOutputs)
-        .where(eq(nodeRunOutputs.nodeRunId, siblingRunId))
+      const siblingOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: siblingRunId })
       expect(siblingOutputs).toHaveLength(0)
     })
   })

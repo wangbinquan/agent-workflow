@@ -1,10 +1,11 @@
-import { withNativeTransactions } from './helpers/nativeTransactions'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { preparedArtifactLane } from '@/modules/task-execution/infrastructure/workspaceLaunchLane'
 // RFC-349 — direct Agent/Workgroup launch keeps the existing route contract
 // while the selected PostgreSQL provider owns the task row, collaborators,
 // launch intent, frozen resource closure and committed lifecycle event.
 
+import { readTaskFixtures, readTaskRepoFixtures } from './helpers/model'
+import { withNativeTransactions } from './helpers/nativeTransactions'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { preparedArtifactLane } from '@/modules/task-execution/infrastructure/workspaceLaunchLane'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -452,7 +453,6 @@ async function harness(input: {
         async loadVisibleAgent(_actor, agentId) {
           return agentId === agent.id ? agent : null
         },
-        async ensureHostWorkflow() {},
         async validateHostWorkflow() {
           return { ok: true, issues: [] }
         },
@@ -466,7 +466,6 @@ async function harness(input: {
       async loadExistingAgentIds(agentIds: readonly string[]) {
         return agentIds.filter((agentId) => agentId === agent.id)
       },
-      async ensureHostWorkflow() {},
       integrity: integrity(integrityCalls),
     }),
     id() {
@@ -854,9 +853,9 @@ function gitMetadataHarness(
     actor: launchActor,
     resourceAuthority,
     invoker: { type: 'user', launchKind: 'direct-json' },
-    task: { workflowId: workflow.id, name: 'Git metadata', inputs: {}, scratch: true },
+    task: { name: 'Git metadata', inputs: {}, scratch: true },
     subject: {
-      workflowId: workflow.id,
+      subject: { kind: 'workflow' as const, sourceId: workflow.id },
       workflowName: workflow.name,
       // 同上：普通工作流行。
       builtin: false,
@@ -1019,13 +1018,9 @@ describeEachProvider('RFC-363 Agent upload journal', (provider) => {
       state: 'admitted',
       lane: 'pre-materialized',
     })
-    const { tasks, taskRepos, taskCollaborators, taskExecutionIntents, committedEvents } = tablesOf(
-      provider.db,
-    )
-    expect(await provider.db.select().from(tasks).where(eq(tasks.id, task.id))).toHaveLength(1)
-    expect(
-      await provider.db.select().from(taskRepos).where(eq(taskRepos.taskId, task.id)),
-    ).toHaveLength(1)
+    const { taskCollaborators, taskExecutionIntents, committedEvents } = tablesOf(provider.db)
+    expect(await readTaskFixtures(provider.db, { id: task.id })).toHaveLength(1)
+    expect(await readTaskRepoFixtures(provider.db, { taskId: task.id })).toHaveLength(1)
     expect(
       await provider.db
         .select()

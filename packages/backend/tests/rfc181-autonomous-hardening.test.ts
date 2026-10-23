@@ -1,3 +1,10 @@
+import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import {
+  agentFixture,
+  patchClarifyRoundFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
@@ -126,8 +133,7 @@ describeEachProvider(
     let db: PersistenceDb
     beforeEach(async () => {
       db = harness.db
-      const { agents } = tablesOf(db)
-      await insertOne(db, agents, {
+      await agentFixture(db, {
         id: PLANNER_AGENT_ID,
         name: 'planner-agent',
         description: '',
@@ -221,15 +227,15 @@ describeEachProvider(
 
     async function seedTask(configJson: string | null): Promise<string> {
       const id = ulid()
-      const { workflows, tasks } = tablesOf(db)
-      await insertOne(db, workflows, {
+      const { workflows } = tablesOf(db)
+      await workflowFixture(db, {
         id: ulid(),
         name: `wf-${id}`,
         definition: '{}',
         builtin: true,
       })
       const wf = (await db.select().from(workflows).limit(1))[0]
-      await insertOne(db, tasks, {
+      await taskFixture(db, {
         id,
         name: 'rfc181-task',
         workflowId: wf?.id ?? ulid(),
@@ -274,11 +280,17 @@ describeEachProvider(
         })
       }
       const clarifyRunId = await mintNodeRun(db, {
+        ...deriveNodeRunRole({ nodeId: '__wg_clarify__', rerunCause: 'clarify-park' }),
         taskId,
         nodeId: '__wg_clarify__',
         status: 'awaiting_human',
         cause: 'clarify-park',
-        overrides: { shardKey: opts.shard, startedAt: Date.now() },
+        overrides: {
+          identity: {
+            shardKey: opts.shard,
+            startedAt: Date.now(),
+          },
+        },
       })
       const sessionId = ulid()
       // RFC-058 双写的权威轮行（实现门 P1-②：/api/clarify、草稿、seal 都读它——
@@ -295,7 +307,7 @@ describeEachProvider(
         intermediaryNodeRunId: clarifyRunId,
         loopIter: 0,
         iteration: 0,
-        questionsJson: JSON.stringify([{ id: 'q1', question: '哪个口径？' }]),
+        questions: JSON.stringify([{ id: 'q1', question: '哪个口径？' }]),
         status: 'awaiting_human',
         createdAt: Date.now(),
       })
@@ -495,11 +507,7 @@ describeEachProvider(
 
     test('已 answered / canceled 的 session no-op；重复调用幂等（陈旧答案回流的根被掐死）', async () => {
       const park = await seedClarifyPark({ shard: ulid(), withAssignment: true })
-      const { clarifyRounds } = tablesOf(db)
-      await db
-        .update(clarifyRounds)
-        .set({ status: 'answered' })
-        .where(eq(clarifyRounds.id, park.sessionId))
+      await patchClarifyRoundFixture(db, { id: park.sessionId }, { status: 'answered' })
       const res = await dismissOpenClarifyParksForAutonomous(db, taskId, 'leader_worker')
       expect(res.dismissedSessions).toBe(0)
       expect(res.requeuedAssignments).toEqual([])

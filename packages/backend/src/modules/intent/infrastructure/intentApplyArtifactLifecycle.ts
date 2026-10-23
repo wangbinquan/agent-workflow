@@ -1,3 +1,6 @@
+import { decodeCurrentIntentArtifact } from './intentApplyCurrentCodec'
+import { rollForwardLegacySkillArtifacts } from './intentApplyLegacyCodec'
+export { decodeIntentApplyRecoveryArtifacts } from './intentApplyArtifactCodec'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
@@ -10,89 +13,12 @@ import type {
   PostgresqlSkillArtifactCompensation,
 } from '../ports/skillArtifactCompensation'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  decodeIntentJournalArtifacts,
-  type IntentJournalArtifact,
-} from '@/modules/intent/domain/journalArtifacts'
-import {
-  INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
-  INTENT_APPLY_DIAGNOSTICS,
-} from '../application/journalConvergence'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { IntentJournalArtifact } from '../domain/journalArtifacts'
+import { INTENT_APPLY_DIAGNOSTICS } from '../application/journalConvergence'
 import type { Logger } from '@/util/log'
 import type { IntentApplyArtifactLifecycle, IntentApplyRecoveryArtifact } from './intentApplyEngine'
 
 export type { IntentApplyRecoveryArtifact }
-
-function stringField(value: Readonly<Record<string, unknown>>, key: string): string {
-  const field = value[key]
-  if (typeof field !== 'string' || field.length === 0) {
-    throw new Error(`intent-apply-artifact-${key}-invalid`)
-  }
-  return field
-}
-
-function positiveIntegerField(value: Readonly<Record<string, unknown>>, key: string): number {
-  const field = value[key]
-  if (!Number.isInteger(field) || (field as number) <= 0) {
-    throw new Error(`intent-apply-artifact-${key}-invalid`)
-  }
-  return field as number
-}
-
-function decodePostgresqlArtifact(value: unknown): IntentApplyArtifact | null {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null
-  const record = value as Readonly<Record<string, unknown>>
-  switch (record.kind) {
-    case 'plugin-install':
-      return Object.freeze({
-        kind: 'plugin-install',
-        pluginId: stringField(record, 'pluginId'),
-        generationId: stringField(record, 'generationId'),
-        generationDir: stringField(record, 'generationDir'),
-      })
-    case 'skill-stage':
-      if (!('operationId' in record) || !('stagingDirectory' in record)) return null
-      return Object.freeze({
-        kind: 'skill-stage',
-        skillId: stringField(record, 'skillId'),
-        operationId: stringField(record, 'operationId'),
-        stagingDirectory: stringField(record, 'stagingDirectory'),
-      })
-    case 'skill-version-stage':
-      if (!('operationId' in record) || !('stagingDirectory' in record)) return null
-      return Object.freeze({
-        kind: 'skill-version-stage',
-        skillId: stringField(record, 'skillId'),
-        operationId: stringField(record, 'operationId'),
-        version: positiveIntegerField(record, 'version'),
-        stagingDirectory: stringField(record, 'stagingDirectory'),
-        versionDirectory: stringField(record, 'versionDirectory'),
-      })
-    default:
-      return null
-  }
-}
-
-/** Decode both native PostgreSQL rows and lossless rows migrated from SQLite. */
-export function decodeIntentApplyRecoveryArtifacts(
-  json: string,
-): readonly IntentApplyRecoveryArtifact[] {
-  let value: unknown
-  try {
-    value = JSON.parse(json)
-  } catch (cause) {
-    throw new Error('intent apply journal artifacts are not valid JSON', { cause })
-  }
-  if (!Array.isArray(value)) return decodeIntentJournalArtifacts(json)
-  return value.map((entry) => {
-    const postgresql = decodePostgresqlArtifact(entry)
-    if (postgresql !== null) return postgresql
-    const [legacy] = decodeIntentJournalArtifacts(JSON.stringify([entry]))
-    if (legacy === undefined) throw new Error('intent apply journal artifact is missing')
-    return legacy
-  })
-}
 
 function operationIdOf(artifact: IntentApplyArtifact): string {
   return artifact.kind === 'plugin-install' ? artifact.generationId : artifact.operationId
@@ -117,117 +43,10 @@ async function assertPluginPublished(input: {
       .where(eq(plugins.id, input.artifact.pluginId))
       .limit(1),
   )
-  if (row === undefined || !(await input.content.pluginExists(row.cachedPath))) {
+  if (row === undefined) return
+  if (!(await input.content.pluginExists(row.cachedPath))) {
     throw new Error(`intent-apply-plugin-publication-missing:${input.artifact.pluginId}`)
   }
-}
-
-async function assertLegacyPluginPublished(input: {
-  readonly db: PersistenceDb
-  readonly pluginId: string
-  readonly content: IntentArtifactContentPort
-}): Promise<void> {
-  const { plugins } = tablesOf(input.db)
-  const row = await first(
-    input.db
-      .select({ cachedPath: plugins.cachedPath })
-      .from(plugins)
-      .where(eq(plugins.id, input.pluginId))
-      .limit(1),
-  )
-  if (row === undefined || !(await input.content.pluginExists(row.cachedPath))) {
-    throw new Error(`intent-apply-plugin-publication-missing:${input.pluginId}`)
-  }
-}
-
-/**
- * RFC-359 —— 合一之前由 SQLite 那台引擎写下的技能工件的前滚。
- *
- * 这段逻辑逐字来自被退役的 `sqliteIntentApplyArtifactLifecycle.ts`：先按 `skill_operations`
- * 的 `(active, phase)` 判断哪些暂存版本还能重放，整批 `unmarkSkillBootVerified` 之后逐条
- * `publishStagedSkillVersion`，最后把 `db-committed` 的 `skill-stage` 操作行收尾。
- * 判据：`rfc343-intent-apply-correctness` 的「committed skill-version convergence」。
- */
-async function rollForwardLegacySkillArtifacts(input: {
-  readonly recovery: LegacyIntentSkillArtifactCompat
-  readonly db: PersistenceDb
-  readonly appHome: string
-  readonly artifacts: readonly IntentJournalArtifact[]
-  readonly log: Logger
-}): Promise<boolean> {
-  const { recovery, db, log } = input
-  let complete = true
-
-  const stagedVersions = input.artifacts.flatMap((artifact) =>
-    artifact.kind === 'skill-version-stage' ? [artifact.staged] : [],
-  )
-  const stages = input.artifacts.flatMap((artifact) =>
-    artifact.kind === 'skill-stage' ? [{ skillId: artifact.skillId, opId: artifact.opId }] : [],
-  )
-
-  const pending: typeof stagedVersions = []
-  for (const staged of stagedVersions) {
-    if (staged.noop !== null) continue
-    if (staged.opId === null) {
-      pending.push(staged)
-      continue
-    }
-    const operation = await recovery.loadSkillOperationState(db, staged.opId)
-    if (
-      operation?.active === 1 &&
-      (operation.phase === 'db-committed' || operation.phase === 'fs-published')
-    ) {
-      pending.push(staged)
-      continue
-    }
-    if (operation?.phase !== 'done') {
-      complete = false
-      log.warn('intent-skill-publish-op-not-replayable', {
-        skillId: staged.skillId,
-        opId: staged.opId,
-        phase: operation?.phase ?? 'missing',
-      })
-    }
-  }
-
-  for (const staged of pending) recovery.unmarkSkillBootVerified(staged.skillId)
-  for (const staged of pending) {
-    try {
-      await recovery.publishStagedSkillVersion(db, { appHome: input.appHome }, staged)
-    } catch (error) {
-      complete = false
-      log.warn('intent-skill-publish-replayed-or-failed', {
-        skillId: staged.skillId,
-        err: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
-  for (const stage of stages) {
-    const operation = await recovery.loadSkillOperationState(db, stage.opId)
-    if (operation?.active === 0 && operation.phase === 'done') continue
-    if (operation?.active !== 1 || operation.phase !== 'db-committed') {
-      complete = false
-      log.warn('intent-skill-finish-op-not-replayable', {
-        skillId: stage.skillId,
-        opId: stage.opId,
-        phase: operation?.phase ?? 'missing',
-      })
-      continue
-    }
-    try {
-      await databaseSessionFor(db).transaction(
-        async (transaction) => await recovery.finishOperation(transaction, stage.opId),
-      )
-    } catch (error) {
-      complete = false
-      log.warn('intent-skill-finish-replayed-or-failed', {
-        skillId: stage.skillId,
-        err: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-  return complete
 }
 
 async function rollForwardPostgresqlSkill(input: {
@@ -244,7 +63,11 @@ async function rollForwardPostgresqlSkill(input: {
       .where(eq(skills.id, input.artifact.skillId))
       .limit(1),
   )
-  if (skill === undefined || skill.managedPath === null || skill.contentVersion < version) {
+  if (skill === undefined) {
+    await input.content.discardSkill({ artifact: input.artifact, version })
+    return
+  }
+  if (skill.managedPath === null || skill.contentVersion < version) {
     throw new Error(`intent-apply-skill-publication-missing:${input.artifact.skillId}`)
   }
   const snapshot = await first(
@@ -303,7 +126,7 @@ export function createIntentApplyArtifactLifecycle(
         })
   return Object.freeze({
     async compensate(artifact: Parameters<IntentApplyArtifactLifecycle['compensate']>[0]) {
-      const postgresql = decodePostgresqlArtifact(artifact)
+      const postgresql = decodeCurrentIntentArtifact(artifact)
       if (postgresql?.kind === 'plugin-install') {
         await content.discardPlugin(postgresql.generationDir)
         return
@@ -325,7 +148,7 @@ export function createIntentApplyArtifactLifecycle(
       const legacySkillArtifacts: IntentJournalArtifact[] = []
       for (const artifact of artifacts) {
         try {
-          const postgresql = decodePostgresqlArtifact(artifact)
+          const postgresql = decodeCurrentIntentArtifact(artifact)
           if (postgresql?.kind === 'plugin-install') {
             await assertPluginPublished({ db: input.db, artifact: postgresql, content })
             continue
@@ -341,27 +164,29 @@ export function createIntentApplyArtifactLifecycle(
           if ((artifact as IntentJournalArtifact).kind === 'legacy-plugin-install-untracked') {
             continue
           }
-          if ((artifact as IntentJournalArtifact).kind === 'plugin-install') {
-            // 旧词汇的 plugin-install 带的是 `pluginId` + `generationDir`；判据与新词汇逐字相同
-            // （行在 + 目录在 = 装成了），只是取 id 的字段名不同。
-            await assertLegacyPluginPublished({
-              db: input.db,
-              content,
-              pluginId: (artifact as Extract<IntentJournalArtifact, { kind: 'plugin-install' }>)
-                .pluginId,
-            })
-            continue
+          const legacy = artifact as IntentJournalArtifact
+          if (legacy.kind === 'skill-stage' || legacy.kind === 'skill-version-stage') {
+            const skillId = legacy.kind === 'skill-stage' ? legacy.skillId : legacy.staged.skillId
+            const { skills } = tablesOf(input.db)
+            const skill = await first(
+              input.db.select({ id: skills.id }).from(skills).where(eq(skills.id, skillId)),
+            )
+            if (skill === undefined) {
+              // RFC-395 II-a A6：已删除技能不再发布，但仍须清掉这次 journal 的暂存内容。
+              await content.discardLegacy(legacy)
+              continue
+            }
           }
-          legacySkillArtifacts.push(artifact as IntentJournalArtifact)
+          legacySkillArtifacts.push(legacy)
           continue
         } catch (error) {
           complete = false
           log.warn(INTENT_APPLY_DIAGNOSTICS.artifactRollForwardRetryable, {
             kind: artifact.kind,
             operationId:
-              decodePostgresqlArtifact(artifact) === null
+              decodeCurrentIntentArtifact(artifact) === null
                 ? 'legacy'
-                : operationIdOf(decodePostgresqlArtifact(artifact)!),
+                : operationIdOf(decodeCurrentIntentArtifact(artifact)!),
             err: error instanceof Error ? error.message : String(error),
           })
         }
@@ -388,114 +213,6 @@ export function createIntentApplyArtifactLifecycle(
         }
       }
       return complete
-    },
-  })
-}
-
-export interface IntentApplyJournalConvergence {
-  converge(input: {
-    readonly activeJournalIds: readonly string[]
-  }): Promise<{ readonly failed: number; readonly rolledForward: number }>
-}
-
-const CONVERGE_MIN_AGE_MS = 10 * 60 * 1000
-
-export function createIntentApplyJournalConvergence(input: {
-  readonly db: PersistenceDb
-  readonly artifacts: IntentApplyArtifactLifecycle
-  readonly now?: () => number
-  readonly log: Logger
-}): IntentApplyJournalConvergence {
-  const now = input.now ?? Date.now
-  return Object.freeze({
-    async converge(command: { readonly activeJournalIds: readonly string[] }) {
-      const active = new Set(command.activeJournalIds)
-      const reapBefore = now() - CONVERGE_MIN_AGE_MS
-      let failed = 0
-      let rolledForward = 0
-      const { intentApplyJournal } = tablesOf(input.db)
-      for (const row of await input.db.select().from(intentApplyJournal)) {
-        if (row.state === 'failed') continue
-        let artifacts: readonly IntentApplyRecoveryArtifact[]
-        try {
-          artifacts = decodeIntentApplyRecoveryArtifacts(row.preparedArtifactsJson)
-        } catch (error) {
-          input.log.warn('intent-journal-artifact-corrupt', {
-            journalId: row.id,
-            state: row.state,
-            err: error instanceof Error ? error.message : String(error),
-          })
-          await input.db
-            .update(intentApplyJournal)
-            .set({
-              error: `retryable: artifact decode failed: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              updatedAt: now(),
-            })
-            .where(and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)))
-          continue
-        }
-        if (row.state === 'prepared' || row.state === 'applying') {
-          if (active.has(row.id) || row.updatedAt > reapBefore) continue
-          let compensationFailed = false
-          for (const artifact of [...artifacts].reverse()) {
-            try {
-              await input.artifacts.compensate(artifact)
-            } catch (error) {
-              compensationFailed = true
-              input.log.warn('intent-converge-compensation-failed', {
-                journalId: row.id,
-                kind: artifact.kind,
-                err: error instanceof Error ? error.message : String(error),
-              })
-            }
-          }
-          if (compensationFailed) {
-            await input.db
-              .update(intentApplyJournal)
-              .set({ error: 'retryable: compensation incomplete', updatedAt: now() })
-              .where(
-                and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)),
-              )
-            continue
-          }
-          const settled = await first(
-            input.db
-              .update(intentApplyJournal)
-              .set({ state: 'failed', error: 'daemon-restart before commit', updatedAt: now() })
-              .where(
-                and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, row.state)),
-              )
-              .returning({ id: intentApplyJournal.id }),
-          )
-          if (settled !== undefined) failed += 1
-          continue
-        }
-        const complete = await input.artifacts.rollForward(artifacts, input.log)
-        if (complete) {
-          rolledForward += 1
-          if (row.error !== null) {
-            await input.db
-              .update(intentApplyJournal)
-              .set({ error: null, updatedAt: now() })
-              .where(
-                and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')),
-              )
-          }
-        } else {
-          await input.db
-            .update(intentApplyJournal)
-            .set({
-              error: INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE,
-              updatedAt: now(),
-            })
-            .where(
-              and(eq(intentApplyJournal.id, row.id), eq(intentApplyJournal.state, 'committed')),
-            )
-        }
-      }
-      return Object.freeze({ failed, rolledForward })
     },
   })
 }

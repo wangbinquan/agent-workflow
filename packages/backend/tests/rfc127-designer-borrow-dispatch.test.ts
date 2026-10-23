@@ -20,7 +20,7 @@
 // What remains is ONE structural lock: a clarify reassign produces a designer handler with NO
 // override — so a refactor that re-introduces borrow through the reassign path goes red here.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -106,8 +106,7 @@ async function seedTask(
   const taskId = `task_${Math.random().toString(36).slice(2, 8)}`
   const def = liveDef()
   const workflowId = `wf_${taskId}`
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rfc127-retired',
     description: '',
@@ -115,7 +114,7 @@ async function seedTask(
     version: 1,
     schemaVersion: 4,
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([
@@ -132,7 +131,7 @@ async function seedTask(
     inputs: JSON.stringify({}),
     startedAt: Date.now(),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: ulid(),
     taskId,
     nodeId: DESIGNER,
@@ -142,7 +141,7 @@ async function seedTask(
     startedAt: Date.now() - 1000,
   })
   const questionerRunId = ulid()
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: questionerRunId,
     taskId,
     nodeId: QUESTIONER,

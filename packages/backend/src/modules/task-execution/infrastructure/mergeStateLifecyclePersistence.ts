@@ -14,7 +14,9 @@ import { ConflictError, NotFoundError } from '@/util/errors'
 import type { MergeStateLifecyclePersistence } from '../application/ports/mergeStateLifecyclePersistence'
 import { holdsExplicitTransaction } from '@/db/transactionScope'
 import { isSupersedableMergeState } from '../domain/nodeRunSupersession'
-import { structurallySupersededCondition } from './nodeRunSupersession'
+import { taskCheckpointProjectionPatch } from './taskCheckpointCodec'
+import { taskCheckpointMountPaths } from './taskCheckpointPersistence'
+import { structurallySupersededCondition } from './runSelection/oracle/supersessionSql'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
@@ -58,12 +60,20 @@ export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecycl
         isSupersedableMergeState(from) &&
         (await isRunSuperseded(tx, input.nodeRunId))
       const to: MergeStateOrNull = superseded ? 'abandoned' : nextMergeState(from, input.event)
+      const extra = superseded
+        ? {}
+        : taskCheckpointProjectionPatch(
+            { ...input.extra?.runtime, ...input.extra?.checkpoint },
+            input.extra?.checkpoint?.checkpoints === undefined
+              ? []
+              : await taskCheckpointMountPaths(tx, row.taskId),
+          )
       const updated = await tx
         .update(nodeRuns)
         // rfc144-allow-direct-merge-state-write -- 事件 CAS：唯一的 merge_state 迁移写手
         // 收尾成 abandoned 时**不带** extra：否则本次迁移的载荷（isoNodeTree* / iso base 列）会覆写
         // 被取代行（设计门 r2 P2-3）。
-        .set({ mergeState: to, ...(superseded ? {} : (input.extra ?? {})) })
+        .set({ mergeState: to, ...extra })
         .where(
           and(
             eq(nodeRuns.id, input.nodeRunId),

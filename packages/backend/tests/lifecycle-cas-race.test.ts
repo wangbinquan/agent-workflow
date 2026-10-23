@@ -4,7 +4,7 @@
 // the helper. The CAS predicate `WHERE id = ? AND status = expectedFrom`
 // guarantees only one of two concurrent writers can succeed.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -32,14 +32,13 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc053-cas-'))
 
   const workflowId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ $schema_version: 2, inputs: [], nodes: [], edges: [] }),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     name: 't',
     id: taskId,
     workflowId,
@@ -75,8 +74,7 @@ async function seedRun(
     | 'exhausted',
 ): Promise<string> {
   const id = ulid()
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id,
     taskId,
     nodeId: 'n',
@@ -101,7 +99,11 @@ describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
       db: h.db,
       nodeRunId: id,
       event: { kind: 'mark-running' },
-      extra: { startedAt: 12345 },
+      extra: {
+        identity: {
+          startedAt: 12345,
+        },
+      },
     })
     expect(r.from).toBe('pending')
     expect(r.to).toBe('running')
@@ -178,7 +180,6 @@ describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
 
   test('transitionNodeRunStatus: CAS lost race — status changes between select and update', async () => {
     const id = await seedRun(h.db, h.taskId, 'running')
-    const { nodeRuns } = tablesOf(h.db)
     // To exercise the CAS path, monkey-patch the db `update` to first mutate
     // the row's status before the helper's UPDATE lands. We do this by
     // racing: kick off a transition (which will SELECT status=running,
@@ -195,7 +196,7 @@ describeEachProvider('RFC-053 PR-B — CAS helpers', (harness) => {
     // First: change row out-of-band.
     // (bypass helper for setup — this is test infra, not production code)
     // rfc053-allow-direct-status-write -- test setup
-    await h.db.update(nodeRuns).set({ status: 'awaiting_review' }).where(eq(nodeRuns.id, id))
+    await patchNodeRunFixture(h.db, { id }, { status: 'awaiting_review' })
 
     let err: unknown = null
     try {

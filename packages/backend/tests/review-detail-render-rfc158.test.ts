@@ -9,6 +9,12 @@
 // RFC-359: seed the 600 unrelated reviews in bounded batches. The PostgreSQL
 // CI timeout happened during their 1,200 individual writes, before the query.
 
+import {
+  type NodeRunFixtureSpec,
+  nodeRunFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
@@ -25,8 +31,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: wfId,
     name: 'wf',
     definition: '{}',
@@ -35,7 +40,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string 
     updatedAt: Date.now(),
   })
   const taskId = ulid()
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 't',
     workflowId: wfId,
@@ -52,7 +57,7 @@ async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string 
   return { taskId }
 }
 
-function reviewRunValues(taskId: string): PersistenceTables['nodeRuns']['$inferInsert'] {
+function reviewRunValues(taskId: string): NodeRunFixtureSpec {
   return {
     id: ulid(),
     taskId,
@@ -68,8 +73,7 @@ function reviewRunValues(taskId: string): PersistenceTables['nodeRuns']['$inferI
 
 async function seedReviewRun(db: PersistenceDb, taskId: string): Promise<string> {
   const row = reviewRunValues(taskId)
-  const { nodeRuns } = tablesOf(db)
-  await insertOne(db, nodeRuns, row)
+  await nodeRunFixture(db, row)
   return row.id
 }
 
@@ -141,7 +145,7 @@ describeEachProvider(
 
       // 600 NEWER doc_versions on other runs — pushing the target out of the
       // global `ORDER BY created_at DESC LIMIT 500` window listReviewSummaries used.
-      const otherRuns: PersistenceTables['nodeRuns']['$inferInsert'][] = []
+      const otherRuns: NodeRunFixtureSpec[] = []
       const otherVersions: PersistenceTables['docVersions']['$inferInsert'][] = []
       for (let i = 0; i < 600; i++) {
         const otherRun = reviewRunValues(taskId)
@@ -158,7 +162,7 @@ describeEachProvider(
       await harness.session.transaction(async (tx) => {
         const { nodeRuns, docVersions } = tablesOf(tx)
         await insertInBatches(tx, nodeRuns, otherRuns, (batch) => {
-          return queryWrite(tx.insert(nodeRuns).values([...batch]))
+          return queryWrite(nodeRunFixture(tx, [...batch]))
         })
         await insertInBatches(tx, docVersions, otherVersions, (batch) => {
           return queryWrite(tx.insert(docVersions).values([...batch]))

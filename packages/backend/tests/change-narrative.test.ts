@@ -11,6 +11,7 @@
 //  - prompt is pure: carries node intents, never user ids (rfc099 isolation)
 //  - extractJsonObject / parseNumstatZ / computeContentDigest unit matrices
 
+import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
@@ -123,13 +124,13 @@ async function seedWorld(db: PersistenceDb): Promise<{
   const { dir, commit } = await makeRepoWithChange()
   const taskId = `01NR${Math.random().toString(36).slice(2, 10).toUpperCase()}`
   const workflowId = `wf-${taskId}`
-  const { workflows, tasks, taskCollaborators } = tablesOf(db)
-  await insertOne(db, workflows, {
+  const { taskCollaborators } = tablesOf(db)
+  await workflowFixture(db, {
     id: workflowId,
     name: 'w',
     definition: JSON.stringify({ nodes: [], edges: [] }),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: '导读测试任务',
     workflowId,

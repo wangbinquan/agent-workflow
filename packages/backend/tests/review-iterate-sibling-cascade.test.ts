@@ -24,6 +24,7 @@
 //   - check the cascadeSiblingReviews call in submitReviewDecision iterate branch
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
+import { readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -223,11 +224,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
   )
 
   const idFor = async (nodeId: string): Promise<string> => {
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db
-      .select()
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, nodeId)))
+    const rows = await readNodeRunFixtures(db, { $and: [{ taskId: task.id }, { nodeId }] })
     const row = rows.find((r) => r.parentNodeRunId === null) ?? rows[0]
     if (row === undefined) throw new Error(`no node_run for ${nodeId}`)
     return row.id

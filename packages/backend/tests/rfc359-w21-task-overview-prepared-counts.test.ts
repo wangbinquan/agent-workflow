@@ -2,6 +2,7 @@
 // still executes four real statements and remains visible to a late recorder.
 // The original owner below is a frozen data/SQL oracle (70258c078f12ee35...),
 // with its opaque input branch copied verbatim and no new branch semantics.
+import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, spyOn, test } from 'bun:test'
@@ -91,8 +92,7 @@ async function seed(harness: ProviderHarness) {
       updatedAt: since,
     })
   }
-  const { workflows, tasks } = tablesOf(harness.db)
-  await insertOne(harness.db, workflows, { id: 'overview-wf', name: 'overview', definition: '{}' })
+  await workflowFixture(harness.db, { id: 'overview-wf', name: 'overview', definition: '{}' })
   const rows = [
     { id: 'a-running', status: 'running', ownerUserId: 'overview-a' },
     { id: 'b-running', status: 'running', ownerUserId: 'overview-b' },
@@ -112,7 +112,7 @@ async function seed(harness: ProviderHarness) {
     },
   ] as const
   for (const row of rows) {
-    await insertOne(harness.db, tasks, {
+    await taskFixture(harness.db, {
       workflowId: 'overview-wf',
       workflowSnapshot: '{}',
       inputs: '{}',
@@ -184,15 +184,16 @@ describeEachProvider('RFC-359 W21 task overview query templates', (harness) => {
     const recording = harness.recordStatements()
     try {
       for (const input of inputs) await compare(harness.db, owner, recording, input)
-      const { tasks } = tablesOf(harness.db)
-      await harness.db
-        .update(tasks)
-        .set({ status: 'done', finishedAt: since + 2 })
-        .where(eq(tasks.id, 'a-running'))
-      await harness.db
-        .update(tasks)
-        .set({ status: 'failed', finishedAt: since + 3 })
-        .where(eq(tasks.id, 'b-awaiting'))
+      await patchTaskFixture(
+        harness.db,
+        { id: 'a-running' },
+        { status: 'done', finishedAt: since + 2 },
+      )
+      await patchTaskFixture(
+        harness.db,
+        { id: 'b-awaiting' },
+        { status: 'failed', finishedAt: since + 3 },
+      )
       for (const input of inputs) {
         await compare(harness.db, owner, recording, input)
         await compare(harness.db, owner, recording, { ...input, since: since + 2 })
@@ -230,18 +231,13 @@ describeEachProvider('RFC-359 W21 task overview query templates', (harness) => {
 
   test('transaction-bound warmed templates see current rows and preserve complete rollback', async () => {
     await seed(harness)
-    const { tasks } = tablesOf(harness.db)
-    const before = await harness.db.select().from(tasks).orderBy(tasks.id)
+    const before = await readTaskFixtures(harness.db, undefined, { orderBy: [{ field: 'id' }] })
     const interruption = new Error('overview template rollback')
     await expect(
       harness.session.transaction(async (tx) => {
         const owner = createTaskOverviewQuery(tx)
         await owner.load(inputs[0]!)
-        const { tasks } = tablesOf(tx)
-        await tx
-          .update(tasks)
-          .set({ status: 'done', finishedAt: since })
-          .where(eq(tasks.id, 'a-running'))
+        await patchTaskFixture(tx, { id: 'a-running' }, { status: 'done', finishedAt: since })
         const recording = harness.recordStatements()
         try {
           for (const input of inputs.slice(0, 3)) await compare(tx, owner, recording, input)
@@ -257,7 +253,11 @@ describeEachProvider('RFC-359 W21 task overview query templates', (harness) => {
         throw interruption
       }),
     ).rejects.toBe(interruption)
-    expect(await harness.db.select().from(tasks).orderBy(tasks.id)).toEqual(before)
+    expect(
+      await readTaskFixtures(harness.db, undefined, {
+        orderBy: [{ field: 'id', direction: 'asc' }],
+      }),
+    ).toEqual(before)
     expect(await createTaskOverviewQuery(harness.db).load(inputs[0]!)).toEqual({
       running: 2,
       awaiting: 2,

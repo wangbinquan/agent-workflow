@@ -62,6 +62,19 @@ afterEach(() => {
 })
 
 describe('TaskSubjectLink — workflow tasks', () => {
+  test('RFC-395 II-a A2: digital employee keeps its name and badge as plain text', async () => {
+    const task: TaskSubjectFields = {
+      workflowId: '00000000000000DIGEMPHOST0',
+      workflowName: '__digital_employee_host__',
+    }
+    mountSubject(<TaskSubjectLink task={task} taskId="de" badge />)
+    expect((await screen.findByText(task.workflowName!)).textContent).toBe(task.workflowName)
+    expect(screen.queryByRole('link', { name: task.workflowName! })).toBeNull()
+    expect(screen.getByTestId('task-workflow-badge-de').textContent).toBe(
+      i18n.t('tasks.workflowBadge'),
+    )
+  })
+
   test('links to /workflows/$id by name, carrying the 「工作流」kind badge', async () => {
     const task: TaskSubjectFields = { workflowId: 'wf1', workflowName: 'My Flow' }
     mountSubject(<TaskSubjectLink task={task} taskId="t1" badge />)

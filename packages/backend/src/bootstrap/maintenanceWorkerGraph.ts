@@ -7,22 +7,21 @@ import {
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { createTokenCallAudit } from '@/auth/composition'
 import { openDb } from '@/db/client'
+import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import { composeIntentMaintenanceCommandsForDatabase } from '@/modules/intent/composition/maintenance'
 import { composeDevelopmentAutomationMaintenanceCommands } from '@/modules/development-automation/composition'
 import { composeDigitalEmployeeMaintenanceCommands } from '@/modules/digital-employee/composition'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composePluginGenerationGcCommand } from '@/modules/resource-catalog/composition/pluginGenerationGc'
-import {
-  composePostgresqlResourcePackageApplyMaintenance,
-  composeSqliteResourcePackageApplyMaintenance,
-} from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
-import type { ResourcePackageApplyMaintenanceCommand } from '@/modules/resource-catalog/public/commands'
+import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
-import { createMaintenanceExecutionFence } from '@/platform/persistence/maintenanceExecutionFence'
+import { createMaintenanceExecutionFence } from '@/modules/task-execution/composition/maintenanceExecutionFence'
 import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
 import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
 import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
@@ -49,7 +48,7 @@ interface MaintenanceWorkerAdapter {
   readonly db: PersistenceDb
   readonly eventsArchiveStore: EventsArchiveStore
   readonly storage: MaintenanceSystemOperations['storage']
-  readonly resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand
+  readonly resourcePackageRecoveryScene: AtomicApplyRecoveryScene<'resource-package'>
   readonly busyDeferralCounter: MaintenanceWorkerGraph['busyDeferralCounter']
   close(): Promise<void>
 }
@@ -75,7 +74,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
       runtime,
       contract: buildLogicalSchemaContract(),
     })
-    const resourcePackageMaintenance = composePostgresqlResourcePackageApplyMaintenance({
+    const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,
       appHome,
       pluginsDir: join(appHome, 'plugins'),
@@ -91,7 +90,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
           return (await operational.runStorageMaintenance()).counters
         },
       }),
-      resourcePackageMaintenanceCommand: resourcePackageMaintenance.command,
+      resourcePackageRecoveryScene: resourcePackageMaintenance.scene,
       busyDeferralCounter: 'postgresqlTransientDeferrals',
     }
   },
@@ -120,7 +119,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
       ;(db as unknown as { $client: { close(): void } }).$client.close()
     }
     registerConnectionClose(close)
-    const resourcePackageMaintenance = composeSqliteResourcePackageApplyMaintenance({
+    const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,
       appHome,
       pluginsDir: join(appHome, 'plugins'),
@@ -140,7 +139,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
           return { checkpointed: 1 }
         },
       }),
-      resourcePackageMaintenanceCommand: resourcePackageMaintenance.command,
+      resourcePackageRecoveryScene: resourcePackageMaintenance.scene,
       busyDeferralCounter: 'sqliteBusyDeferrals',
     }
   },
@@ -155,7 +154,7 @@ function selectMaintenanceWorkerAdapter(input: GraphInput): MaintenanceWorkerAda
 
 export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = async (input) => {
   const adapter = selectMaintenanceWorkerAdapter(input)
-  const { db: client, resourcePackageMaintenanceCommand } = adapter
+  const { db: client, resourcePackageRecoveryScene } = adapter
   const { appHome, effects: workerEffects } = input
   const store = createMaintenanceRunStore(client)
   const integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
@@ -208,16 +207,20 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
   })
   const intentMaintenanceCommands = composeIntentMaintenanceCommandsForDatabase({
     db: client,
-    content: workerEffects?.intentArtifactContent,
     scratch: workerEffects?.intentScratch,
     appHome,
-    pluginsDir: join(appHome, 'plugins'),
-    resourcePackages: {
-      converge: ({ activeApplyIds }) =>
-        resourcePackageMaintenanceCommand.converge({ activeApplyIds }),
-    },
     log: createLogger('intentMaintenance'),
   })
+  const atomicApply = createAtomicApplyRecovery([
+    composeIntentApplyRecoveryScene({
+      db: client,
+      appHome,
+      pluginsDir: join(appHome, 'plugins'),
+      content: workerEffects?.intentArtifactContent,
+      log: createLogger('intentMaintenance'),
+    }),
+    resourcePackageRecoveryScene,
+  ])
   return Object.freeze({
     store,
     ownerCommands: Object.freeze({
@@ -225,6 +228,7 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
       developmentAutomation: developmentAutomationMaintenance,
       digitalEmployee: digitalEmployeeMaintenance,
       intent: intentMaintenanceCommands,
+      atomicApply,
       integration: integrationMaintenanceCommands,
       taskRecovery: taskRecoveryOperations,
       taskArchive: taskArchiveMaintenanceCommand,

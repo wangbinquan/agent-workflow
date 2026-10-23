@@ -5,6 +5,7 @@
 // （consumed/finalized 且操作 committed/completed），final 路径在则按 digest 校验读取，
 // 否则回退 staged 路径。
 
+import { decodeLegacyReviewBody } from '@/platform/content/legacyReview'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 
@@ -58,14 +59,19 @@ export class DatabaseCommittedReviewArtifactReader implements CommittedReviewArt
       )
       .limit(1)
     const artifact = rows[0]
-    const final = await this.content.read(finalPath)
+    const final = await this.content.read(decodeLegacyReviewBody(finalPath).location.value)
     if (final !== null) {
       return artifact === undefined
         ? Buffer.from(final.body).toString('utf8')
         : readVerified(final, artifact.sha256, artifact.byteSize)
     }
     if (artifact !== undefined) {
-      const staged = await this.content.read(artifact.stagedPath)
+      const staged = await this.content.read(
+        decodeLegacyReviewBody(artifact.stagedPath, {
+          sha256: artifact.sha256,
+          size: artifact.byteSize,
+        }).location.value,
+      )
       if (staged !== null) return readVerified(staged, artifact.sha256, artifact.byteSize)
     }
     throw new HumanGateOperationError(

@@ -1,7 +1,5 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { nodeRunFixture, patchNodeRunFixture, patchTaskFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -45,9 +43,8 @@ describeEachProvider('RFC-370 selected runtime inventory read', (harness) => {
         return
       }
       await seedTask(harness.db, taskId)
-      const { tasks, nodeRuns } = tablesOf(harness.db)
-      await harness.db.update(tasks).set({ status: 'running' }).where(eq(tasks.id, taskId))
-      await insertOne(harness.db, nodeRuns, {
+      await patchTaskFixture(harness.db, { id: taskId }, { status: 'running' })
+      await nodeRunFixture(harness.db, {
         id: nodeRunId,
         taskId,
         nodeId: DESIGNER,
@@ -84,16 +81,17 @@ describeEachProvider('RFC-370 selected runtime inventory read', (harness) => {
         },
       })
       expect(reads).toBe(2)
-      await harness.db
-        .update(nodeRuns)
-        .set({
+      await patchNodeRunFixture(
+        harness.db,
+        { id: nodeRunId },
+        {
           runtimeInventoryJson: JSON.stringify({
             state: 'malformed',
             reason: 'hosted-inventory-invalid',
             message: null,
           }),
-        })
-        .where(eq(nodeRuns.id, nodeRunId))
+        },
+      )
       await application.dispose()
       application = undefined
       application = await createProviderHttpApplication(harness, {

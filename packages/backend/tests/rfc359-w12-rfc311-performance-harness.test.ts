@@ -2,6 +2,13 @@
 // one corpus. These small real-database cases are data/shape evidence; HTTP
 // latency and the full-size benchmark run separately in the hosted workflow.
 
+import { readStoredTaskRows, readStoredNodeRunRows } from './helpers/model/storedRows'
+import {
+  patchWorkflowFixture,
+  readTaskFixtures,
+  readWorkflowFixtures,
+  readNodeRunFixtures,
+} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -154,16 +161,17 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
     expect(receipt.expectedDigests).toEqual(OLD_NATIVE_DIGESTS)
     expect(receipt.actualDigests).toEqual(OLD_NATIVE_DIGESTS)
     expect(receipt.matchesExpected).toBe(true)
-    const { nodeRuns, cachedRepos, tasks, nodeRunEvents, webhookDeliveries } = tablesOf(harness.db)
+    const { cachedRepos, nodeRunEvents, webhookDeliveries } = tablesOf(harness.db)
     // RFC-374 appends a nullable column; preserve the frozen legacy-column oracle.
-    const persistedRuns = await harness.db.select().from(nodeRuns).orderBy(nodeRuns.id)
+    // RFC-395 II-a: hash physical rows, preserving the original goldens verbatim.
+    const persistedRuns = await readStoredNodeRunRows(harness.db)
     expect(persistedRuns.every((row) => row.seq === null)).toBe(true)
     // Independent old physical-row goldens also cover every omitted schema default.
     expect({
       cachedRepos: allColumnDigest(
         await harness.db.select().from(cachedRepos).orderBy(cachedRepos.id),
       ),
-      tasks: allColumnDigest(await harness.db.select().from(tasks).orderBy(tasks.id)),
+      tasks: allColumnDigest(await readStoredTaskRows(harness.db)),
       nodeRuns: allColumnDigest(persistedRuns.map(({ seq: _seq, ...legacy }) => legacy)),
       nodeRunEvents: allColumnDigest(
         await harness.db.select().from(nodeRunEvents).orderBy(nodeRunEvents.id),
@@ -185,16 +193,12 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
       ['nodeRunEvents', 361, 361],
       ['webhookDeliveries', 11, 11],
     ])
-    const child = await first(
-      harness.db.select().from(tasks).where(eq(tasks.id, 'perftask0000009')),
-    )
+    const child = (await readTaskFixtures(harness.db, { id: 'perftask0000009' }))[0]
     expect(child?.executionLineageId).toBe('perftask0000008')
     expect(child?.lineageSlotPathJson).toBe(
       '[{"stableNodeKey":"task-root","frozenOccurrenceKey":"perftask0000008","workflowRevision":null},{"stableNodeKey":"child-task","frozenOccurrenceKey":"perftask0000009","workflowRevision":null}]',
     )
-    const run = await first(
-      harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'perfrun00000000')),
-    )
+    const run = (await readNodeRunFixtures(harness.db, { id: 'perfrun00000000' }))[0]
     expect(run).toMatchObject({
       continuationSlotKey: null,
       lineageSlotPathJson: null,
@@ -205,20 +209,16 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
 
   test('the reusable entry preserves existing database-default workflow timestamps', async () => {
     await seedPerformanceCorpusEntry({ db: harness.db, session: harness.session })
-    const { workflows } = tablesOf(harness.db)
-    const original = await first(
-      harness.db.select().from(workflows).where(eq(workflows.id, 'perf-wf')),
-    )
+    const original = (await readWorkflowFixtures(harness.db, { id: 'perf-wf' }))[0]
     expect(original?.createdAt).toBeGreaterThan(0)
     expect(original?.updatedAt).toBeGreaterThan(0)
-    await harness.db
-      .update(workflows)
-      .set({ createdAt: 123_456, updatedAt: 234_567 })
-      .where(eq(workflows.id, 'perf-wf'))
-    await seedPerformanceCorpus({ db: harness.db, session: harness.session, dimensions: TINY })
-    const restored = await first(
-      harness.db.select().from(workflows).where(eq(workflows.id, 'perf-wf')),
+    await patchWorkflowFixture(
+      harness.db,
+      { id: 'perf-wf' },
+      { createdAt: 123_456, updatedAt: 234_567 },
     )
+    await seedPerformanceCorpus({ db: harness.db, session: harness.session, dimensions: TINY })
+    const restored = (await readWorkflowFixtures(harness.db, { id: 'perf-wf' }))[0]
     expect(restored?.createdAt).toBe(123_456)
     expect(restored?.updatedAt).toBe(234_567)
   })
@@ -326,7 +326,7 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
         throw failure
       }),
     ).rejects.toBe(failure)
-    const { tasks, cachedRepos, nodeRunEvents, workflows } = tablesOf(harness.db)
+    const { tasks, cachedRepos, nodeRunEvents } = tablesOf(harness.db)
     expect(await first(harness.db.select({ count: count() }).from(tasks))).toEqual({ count: 0 })
     expect(await first(harness.db.select({ count: count() }).from(cachedRepos))).toEqual({
       count: 0,
@@ -334,9 +334,7 @@ describeEachProvider('RFC-311 performance corpus real database', (harness) => {
     expect(await first(harness.db.select({ count: count() }).from(nodeRunEvents))).toEqual({
       count: 0,
     })
-    expect(
-      await first(harness.db.select().from(workflows).where(eq(workflows.id, 'perf-wf'))),
-    ).toBeUndefined()
+    expect((await readWorkflowFixtures(harness.db, { id: 'perf-wf' }))[0]).toBeUndefined()
   })
 
   test('reseed retains old insert-ignore rows but appends database-generated event IDs', async () => {

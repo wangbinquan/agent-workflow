@@ -1,6 +1,7 @@
 // RFC-357 —— 共享场景的种子写入。`db` 是两个 provider 的公共基类型，所以这段
 // insert 代码两边逐字相同；差异全在调用方怎么把客户端造出来。
 
+import { taskFixture, workflowFixture } from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskListPageDb } from '@/modules/task-execution/infrastructure/taskListPage'
@@ -13,7 +14,7 @@ import {
 } from './rfc357PageScenario'
 
 export async function seedRfc357Page(db: TaskListPageDb): Promise<void> {
-  const { users, workflows, tasks, taskCollaborators, lifecycleAlerts } = tablesOf(db)
+  const { users, taskCollaborators, lifecycleAlerts } = tablesOf(db)
   await db.insert(users).values(
     ['admin', 'alice', 'bob'].map((id) => ({
       id,
@@ -25,7 +26,7 @@ export async function seedRfc357Page(db: TaskListPageDb): Promise<void> {
       updatedAt: 1,
     })),
   )
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: 'wf1',
     name: 'Nightly Workflow',
     definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -33,7 +34,7 @@ export async function seedRfc357Page(db: TaskListPageDb): Promise<void> {
 
   for (const row of RFC357_SEED) {
     const startedAt = rfc357StartedAt(row.id)
-    await insertOne(db, tasks, {
+    await taskFixture(db, {
       id: row.id,
       name: row.name,
       workflowId: 'wf1',
@@ -58,7 +59,6 @@ export async function seedRfc357Page(db: TaskListPageDb): Promise<void> {
       workgroupId: row.workgroupConfigJson === undefined ? null : 'wg1',
       workgroupConfigJson: row.workgroupConfigJson ?? null,
       sourceAgentName: row.sourceAgentName ?? null,
-      repoCount: 1,
     })
     for (const userId of row.collaborators ?? []) {
       await insertOne(db, taskCollaborators, {

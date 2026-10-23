@@ -352,7 +352,9 @@ export async function runNode(
     await opts.persistence.nodeExecution.patch({
       nodeRunId: opts.nodeRunId,
       values: {
-        injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+        config: {
+          injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+        },
       },
     })
     log.info('inject-snapshot-eager-write', {
@@ -423,8 +425,10 @@ export async function runNode(
           allowedFrom: ['pending'],
           reason: 'signal-port-in-prompt',
           extra: {
-            finishedAt: Date.now(),
-            errorMessage: err.message,
+            identity: {
+              finishedAt: Date.now(),
+              errorMessage: err.message,
+            },
           },
         })
         return {
@@ -483,7 +487,13 @@ export async function runNode(
             ? { expandPromptTemplate: opts.expandPromptTemplate }
             : {}),
           inputs: opts.inputs,
-          meta: opts.templateMeta,
+          meta: {
+            ...opts.templateMeta,
+            repos: opts.templateMeta.repos?.map((repo) => ({
+              ...repo,
+              worktreeDirName: repo.mountPath,
+            })),
+          },
           agentOutputs: opts.agent.outputs,
           envelopeNonce,
           hasExternalUntrustedInput:
@@ -532,13 +542,17 @@ export async function runNode(
   // rfc053-allow-direct-status-write -- writing non-status field
   await opts.persistence.nodeExecution.patch({
     nodeRunId: opts.nodeRunId,
-    values: await nodeRunPrompts.store(opts.taskId, opts.nodeRunId, prompt),
+    values: { config: await nodeRunPrompts.store(opts.taskId, opts.nodeRunId, prompt) },
   })
   // RFC-053: mark-running enforces pending → running.
   await opts.persistence.nodeRuns.transition({
     nodeRunId: opts.nodeRunId,
     event: { kind: 'mark-running' },
-    extra: { startedAt: Date.now() },
+    extra: {
+      identity: {
+        startedAt: Date.now(),
+      },
+    },
   })
   // RFC-098 B3 (audit S-28): the eager `node.status: running` ping (see the
   // inject-snapshot block above) fires only AFTER the row really is running —
@@ -612,7 +626,12 @@ export async function runNode(
             to: 'failed',
             allowedFrom: ['running'],
             reason: 'runtime-session-reset-persistence-failed',
-            extra: { finishedAt: Date.now(), errorMessage },
+            extra: {
+              identity: {
+                finishedAt: Date.now(),
+                errorMessage,
+              },
+            },
           })
         } catch (statusError) {
           log.warn('runtime-session-reset-failure-status-persist-failed', {
@@ -661,7 +680,12 @@ export async function runNode(
           to: 'failed',
           allowedFrom: ['running'],
           reason: 'runtime-session-conflict',
-          extra: { finishedAt: Date.now(), errorMessage },
+          extra: {
+            identity: {
+              finishedAt: Date.now(),
+              errorMessage,
+            },
+          },
         })
         return {
           status: 'failed',
@@ -751,8 +775,10 @@ export async function runNode(
       allowedFrom: ['running', 'pending'],
       reason: 'runtime-spawn-failed',
       extra: {
-        finishedAt: Date.now(),
-        errorMessage,
+        identity: {
+          finishedAt: Date.now(),
+          errorMessage,
+        },
       },
     })
     return {
@@ -1067,7 +1093,11 @@ export async function runNode(
           await persistRunnerWrite('runtime-inventory/eager', () =>
             opts.persistence.nodeExecution.patch({
               nodeRunId: opts.nodeRunId,
-              values: { runtimeInventoryJson },
+              values: {
+                config: {
+                  runtimeInventoryJson,
+                },
+              },
             }),
           )
           startupInventoryPersistedLive = true
@@ -1492,7 +1522,12 @@ export async function runNode(
         to: 'failed',
         allowedFrom: ['running', 'pending'],
         reason: 'runtime-spawn-failed',
-        extra: { finishedAt: Date.now(), errorMessage },
+        extra: {
+          identity: {
+            finishedAt: Date.now(),
+            errorMessage,
+          },
+        },
       })
       await finishCall('failed', processEndedAt)
       return {
@@ -1922,7 +1957,7 @@ export async function runNode(
           // copy，节点 iso 仍存活——全生命周期唯一可靠读取窗口），并把 content
           // 规范化为 repo0 相对路径（D6：绝对路径 / './' 前缀不再泄漏下游；容器
           // 相对形态只进 archive_json）。归档写失败 = 环境级故障，fail loud。
-          const worktreeDirName = opts.templateMeta.repos?.[0]?.worktreeDirName ?? ''
+          const mountPath = opts.templateMeta.repos?.[0]?.mountPath ?? ''
           const archiveJsonByPort = new Map<string, string>()
           if (
             status === 'done' &&
@@ -1939,7 +1974,7 @@ export async function runNode(
                   nodeRunId: opts.nodeRunId,
                   portName: name,
                   items: arch.items,
-                  worktreeDirName,
+                  mountPath,
                 })
                 archiveJsonByPort.set(name, res.archiveJson)
                 normalizedContent.set(name, arch.items.map((it) => it.sourcePath).join('\n'))
@@ -2159,15 +2194,19 @@ export async function runNode(
       allowedFrom: ['running'],
       reason: 'runner-exit',
       extra: {
-        finishedAt: Date.now(),
-        exitCode: exitCode ?? null,
-        errorMessage: errorMessage ?? null,
-        failureCode: failureCode ?? null,
-        tokInput: tokenUsage.input,
-        tokOutput: tokenUsage.output,
-        tokCacheCreate: tokenUsage.cacheCreate,
-        tokCacheRead: tokenUsage.cacheRead,
-        tokTotal: tokenUsage.total,
+        identity: {
+          finishedAt: Date.now(),
+          exitCode: exitCode ?? null,
+          errorMessage: errorMessage ?? null,
+          failureCode: failureCode ?? null,
+        },
+        result: {
+          tokInput: tokenUsage.input,
+          tokOutput: tokenUsage.output,
+          tokCacheCreate: tokenUsage.cacheCreate,
+          tokCacheRead: tokenUsage.cacheRead,
+          tokTotal: tokenUsage.total,
+        },
       },
     })
     // RFC-132 PR-D 步骤2 (T4): RFC-070 消费戳废弃——派生老化 isTargetNodeConsumed
@@ -2178,17 +2217,23 @@ export async function runNode(
     await opts.persistence.nodeExecution.patch({
       nodeRunId: opts.nodeRunId,
       values: {
-        runtimeInventoryJson,
-        // RFC-280 T3: declared × observed × diff — the node-detail warning face.
-        startupVerificationJson,
-        // RFC-046: persist the post-budget-clip snapshot captured at inject
-        // time (or copied from attempt 0 on the envelope-followup path).
-        injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
-        // RFC-049: structured port-validation failure payload.
-        portValidationFailuresJson:
-          portValidationFailures.length > 0
-            ? serializePortValidationFailures(portValidationFailures)
-            : null,
+        config: {
+          runtimeInventoryJson,
+          // RFC-046: persist the post-budget-clip snapshot captured at inject
+          // time (or copied from attempt 0 on the envelope-followup path).
+          injectedMemoriesJson: injectedSnapshot === null ? null : JSON.stringify(injectedSnapshot),
+        },
+        runtime: {
+          // RFC-280 T3: declared × observed × diff — the node-detail warning face.
+          startupVerificationJson,
+        },
+        result: {
+          // RFC-049: structured port-validation failure payload.
+          portValidationFailuresJson:
+            portValidationFailures.length > 0
+              ? serializePortValidationFailures(portValidationFailures)
+              : null,
+        },
       },
     })
 
@@ -2276,10 +2321,12 @@ export async function runNode(
       allowedFrom: ['running'],
       reason: 'runner-post-spawn-exception',
       extra: {
-        finishedAt: Date.now(),
-        exitCode: null,
-        errorMessage: postSpawnErrorMessage,
-        failureCode: postSpawnFailureCode ?? null,
+        identity: {
+          finishedAt: Date.now(),
+          exitCode: null,
+          errorMessage: postSpawnErrorMessage,
+          failureCode: postSpawnFailureCode ?? null,
+        },
       },
     })
   } catch {

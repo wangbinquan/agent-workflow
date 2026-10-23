@@ -1,13 +1,11 @@
 import {
   AgentInputPortSchema,
   AgentInputPortsSchema,
-  AgentSkillRefSchema,
   type Agent,
-  type AgentSkillRef,
   type CreateAgent,
   type UpdateAgent,
 } from '@agent-workflow/shared'
-import { parseAgentDependencyIds } from './agentDependencyJson'
+import { decodeAgentReferenceIds, decodeAgentSkillReferences } from './agentReferenceCodec'
 
 export interface AgentPersistenceRow {
   readonly id: string
@@ -40,23 +38,6 @@ function jsonRecord(value: string): Record<string, unknown> {
     return Object.fromEntries(Object.entries(decoded))
   } catch {
     return {}
-  }
-}
-
-function stringArray(value: string): string[] {
-  return parseAgentDependencyIds(() => JSON.parse(value))
-}
-
-function skillRefs(value: string): AgentSkillRef[] {
-  try {
-    const decoded: unknown = JSON.parse(value)
-    if (!Array.isArray(decoded)) return []
-    return decoded.flatMap((entry) => {
-      const parsed = AgentSkillRefSchema.safeParse(entry)
-      return parsed.success ? [parsed.data] : []
-    })
-  } catch {
-    return []
   }
 }
 
@@ -146,14 +127,15 @@ function decodeAgentPersistenceRow(row: AgentPersistenceRow, decoding: AgentRowD
     id: row.id,
     name: row.name,
     description: row.description,
-    outputs: decoding === 'normalized' ? stringArray(row.outputs) : JSON.parse(row.outputs),
+    outputs:
+      decoding === 'normalized' ? decodeAgentReferenceIds(row.outputs) : JSON.parse(row.outputs),
     inputs: inputPorts(row.inputs),
     syncOutputsOnIterate: row.syncOutputsOnIterate,
     permission: decoding === 'normalized' ? jsonRecord(row.permission) : JSON.parse(row.permission),
-    skills: skillRefs(row.skills),
-    dependsOn: stringArray(row.dependsOn),
-    mcp: stringArray(row.mcp),
-    plugins: stringArray(row.plugins),
+    skills: decodeAgentSkillReferences(row.skills),
+    dependsOn: decodeAgentReferenceIds(row.dependsOn),
+    mcp: decodeAgentReferenceIds(row.mcp),
+    plugins: decodeAgentReferenceIds(row.plugins),
     frontmatterExtra: sidecars.exposed,
     bodyMd: row.bodyMd,
     ownerUserId: row.ownerUserId,

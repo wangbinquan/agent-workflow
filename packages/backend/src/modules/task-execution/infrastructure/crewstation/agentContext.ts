@@ -1,3 +1,4 @@
+import { encodeTaskCheckpoints } from '../taskCheckpointCodec'
 import { z } from 'zod'
 import { DeclaredInjectionManifestSchema } from '@agent-workflow/shared'
 import type { NodeExecutionSnapshot } from '../../application/ports/nodeExecutionPersistence'
@@ -17,7 +18,10 @@ const NodeContext = z
   .strict()
 
 export function hostedAgentNodeContext(
-  node: Pick<NodeExecutionSnapshot, keyof z.infer<typeof NodeContext>>,
+  node: Pick<
+    NodeExecutionSnapshot,
+    Exclude<keyof z.infer<typeof NodeContext>, 'preSnapshot'> | 'checkpointInheritance'
+  >,
 ): z.infer<typeof NodeContext> {
   return Object.freeze(
     NodeContext.parse({
@@ -29,7 +33,7 @@ export function hostedAgentNodeContext(
       parentNodeRunId: node.parentNodeRunId,
       shardKey: node.shardKey,
       envelopeNonce: node.envelopeNonce,
-      preSnapshot: node.preSnapshot,
+      preSnapshot: encodeTaskCheckpoints(node.checkpointInheritance, ['']).preSnapshot,
     }),
   )
 }

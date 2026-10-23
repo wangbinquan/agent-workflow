@@ -1,6 +1,12 @@
 // P-4-07: daemon-restart orphan reaper.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
+import {
+  nodeRunFixture,
+  patchNodeRunFixture,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -38,15 +44,14 @@ async function seedRunning(db: PersistenceDb): Promise<{ taskId: string; runId: 
   const workflowId = ulid()
   const taskId = ulid()
   const runId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'wf',
     definition: '{}',
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
@@ -64,7 +69,7 @@ async function seedRunning(db: PersistenceDb): Promise<{ taskId: string; runId: 
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await insertOne(db, nodeRuns, {
+  await nodeRunFixture(db, {
     id: runId,
     taskId,
     nodeId: 'a',
@@ -92,8 +97,8 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     const { taskId, runId } = await seedRunning(h.db)
     const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
     expect(r).toEqual({ tasks: 1, runs: 1 })
-    const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
+    const { nodeRuns } = tablesOf(h.db)
+    const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('interrupted')
     expect(t?.errorSummary).toBe('daemon-restart')
     const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
@@ -122,11 +127,12 @@ describeEachProvider('reapOrphanRuns', (harness) => {
       currentNodeRunId: runId,
       leaseNonceDigest: 'terminal-held-nonce',
     })
-    const { nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
-    await h.db
-      .update(nodeRuns)
-      .set({ status: 'failed', failureCode: 'runtime-session-identity-invalid', pid: 4242 })
-      .where(eq(nodeRuns.id, runId))
+    const { runtimeSessionLeases } = tablesOf(h.db)
+    await patchNodeRunFixture(
+      h.db,
+      { id: runId },
+      { status: 'failed', failureCode: 'runtime-session-identity-invalid', pid: 4242 },
+    )
     const calls: string[] = []
 
     await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
@@ -162,8 +168,8 @@ describeEachProvider('reapOrphanRuns', (harness) => {
       currentNodeRunId: runId,
       leaseNonceDigest: 'terminal-live-nonce',
     })
-    const { nodeRuns, runtimeSessionLeases } = tablesOf(h.db)
-    await h.db.update(nodeRuns).set({ status: 'failed', pid: 4343 }).where(eq(nodeRuns.id, runId))
+    const { runtimeSessionLeases } = tablesOf(h.db)
+    await patchNodeRunFixture(h.db, { id: runId }, { status: 'failed', pid: 4343 })
 
     await expect(
       reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {

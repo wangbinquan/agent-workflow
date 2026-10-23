@@ -1,8 +1,13 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  patchWorkflowFixture,
+  taskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  readClarifyRoundFixtures,
+} from './helpers/model'
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
 import { errorHandler } from '@/util/errors'
@@ -23,10 +28,8 @@ import {
 } from '@agent-workflow/shared'
 import { createClarifyRound } from '@/services/clarify/service'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import {
-  saveClarifyDraft,
-  freezeAnswerAttributions,
-} from '@/modules/collaboration/infrastructure/clarifyRounds'
+import { saveClarifyDraft } from '@/modules/collaboration/infrastructure/clarifyRounds'
+import { freezeAnswerAttributions } from '@/modules/collaboration/domain/clarifyAnswers'
 import { createClarifyFollowupStore } from '@/modules/collaboration/infrastructure/clarifyFollowupStore'
 import { createClarifyFollowupOperations } from '@/modules/collaboration/application/clarifyFollowup'
 import { clarifyFollowupActivity } from '@/modules/collaboration/infrastructure/clarifyFollowupActivity'
@@ -135,14 +138,13 @@ async function seed(
     edges: [],
     outputs: [],
   }
-  const { workflows, tasks, nodeRuns, clarifyRounds } = tablesOf(h.db)
-  await insertOne(h.db, workflows, {
+  await workflowFixture(h.db, {
     id: workflowId,
     name: 'light',
     definition: JSON.stringify(definition),
     schemaVersion: 7,
   })
-  await insertOne(h.db, tasks, {
+  await taskFixture(h.db, {
     id: taskId,
     name: 'light',
     executionLineageId: taskId,
@@ -159,7 +161,7 @@ async function seed(
     inputs: '{}',
     startedAt: Date.now(),
   })
-  await insertOne(h.db, nodeRuns, {
+  await nodeRunFixture(h.db, {
     id: askingNodeRunId,
     taskId,
     nodeId: 'asking',
@@ -182,10 +184,7 @@ async function seed(
   )
   const read = async () => {
     return (
-      await h.db
-        .select()
-        .from(clarifyRounds)
-        .where(eq(clarifyRounds.intermediaryNodeRunId, round.intermediaryNodeRunId))
+      await readClarifyRoundFixtures(h.db, { intermediaryNodeRunId: round.intermediaryNodeRunId })
     )[0]!
   }
   return { taskId, nodeRunId: round.intermediaryNodeRunId, questions, read }
@@ -198,9 +197,8 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         categories: ['Scope', ['Performance', 'Database', 'SQL']],
         instructions: '',
       })
-      const { workflows } = tablesOf(h.db)
       // Editing the reusable workflow must not silently change an already running task.
-      await h.db.update(workflows).set({ definition: JSON.stringify({ nodes: [] }) })
+      await patchWorkflowFixture(h.db, undefined, { definition: JSON.stringify({ nodes: [] }) })
       const store = createClarifyFollowupStore(h.db, events)
       const snapshot = await store.read(fixture.nodeRunId, [])
       expect(snapshot.categoryPaths).toEqual([['Scope'], ['Performance', 'Database', 'SQL']])
@@ -263,7 +261,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         },
         editor,
       )
-      const questions = JSON.parse((await fixture.read()).questionsJson) as ClarifyQuestion[]
+      const questions = JSON.parse((await fixture.read()).questions) as ClarifyQuestion[]
       expect(questions.at(-1)?.mindmap?.categoryPath).toEqual(['Performance', 'Database', 'SQL'])
       expect(questions.at(-1)?.mindmap?.parentQuestionId).toBeUndefined()
     })
@@ -304,11 +302,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         instruction: 'Deeper',
         basis: clarifyContentKey(clarifyFollowupContext(snap.questions, snap.drafts, 'b')),
       }
-      const { nodeRuns } = tablesOf(h.db)
-      const beforeRuns = await h.db
-        .select()
-        .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, fixture.taskId))
+      const beforeRuns = await readNodeRunFixtures(h.db, { taskId: fixture.taskId })
       const appended = await operations.append(fixture.nodeRunId, request, editor)
       expect(await operations.append(fixture.nodeRunId, request, editor)).toEqual(appended)
       // Retry after process restart recovers from the same original questions JSON.
@@ -324,7 +318,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         operations.append(fixture.nodeRunId, { ...request, instruction: 'different' }, editor),
       ).rejects.toThrow('request ID')
       const row = await fixture.read(),
-        qs = JSON.parse(row.questionsJson) as ClarifyQuestion[]
+        qs = JSON.parse(row.questions) as ClarifyQuestion[]
       expect(qs).toHaveLength(3)
       expect(qs[2]?.mindmap).toMatchObject({
         categoryPath: ['Scope'],
@@ -333,9 +327,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       })
       expect(row.iteration).toBe(0)
       expect(row.status).toBe('awaiting_human')
-      expect(await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, fixture.taskId))).toEqual(
-        beforeRuns,
-      )
+      expect(await readNodeRunFixtures(h.db, { taskId: fixture.taskId })).toEqual(beforeRuns)
       await expect(
         sealRoundQuestions({
           db: h.db,
@@ -362,7 +354,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         answers: qs.map(answer),
       })
       expect(sealed.roundFullySealed).toBe(true)
-      expect(JSON.parse((await fixture.read()).answersJson!)).toHaveLength(3)
+      expect(JSON.parse((await fixture.read()).answers!)).toHaveLength(3)
     })
   test('late generation is rejected after ancestor edit, cancellation, or whole-round submission; failure is retryable', async () => {
     const fixture = await seed(h),
@@ -444,7 +436,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       expect(error).toBeInstanceOf(Error)
       if (effect === 'cancel-reject')
         expect(error).toMatchObject({ code: 'clarify-followup-canceled', status: 409 })
-      expect(JSON.parse((await fixture.read()).questionsJson)).toHaveLength(2)
+      expect(JSON.parse((await fixture.read()).questions)).toHaveLength(2)
     }
     const other = await seed(h)
     const snap = await store.read(other.nodeRunId, 'b')
@@ -499,12 +491,12 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       },
       editor,
     )
-    expect(JSON.parse((await fixture.read()).questionsJson)).toHaveLength(3)
+    expect(JSON.parse((await fixture.read()).questions)).toHaveLength(3)
   })
   test('ordinary rounds strip metadata and retain original unconfirmed seal; locked answers remain intact', async () => {
     const plain = await seed(h, 'self', false)
     expect(
-      JSON.parse((await plain.read()).questionsJson).every(
+      JSON.parse((await plain.read()).questions).every(
         (question: ClarifyQuestion) => !question.mindmap,
       ),
     ).toBe(true)
@@ -543,7 +535,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         })
       ).roundFullySealed,
     ).toBe(true)
-    expect(JSON.parse((await map.read()).answersJson!)[0].selectedOptionIndices).toEqual([0])
+    expect(JSON.parse((await map.read()).answers!)[0].selectedOptionIndices).toEqual([0])
   })
 })
 
@@ -602,7 +594,7 @@ describeEachProvider(
           ).toEqual(result)
           expect(calls).toBe(1)
           const row = await fixture.read()
-          const questions = JSON.parse(row.questionsJson) as ClarifyQuestion[]
+          const questions = JSON.parse(row.questions) as ClarifyQuestion[]
           expect(questions.slice(0, 2)).toEqual(fixture.questions)
           expect(questions.slice(2).map((question) => question.mindmap?.categoryPath)).toEqual(
             categoryPath.length ? [['Scope'], ['Scope']] : [['Database'], ['Capacity']],
@@ -612,7 +604,7 @@ describeEachProvider(
               .slice(2)
               .every((question) => question.mindmap?.parentQuestionId === undefined),
           ).toBe(true)
-          expect(JSON.parse(row.draftAnswersJson!).b.confirmedBasis).toBe(
+          expect(JSON.parse(row.draftAnswers!).b.confirmedBasis).toBe(
             answer(fixture.questions[1]!).confirmedBasis,
           )
           await expect(
@@ -680,7 +672,7 @@ describeEachProvider(
         expect(await outcome).toMatchObject({
           code: effect === 'edit' ? 'clarify-followup-stale' : 'clarify-followup-canceled',
         })
-        expect(JSON.parse((await fixture.read()).questionsJson)).toHaveLength(2)
+        expect(JSON.parse((await fixture.read()).questions)).toHaveLength(2)
       }
       await sealRoundQuestions({
         db: h.db,
@@ -728,7 +720,7 @@ describeEachProvider('RFC-378 decision persistence on the original round', (h) =
           editor,
           draftEvents: events,
         })
-      expect(JSON.parse((await fixture.read()).draftAnswersJson!).a.decision).toEqual(decision)
+      expect(JSON.parse((await fixture.read()).draftAnswers!).a.decision).toEqual(decision)
       const store = createClarifyFollowupStore(h.db, events)
       expect((await store.read(fixture.nodeRunId, 'b')).drafts.a?.decision).toEqual(decision)
       await sealRoundQuestions({
@@ -755,7 +747,7 @@ describeEachProvider('RFC-378 decision persistence on the original round', (h) =
         questionSetKey: clarifyQuestionSetKey(fixture.questions),
         answers: [final],
       })
-      const sealed = JSON.parse((await fixture.read()).answersJson!) as ClarifyAnswer[]
+      const sealed = JSON.parse((await fixture.read()).answers!) as ClarifyAnswer[]
       expect(sealed.find((value) => value.questionId === 'a')?.decision).toEqual(decision)
       expect(sealed.find((value) => value.questionId === 'b')?.decision).toEqual(final.decision)
     })

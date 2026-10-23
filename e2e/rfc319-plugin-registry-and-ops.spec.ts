@@ -25,6 +25,7 @@
 // 归因（故不用 `test.describe.configure({ mode: 'serial' })`）。一次 `page.route` 都不注入：
 // 所有分支都由真的动作产生——真 npm、真 registry、真 tarball、真事务。
 
+import { taskFixtureSql } from './fixtures/model'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import {
   existsSync,
@@ -1313,15 +1314,22 @@ test('RFC-319 EVENT-X5: webhook 起的任务终态后自动清工作区——开
     for (const row of seeded) {
       runSqlite(
         databaseFileOf(home),
-        `INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path,
-           base_branch, branch, status, inputs, started_at, running_ms, space_kind, repo_count,
-           webhook_trigger_id)
-         VALUES ('${row.id}', '${row.id}', 'rfc319-b108-wf',
-           '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
-           '${join(home, 'fixture-repo')}', '${row.worktree}',
-           'main', 'agent-workflow/${row.id}', 'pending', '{}', ${Date.now()}, 0,
-           '${row.tag === 'local' ? 'local' : 'scratch'}', 1,
-           ${row.tag === 'manual' ? 'NULL' : `'rfc319-b108-trigger'`});`,
+        taskFixtureSql({
+          id: row.id,
+          name: row.id,
+          workflowId: 'rfc319-b108-wf',
+          workflowSnapshot: '{"$schema_version":1,"inputs":[],"nodes":[],"edges":[]}',
+          repoPath: join(home, 'fixture-repo'),
+          worktreePath: row.worktree,
+          baseBranch: 'main',
+          branch: `agent-workflow/${row.id}`,
+          status: 'pending',
+          inputs: '{}',
+          startedAt: Date.now(),
+          runningMs: 0,
+          spaceKind: row.tag === 'local' ? 'local' : 'scratch',
+          webhookTriggerId: row.tag === 'manual' ? null : 'rfc319-b108-trigger',
+        }),
       )
     }
     // `runSqlite` 走 `bun:sqlite` 的多语句 exec，约束错误不抛异常（见

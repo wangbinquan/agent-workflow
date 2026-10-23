@@ -23,7 +23,7 @@ function bindingOf(state: TaskMechanicsState): IsolationWorkspaceBinding {
     repositories: state.repos.map((repo) => ({
       repositoryRef: repo.repoPath,
       workspaceRef: repo.worktreePath,
-      mount: repo.worktreeDirName,
+      mount: repo.mountPath,
       baseBranch: repo.baseBranch,
     })),
   }
