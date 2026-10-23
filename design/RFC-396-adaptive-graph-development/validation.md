@@ -1,5 +1,18 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-23 最新修复接受与 CI 边界
+
+源码修复 `ae210a8399964b249e68c8cc2c4b5de230c0aec5` 的 [主 CI 39972466454](https://github.com/wangbinquan/agent-workflow/actions/runs/39972466454) 已终态 **46 success / 2 failure / 1 cancelled**。类型/lint/格式、后端/前端、三平台构建、九个 E2E 分片及链接检查成功；Static scans 的 dependency audit gate 失败（只读步骤状态），macOS E2E 2/3 触发既有20分钟 job上限取消，`CI required` 因此失败。没有称整条 CI 全绿，没有重跑旧 CI 覆盖失败。
+
+- [Linux 图所在分片](https://github.com/wangbinquan/agent-workflow/actions/runs/39972466454/job/120479370593)：167 passed；三个图旅程首轮36.6s / 53.4s / 17.5s。
+- [Windows 图所在分片](https://github.com/wangbinquan/agent-workflow/actions/runs/39972466454/job/120482288428)：137 passed / 1 flaky；三个图旅程首轮1.9m / 3.0m / 1.6m。另一个普通任务 `running-api` 首次10秒仍pending，重试通过；保留其未知归属，不把分片成功记成无波动。
+- [macOS 2/3](https://github.com/wangbinquan/agent-workflow/actions/runs/39972466454/job/120483333367)：check-run 明确 `The job has exceeded the maximum execution time of 20m0s`。取消前 `rfc319-worktree-and-commit` 的 beforeAll 初次和重试均90000ms超时，另有 `rfc372-mindmap` 大图用例失败，重试未完成。没有 RFC-396 完成结果；也不能根据没有结果行断言未开始。取消机制明确，耗时和失败根因仍未确定。相关 specs、harness和CI配置与上一候选fb99为相同Git blob，后端未变；这些事实不足以直接排除共享负载影响。未改这些用例、超时或其他会话产出。
+- [视觉回归39972466358](https://github.com/wangbinquan/agent-workflow/actions/runs/39972466358)：同一SHA completed/success。
+
+该准确SHA的GitHub macOS artifact **12509828093**（压缩包digest `sha256:7033d28d92f6ada2ed56199011ae56441fa36d243eb530cbaa773dfebe4e6bdd`）本地真实浏览器三旅程 **3 passed / 0 failed / 0 skipped / 0 flaky，131.9s**。预约完整经过员工创建、任务受理、原始澄清/暂定决定及后续图、审核、实现、验证、MR和合入；其余两个旅程保留API准备。确认页自动MR分支说明、390/320px HTML和文本Range可见边界断言全部通过。实际读取确认页、两种窄屏、MR等待、合入、关闭六张截图，确认新说明、控件换行和终态区别；SVG保留自己的横向滚动。模型/代码托管仍为受控fixture，不能替代企业连接和模型质量接受。
+
+原始证据为 `/tmp/rfc396-ae210-{main,visual}-ci.json`、`/tmp/rfc396-ae210-native-{linux,windows,macos}-job.log`、`/tmp/rfc396-ae210-ui-summary.json`、`/tmp/rfc396-ae210-artifact-provenance.json`、`/tmp/rfc396-ae210-ui-screenshots/`。验收和监控进程均已退出；未重复全量本地gate。归属未明项及真实企业连接/新版本托管验收继续开放，RFC保持In Progress。
+
 ## 2026-10-23 页面操作补齐的实际执行与修正
 
 `fb99b3a0dfffd749b681cc12f867c5085c4eb878` 发布了空 CI/明细/终态呈现修复及预约页面操作用例。该 SHA 的 GitHub macOS artifact 本地结果 **2 pass / 1 fail**：通知和已有模块的 MR 观察与终态成功，预约停在新增的岗位下拉框精确名称定位。三个平台 hosted E2E 确认同一失败，属于本会话用例。主 CI `39965841593` 终态 **44 success / 5 failure**，其他失败为 Static scans 与派生汇总。修正后限定复验又发现预选员工的任务深链会自动前进，已改为实际点击可见步骤。原失败日志 `/tmp/rfc396-fb99-ui-journeys.log` 与 `/tmp/rfc396-fb99-booking-repair.log` 保留。
