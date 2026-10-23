@@ -9,7 +9,7 @@ import {
   newestNodeRun,
   DAEMON_RESTART_ERROR_SUMMARY,
   isTerminalTaskStatus,
-  type TaskStartOptions,
+  type StartTask,
   type TaskStatus,
   type WorkflowDefinition,
   WorkflowDefinitionSchema,
@@ -33,6 +33,7 @@ import { readTaskResourceUsage } from '@/services/limits'
 import { createFileProgramToolSource } from '../infrastructure/local/fileProgramToolSource'
 import type { ProgramToolSource } from '../application/ports/scriptFixture'
 import {
+  DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
   DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
   DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
   DIGITAL_EMPLOYEE_PROMPT_KEY,
@@ -44,6 +45,7 @@ import {
 } from '../domain/digitalEmployeeHost'
 import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
 import { taskStopProjection } from '../domain/sourceTermination'
+import { ensureDigitalEmployeeHostWorkflow } from './actionExecutionRunners'
 import type { DigitalEmployeeWorkspacePort } from './required-ports'
 import type {
   DigitalEmployeeExecutionCore,
@@ -364,6 +366,20 @@ export interface DigitalEmployeeExecutionDependencies {
       readonly definition: WorkflowDefinition
     } | null>
   }>
+  /**
+   * 合成宿主工作流行的**幂等播种**（2026-09-19 回补）。
+   *
+   * `DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID` 是一个合成 id：只有这行 builtin 锚存在，执行任务的
+   * `workflow_id` 才指得到东西。合一（`c932bc8e8`）时这一步被整个丢掉了，于是数字员工的执行
+   * 任务落在一个**不存在的工作流**上；用户可见后果在人工评审这条路上炸——`getReviewDetail`
+   * 拿 `task.workflowId` 查 workflows 查不到就抛 `review-not-found`，评审页只剩一句
+   * 「Review not found.」：案例一直等着人工评审，评审人点进去打不开（e2e DE-28）。
+   *
+   * 按端口接进来而不是拿 `db` 自己写——这份 deps 刻意不带 db（两个 provider 各自绑定）。
+   * 只有截获 launch 的测试替身会缺省它；库内端口（`composeDatabaseDigitalEmployeeExecutionPorts`）
+   * 总是提供。RFC-395 II-a（D1）落地后宿主播种整体删除。
+   */
+  readonly hostWorkflow?: Readonly<{ ensure(): Promise<void> }>
   readonly executionMetadata: Readonly<{
     load(taskId: string): Promise<{
       readonly roundRef: string | null
@@ -492,7 +508,8 @@ function buildDigitalEmployeeExecution(
           deps.executionContracts.get(reviewedExecution.planningTool.workContractRef).inputMode,
         )
       : null
-    const task: TaskStartOptions = {
+    const task: StartTask = {
+      workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
       name: `employee:${plan.roundRef}`.slice(0, 255),
       inputs:
         implementation.kind === 'program'
@@ -522,10 +539,11 @@ function buildDigitalEmployeeExecution(
           `exact workflow unavailable: ${implementation.workflowRef.id}@${implementation.workflowRef.revision}`,
         )
       }
+      task.workflowId = workflow.id
       task.expectedWorkflowVersion = workflow.version
       task.inputs = { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt }
       subject = {
-        subject: { kind: 'workflow', sourceId: workflow.id },
+        workflowId: workflow.id,
         workflowName: workflow.name,
         workflowVersion: workflow.version,
         workflowSnapshot: workflow.definition,
@@ -604,7 +622,8 @@ function buildDigitalEmployeeExecution(
         )
       }
       subject = {
-        subject: { kind: 'digital-employee', sourceId: null },
+        workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+        workflowName: '__digital_employee_host__',
         workflowVersion: 1,
         workflowSnapshot: snapshot,
         // 合成的宿主快照：写时冻结规范排版（plan §5hn）。
@@ -612,6 +631,14 @@ function buildDigitalEmployeeExecution(
       }
     }
 
+    // RFC-359 AC-1 回补（2026-09-19）：**宿主工作流行的幂等播种在合一（`c932bc8e8`）时丢了**。
+    // `DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID` 是一个合成 id，只有这行 builtin 锚存在，任务的
+    // `workflow_id` 才指得到东西。丢了之后数字员工的执行任务落在一个**不存在的工作流**上，
+    // 用户可见后果在人工评审这条路上炸：`getReviewDetail` 拿 `task.workflowId` 查 workflows
+    // 查不到 ⇒ `review-not-found`，评审页只剩一句「Review not found.」
+    // ——案例一直等着人工评审，而评审人点进去打不开（e2e DE-28 实撞，连红三天）。
+    // 播种必须在 launch **之前**：launch 那一笔就要写 task 行。
+    if (deps.hostWorkflow) await deps.hostWorkflow.ensure()
     const launchActor = await deps.resolveActor()
     const launched = await deps.launch.launch({
       actor: launchActor,
@@ -856,8 +883,10 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
 ): Pick<
   DigitalEmployeeExecutionDependencies,
   'tasks' | 'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview'
-> {
+> &
+  Required<Pick<DigitalEmployeeExecutionDependencies, 'hostWorkflow'>> {
   return Object.freeze({
+    hostWorkflow: { ensure: () => ensureDigitalEmployeeHostWorkflow(db) },
     tasks: {
       get: (taskId: string) => getTask(db, taskId),
       async cancel(taskId: string) {
