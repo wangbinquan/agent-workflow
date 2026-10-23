@@ -35,6 +35,10 @@
 
 本任务独立修复已完成集中复验：SQLite 的 OS 架构、测试跳过策略、能力索引与 MR bridge 四文件 **58 pass / 0 fail，189 expect**；迁移后图工作区/人工验收/终态与 overlay inventory 四文件 **46 pass / 0 fail**；14 个相关 TS/TSX 路径 ESLint 通过。日志分别为 `/tmp/rfc396-ci-repair-backend.log`、`/tmp/rfc396-ci-repair-frontend.log`、`/tmp/rfc396-ci-repair-lint.log`。8 个 UI 文件迁移前后内容 SHA256 一致；没有改动 OS 禁止规则或测试跳过允许清单。以上不覆盖未闭合的 Task 主体发布依赖，也不是 Windows bridge 实跑或新提交的 hosted CI 通过证明。
 
+上述独立修复已以 `6423d9ef0cb86be3e8b6eadfed6adf3565bc8e16` 推送，推送后本地/远端差异 `0/0`、index 为空；[主 CI 39916451896](https://github.com/wangbinquan/agent-workflow/actions/runs/39916451896) 与 [视觉回归 39916451473](https://github.com/wangbinquan/agent-workflow/actions/runs/39916451473) 启动时分别记录，未宣称它们已通过。
+
+首个 MR 提交的 [视觉回归 39914131342](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131342) 终态为 **58 passed / 1 failed**，唯一失败是数字员工类型目录截图。按视觉回归 README 的 Option A 下载 artifact `12484069229`，逐张查看 expected / actual / diff 后确认：变化仅为图数字人卡片显示新的 MR 看护说明、工作项 `6 → 24`、生命周期区域 `1 → 2` 及对应文字排版；其他卡片与页面布局保持。当前快照与 artifact 中 expected 字节一致，已将逐张审阅后的实际截图原样复制到唯一对应的 Linux 基线，不提高阈值、不批量接受其他截图。新的 exact-SHA 视觉回归仍须给出零差异结论；这一目录截图也不替代完整 MR 运行验收。
+
 
 **2026-10-22 全面回顾后的当前裁决：需要修改后再验收。** 以下“功能验收完成”是前一轮范围的历史记录。本轮确认 R01～R10 功能/可用性缺口，以及 MR 提交和持续看护未接入；新增范围见 [review-and-mr-parity.md](./review-and-mr-parity.md)。原浏览器旅程含 API 建立工作和提交澄清，不能当成全程 UI 可用性证明。新的 MR 生命周期、修复和 UI 验收尚未完成。
 
