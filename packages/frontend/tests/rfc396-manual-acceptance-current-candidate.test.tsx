@@ -2,8 +2,8 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { GraphDesignDocument } from '@agent-workflow/shared'
-import { GraphDesignEvidence } from '@/components/digital-employees/GraphDesignEvidence'
-import type { GraphEvidenceData } from '@/components/digital-employees/graphDesignModel'
+import { GraphDesignEvidence } from '@/features/development-automation/graph-development/GraphDesignEvidence'
+import type { GraphEvidenceData } from '@/features/development-automation/graph-development/graphDesignModel'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

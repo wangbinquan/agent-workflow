@@ -3,21 +3,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { api, ApiError } from '@/api/client'
-import { GraphDesignWorkspace } from '@/components/digital-employees/GraphDesignWorkspace'
-import { GraphDesignEvidence } from '@/components/digital-employees/GraphDesignEvidence'
+import { GraphDesignWorkspace } from '@/features/development-automation/graph-development/GraphDesignWorkspace'
+import { GraphDesignEvidence } from '@/features/development-automation/graph-development/GraphDesignEvidence'
 import {
   graphDocumentChanges,
   rebaseGraphDraft,
   type GraphWorkspaceData,
   type GraphEvidenceData,
-} from '@/components/digital-employees/graphDesignModel'
-import { GraphDesignDelivery } from '@/components/digital-employees/GraphDesignDelivery'
+} from '@/features/development-automation/graph-development/graphDesignModel'
+import { GraphDesignDelivery } from '@/features/development-automation/graph-development/GraphDesignDelivery'
 import {
   graphDeliveryStatus,
   projectGraphDeliveryCare,
   type GraphDeliveryProgress,
   type GraphMergeRequestDelivery,
-} from '@/components/digital-employees/graphDeliveryModel'
+} from '@/features/development-automation/graph-development/graphDeliveryModel'
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -28,7 +28,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a href="#fixture">{children}</a>,
 }))
-vi.mock('@/components/digital-employees/GraphModelView', () => ({
+vi.mock('@/features/development-automation/graph-development/GraphModelView', () => ({
   GraphModelView: () => <div>diagram</div>,
 }))
 vi.mock('@/components/prose/Prose', () => ({

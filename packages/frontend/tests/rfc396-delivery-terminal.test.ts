@@ -4,7 +4,7 @@ import {
   graphDeliveryStatus,
   type GraphDeliveryProgress,
   type GraphMergeRequestDelivery,
-} from '@/components/digital-employees/graphDeliveryModel'
+} from '@/features/development-automation/graph-development/graphDeliveryModel'
 
 function delivery(
   status: GraphMergeRequestDelivery['status'] = 'active',

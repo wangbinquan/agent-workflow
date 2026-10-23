@@ -255,9 +255,15 @@ const OVERLAY_CALLSITES = {
     count: 1,
   },
   // RFC-396: graph proposals, frozen bases, design edits and original evidence.
-  'components/digital-employees/GraphDesignEditors.tsx': { family: 'graph-development', count: 1 },
-  'components/digital-employees/GraphDesignEvidence.tsx': { family: 'graph-development', count: 2 },
-  'components/digital-employees/GraphDesignWorkspace.tsx': {
+  'features/development-automation/graph-development/GraphDesignEditors.tsx': {
+    family: 'graph-development',
+    count: 1,
+  },
+  'features/development-automation/graph-development/GraphDesignEvidence.tsx': {
+    family: 'graph-development',
+    count: 2,
+  },
+  'features/development-automation/graph-development/GraphDesignWorkspace.tsx': {
     family: 'graph-development',
     count: 4,
   },

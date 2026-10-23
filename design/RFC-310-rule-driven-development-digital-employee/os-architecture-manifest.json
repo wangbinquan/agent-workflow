@@ -33,6 +33,8 @@
         "modules/development-automation/composition/digitalEmployeeWorkspace.ts -> public/types",
         "modules/development-automation/composition/employeeCaseDetailProjection.ts -> public/types",
         "modules/development-automation/composition/employeeTypePackage.ts -> public/types",
+        "modules/development-automation/composition/graphDeliveryJob.ts -> public/types",
+        "modules/development-automation/composition/graphDeliveryLifecycle.ts -> public/types",
         "modules/development-automation/composition/graphDevelopment.ts -> public/types",
         "modules/development-automation/infrastructure/graph-development/employeeWorkspace.ts -> public/types",
         "modules/integration/infrastructure/integrationTriggerResources.ts -> composition",

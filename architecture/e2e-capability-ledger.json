@@ -12847,11 +12847,11 @@
       "evidence": [
         {
           "file": "e2e/rfc396-graph-development.spec.ts",
-          "test": "RFC-396 booking journey adapts graphs and delivers an explicitly accepted candidate"
+          "test": "RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge"
         },
         {
           "file": "e2e/rfc396-graph-development.spec.ts",
-          "test": "RFC-396 notification journey adapts graphs for duplicate and out-of-order constraints"
+          "test": "RFC-396 notification journey adapts graphs and observes MR close without merging"
         },
         {
           "file": "e2e/rfc396-graph-development.spec.ts",

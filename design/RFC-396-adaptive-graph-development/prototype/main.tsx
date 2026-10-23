@@ -3,14 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { Card } from '../../../packages/frontend/src/components/Card'
 import { PageHeader } from '../../../packages/frontend/src/components/PageHeader'
 import { Field, TextArea } from '../../../packages/frontend/src/components/Form'
-import { GraphDesignDelivery } from '../../../packages/frontend/src/components/digital-employees/GraphDesignDelivery'
+import { GraphDesignDelivery } from '../../../packages/frontend/src/features/development-automation/graph-development/GraphDesignDelivery'
 import {
   projectGraphDeliveryCare,
   type GraphDeliveryProgress,
   type GraphMergeRequestDelivery,
-} from '../../../packages/frontend/src/components/digital-employees/graphDeliveryModel'
+} from '../../../packages/frontend/src/features/development-automation/graph-development/graphDeliveryModel'
 import '../../../packages/frontend/src/styles.css'
-import '../../../packages/frontend/src/components/digital-employees/GraphDesignWorkspace.css'
+import '../../../packages/frontend/src/features/development-automation/graph-development/GraphDesignWorkspace.css'
 import './prototype.css'
 
 type View = { id: string; title: string; kind: string; why: string; nodes: string[] }

@@ -7,11 +7,11 @@ import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import type { CachedRepo, CaseMembers, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
-import { GraphDesignWorkspace } from '@/components/digital-employees/GraphDesignWorkspace'
+import { GraphDesignWorkspace } from '@/features/development-automation/graph-development/GraphDesignWorkspace'
 import {
   projectGraphDeliveryCare,
   deliveryStateLabel,
-} from '@/components/digital-employees/graphDeliveryModel'
+} from '@/features/development-automation/graph-development/graphDeliveryModel'
 import type {
   DigitalEmployeeDefinition,
   EmployeeTypePackage,

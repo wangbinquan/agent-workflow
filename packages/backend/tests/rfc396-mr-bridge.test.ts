@@ -1,7 +1,9 @@
 // RFC-396 MR parity: the verified tree enters the existing care workspace, and every repair
 // (including a separate conflict scene) must execute the approved graph checks again.
+// Run the real repository check through Bun explicitly so every assertion also
+// runs on native Windows; this suite does not require POSIX shebang/chmod semantics.
 import { afterEach, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { canonicalJson, repositoryMaterializationCommit } from '@agent-workflow/shared'
@@ -26,7 +28,11 @@ import type { GraphMrBeforePublishInput } from '@/modules/development-automation
 import type { EmployeeCaseWorkspaceRow } from '@/modules/development-automation/application/ports/employeeWorkspacePersistence'
 import type { EmployeeChangeCandidateRecord } from '@/modules/development-automation/application/ports/employeePlatformWorkItemPersistence'
 import { createFileAutomationWorkspaceEffectsFactory } from '@/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
-import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/infrastructure/local/verificationCommandEffects'
+import {
+  createLocalVerificationCommandEffects,
+  createLocalVerificationCommandEffectsFactory,
+  createRepoScriptResolver,
+} from '@/modules/development-automation/infrastructure/local/verificationCommandEffects'
 import { createVerificationProfilePersistence } from '@/modules/development-automation/infrastructure/configResourceStore'
 import { createEmployeeWorkspacePersistence } from '@/modules/development-automation/infrastructure/employeeWorkspacePersistence'
 import { createEmployeePlatformWorkItemPersistence } from '@/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence'
@@ -91,9 +97,8 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     )
     writeFileSync(
       join(graphScene.workspacePath, 'verify.js'),
-      '#!/usr/bin/env bun\n// booking-test\nif ((await import("./booking.js")).reserve() !== "预约") process.exit(3); console.log("booking-test passed");\n',
+      '// booking-test\nif ((await import("./booking.js")).reserve() !== "预约") process.exit(3); console.log("booking-test passed");\n',
     )
-    chmodSync(join(graphScene.workspacePath, 'verify.js'), 0o755)
     const f = await graphFixture(harness.db, baseline)
     const profiles = createVerificationProfilePersistence(harness.db)
     const profile: VerificationProfileContent = {
@@ -247,6 +252,18 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       profiles,
       verification: {
         ...verificationEffects,
+        create(input) {
+          const resolver = createRepoScriptResolver()
+          return createLocalVerificationCommandEffects({
+            evidence: input.evidence,
+            resolver: {
+              resolve(request) {
+                const resolved = resolver.resolve(request)
+                return resolved ? { argv: [process.execPath, ...resolved.argv] } : null
+              },
+            },
+          })
+        },
         async environment(path) {
           const actual = await verificationEffects.environment!(path)
           return { ...actual, digest: sha256Hex(`${actual.digest}:${environmentGeneration}`) }
@@ -446,8 +463,7 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     }
   }
 
-  // The profile is an executable repository script; the same contract has platform-neutral unit coverage elsewhere.
-  const caseTest = test.skipIf(process.platform === 'win32')
+  const caseTest = test
 
   caseTest(
     'owner persistence resumes an interrupted handoff and keeps the published candidate after reconstruction',

@@ -2,7 +2,7 @@
 
 ## 2026-10-22 MR 能力补齐与全面回顾：当前候选
 
-本轮生产和用例已完成，集中验证正在收口，RFC 仍 In Progress。旧版内部交付证据在下方保留，不外推为新的 MR 能力通过。
+本轮生产和用例已完成，已以 `ba7b8c6c4a03f0ab952dfd52fee291332dda74f5` 发布到 `origin/main`，集中验证正在收口，RFC 仍 In Progress。旧版内部交付证据在下方保留，不外推为新的 MR 能力通过。
 
 | 范围 | 本轮结果与证据界限 |
 | --- | --- |
@@ -13,11 +13,27 @@
 | 前端交互 | 终止态 **6/0**；人工验收候选/范围变化 **11/0**；工作区修后 **26/0**（含实现门发现的两条恢复旅程）；合计覆盖 **43 个独立用例**，三文件结果分别记录 |
 | 独立实现门 | **PASS**；两处 UI 旅程回归修复后定向复核通过，详见 [implementation-gate](./implementation-gate.md) |
 | 静态 | backend / frontend 初轮修后 `tsc --noEmit` 通过；backend 默认 Node 4 GiB heap OOM，8 GiB 完成。末次共享树前端检查又出现 3 处并发错误：非本任务 `shared/src/schemas/task.ts` 的 `taskExecutionKind` 新增 `digital-employee`，而 `TaskSubjectLink.tsx` / `tasks.new.tsx` 尚未覆盖。实际 diff 已核实，未代改或纳入提交；本任务新增测试的参数类型已修。任务路径 ESLint 通过，最终整仓结论以本次 exact-SHA CI 为准 |
-| MR E2E | 三个既有图旅程已适配 graph@2，保留主要图/审核/证据断言，并增加同 Case MR 创建、缺 CI 不误绿、外部 merged/closed 观测终结；模型与 code host 是受控 fixture。当前尚未执行 |
+| MR E2E | 三个既有图旅程已适配 graph@2，保留主要图/审核/证据断言，并增加同 Case MR 创建、缺 CI 不误绿、外部 merged/closed 观测终结；模型与 code host 是受控 fixture。本次托管 CI 的浏览器任务已启动，尚无通过结论；数字员工启动模型的发布依赖缺口单列于下方 |
 | 真人浏览器 | 当前 CUA inventory 为 apps=[] / browsers=[]，创建 iab 返回 `Browser is not available: iab`；不宣称本轮真人界面验收通过 |
-| 发布与 hosted CI | 本轮候选尚未提交。最终必须记录实际提交与 exact-SHA hosted CI；此前 `67795ed462` 的结果不能证明新代码 |
+| 发布与 hosted CI | `ba7b8c6c4a03f0ab952dfd52fee291332dda74f5` 已推送，推送后本地/远端差异 `0/0`，共享 index 为空；71 个准确路径包含本任务内并行 Codex 产出，其他在制内容保留未提交。[主 CI 39914131430](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131430) 与 [视觉回归 39914131342](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131342) 执行中；此前 `67795ed462` 的结果不能证明新代码 |
 
 新增实现与恢复边界见 [全面回顾](./review-and-mr-parity.md)，岗位与 CI 连接使用方式见 [usage](./usage.md)。本轮未修改旧托管实例或其镜像。
+
+### 本轮发布后的 CI 归因与共享文件依赖缺口
+
+`ba7b8c6c4a03` 的 [CI 39914131430](https://github.com/wangbinquan/agent-workflow/actions/runs/39914131430) 已报告失败；本地共享树中的通过结果不能替代这个实际发布快照。独立功能复核只能说明其审阅的候选内容，不能据此认为发布依赖已完整。
+
+| 失败范围 | 已核实原因与处置 |
+| --- | --- |
+| 类型检查、backend 10/24 的 hostWorkflow 四项、backend 20/24 的真实数字员工执行四项，以及 backend 14/24 的人工审核 E2E | `digitalEmployeeExecution.ts` 整文件除本任务的材料说明前缀/env，还提交了 RFC-395 II-a 的 `TaskStartOptions`、新 `subject` 和移除旧宿主播种的改动；所依赖的共享 schema、启动 kernel、任务主体/创建、审核投影及测试仍只在本地在制。远端旧 kernel 仍读取 `input.subject.workflowId`，类型和实际启动均不成立。**这是本次发布选择的依赖闭包遗漏，不能仅称为外部旧测试问题。** 保留全部迁移产出，不还原新模型、不删旧断言，也不擅自扫入尚未完成集中验证的迁移文件。完整迁移闭包可提交之前，此项阻塞整仓通过 |
+| backend 15/24，OS 架构两项 | 新 MR 界面包含开发员工业务语义却位于通用数字员工组件目录；两个类型包组合层依赖未登记。修复将图功能归位至 development-automation feature，并精确补齐已审阅依赖，既有禁止规则保持不变 |
+| backend 6/24，测试跳过登记 | 新 MR bridge 测试因 POSIX shebang/chmod 夹具跳过 Windows；业务断言本身无需该限制。改为生产仓库脚本解析器定位脚本、显式 Bun 执行，保留全部 17 项用例和真实执行证据，不增加跳过豁免 |
+| backend 1/24，能力证据索引 | 两个 graph E2E 标题更新后索引仍是旧名称；只重接精确标题，保留原有覆盖断言 |
+| Static scans | 只读取状态元数据：该 job 失败。未读取该类 findings 或日志，未对此开展分析 |
+
+依赖缺口的具体边界：`packages/shared/src/schemas/task.ts`、Task Execution 的 `taskRouteLaunchOperations.ts` / `taskSubject` / `taskCreation` / repository codecs、Collaboration 的 `review.ts` 与任务主体查询合同、`actionExecutionEnvironment.ts` 及对应历史回归。当前 `public/queries`、`services/task` 和新增测试 helper 又与迁移其他部分耦合，不能把这些路径当作已确认可独立发布的 allowlist。对应 II-a 计划要求整组集中验证后提交；本任务继续处理独立缺陷，未替代迁移责任范围。
+
+本任务独立修复已完成集中复验：SQLite 的 OS 架构、测试跳过策略、能力索引与 MR bridge 四文件 **58 pass / 0 fail，189 expect**；迁移后图工作区/人工验收/终态与 overlay inventory 四文件 **46 pass / 0 fail**；14 个相关 TS/TSX 路径 ESLint 通过。日志分别为 `/tmp/rfc396-ci-repair-backend.log`、`/tmp/rfc396-ci-repair-frontend.log`、`/tmp/rfc396-ci-repair-lint.log`。8 个 UI 文件迁移前后内容 SHA256 一致；没有改动 OS 禁止规则或测试跳过允许清单。以上不覆盖未闭合的 Task 主体发布依赖，也不是 Windows bridge 实跑或新提交的 hosted CI 通过证明。
 
 
 **2026-10-22 全面回顾后的当前裁决：需要修改后再验收。** 以下“功能验收完成”是前一轮范围的历史记录。本轮确认 R01～R10 功能/可用性缺口，以及 MR 提交和持续看护未接入；新增范围见 [review-and-mr-parity.md](./review-and-mr-parity.md)。原浏览器旅程含 API 建立工作和提交澄清，不能当成全程 UI 可用性证明。新的 MR 生命周期、修复和 UI 验收尚未完成。
