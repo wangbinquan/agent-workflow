@@ -42,6 +42,8 @@
 
 ## 2026-10-21 RFC-396 In Progress：自适应图驱动研发数字人
 
+**2026-10-23 接续与环境核对**：文档候选 `5912ec43b94a` 的 CI `39978754925` 已完成47成功/2失败，所有功能作业成功，Static scans及派生汇总失败；不覆盖原 `ae210` 的Mac20分钟取消。新一轮已修无变化重验的 `candidate-empty` / 重复提交问题，并在通知MR旅程加入关闭浏览器、daemon崩溃及同数据目录恢复。集中SQLite覆盖77用例，首轮74/3、受影响两文件32/1、末次单项1/0，测试夹具/期望错误已修，生产未因其改动；准确范围见验收记录。新候选PG/三平台/恢复旅程与性能实测仍待CI及准确artifact。旧托管服务明确报 `ENOSPC`，节点 `desktop-control-plane` 的可用磁盘字节为0；CS/GitLab/registry的HTTP500分别保留，未推断共同根因。实际task parent仍旧镜像，不能代签graph@2接受；[只读就绪证据](design/RFC-396-adaptive-graph-development/hosted-readiness-2026-10-23.json)记录范围。此前遗漏的三个本RFC `tail -F` 跟随进程已关闭，日志保留。
+
 **2026-10-23 最新修复接受**：源码候选 `ae210a839996` 的 CI `39972466454` 终态46成功/2失败/1取消：依赖审计与汇总失败，macOS 2/3触发既有20分钟上限；取消前的启动/大图失败原因尚未确定，未将其推给环境。Linux/Windows图旅程均首轮通过，同SHA视觉回归成功；该GitHub macOS artifact本地三旅程3/0、131.9s，实际确认新任务摘要、320/390px文本和控件、MR等待/合入/关闭。没有把本地证据替代被取消的Mac CI。代码、截图和归因范围见 [验收记录](design/RFC-396-adaptive-graph-development/validation.md) 与 [CI归因](design/RFC-396-adaptive-graph-development/ci-audit-2026-10-23.md)。所有本次验收与监控进程已退出，真实企业连接和新版本托管验收仍开放，RFC不标Done。
 
 **2026-10-23 页面验收后继**：`fb99b3a0d` 的主 CI `39965841593` 终态44成功/5失败，三个平台 E2E 都是本会话新增预约用例的控件名称定位错误；另两项为 Static scans 与派生汇总。纠正定位和深链步骤假设后，相同 GitHub artifact 的完整预约 UI 旅程1/0、39.1s，原失败保留。截图又确认新任务摘要错误显示“仅交付内部候选”、320px 内部文本裁切；当前已完成合同说明复用、网格宽度修复、实际 HTML/文本范围断言，并补空闲 MR 等待文案（相关回归22/0）。这些新生产修改仍须后继 artifact 与 CI 接受，旧成功不代签。WebKit 定时 CI 已终态6成功/2失败，均为有实施前证据的 MEM-X8；详见 [归因](design/RFC-396-adaptive-graph-development/ci-audit-2026-10-23.md) 与 [验证](design/RFC-396-adaptive-graph-development/validation.md)。

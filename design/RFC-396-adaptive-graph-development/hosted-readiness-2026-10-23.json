@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "rfc": "RFC-396",
+  "observedAt": "2026-10-24T01:42:18.705392+00:00",
+  "criterion": "graph@2 hosted and real enterprise MR/CI acceptance",
+  "result": "blocked-before-upgrade",
+  "scope": {
+    "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
+    "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
+    "namespace": "cs-rfc396-graph-acceptance",
+    "node": "desktop-control-plane",
+    "sourceGitLabProjectId": 570,
+    "businessGitLabProjectId": 571
+  },
+  "service": {
+    "pod": "rfc396-graph-acceptance-green-7c579d49cb-9xwpv",
+    "state": "CrashLoopBackOff",
+    "restartCount": 93,
+    "lastTerminationReason": "Error",
+    "lastExitCode": 1,
+    "error": "ENOSPC: no space left on device, mkdir '/home/agent-workflow/.agent-workflow'",
+    "directoryStorage": "container writable layer; pod has no volumes or volume mounts",
+    "imageDigest": "sha256:48b6900402c2874e3c3efdbb5869557e7fe9582e39bf47eb74d2e3fa49ed0321",
+    "sourceSha": "67795ed462db9b78cea82fad5ae14c9d09bbca91"
+  },
+  "nodeStorage": {
+    "filesystemAvailableBytes": 0,
+    "imageFilesystemAvailableBytes": 0,
+    "containerFilesystemAvailableBytes": 0,
+    "filesystemCapacityBytes": 244867633152,
+    "filesystemUsedBytes": 232423530496,
+    "freeInodes": 7497395,
+    "diskPressureCondition": false
+  },
+  "taskParent": {
+    "id": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+    "generation": 1,
+    "ready": true,
+    "restartCount": 0,
+    "actualImageDigest": "sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
+    "declaredImageDigest": "sha256:21b2a5640e5d2970392cd7ca0e9ad85beb7ea26b327bd5ad42c832041d2f9043",
+    "declaredImageIsRunning": false
+  },
+  "externalReads": {
+    "crewStationConsole": "HTTP 500 with empty body",
+    "hostedAgentWorkflow": "HTTP 500 with empty body",
+    "gitLab": "HTTP 500 JSON response after process-scoped proxy bypass",
+    "registry": "six bounded manifest reads failed; one subsequent diagnostic confirmed HTTP 500",
+    "sharedRootCauseEstablished": false
+  },
+  "boundaries": [
+    "This is a readiness observation, not a graph@2 hosted acceptance result.",
+    "The prior graph@1 delivered Case remains an internal candidate with publication:null.",
+    "No service, task, MR, database, configuration or storage object was changed during this investigation.",
+    "The declared task image does not prove the running parent environment was upgraded.",
+    "Current business repository HEAD, CI definition, runners and enterprise pipeline connection could not be verified.",
+    "Only this namespace's pod references were read. Cross-namespace image-reference enumeration was rejected by automatic approval review; the rejection was not bypassed.",
+    "Old image cache sizes do not establish reclaimable space or recoverability. No cache or other project data was deleted."
+  ],
+  "localEvidence": [
+    "/tmp/rfc396-hosted-readonly-handoff-20261024.md",
+    "/tmp/rfc396-owned-storage-readonly-20261024.json",
+    "/tmp/rfc396-owned-image-cache-readonly-20261024.json",
+    "/tmp/rfc396-owned-registry-readonly-20261024.json"
+  ]
+}

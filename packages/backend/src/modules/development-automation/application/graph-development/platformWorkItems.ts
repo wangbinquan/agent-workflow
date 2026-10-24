@@ -1,4 +1,5 @@
 import { canonicalJson, repositoryMaterializationCommit } from '@agent-workflow/shared'
+import { z } from 'zod'
 import type { CandidateDeliveryParticipant } from '@/modules/source-control/public/types'
 import { graphDigest } from '../../domain/graph-development/model'
 import { graphToolResultSchema, graphResultSchemas } from './toolContracts'
@@ -8,6 +9,61 @@ import type { GraphDesignStore } from '../ports/graphDesignStore'
 import type { GraphVerificationWorkspace, createGraphVerification } from './verification'
 import type { GraphEmployeeContext } from './employeeCodec'
 import { GraphReactionPlanSchema, graphWork } from './reactionMaterial'
+
+interface GraphDeliveryInput {
+  work: GraphEmployeeContext
+  roundRef: string
+  workspace: GraphVerificationWorkspace
+  verification: {
+    candidate: { candidateRef: string; treeOid: string }
+    basisId: string
+    basisDigest: string
+    implementationRoundRef: string
+  }
+  deliveryContent: { commitMessage: string; title: string; description: string }
+}
+interface GraphDeliveryResult {
+  issueState: unknown
+  candidateState: unknown
+  artifactRefs: readonly string[]
+}
+function publishedContext(inputEnvelopeJson: string) {
+  const envelope = z.object({ contextsJson: z.string() }).parse(JSON.parse(inputEnvelopeJson))
+  const contexts = z
+    .array(z.object({ typeId: z.string(), stateJson: z.string() }))
+    .parse(JSON.parse(envelope.contextsJson))
+  const state = (typeId: string) => {
+    const value = contexts.find((context) => context.typeId === typeId)
+    return value ? (JSON.parse(value.stateJson) as unknown) : null
+  }
+  const candidate = z
+    .object({
+      status: z.literal('published'),
+      candidateRef: z.string(),
+      commitSha: z.string(),
+    })
+    .safeParse(state('development.change-candidate'))
+  const mr = z
+    .object({
+      status: z.literal('active'),
+      headSha: z.string(),
+      repositoryRef: z.string(),
+      sourceBranch: z.string(),
+      targetBranch: z.string(),
+    })
+    .safeParse(state('development.merge-request'))
+  const issue = contexts.find((context) => context.typeId === 'development.issue-handling')
+  if (!candidate.success || !mr.success || !issue || candidate.data.commitSha !== mr.data.headSha)
+    return null
+  return {
+    candidateRef: candidate.data.candidateRef,
+    commitSha: candidate.data.commitSha,
+    repositoryRef: mr.data.repositoryRef,
+    sourceBranch: mr.data.sourceBranch,
+    targetBranch: mr.data.targetBranch,
+    issueStateJson: issue.stateJson,
+  }
+}
 
 export function createGraphPlatformWorkItems(deps: {
   commands: GraphDesignCommands
@@ -21,19 +77,20 @@ export function createGraphPlatformWorkItems(deps: {
   candidates: CandidateDeliveryParticipant
   publication?: { remoteUrl(repositoryId: string): Promise<string> }
   mergeRequestDelivery?: {
-    prepareHandoff(input: {
-      work: GraphEmployeeContext
-      roundRef: string
-      workspace: GraphVerificationWorkspace
-      verification: {
-        candidate: { candidateRef: string; treeOid: string }
-        basisId: string
-        basisDigest: string
-        implementationRoundRef: string
-      }
-      commitSha: string
-      deliveryContent: { commitMessage: string; title: string; description: string }
-    }): Promise<{ issueState: unknown; candidateState: unknown; artifactRefs: readonly string[] }>
+    prepareHandoff(input: GraphDeliveryInput & { commitSha: string }): Promise<GraphDeliveryResult>
+    resumeHandoff?(
+      input: GraphDeliveryInput & { commitSha: string },
+    ): Promise<GraphDeliveryResult | null>
+    verificationWorkspace?(
+      input: Pick<GraphDeliveryInput, 'work' | 'workspace'> & {
+        published: ReturnType<typeof publishedContext>
+      },
+    ): Promise<GraphVerificationWorkspace>
+    reusePublished?(
+      input: GraphDeliveryInput & {
+        published: ReturnType<typeof publishedContext>
+      },
+    ): Promise<{ commitSha: string; delivery: GraphDeliveryResult } | null>
   }
 }) {
   return {
@@ -78,10 +135,19 @@ export function createGraphPlatformWorkItems(deps: {
         result = { designId: document.id, revision: document.revision }
         summary = '已保存完整需求材料并确定仓库基线。'
       } else if (plan.workItemRef === 'verify-change') {
+        const workspace = await deps.workspace.state(work.designId)
+        const verificationWorkspace =
+          work.request.deliveryMode === 'merge-request'
+            ? ((await deps.mergeRequestDelivery?.verificationWorkspace?.({
+                work,
+                workspace,
+                published: publishedContext(plan.inputEnvelopeJson),
+              })) ?? workspace)
+            : workspace
         result = await deps.verification.run({
           designId: work.designId,
           roundRef: plan.roundRef,
-          workspace: await deps.workspace.state(work.designId),
+          workspace: verificationWorkspace,
         })
         summary = graphResultSchemas['verify-change'].parse(result).passed
           ? '候选校验已通过。'
@@ -92,7 +158,7 @@ export function createGraphPlatformWorkItems(deps: {
           .sort((a, b) => b.createdAt - a.createdAt)[0]
         if (!verification) throw new Error('graph-delivery-verification-missing')
         const value = JSON.parse(verification.payloadJson) as {
-          candidate: { treeOid: string; candidateRef: string }
+          candidate: { treeOid: string; candidateRef: string; baselineSnapshotRef?: string }
           basisId: string
           basisDigest: string
           implementationRoundRef: string
@@ -100,11 +166,11 @@ export function createGraphPlatformWorkItems(deps: {
         }
         if (!graphResultSchemas['verify-change'].parse(value.result).passed)
           throw new Error('graph-delivery-verification-not-passed')
-        const deliveryId = `delivery:${graphDigest({ basis: value.basisDigest, candidate: value.candidate })}`
+        let deliveryId = `delivery:${graphDigest({ basis: value.basisDigest, candidate: value.candidate })}`
         const delivered = (await deps.store.links(work.designId)).find(
           (link) => link.id === deliveryId,
         )
-        if (delivered) {
+        if (delivered && work.request.deliveryMode !== 'merge-request') {
           const saved = JSON.parse(delivered.payloadJson) as { result: unknown }
           return JSON.stringify(
             graphToolResultSchema(plan.workItemRef).parse({
@@ -121,16 +187,97 @@ export function createGraphPlatformWorkItems(deps: {
           (JSON.parse(implementation.payloadJson) as { result: unknown }).result,
         )
         const workspace = await deps.workspace.state(work.designId)
-        const commit = await deps.candidates.commit({
-          baselineRepoPath: workspace.baselineRepoPath,
-          baselineSha: repositoryMaterializationCommit(workspace.baseline),
-          repositoryBaseline: workspace.baseline,
-          overlayRoot: workspace.workspacePath,
-          uploadPlan: workspace.uploadPlan,
-          expectedTreeOid: value.candidate.treeOid,
-          missionId: `graph-${work.caseId}-${value.basisDigest.slice(0, 12)}`,
-          summarySource: output.deliveryContent.commitMessage,
-        })
+        const deliveryInput: GraphDeliveryInput = {
+          work,
+          roundRef: plan.roundRef,
+          workspace,
+          verification: value,
+          deliveryContent: output.deliveryContent,
+        }
+        const reused =
+          work.request.deliveryMode === 'merge-request'
+            ? ((await deps.mergeRequestDelivery?.reusePublished?.({
+                ...deliveryInput,
+                published: publishedContext(plan.inputEnvelopeJson),
+              })) ?? null)
+            : null
+        if (delivered && !reused && work.request.deliveryMode === 'merge-request') {
+          const saved = JSON.parse(delivered.payloadJson) as {
+            result: { commitSha: string | null }
+          }
+          if (
+            saved.result.commitSha &&
+            (await deps.mergeRequestDelivery?.resumeHandoff?.({
+              ...deliveryInput,
+              commitSha: saved.result.commitSha,
+            }))
+          )
+            return JSON.stringify(
+              graphToolResultSchema(plan.workItemRef).parse({
+                summary: '设计、候选提交与验证证据已交付。',
+                result: saved.result,
+              }),
+            )
+        }
+        if (work.request.deliveryMode === 'merge-request') {
+          // Reverification produces a fresh evidence receipt even when its published
+          // business tree is unchanged. Include publication inputs in replay identity.
+          deliveryId = `delivery:${graphDigest({
+            basis: value.basisDigest,
+            candidate: value.candidate,
+            verification: verification.id,
+            request: work.request,
+            deliveryContent: output.deliveryContent,
+            targetBranch: workspace.targetBranch ?? null,
+            uploadPlan: workspace.uploadPlan ?? null,
+          })}`
+          const previous = (await deps.store.links(work.designId)).find(
+            (link) => link.id === deliveryId,
+          )
+          if (previous) {
+            const saved = JSON.parse(previous.payloadJson) as {
+              result: { commitSha: string | null }
+            }
+            const resumed =
+              reused?.delivery ??
+              (saved.result.commitSha
+                ? await deps.mergeRequestDelivery?.resumeHandoff?.({
+                    ...deliveryInput,
+                    commitSha: saved.result.commitSha,
+                  })
+                : null)
+            if (!resumed) throw new Error('graph-mr-delivery-replay-mismatch')
+            return JSON.stringify(
+              graphToolResultSchema(plan.workItemRef).parse({
+                summary: '设计、候选提交与验证证据已交付。',
+                result: saved.result,
+              }),
+            )
+          }
+        }
+        if (
+          work.request.deliveryMode === 'merge-request' &&
+          !reused &&
+          value.candidate.baselineSnapshotRef &&
+          value.candidate.baselineSnapshotRef !==
+            `git:${repositoryMaterializationCommit(workspace.baseline)}` &&
+          workspace.baseline.kind === 'commit'
+        )
+          throw new Error(
+            'graph-mr-candidate-baseline-changed: 当前发布 head 与验证候选的父基线不一致；请重新准备并验证候选后交付。',
+          )
+        const commit = reused
+          ? { ok: true as const, commitSha: reused.commitSha, localRef: '' }
+          : await deps.candidates.commit({
+              baselineRepoPath: workspace.baselineRepoPath,
+              baselineSha: repositoryMaterializationCommit(workspace.baseline),
+              repositoryBaseline: workspace.baseline,
+              overlayRoot: workspace.workspacePath,
+              uploadPlan: workspace.uploadPlan,
+              expectedTreeOid: value.candidate.treeOid,
+              missionId: `graph-${work.caseId}-${value.basisDigest.slice(0, 12)}`,
+              summarySource: output.deliveryContent.commitMessage,
+            })
         if (!commit.ok) throw new Error(`${commit.code}: ${commit.detail}`)
         let publication: {
           remoteRef: string
@@ -162,7 +309,8 @@ export function createGraphPlatformWorkItems(deps: {
         }
         const basis = await deps.commands.basis(work.designId, value.basisId)
         const mergeRequestDelivery =
-          work.request.deliveryMode === 'merge-request'
+          reused?.delivery ??
+          (work.request.deliveryMode === 'merge-request'
             ? await (() => {
                 if (!deps.mergeRequestDelivery) throw new Error('graph-mr-delivery-binding-missing')
                 return deps.mergeRequestDelivery.prepareHandoff({
@@ -174,7 +322,7 @@ export function createGraphPlatformWorkItems(deps: {
                   deliveryContent: output.deliveryContent,
                 })
               })()
-            : null
+            : null)
         const links = await deps.store.links(work.designId)
         const artifact = await deps.artifacts.put([
           {
@@ -233,9 +381,11 @@ export function createGraphPlatformWorkItems(deps: {
           }),
           createdAt: Date.now(),
         })
-        summary = mergeRequestDelivery
-          ? '候选与图验证已就绪，继续提交 MR 并持续看护。'
-          : '设计、候选提交与验证证据已交付。'
+        summary = reused
+          ? '新的图验证已记录，代码与发布输入未变化，继续观察现有 MR。'
+          : mergeRequestDelivery
+            ? '候选与图验证已就绪，继续提交 MR 并持续看护。'
+            : '设计、候选提交与验证证据已交付。'
       } else throw new Error('graph-platform-work-item-unknown')
       return JSON.stringify(graphToolResultSchema(plan.workItemRef).parse({ summary, result }))
     },

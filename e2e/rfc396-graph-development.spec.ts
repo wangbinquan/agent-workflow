@@ -11,6 +11,7 @@ import type { ClarifyAnswer, ClarifyQuestion } from '../packages/shared/src/sche
 
 test.setTimeout(300_000)
 let daemon: DaemonHandle
+const daemonHandles: DaemonHandle[] = []
 let mocks: SystemMockClient
 let employeeId: string
 let repositoryId: string
@@ -31,6 +32,7 @@ async function api<T>(path: string, body?: unknown, method?: string): Promise<T>
 }
 test.beforeAll(async () => {
   daemon = await startDaemon({ stubMode: 'graph-development', home: process.env.RFC396_E2E_HOME })
+  daemonHandles.push(daemon)
   mocks = new SystemMockClient(
     process.env.AW_SYSTEM_MOCK_CONTROL_URL!,
     process.env.AW_SYSTEM_MOCK_CONTROL_TOKEN!,
@@ -87,7 +89,9 @@ test.beforeAll(async () => {
   ).id
 })
 test.afterAll(async () => {
-  await daemon?.stop()
+  // Stop the restarted owner before the original handle removes its owned home.
+  // Explicit RFC396_E2E_HOME remains retained by the harness for evidence inspection.
+  for (const handle of [...daemonHandles].reverse()) await handle.stop()
 })
 
 interface Workspace {
@@ -392,6 +396,7 @@ async function journey(
   followup: string,
   finalMrState: 'merged' | 'closed' = 'merged',
 ) {
+  const browserContext = page.context()
   const booking = scenario.startsWith('Booking:')
   const caseId = booking
     ? await createBookingCaseThroughUi(page, scenario)
@@ -739,6 +744,13 @@ async function journey(
   await expect(
     page.getByText('The workspace is not prepared; this is the task target.'),
   ).toHaveCount(0)
+  if (finalMrState === 'closed') {
+    // RFC-396 AC21: a published MR must survive a closed browser and an abrupt daemon exit.
+    // Keep the same durable home; change external state while no observer is running.
+    await page.close()
+    expect(browserContext.pages()).toHaveLength(0)
+    await daemon.killChild('SIGKILL')
+  }
   // Change only the external fixture. The real observer must discover the new state
   // and settle this same Case; no internal event injection or Case termination endpoint is used.
   await mocks.mutateCodeHost({
@@ -748,6 +760,19 @@ async function journey(
     number: mergeRequest.number,
     state: finalMrState,
   })
+  if (finalMrState === 'closed') {
+    daemon = await startDaemon({ stubMode: 'graph-development', home: daemon.home })
+    daemonHandles.push(daemon)
+    const recovered = await caseProjection()
+    expect(recovered.case.id).toBe(caseId)
+    expect(recovered.detail.delivery).toMatchObject({
+      ref: delivery.ref,
+      sourceBranch: delivery.sourceBranch,
+      targetBranch: delivery.targetBranch,
+      headSha: delivery.headSha,
+    })
+    // No page is open while the recovered observer consumes the external terminal state.
+  }
   await expect
     .poll(
       async () => {
@@ -770,6 +795,21 @@ async function journey(
       mrStatus: finalMrState,
     })
   expect((await workspace()).host.state).toBe('terminal')
+  if (finalMrState === 'closed') {
+    const recoveredProject = (await mocks.snapshot()).codeHosts.find(
+      (item) => item.projectPath === projectPath,
+    )
+    const recoveredMrs = recoveredProject?.mergeRequests.filter(
+      (mr) => mr.sourceBranch === delivery.sourceBranch,
+    )
+    expect(recoveredMrs).toHaveLength(1)
+    expect(recoveredMrs![0]).toMatchObject({
+      number: mergeRequest.number,
+      headSha: delivery.headSha,
+    })
+    expect(browserContext.pages()).toHaveLength(0)
+    page = await browserContext.newPage()
+  }
   await open(page, caseId)
   await expect(page.getByTestId('graph-delivery-care')).toContainText(
     finalMrState === 'merged' ? 'Merge request merged' : 'Merge request closed without merging',

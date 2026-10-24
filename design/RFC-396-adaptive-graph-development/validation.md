@@ -1,5 +1,19 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-23 接续候选与外部验收前提
+
+文档提交 `5912ec43b94a7c3646fbb41a6892c418f709f913` 的 [CI 39978754925](https://github.com/wangbinquan/agent-workflow/actions/runs/39978754925) 已完成 **47 success / 2 failure**。所有功能 jobs 成功，失败为 Static scans（job `120500185914`）及派生汇总（job `120513349817`）；仅读取状态元数据。该提交保留 `ae210` 的源码和测试内容，提供后继功能 CI 证据；没有据此抹去或归因原 `ae210` 的 macOS 超时，整条 CI 仍为 failure。
+
+本轮代码收尾覆盖已发布 MR 无变化重验的 `candidate-empty`、重复提交和回执重放，并将浏览器关闭、daemon 崩溃后以同一持久目录恢复 MR 的直接旅程补入原通知 E2E。新增生产、回归用例和有限大图测量均先写齐，再集中验证；以下历史通过结果不代签这一新候选。
+
+本轮集中SQLite验证覆盖7文件、77个用例：首轮 **74 pass / 3 fail，468 assertions，62.52s**。三项均为新增测试构造/期望错误：提交标题遗漏生产 `aw:` 前缀、材料列表遗漏原始需求，以及repair复用原reaction round导致候选唯一约束拒绝入库。修正后两个受影响文件 **32 pass / 1 fail，256 assertions，54.17s**；最后一个夹具仍把两个round同时置为running，触发Case单writer约束。最终通过正式 `settleRound` 完成原handoff后再建repair，并只复验该用例 **1 pass / 0 fail**。生产内容未因这些测试错误修改，其余未变用例复用有效成功结果；不声称最后又跑了一次77/0全套。原失败日志分别保留在 `/tmp/rfc396-noop-sqlite.log`、`/tmp/rfc396-noop-sqlite-repair.log`，末次结果为 `/tmp/rfc396-noop-owner-repair.log`。任务文件ESLint、Prettier、diff检查通过。独立只读功能复核已确认重放、真实tree变化和同tree发布身份变化的完整分支；不将静态复核代签运行结果。
+
+PostgreSQL与原生三平台结果等待本候选GitHub CI；新增浏览器离线/daemon崩溃恢复旅程和多视图/深依赖测量等待该精确SHA构建产物。没有启动额外全量本地gate。
+
+真实企业连接与新版本托管验收当前有明确外部前提：[只读就绪记录](./hosted-readiness-2026-10-23.json)。原 green 服务在容器可写层创建应用目录时直接报 `ENOSPC`，节点 fs/imageFs/containerFs 的 `availableBytes` 均为0；task parent仍运行旧镜像。CS、GitLab和registry分别返回500或有界请求失败，没有认定它们与满盘共享同一根因。尚未部署新graph@2、创建真实MR或触发真实CI。旧图@1的 `publication:null` 仍只证明原内部候选流程。
+
+清理核对发现三个本RFC历史 `tail -F` 日志跟随进程遗漏，现已结束并保留日志，纠正此前进程清理不完整的记录。没有清理集群缓存：跨namespace镜像引用查询被自动审批拒绝，且registry可恢复性未获证实；没有绕过拒绝或删除其他项目内容。
+
 ## 2026-10-23 最新修复接受与 CI 边界
 
 源码修复 `ae210a8399964b249e68c8cc2c4b5de230c0aec5` 的 [主 CI 39972466454](https://github.com/wangbinquan/agent-workflow/actions/runs/39972466454) 已终态 **46 success / 2 failure / 1 cancelled**。类型/lint/格式、后端/前端、三平台构建、九个 E2E 分片及链接检查成功；Static scans 的 dependency audit gate 失败（只读步骤状态），macOS E2E 2/3 触发既有20分钟 job上限取消，`CI required` 因此失败。没有称整条 CI 全绿，没有重跑旧 CI 覆盖失败。

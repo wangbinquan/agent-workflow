@@ -206,7 +206,7 @@ describe('RFC-396 graph MR type composition', () => {
     expect(
       value.authoringManifest.workItems.find((item) => item.workItemRef === 'deliver-result')
         ?.nextWorkItemRefs,
-    ).toEqual(['publish-mr'])
+    ).toEqual(['publish-mr', 'observe-mr'])
     expect(
       value.authoringManifest.workItems.some((item) => item.workItemRef === 'analyze-implement'),
     ).toBe(false)

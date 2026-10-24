@@ -20,7 +20,12 @@ import {
   bindChangeCandidateParticipant,
 } from '@/modules/source-control/composition/repositoryCandidate'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
-import { createGraphDeliveryBridge } from '@/modules/development-automation/composition/graphDeliveryBridge'
+import {
+  createGraphDeliveryBridge,
+  type GraphMrHandoffResult,
+} from '@/modules/development-automation/composition/graphDeliveryBridge'
+import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
+import { graphDigest } from '@/modules/development-automation/domain/graph-development/model'
 import { issueHandlingContextSchema } from '@/modules/development-automation/composition/employeeTypePackage'
 import { createGraphVerification } from '@/modules/development-automation/application/graph-development/verification'
 import type { GraphEmployeeContext } from '@/modules/development-automation/application/graph-development/employeeCodec'
@@ -36,6 +41,7 @@ import {
 import { createVerificationProfilePersistence } from '@/modules/development-automation/infrastructure/configResourceStore'
 import { createEmployeeWorkspacePersistence } from '@/modules/development-automation/infrastructure/employeeWorkspacePersistence'
 import { createEmployeePlatformWorkItemPersistence } from '@/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence'
+import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 import {
   verificationProfileContentDigest,
   type VerificationProfileContent,
@@ -55,6 +61,59 @@ function git(cwd: string, ...args: string[]) {
 }
 
 describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
+  function platformPlan(
+    work: GraphEmployeeContext,
+    workItemRef: 'verify-change' | 'deliver-result',
+    roundRef: string,
+    published?: GraphMrHandoffResult,
+  ) {
+    return {
+      roundRef,
+      executionNonce: 'nonce',
+      caseRef: { id: work.caseId },
+      employeeTypeRef: { typeId: 'graph-development', revision: 2 },
+      workItemRef,
+      inputEnvelopeJson: canonicalJson({
+        contextsJson: canonicalJson([
+          {
+            id: 'graph-context',
+            typeId: 'graph-development.design-context',
+            revision: 1,
+            stateJson: canonicalJson(work),
+            artifactRefs: [],
+          },
+          ...(published
+            ? [
+                {
+                  id: 'issue',
+                  typeId: 'development.issue-handling',
+                  revision: 1,
+                  stateJson: canonicalJson(published.issueState),
+                },
+                {
+                  id: 'candidate',
+                  typeId: 'development.change-candidate',
+                  revision: 1,
+                  stateJson: canonicalJson(published.candidateState),
+                },
+                {
+                  id: 'mr',
+                  typeId: 'development.merge-request',
+                  revision: 1,
+                  stateJson: canonicalJson({
+                    status: 'active',
+                    headSha: published.candidateState.commitSha,
+                    repositoryRef: work.repositoryId,
+                    sourceBranch: published.issueState.request.workingBranch,
+                    targetBranch: work.request.targetBranch ?? 'main',
+                  }),
+                },
+              ]
+            : []),
+        ]),
+      }),
+    }
+  }
   async function fixture(
     unborn = false,
     options: {
@@ -460,6 +519,7 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       frozen,
       verified,
       committed,
+      candidateRows,
       checkpointPaths,
       review,
       implementation,
@@ -479,6 +539,496 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
   }
 
   const caseTest = test
+
+  async function publishedFixture() {
+    const f = await fixture()
+    const initial = await f.bridge.prepareHandoff(f.handoff)
+    f.setWorkspace({
+      ...f.getWorkspace()!,
+      baselineSha: f.committed.commitSha,
+      remoteHeadSha: f.committed.commitSha,
+      state: 'published',
+    })
+    f.candidateRows.set(initial.candidateState.candidateRef, {
+      ...f.candidateRows.get(initial.candidateState.candidateRef)!,
+      state: 'published',
+    })
+    const publication: GraphMrHandoffResult = {
+      ...initial,
+      candidateState: { ...initial.candidateState, status: 'published' },
+    }
+    const work = {
+      ...f.work,
+      request: { ...f.work.request, deliveryMode: 'merge-request' as const },
+    }
+    const workspace = (await f.bridge.continuationWorkspace('design-a'))!
+    const published = {
+      candidateRef: publication.candidateState.candidateRef,
+      commitSha: f.committed.commitSha,
+      repositoryRef: 'repo-a',
+      sourceBranch: 'graph/booking',
+      targetBranch: 'main',
+      issueStateJson: canonicalJson(publication.issueState),
+    }
+    const verificationWorkspace = await f.bridge.verificationWorkspace({
+      work,
+      workspace,
+      published,
+    })
+    const checked = await f.verification.run({
+      designId: 'design-a',
+      roundRef: 'published-checks',
+      workspace: verificationWorkspace,
+    })
+    expect(checked.passed).toBe(true)
+    return {
+      ...f,
+      work,
+      publication,
+      published,
+      workspace,
+      verificationWorkspace,
+      reuse: {
+        ...f.handoff,
+        work,
+        workspace,
+        published,
+        roundRef: 'published-redelivery',
+        verification: {
+          ...f.handoff.verification,
+          candidate: { candidateRef: checked.candidateRef!, treeOid: checked.candidateTreeOid! },
+        },
+      },
+    }
+  }
+
+  caseTest(
+    'publication reuse rejects changed inputs, a different published head, stale approval and workspace drift',
+    async () => {
+      const f = await publishedFixture()
+      const count = git(f.repo, 'rev-list', '--all', '--count')
+      expect((await f.bridge.reusePublished(f.reuse))?.commitSha).toBe(f.committed.commitSha)
+      for (const patch of [
+        { publicationBranch: 'another-source' },
+        { targetBranch: 'release' },
+        { body: 'A different publication request' },
+        {
+          uploads: [
+            {
+              artifactRef: 'other-upload',
+              sha256: 'b'.repeat(64),
+              originalName: 'spec.md',
+              placement: 'temporary' as const,
+              targetPath: null,
+            },
+          ],
+        },
+      ])
+        await expect(
+          f.bridge.reusePublished({
+            ...f.reuse,
+            work: { ...f.work, request: { ...f.work.request, ...patch } },
+          }),
+        ).rejects.toThrow('graph-mr-publication-inputs-changed')
+      await expect(
+        f.bridge.reusePublished({
+          ...f.reuse,
+          deliveryContent: {
+            ...f.handoff.deliveryContent,
+            commitMessage: 'Different commit intent',
+          },
+        }),
+      ).rejects.toThrow('graph-mr-publication-inputs-changed')
+      await expect(
+        f.bridge.reusePublished({
+          ...f.reuse,
+          workspace: {
+            ...f.workspace,
+            uploadPlan: { planDigest: 'new-plan', entries: [] },
+          },
+        }),
+      ).rejects.toThrow('graph-mr-publication-inputs-changed')
+      expect(
+        await f.bridge.reusePublished({
+          ...f.reuse,
+          published: { ...f.published, commitSha: 'e'.repeat(40) },
+        }),
+      ).toBeNull()
+      expect(await f.bridge.reusePublished({ ...f.reuse, published: null })).toBeNull()
+      const wrongTarget = { ...f.work, request: { ...f.work.request, targetBranch: 'release' } }
+      expect(
+        (
+          await f.bridge.verificationWorkspace({
+            work: wrongTarget,
+            workspace: f.workspace,
+            published: f.published,
+          })
+        ).baseline,
+      ).toEqual(f.workspace.baseline)
+      await expect(
+        f.bridge.prepareHandoff({ ...f.handoff, work: wrongTarget, workspace: f.workspace }),
+      ).rejects.toThrow('graph-mr-target-baseline-mismatch')
+      f.setWorkspace({ ...f.getWorkspace()!, remoteHeadSha: 'f'.repeat(40) })
+      expect(await f.bridge.reusePublished(f.reuse)).toBeNull()
+      f.setWorkspace({ ...f.getWorkspace()!, remoteHeadSha: f.committed.commitSha })
+      f.setReview({ ...f.review, decision: 'rejected' })
+      await expect(f.bridge.reusePublished(f.reuse)).rejects.toThrow(
+        'graph-mr-approval-no-longer-valid',
+      )
+      f.setReview(f.review)
+      f.changeEnvironment()
+      await expect(f.bridge.reusePublished(f.reuse)).rejects.toThrow(
+        'graph-mr-reverification-required',
+      )
+      expect(
+        (
+          await f.verification.run({
+            designId: 'design-a',
+            roundRef: 'fresh-published-checks',
+            workspace: f.verificationWorkspace,
+          })
+        ).passed,
+      ).toBe(true)
+      expect(
+        (await f.bridge.reusePublished({ ...f.reuse, roundRef: 'fresh-redelivery' }))?.commitSha,
+      ).toBe(f.committed.commitSha)
+      writeFileSync(
+        join(f.workspace.workspacePath, 'booking.js'),
+        'export const reserve = () => "预约";\n// actual new code\n',
+      )
+      expect((await f.bridge.verificationWorkspace(f.reuse)).baseline).toEqual(f.workspace.baseline)
+      await expect(f.bridge.reusePublished(f.reuse)).rejects.toThrow(
+        'graph-mr-handoff-candidate-drifted',
+      )
+      expect(git(f.repo, 'rev-list', '--all', '--count')).toBe(count)
+    },
+    30_000,
+  )
+
+  caseTest(
+    'incompatible publication inputs stop the platform before commit or push',
+    async () => {
+      const f = await publishedFixture()
+      let workspace = f.workspace
+      let commits = 0,
+        pushes = 0
+      const platform = createGraphPlatformWorkItems({
+        ...f,
+        workspace: { initialize: async () => workspace, state: async () => workspace },
+        candidates: {
+          ...f.candidates,
+          async commit(input) {
+            commits++
+            return await f.candidates.commit(input)
+          },
+          async push(input) {
+            pushes++
+            return await f.candidates.push(input)
+          },
+        },
+        mergeRequestDelivery: f.bridge,
+      })
+      const count = git(f.repo, 'rev-list', '--all', '--count')
+      const publishedSubject = git(f.repo, 'log', '-1', '--format=%s', f.committed.commitSha)
+      expect(publishedSubject).toBe(`aw: ${f.implementation.deliveryContent.commitMessage}`)
+      for (const patch of [
+        { publicationBranch: 'another-source' },
+        { targetBranch: 'release' },
+        { body: 'Different requirement' },
+      ])
+        await expect(
+          platform.execute(
+            platformPlan(
+              { ...f.work, request: { ...f.work.request, ...patch } },
+              'deliver-result',
+              'changed-identity',
+              f.publication,
+            ),
+          ),
+        ).rejects.toThrow('graph-mr-publication-inputs-changed')
+      workspace = { ...workspace, uploadPlan: { planDigest: 'changed-plan', entries: [] } }
+      await expect(
+        platform.execute(
+          platformPlan(f.work, 'deliver-result', 'changed-upload-plan', f.publication),
+        ),
+      ).rejects.toThrow('graph-mr-publication-inputs-changed')
+      workspace = f.workspace
+      for (const [index, patch] of [
+        { title: 'A different MR title' },
+        { description: 'Different MR release notes' },
+        { commitMessage: 'A different immutable commit message' },
+      ].entries()) {
+        const roundRef = `changed-publication-content-${index}`
+        const implementation = {
+          ...f.implementation,
+          deliveryContent: { ...f.implementation.deliveryContent, ...patch },
+        }
+        await f.store.insertLink({
+          designId: 'design-a',
+          id: `implementation:${roundRef}`,
+          kind: 'execution',
+          payloadJson: canonicalJson({
+            basisId: f.frozen.basis.id,
+            basisDigest: f.frozen.basis.digest,
+            roundRef,
+            result: implementation,
+          }),
+          createdAt: Date.now() + index,
+        })
+        expect(
+          JSON.parse(
+            await platform.execute(
+              platformPlan(f.work, 'verify-change', `${roundRef}-checks`, f.publication),
+            ),
+          ).result.passed,
+        ).toBe(true)
+        await expect(
+          platform.execute(platformPlan(f.work, 'deliver-result', roundRef, f.publication)),
+        ).rejects.toThrow('graph-mr-publication-inputs-changed')
+      }
+      expect(git(f.repo, 'log', '-1', '--format=%s', f.committed.commitSha)).toBe(publishedSubject)
+      expect(git(f.repo, 'rev-list', '--all', '--count')).toBe(count)
+      expect(commits).toBe(0)
+      expect(pushes).toBe(0)
+      expect(f.candidateRows.get(f.publication.candidateState.candidateRef)).toMatchObject({
+        state: 'published',
+        baselineSha: f.publication.candidateState.baselineSha,
+        commitSha: f.committed.commitSha,
+      })
+    },
+    30_000,
+  )
+
+  caseTest(
+    'changed care code is verified against the current head and becomes a real child candidate',
+    async () => {
+      const f = await publishedFixture()
+      writeFileSync(
+        join(f.workspace.workspacePath, 'booking.js'),
+        'export const reserve = () => "预约";\n// requested code change\n',
+      )
+      let commits = 0
+      const platform = createGraphPlatformWorkItems({
+        ...f,
+        workspace: { initialize: async () => f.workspace, state: async () => f.workspace },
+        candidates: {
+          ...f.candidates,
+          async commit(input) {
+            commits++
+            return await f.candidates.commit(input)
+          },
+        },
+        mergeRequestDelivery: f.bridge,
+      })
+      expect(
+        JSON.parse(
+          await platform.execute(
+            platformPlan(f.work, 'verify-change', 'changed-code-checks', f.publication),
+          ),
+        ).result.passed,
+      ).toBe(true)
+      const delivered = JSON.parse(
+        await platform.execute(
+          platformPlan(f.work, 'deliver-result', 'changed-code-delivery', f.publication),
+        ),
+      ).result
+      expect(commits).toBe(1)
+      expect(delivered.commitSha).not.toBe(f.committed.commitSha)
+      expect(git(f.repo, 'rev-parse', `${delivered.commitSha}^`)).toBe(f.committed.commitSha)
+      expect(JSON.parse(delivered.mergeRequestDelivery.candidateStateJson)).toMatchObject({
+        status: 'prepared',
+        baselineSha: f.committed.commitSha,
+      })
+    },
+    30_000,
+  )
+
+  caseTest(
+    'an upgraded graph@2 delivery replays its legacy completed receipt without another commit',
+    async () => {
+      const f = await fixture()
+      const handoff = await f.bridge.prepareHandoff(f.handoff)
+      const legacyResult = {
+        artifactRefs: handoff.artifactRefs,
+        commitSha: f.committed.commitSha,
+        publication: null,
+        mergeRequestDelivery: {
+          issueStateJson: canonicalJson(handoff.issueState),
+          candidateStateJson: canonicalJson(handoff.candidateState),
+        },
+      }
+      const verification = JSON.parse(
+        (await f.store.record('design-a', 'verification:initial-checks'))!.payloadJson,
+      )
+      await f.store.insertLink({
+        designId: 'design-a',
+        kind: 'execution',
+        id: `delivery:${graphDigest({ basis: f.frozen.basis.digest, candidate: verification.candidate })}`,
+        payloadJson: canonicalJson({ kind: 'delivery', result: legacyResult }),
+        createdAt: Date.now(),
+      })
+      const workspace = (await f.bridge.continuationWorkspace('design-a'))!
+      const work = {
+        ...f.work,
+        request: { ...f.work.request, deliveryMode: 'merge-request' as const },
+      }
+      const platform = createGraphPlatformWorkItems({
+        ...f,
+        workspace: { initialize: async () => workspace, state: async () => workspace },
+        candidates: {
+          ...f.candidates,
+          async commit() {
+            throw new Error('legacy replay must not commit')
+          },
+          async push() {
+            throw new Error('legacy replay must not push')
+          },
+        },
+        mergeRequestDelivery: f.bridge,
+      })
+      expect(
+        JSON.parse(await platform.execute(platformPlan(work, 'deliver-result', 'legacy-retry')))
+          .result,
+      ).toEqual(legacyResult)
+      expect(
+        await f.bridge.resumeHandoff({
+          ...f.handoff,
+          workspace,
+          deliveryContent: { ...f.handoff.deliveryContent, title: 'Changed publication' },
+        }),
+      ).toBeNull()
+      f.setReview({ ...f.review, decision: 'rejected' })
+      await expect(
+        platform.execute(platformPlan(work, 'deliver-result', 'legacy-withdrawn')),
+      ).rejects.toThrow('graph-mr-approval-no-longer-valid')
+    },
+    30_000,
+  )
+
+  caseTest(
+    'a current delivery receipt rechecks native approval and the care tree before publication replay',
+    async () => {
+      const f = await fixture()
+      const work = {
+        ...f.work,
+        request: { ...f.work.request, deliveryMode: 'merge-request' as const },
+      }
+      const workspace = async () =>
+        (await f.bridge.continuationWorkspace('design-a')) ?? f.handoff.workspace
+      let commits = 0
+      const platform = createGraphPlatformWorkItems({
+        ...f,
+        workspace: { initialize: workspace, state: workspace },
+        candidates: {
+          ...f.candidates,
+          async commit(input) {
+            commits++
+            return await f.candidates.commit(input)
+          },
+          async push() {
+            throw new Error('delivery replay must not push')
+          },
+        },
+        mergeRequestDelivery: f.bridge,
+      })
+      const plan = platformPlan(work, 'deliver-result', 'current-receipt')
+      const delivered = JSON.parse(await platform.execute(plan)).result
+      expect(JSON.parse(delivered.mergeRequestDelivery.candidateStateJson).status).toBe('prepared')
+      expect(JSON.parse(await platform.execute(plan)).result).toEqual(delivered)
+      expect(commits).toBe(1)
+      f.setReview({ ...f.review, decision: 'rejected' })
+      await expect(platform.execute(plan)).rejects.toThrow('graph-mr-approval-no-longer-valid')
+      f.setReview(f.review)
+      writeFileSync(
+        join((await workspace()).workspacePath, 'booking.js'),
+        'export const reserve = () => "预约";\n// replay drift\n',
+      )
+      await expect(platform.execute(plan)).rejects.toThrow('graph-mr-handoff-candidate-drifted')
+      expect(commits).toBe(1)
+    },
+    30_000,
+  )
+
+  caseTest(
+    'a newly approved basis refreshes handoff and care materials without republishing identical code',
+    async () => {
+      const f = await publishedFixture()
+      f.execution.resolveImplementationBaseline = async () => f.workspace.baseline
+      const before = await f.commands.document('design-a')
+      const next = await f.commands.preview('design-a', {
+        requestId: 'same-tree-new-basis',
+        expectedRevision: before.revision,
+        includedElementIds: ['booking'],
+      })
+      const review = {
+        ...f.review,
+        id: 'new-basis-approval',
+        taskId: 'new-basis-review',
+        basisDigest: next.basis.digest,
+        decidedAt: 90,
+      }
+      f.setReview(review)
+      await f.commands.recordReview('design-a', review)
+      await f.store.insertLink({
+        designId: 'design-a',
+        id: 'implementation:new-basis-build',
+        kind: 'execution',
+        payloadJson: canonicalJson({
+          basisId: next.basis.id,
+          basisDigest: next.basis.digest,
+          roundRef: 'new-basis-build',
+          result: f.implementation,
+        }),
+        createdAt: Date.now() + 10,
+      })
+      const work = {
+        ...f.work,
+        basisId: next.basis.id,
+        basisDigest: next.basis.digest,
+        reviewReceiptId: review.id,
+      }
+      const platform = createGraphPlatformWorkItems({
+        ...f,
+        workspace: { initialize: async () => f.workspace, state: async () => f.workspace },
+        candidates: {
+          ...f.candidates,
+          async commit() {
+            throw new Error('same tree must retain its commit')
+          },
+          async push() {
+            throw new Error('same publication must not push')
+          },
+        },
+        mergeRequestDelivery: f.bridge,
+      })
+      expect(
+        JSON.parse(
+          await platform.execute(
+            platformPlan(work, 'verify-change', 'new-basis-checks', f.publication),
+          ),
+        ).result.passed,
+      ).toBe(true)
+      const delivered = JSON.parse(
+        await platform.execute(
+          platformPlan(work, 'deliver-result', 'new-basis-delivery', f.publication),
+        ),
+      ).result
+      expect(delivered.commitSha).toBe(f.committed.commitSha)
+      const artifact = (await f.commands.basis('design-a', next.basis.id)).artifact
+      const issue = JSON.parse(delivered.mergeRequestDelivery.issueStateJson)
+      expect(issue.materialArtifactRefs).toContain(artifact.artifactRef)
+      expect(issue.materialArtifactRefs).toContain(f.frozen.artifact.artifactRef)
+      const material = await f.bridge.repairMaterial({
+        caseId: 'case-a',
+        roundRef: 'after-new-basis',
+      })
+      expect(material).toMatchObject({ basisId: next.basis.id, basisDigest: next.basis.digest })
+      expect(material!.files.find((file) => file.path === 'care.json')!.content).toContain(
+        next.basis.digest,
+      )
+    },
+    30_000,
+  )
 
   caseTest(
     'MR handoff preserves its business identity through a portable checkpoint and replay',
@@ -524,6 +1074,8 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
         typeId: 'graph-driven-development',
         typeRevision: 2,
         primaryContextId: 'graph-case-a',
+        activeRoundId: 'handoff',
+        currentWorkItemRef: 'deliver-result',
         executionPolicyRevision: 1,
         createdAt: 1,
         updatedAt: 1,
@@ -616,6 +1168,221 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       })
       expect((await workspacePersistence.workspace('case-a'))?.sourceBranch).toBe('graph/booking')
       expect(restores).toBe(1)
+      let commitCalls = 0,
+        pushCalls = 0
+      const work = {
+        ...f.work,
+        request: { ...f.work.request, deliveryMode: 'merge-request' as const },
+      }
+      let publication: GraphMrHandoffResult = {
+        ...result,
+        candidateState: { ...result.candidateState, status: 'published' },
+      }
+      const platform = () =>
+        createGraphPlatformWorkItems({
+          ...f,
+          workspace: {
+            initialize: async () => (await compose().continuationWorkspace('design-a'))!,
+            state: async () => (await compose().continuationWorkspace('design-a'))!,
+          },
+          candidates: {
+            ...f.candidates,
+            async commit(input) {
+              commitCalls++
+              return await f.candidates.commit(input)
+            },
+            async push(input) {
+              pushCalls++
+              return await f.candidates.push(input)
+            },
+          },
+          mergeRequestDelivery: compose(),
+        })
+      const countBefore = git(f.repo, 'rev-list', '--all', '--count')
+      const checked = JSON.parse(
+        await platform().execute(
+          platformPlan(work, 'verify-change', 'unchanged-checks', publication),
+        ),
+      ).result
+      expect(checked.passed).toBe(true)
+      const put = f.artifacts.put.bind(f.artifacts)
+      let interruptDelivery = true
+      f.artifacts.put = async (files) => {
+        if (interruptDelivery && files.some((file) => file.path === 'delivery.json')) {
+          interruptDelivery = false
+          throw new Error('delivery-response-lost')
+        }
+        return await put(files)
+      }
+      const deliveryPlan = platformPlan(work, 'deliver-result', 'unchanged-delivery', publication)
+      await expect(platform().execute(deliveryPlan)).rejects.toThrow('delivery-response-lost')
+      const delivered = JSON.parse(await platform().execute(deliveryPlan)).result
+      expect(delivered.commitSha).toBe(f.committed.commitSha)
+      expect(JSON.parse(delivered.mergeRequestDelivery.candidateStateJson)).toMatchObject({
+        status: 'published',
+        candidateRef: result.candidateState.candidateRef,
+      })
+      expect(JSON.parse(await platform().execute(deliveryPlan)).result).toEqual(delivered)
+      expect(git(f.repo, 'rev-list', '--all', '--count')).toBe(countBefore)
+      expect(commitCalls).toBe(0)
+      expect(pushCalls).toBe(0)
+      expect((await platformPersistence.candidate(result.candidateState.candidateRef))?.state).toBe(
+        'published',
+      )
+      expect(
+        (await f.store.records('design-a')).some(
+          (row) => row.id === 'verification:unchanged-checks' && row.status === 'completed',
+        ),
+      ).toBe(true)
+
+      const runtime = createRuntimePersistence(harness.db)
+      await runtime.settleRound({
+        roundId: 'handoff',
+        state: 'completed',
+        outputJson: canonicalJson(delivered),
+        nextCaseState: 'active',
+        nextWorkItemRef: 'observe-mr',
+        now: 4,
+      })
+      expect(
+        (await runtime.listRounds('case-a')).find((round) => round.id === 'handoff'),
+      ).toMatchObject({ state: 'completed' })
+      const afterHandoff = await runtime.getCase('case-a')
+      expect(afterHandoff).toMatchObject({ state: 'active', activeRoundId: null })
+
+      // A later care repair owns a different real commit and candidate. Recheck
+      // that candidate, not merely the one from the first graph handoff.
+      const current = (await compose().continuationWorkspace('design-a'))!
+      writeFileSync(
+        join(current.workspacePath, 'booking.js'),
+        'export const reserve = () => "预约";\n// review repair\n',
+      )
+      const repair = await f.candidates.derive({
+        baselineRepoPath: f.repo,
+        baselineSha: f.committed.commitSha,
+        repositoryBaseline: current.baseline,
+        overlayRoot: current.workspacePath,
+        excludePolicyDigest: 'a'.repeat(64),
+        agentOutcomeRef: 'care-repair',
+      })
+      if (!repair.ok) throw new Error(repair.detail)
+      const repairCommit = await f.candidates.commit({
+        baselineRepoPath: f.repo,
+        baselineSha: f.committed.commitSha,
+        repositoryBaseline: current.baseline,
+        overlayRoot: current.workspacePath,
+        expectedTreeOid: repair.receipt.treeOid,
+        missionId: 'care-repair',
+        summarySource: 'Fix booking review',
+      })
+      if (!repairCommit.ok) throw new Error(repairCommit.detail)
+      await insertOne(harness.db, employeeReactionRounds, {
+        id: 'care-repair',
+        caseId: 'case-a',
+        caseRevision: afterHandoff!.revision,
+        employeeId: 'employee-a',
+        employeeRevision: 1,
+        ruleId: 'prepare-repair',
+        workItemRef: 'prepare-change',
+        workContractId: 'development.prepare-change',
+        workContractVersion: 1,
+        executionPolicyRevision: 1,
+        inputContextRefsJson: '[]',
+        planJson: '{}',
+        state: 'running',
+        createdAt: 4,
+        updatedAt: 4,
+      })
+      await platformPersistence.insertCandidate({
+        candidateRef: repair.receipt.candidateRef,
+        caseId: 'case-a',
+        roundId: 'care-repair',
+        baselineSha: f.committed.commitSha,
+        treeOid: repair.receipt.treeOid,
+        receiptJson: canonicalJson({ ...repair.receipt, uploadPlan: null }),
+        summarySource: 'Fix booking review',
+        createdAt: 4,
+        updatedAt: 4,
+      })
+      expect(await platformPersistence.candidate(repair.receipt.candidateRef)).toMatchObject({
+        caseId: 'case-a',
+        roundId: 'care-repair',
+        state: 'prepared',
+        baselineSha: f.committed.commitSha,
+        treeOid: repair.receipt.treeOid,
+        commitSha: null,
+      })
+      await platformPersistence.recordCandidateCommit({
+        candidateRef: repair.receipt.candidateRef,
+        commitSha: repairCommit.commitSha,
+        updatedAt: 5,
+      })
+      await platformPersistence.publishCandidateAndWorkspace({
+        caseId: 'case-a',
+        candidateRef: repair.receipt.candidateRef,
+        commitSha: repairCommit.commitSha,
+        pushReceiptJson: '{"published":true}',
+        updatedAt: 6,
+      })
+      expect(await platformPersistence.candidate(repair.receipt.candidateRef)).toMatchObject({
+        state: 'published',
+        baselineSha: f.committed.commitSha,
+        treeOid: repair.receipt.treeOid,
+        commitSha: repairCommit.commitSha,
+      })
+      expect(await harness.db.select().from(employeeChangeCandidates)).toHaveLength(2)
+      publication = {
+        ...publication,
+        issueState: {
+          ...publication.issueState,
+          deliveryContent: {
+            ...publication.issueState.deliveryContent,
+            commitMessage: 'Fix booking review',
+          },
+        },
+        candidateState: {
+          ...publication.candidateState,
+          candidateRef: repair.receipt.candidateRef,
+          baselineSha: f.committed.commitSha,
+          treeOid: repair.receipt.treeOid,
+          commitSha: repairCommit.commitSha,
+          summarySource: 'Fix booking review',
+        },
+      }
+      const repairCount = git(f.repo, 'rev-list', '--all', '--count')
+      const repairChecked = JSON.parse(
+        await platform().execute(
+          platformPlan(work, 'verify-change', 'repair-recheck', publication),
+        ),
+      ).result
+      expect(repairChecked.limitations).toEqual([])
+      expect(repairChecked.passed).toBe(true)
+      const repairDeliveryPlan = platformPlan(
+        work,
+        'deliver-result',
+        'repair-redelivery',
+        publication,
+      )
+      const repairDelivery = JSON.parse(await platform().execute(repairDeliveryPlan)).result
+      expect(repairDelivery.commitSha).toBe(repairCommit.commitSha)
+      expect(JSON.parse(repairDelivery.mergeRequestDelivery.candidateStateJson).candidateRef).toBe(
+        repair.receipt.candidateRef,
+      )
+      expect(
+        JSON.parse(repairDelivery.mergeRequestDelivery.issueStateJson).deliveryContent
+          .commitMessage,
+      ).toBe('Fix booking review')
+      expect(JSON.parse(await platform().execute(repairDeliveryPlan)).result).toEqual(
+        repairDelivery,
+      )
+      expect(
+        JSON.parse(
+          await platform().execute(platformPlan(work, 'deliver-result', 'repair-redelivery')),
+        ).result,
+      ).toEqual(repairDelivery)
+      expect(git(f.repo, 'rev-list', '--all', '--count')).toBe(repairCount)
+      expect(commitCalls).toBe(0)
+      expect(pushCalls).toBe(0)
     },
     30_000,
   )

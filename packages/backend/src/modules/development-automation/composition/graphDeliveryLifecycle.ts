@@ -109,7 +109,7 @@ export function composeGraphDeliveryLifecycleTypePackage(
         workItems: [
           ...descriptor.authoringManifest.workItems.map((item) =>
             item.workItemRef === 'deliver-result'
-              ? { ...item, nextWorkItemRefs: ['publish-mr'] }
+              ? { ...item, nextWorkItemRefs: ['publish-mr', 'observe-mr'] }
               : item,
           ),
           ...shared.workItems.map((item) =>
@@ -203,7 +203,54 @@ export function composeGraphDeliveryLifecycleRuntimeCodec(core: RuntimeCodec): R
     selectReactionToolSlotJson: (json) => select(json).selectReactionToolSlotJson(json),
     assembleReactionInputJson: (json) => select(json).assembleReactionInputJson(json),
     validateReactionOutputJson: (json) => select(json).validateReactionOutputJson(json),
-    resolveReactionSettlementJson: (json) => select(json).resolveReactionSettlementJson(json),
+    resolveReactionSettlementJson(json) {
+      const settled = select(json).resolveReactionSettlementJson(json)
+      if (
+        z.object({ workItemRef: z.string() }).passthrough().parse(JSON.parse(json)).workItemRef !==
+        'deliver-result'
+      )
+        return settled
+      const request = z
+        .object({
+          workItemRef: z.string(),
+          outputJson: z.string(),
+          allowedNextWorkItemRefs: z.array(z.string()),
+        })
+        .passthrough()
+        .parse(JSON.parse(json))
+      if (
+        request.workItemRef !== 'deliver-result' ||
+        !request.allowedNextWorkItemRefs.includes('observe-mr')
+      )
+        return settled
+      const output = z
+        .object({
+          status: z.string(),
+          contextPatches: z.array(
+            z.object({ contextTypeId: z.string(), stateJson: z.string() }).passthrough(),
+          ),
+        })
+        .passthrough()
+        .parse(JSON.parse(request.outputJson))
+      const candidate = output.contextPatches.find(
+        (patch) => patch.contextTypeId === 'development.change-candidate',
+      )
+      const graph = output.contextPatches.find((patch) => isCoreContext(patch.contextTypeId))
+      if (
+        output.status !== 'ok' ||
+        !candidate ||
+        !graph ||
+        (JSON.parse(graph.stateJson) as { request: { deliveryMode?: string } }).request
+          .deliveryMode !== 'merge-request' ||
+        (JSON.parse(candidate.stateJson) as { status: string }).status !== 'published'
+      )
+        return settled
+      return JSON.stringify({
+        ...JSON.parse(settled),
+        nextWorkItemRef: 'observe-mr',
+        caseState: 'active',
+      })
+    },
     buildInvokedCaseJson(json) {
       const request = z
         .object({

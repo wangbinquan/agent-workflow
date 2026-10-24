@@ -154,6 +154,7 @@ function delivery(
   revision: 1 | 2,
   includeHandoff: boolean,
   existing: ReturnType<typeof context>[] = [],
+  deliveryHandoff = handoff,
 ) {
   const inputEnvelopeJson = JSON.stringify({
     roundRef: 'deliver-round',
@@ -178,7 +179,7 @@ function delivery(
             artifactRefs: deliveryArtifacts,
             commitSha: headSha,
             publication: null,
-            ...(includeHandoff ? { mergeRequestDelivery: handoff } : {}),
+            ...(includeHandoff ? { mergeRequestDelivery: deliveryHandoff } : {}),
           },
         },
       }),
@@ -215,6 +216,30 @@ function settle(revision: 1 | 2, result: ReturnType<typeof delivery>) {
 }
 
 describe('RFC-396 composed graph delivery codec', () => {
+  test('an unchanged published candidate records graph evidence and observes the MR without publishing or replacing MR/CI facts', () => {
+    const result = delivery(2, true, [], {
+      ...handoff,
+      candidateStateJson: JSON.stringify({ ...candidateState, status: 'published' }),
+    })
+    expect(settle(2, result)).toMatchObject({
+      caseState: 'active',
+      terminalKind: null,
+      nextWorkItemRef: 'observe-mr',
+    })
+    expect(result.output.contextPatches.map((patch) => patch.contextTypeId)).toEqual([
+      GRAPH_CONTEXT_TYPE,
+      'development.issue-handling',
+      'development.change-candidate',
+    ])
+    expect(result.output.artifactRefs).toEqual(['original-requirement', ...deliveryArtifacts])
+    expect(JSON.parse(result.output.contextPatches[2]!.stateJson).status).toBe('published')
+    const legacy = delivery(1, true, [], {
+      ...handoff,
+      candidateStateJson: JSON.stringify({ ...candidateState, status: 'published' }),
+    })
+    expect(settle(1, legacy)).toMatchObject({ caseState: 'terminal', nextWorkItemRef: null })
+  })
+
   test('graph@2 keeps its verified graph context, adds valid MR contexts and continues to publish-mr', () => {
     expect(initialContext(2).request.deliveryMode).toBe('merge-request')
     const result = delivery(2, true)

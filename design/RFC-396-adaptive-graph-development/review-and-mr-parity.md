@@ -101,4 +101,6 @@ T17～T19 的生产实现和测试用例已写齐，进入 T20 集中验证。�
 
 候选型证据按当前工作区派生 tree 判定；人工验收后端与界面均绑定准确范围。批准的 profile revision 只要仍可读取且 digest 一致就继续有效，资源发布新版本或归档不会暗换在途的已批准合同。重复交接、真实冲突 merge、基线刷新、证据读取失败和人工撤回均有回归。具体测试数字、失败原因与修后复验见 [validation.md](./validation.md)。
 
-本轮仍明确保留这些边界：CUA inventory 没有浏览器，创建 iab 返回 unavailable；后继已使用 GitHub 准确提交 artifact 在真实 Playwright 浏览器完成预约全页面旅程并检查截图，见 validation，但最新摘要/窄屏修复仍待后继 artifact 验收；MR E2E 使用受控模型与 code host，不能替代真实 GitLab 企业连接验收；新实现未部署到旧托管验收实例。另一个后续优化是：已发布 MR 在代码未变化时重新验证，现有 `verify-change → deliver-result` 仍可能生成同树子提交并重新触发 CI，不改变 MR 身份或代码内容，但尚未保证无变化重验不提交。
+本轮仍明确保留这些边界：CUA inventory 没有浏览器，创建 iab 返回 unavailable；后继已使用准确 `ae210` 的 GitHub artifact 在真实 Playwright 浏览器完成预约全页面旅程，最新摘要与320/390px实际文本边界均已验收并目检截图，见 validation。MR E2E 使用受控模型与 code host，不能替代真实 GitLab 企业连接验收；新实现未部署到旧托管验收实例。接续只读核实旧服务因 `ENOSPC` 无法启动、节点可用字节为0，CS/GitLab/registry读取失败另记，见[就绪证据](./hosted-readiness-2026-10-23.json)。
+
+无变化重验的接续修复明确区分当前已发布候选与新代码候选：核对持久化head、真实tree、发布身份和当前原生批准后，使用原候选父基线重新验证，保存新的graph证据与handoff，复用原commit继续 `observe-mr`。新basis材料必须取得新批准并进入后续care；旧版与新版交付回执重放也核对批准和当前树。真实代码变化仍产生当前head的正常子提交。现有 `ensureMergeRequest` 不更新已存在MR的标题/描述，因此同tree但发布输入变化时，在任何commit前明确报 `graph-mr-publication-inputs-changed`，保留现有MR和提交，要求通过新工作重新准备和审核；不冒称已更新外部说明。代码/用例与实际执行结果分别记录在 validation，未取得新候选证据前不标整体通过。

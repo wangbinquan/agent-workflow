@@ -24,6 +24,7 @@ import {
 } from '../application/graph-development/mrCare'
 import { graphDigest } from '../domain/graph-development/model'
 import { withAutomationWorkspaceEffects } from '../infrastructure/automationWorkspaceEffects'
+import { issueHandlingContextSchema } from './employeeTypePackage'
 
 type Candidate = Extract<
   Awaited<ReturnType<ChangeCandidateParticipant['derive']>>,
@@ -57,7 +58,7 @@ export interface GraphMrHandoffResult {
     }
   }
   readonly candidateState: {
-    readonly status: 'prepared'
+    readonly status: 'prepared' | 'published'
     readonly candidateRef: string
     readonly baselineSha: string
     readonly treeOid: string
@@ -66,6 +67,89 @@ export interface GraphMrHandoffResult {
     readonly commitSha: string
   }
   readonly artifactRefs: readonly string[]
+}
+
+interface GraphMrDeliveryInput {
+  readonly work: GraphEmployeeContext
+  readonly roundRef: string
+  readonly workspace: GraphVerificationWorkspace
+  readonly verification: {
+    readonly candidate: { readonly candidateRef: string; readonly treeOid: string }
+    readonly basisId: string
+    readonly basisDigest: string
+    readonly implementationRoundRef: string
+  }
+  readonly deliveryContent: {
+    readonly commitMessage: string
+    readonly title: string
+    readonly description: string
+  }
+}
+
+interface PublishedGraphCandidate {
+  readonly candidateRef: string
+  readonly commitSha: string
+  readonly repositoryRef: string
+  readonly sourceBranch: string
+  readonly targetBranch: string
+  readonly issueStateJson: string
+}
+type GraphPublishedInput = Pick<GraphMrDeliveryInput, 'work' | 'workspace'> & {
+  readonly published: PublishedGraphCandidate | null
+}
+
+function deliveryIssue(input: GraphMrDeliveryInput, artifactRefs: readonly string[]) {
+  const { work } = input
+  const uploads = work.request.uploads.map((upload, index) => ({
+    ...upload,
+    targetPath:
+      upload.placement === 'temporary'
+        ? (upload.targetPath ??
+          `.agent-workflow/inputs/requirements/${stableIdentityComponent(work.caseId)}/uploads/${index}-${stableIdentityComponent(upload.originalName)}`)
+        : upload.targetPath!,
+  }))
+  return {
+    status: 'active' as const,
+    subjectRef: `case:${work.caseId}`,
+    repositoryRef: work.repositoryId,
+    request: {
+      kind: work.request.kind,
+      body: work.request.body,
+      externalId: null,
+      uploads,
+      executionOptions: {},
+      workingBranch:
+        work.request.publicationBranch ??
+        `agent-workflow/employee/${stableGitRefComponent(work.caseId)}`,
+    },
+    materialArtifactRefs: [
+      ...work.request.uploads.map((upload) => upload.artifactRef),
+      ...artifactRefs,
+    ],
+    deliveryContent: {
+      commitMessage: input.deliveryContent.commitMessage,
+      mergeRequestTitle: input.deliveryContent.title,
+      mergeRequestDescription:
+        input.deliveryContent.description || '按已批准的图设计完成实现与验证。',
+    },
+  } satisfies GraphMrHandoffResult['issueState']
+}
+
+function publicationIdentity(
+  handoff: GraphMrHandoff,
+  result: Pick<GraphMrHandoffResult, 'issueState'>,
+) {
+  // Review and verification receipts may advance without changing a publication.
+  // Physical workspace paths and the source commit's new baseline are not inputs.
+  return graphDigest({
+    caseId: handoff.caseId,
+    designId: handoff.designId,
+    repositoryId: handoff.repositoryId,
+    targetBranch: handoff.workspace.targetBranch ?? 'main',
+    uploadPlan: handoff.workspace.uploadPlan ?? null,
+    request: result.issueState.request,
+    deliveryContent: result.issueState.deliveryContent,
+  })
 }
 
 /** One existing Case changes workspace owner; MR creation/observation stays in the development engine. */
@@ -100,27 +184,288 @@ export function createGraphDeliveryBridge(deps: {
     persistence: deps.platformPersistence,
     workspacePath,
   })
+  async function publishedCandidate(input: GraphPublishedInput) {
+    if (!input.published) return null
+    const current = await deps.platformPersistence.currentWorkspace(input.work.caseId)
+    const candidate = await deps.platformPersistence.candidate(input.published.candidateRef)
+    const commitSha = candidate?.commitSha
+    if (
+      !current ||
+      current.row.state !== 'published' ||
+      !candidate ||
+      candidate.state !== 'published' ||
+      !commitSha ||
+      current.row.repositoryId !== input.work.repositoryId ||
+      current.row.baselineSha !== commitSha ||
+      current.row.remoteHeadSha !== commitSha ||
+      repositoryMaterializationCommit(input.workspace.baseline) !== commitSha ||
+      input.published.commitSha !== commitSha ||
+      input.published.repositoryRef !== input.work.repositoryId ||
+      input.published.sourceBranch !== current.row.sourceBranch ||
+      input.published.targetBranch !== current.row.targetBranch ||
+      (input.workspace.targetBranch ?? 'main') !== current.row.targetBranch ||
+      (input.work.request.targetBranch !== null &&
+        input.work.request.targetBranch !== current.row.targetBranch)
+    )
+      return null
+    return { current, candidate, commitSha }
+  }
+  async function verificationWorkspace(
+    input: GraphPublishedInput,
+  ): Promise<GraphVerificationWorkspace> {
+    const published = await publishedCandidate(input)
+    if (!published) return input.workspace
+    const staged = await deps.candidates.stage({
+      baselineRepoPath: input.workspace.baselineRepoPath,
+      baselineSha: published.commitSha,
+      overlayRoot: input.workspace.workspacePath,
+      uploadPlan: input.workspace.uploadPlan,
+    })
+    if (!staged.ok) throw new Error(`${staged.code}: ${staged.detail}`)
+    try {
+      if (staged.treeOid !== published.candidate.treeOid) return input.workspace
+    } finally {
+      await staged.cleanup()
+    }
+    // An unchanged published tree has no delta against its own commit. Recheck
+    // the actual published candidate against its original parent, after proving
+    // that the current care scene still equals that exact publication.
+    const parent = await deps.sourceControl.resolveBaseline({
+      baselineRepoPath: input.workspace.baselineRepoPath,
+      preferredBranch: published.candidate.baselineSha,
+      sourceBranch: null,
+      allowUnborn: true,
+    })
+    if (!parent.contentBaseline || parent.baselineSha !== published.candidate.baselineSha)
+      throw new Error('graph-mr-published-parent-unavailable')
+    return { ...input.workspace, baseline: parent.contentBaseline }
+  }
   return {
     ...care,
-    async prepareHandoff(input: {
-      readonly work: GraphEmployeeContext
-      readonly roundRef: string
-      readonly workspace: GraphVerificationWorkspace
-      readonly verification: {
-        readonly candidate: { readonly candidateRef: string; readonly treeOid: string }
-        readonly basisId: string
-        readonly basisDigest: string
-        readonly implementationRoundRef: string
+    verificationWorkspace,
+    async resumeHandoff(
+      input: GraphMrDeliveryInput & { commitSha: string },
+    ): Promise<GraphMrHandoffResult | null> {
+      if (
+        input.work.request.targetBranch !== null &&
+        input.work.request.targetBranch !== (input.workspace.targetBranch ?? 'main')
+      )
+        return null
+      const previous = (await deps.store.records(input.work.designId))
+        .filter((row) => row.kind === 'mr-handoff' && row.status === 'completed')
+        .map(
+          (row) =>
+            JSON.parse(row.payloadJson) as {
+              handoff: GraphMrHandoff
+              result: GraphMrHandoffResult
+              publicationIdentity?: string
+            },
+        )
+        .find(
+          ({ handoff }) =>
+            handoff.basisDigest === input.verification.basisDigest &&
+            handoff.candidateRef === input.verification.candidate.candidateRef &&
+            handoff.commitSha === input.commitSha,
+        )
+      if (!previous || !input.work.reviewReceiptId) return null
+      const handoff = { ...previous.handoff, reviewReceiptId: input.work.reviewReceiptId }
+      const desired = {
+        ...previous.result,
+        issueState: deliveryIssue(input, previous.result.artifactRefs),
       }
-      readonly commitSha: string
-      readonly deliveryContent: {
-        readonly commitMessage: string
-        readonly title: string
-        readonly description: string
+      if (
+        publicationIdentity({ ...handoff, workspace: input.workspace }, desired) !==
+        (previous.publicationIdentity ?? publicationIdentity(previous.handoff, previous.result))
+      )
+        return null
+      const approved = await validateGraphMrBasis(handoff, deps)
+      if (!approved.ok) throw new Error(`${approved.code}: ${approved.detail}`)
+      const staged = await deps.candidates.stage({
+        baselineRepoPath: input.workspace.baselineRepoPath,
+        baselineSha: repositoryMaterializationCommit(input.workspace.baseline),
+        overlayRoot: input.workspace.workspacePath,
+        uploadPlan: input.workspace.uploadPlan,
+      })
+      if (!staged.ok) throw new Error(`${staged.code}: ${staged.detail}`)
+      try {
+        if (staged.treeOid !== handoff.candidateTreeOid)
+          throw new Error('graph-mr-handoff-candidate-drifted')
+      } finally {
+        await staged.cleanup()
       }
-    }): Promise<GraphMrHandoffResult> {
+      return previous.result
+    },
+    async reusePublished(
+      input: GraphMrDeliveryInput & GraphPublishedInput,
+    ): Promise<{ commitSha: string; delivery: GraphMrHandoffResult } | null> {
+      if (!input.published || !input.work.reviewReceiptId) return null
+      const records = await deps.store.records(input.work.designId)
+      const previous = records
+        .filter((row) => row.kind === 'mr-handoff' && row.status === 'completed')
+        .sort((a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id))[0]
+      if (!previous) return null
+      const saved = JSON.parse(previous.payloadJson) as {
+        handoff: GraphMrHandoff
+        result: GraphMrHandoffResult
+        publicationIdentity?: string
+      }
+      const intendedPublicationIdentity = publicationIdentity(
+        {
+          ...saved.handoff,
+          caseId: input.work.caseId,
+          designId: input.work.designId,
+          repositoryId: input.work.repositoryId,
+          workspace: input.workspace,
+        },
+        { issueState: deliveryIssue(input, []) },
+      )
+      const currentCandidate = await deps.platformPersistence.candidate(
+        input.published.candidateRef,
+      )
+      if (
+        currentCandidate?.treeOid === input.verification.candidate.treeOid &&
+        (intendedPublicationIdentity !==
+          (saved.publicationIdentity ?? publicationIdentity(saved.handoff, saved.result)) ||
+          (input.work.request.targetBranch !== null &&
+            input.work.request.targetBranch !== (input.workspace.targetBranch ?? 'main')))
+      )
+        throw new Error(
+          'graph-mr-publication-inputs-changed: 代码树与已发布提交相同，但 MR 标题、描述、提交消息、源/目标分支、需求或上传计划已变化；现有 MR 和 Git 提交保持不变，请通过新工作重新准备并审核发布输入。',
+        )
+      const published = await publishedCandidate(input)
+      if (!published || published.candidate.treeOid !== input.verification.candidate.treeOid)
+        return null
+      const { current, candidate, commitSha } = published
+      const handoff: GraphMrHandoff = {
+        designId: input.work.designId,
+        caseId: input.work.caseId,
+        repositoryId: input.work.repositoryId,
+        basisId: input.verification.basisId,
+        basisDigest: input.verification.basisDigest,
+        reviewReceiptId: input.work.reviewReceiptId,
+        implementationRoundRef: input.verification.implementationRoundRef,
+        candidateRef: input.verification.candidate.candidateRef,
+        candidateTreeOid: input.verification.candidate.treeOid,
+        commitSha,
+        workspace: input.workspace,
+      }
+      const frozen = await deps.commands.basis(input.work.designId, input.verification.basisId)
+      const receipt = JSON.parse(candidate.receiptJson) as Candidate
+      let delivery: GraphMrHandoffResult = {
+        issueState: deliveryIssue(input, [frozen.artifact.artifactRef]),
+        candidateState: {
+          status: 'published',
+          candidateRef: candidate.candidateRef,
+          baselineSha: candidate.baselineSha,
+          treeOid: candidate.treeOid,
+          summarySource: candidate.summarySource,
+          changedPaths: [
+            ...receipt.changed.added,
+            ...receipt.changed.modified,
+            ...receipt.changed.deleted,
+          ],
+          commitSha,
+        },
+        artifactRefs: [frozen.artifact.artifactRef],
+      }
+      const identityDigest = publicationIdentity(handoff, delivery)
+      if (
+        delivery.issueState.request.workingBranch !== current.row.sourceBranch ||
+        (input.workspace.targetBranch ?? 'main') !== current.row.targetBranch
+      )
+        return null
+      const currentIssue = issueHandlingContextSchema.parse(
+        JSON.parse(input.published.issueStateJson),
+      )
+      if (
+        currentIssue.status !== 'active' ||
+        currentIssue.repositoryRef !== input.work.repositoryId ||
+        currentIssue.subjectRef !== delivery.issueState.subjectRef ||
+        !currentIssue.deliveryContent ||
+        graphDigest(currentIssue.request) !== graphDigest(delivery.issueState.request)
+      )
+        return null
+      // Preserve care's published title/message after repairs. The graph's
+      // requested publication identity is stored separately from that care state.
+      delivery = {
+        ...delivery,
+        issueState: {
+          ...delivery.issueState,
+          deliveryContent: currentIssue.deliveryContent,
+          materialArtifactRefs: [
+            ...new Set([
+              ...currentIssue.materialArtifactRefs,
+              ...delivery.issueState.materialArtifactRefs,
+            ]),
+          ],
+        },
+      }
+      const approved = await validateGraphMrBasis(handoff, deps)
+      if (!approved.ok) throw new Error(`${approved.code}: ${approved.detail}`)
+      const verified = records
+        .filter((row) => {
+          if (row.kind !== 'verification' || row.status !== 'completed') return false
+          const value = JSON.parse(row.payloadJson) as typeof input.verification & {
+            candidate: Candidate
+            result: unknown
+          }
+          return (
+            value.candidate.candidateRef === input.verification.candidate.candidateRef &&
+            value.candidate.treeOid === candidate.treeOid &&
+            value.candidate.baselineSnapshotRef === `git:${candidate.baselineSha}` &&
+            value.basisDigest === input.verification.basisDigest &&
+            value.implementationRoundRef === input.verification.implementationRoundRef &&
+            graphResultSchemas['verify-change'].parse(value.result).passed
+          )
+        })
+        .sort((a, b) => b.createdAt - a.createdAt || b.updatedAt - a.updatedAt)[0]
+      if (!verified) return null
+      const checkedWorkspace = await verificationWorkspace(input)
+      if (repositoryMaterializationCommit(checkedWorkspace.baseline) !== candidate.baselineSha)
+        throw new Error('graph-mr-handoff-candidate-drifted')
+      const checked = await deps.verification.run({
+        designId: input.work.designId,
+        roundRef: verified.id.slice('verification:'.length),
+        workspace: checkedWorkspace,
+        implementationRoundRef: input.verification.implementationRoundRef,
+        expectedBasisDigest: input.verification.basisDigest,
+        expectedCandidateTreeOid: candidate.treeOid,
+      })
+      if (!checked.passed) throw new Error('graph-mr-reverification-required')
+      const resolved = await deps.sourceControl.resolveBaseline({
+        baselineRepoPath: input.workspace.baselineRepoPath,
+        preferredBranch: commitSha,
+        sourceBranch: null,
+        allowUnborn: true,
+      })
+      if (
+        resolved.contentBaseline?.kind !== 'commit' ||
+        resolved.contentBaseline.commitSha !== commitSha ||
+        resolved.contentBaseline.treeOid !== candidate.treeOid
+      )
+        throw new Error('graph-mr-commit-content-mismatch')
+      const { workspace: _workspace, ...identity } = handoff
+      const record = await deps.commands.beginRecord(
+        input.work.designId,
+        `mr-handoff:${graphDigest({ roundRef: input.roundRef, identity, publication: identityDigest, reused: true })}`,
+        'mr-handoff',
+        { ...identity, baseline: input.workspace.baseline, published: input.published },
+      )
+      if (record.status !== 'completed')
+        await deps.commands.finishRecord(record, 'completed', {
+          handoff,
+          result: delivery,
+          publicationIdentity: identityDigest,
+        })
+      return { commitSha, delivery }
+    },
+    async prepareHandoff(
+      input: GraphMrDeliveryInput & { readonly commitSha: string },
+    ): Promise<GraphMrHandoffResult> {
       const { work, workspace, verification } = input
       const targetBranch = workspace.targetBranch ?? work.request.targetBranch ?? 'main'
+      if (work.request.targetBranch && work.request.targetBranch !== targetBranch)
+        throw new Error('graph-mr-target-baseline-mismatch')
       const sourceBranch =
         work.request.publicationBranch ??
         `agent-workflow/employee/${stableGitRefComponent(work.caseId)}`
@@ -170,12 +515,31 @@ export function createGraphDeliveryBridge(deps: {
       // Once handoff completes, workspace.state() resolves to care. A delivery
       // receipt retry must retain its identity across that physical path change.
       const { workspace: _workspace, ...identity } = handoff
-      let record = await deps.commands.beginRecord(
-        work.designId,
-        `mr-handoff:${graphDigest({ basis: handoff.basisDigest, candidate: handoff.candidateRef })}`,
-        'mr-handoff',
-        { ...identity, baseline: workspace.baseline, sourceBranch, targetBranch },
-      )
+      const legacyRecordId = `mr-handoff:${graphDigest({ basis: handoff.basisDigest, candidate: handoff.candidateRef })}`
+      const legacyRecord = await deps.store.record(work.designId, legacyRecordId)
+      const publicationDigest = publicationIdentity(handoff, {
+        issueState: deliveryIssue(input, []),
+      })
+      const legacyPublication =
+        legacyRecord?.status === 'completed'
+          ? (JSON.parse(legacyRecord.payloadJson) as {
+              handoff: GraphMrHandoff
+              result: GraphMrHandoffResult
+            })
+          : null
+      const recordId =
+        legacyRecord &&
+        (!legacyPublication ||
+          publicationIdentity(legacyPublication.handoff, legacyPublication.result) ===
+            publicationDigest)
+          ? legacyRecordId
+          : `mr-handoff:${graphDigest({ basis: handoff.basisDigest, candidate: handoff.candidateRef, publication: publicationDigest })}`
+      let record = await deps.commands.beginRecord(work.designId, recordId, 'mr-handoff', {
+        ...identity,
+        baseline: workspace.baseline,
+        sourceBranch,
+        targetBranch,
+      })
       if (record.status === 'completed')
         return (JSON.parse(record.payloadJson) as { result: GraphMrHandoffResult }).result
       const committed = await deps.sourceControl.resolveBaseline({
@@ -252,14 +616,8 @@ export function createGraphDeliveryBridge(deps: {
           updatedAt: timestamp,
         })
       }
-      const uploads = work.request.uploads.map((upload, index) => ({
-        ...upload,
-        targetPath:
-          upload.placement === 'temporary'
-            ? (upload.targetPath ??
-              `.agent-workflow/inputs/requirements/${stableIdentityComponent(work.caseId)}/uploads/${index}-${stableIdentityComponent(upload.originalName)}`)
-            : upload.targetPath!,
-      }))
+      const issue = deliveryIssue(input, [frozen.artifact.artifactRef])
+      const uploads = issue.request.uploads
       // Graph intake stores temporary files in its own material directory. The
       // shared care tools consume the existing requirements-directory contract.
       await withAutomationWorkspaceEffects(deps.factory, async (effects) => {
@@ -307,29 +665,7 @@ export function createGraphDeliveryBridge(deps: {
       })
       const artifactRefs = [frozen.artifact.artifactRef]
       const result: GraphMrHandoffResult = {
-        issueState: {
-          status: 'active',
-          subjectRef: `case:${work.caseId}`,
-          repositoryRef: work.repositoryId,
-          request: {
-            kind: work.request.kind,
-            body: work.request.body,
-            externalId: null,
-            uploads,
-            executionOptions: {},
-            workingBranch: sourceBranch,
-          },
-          materialArtifactRefs: [
-            ...work.request.uploads.map((upload) => upload.artifactRef),
-            ...artifactRefs,
-          ],
-          deliveryContent: {
-            commitMessage: input.deliveryContent.commitMessage,
-            mergeRequestTitle: input.deliveryContent.title,
-            mergeRequestDescription:
-              input.deliveryContent.description || '按已批准的图设计完成实现与验证。',
-          },
-        },
+        issueState: issue,
         candidateState: {
           status: 'prepared',
           candidateRef: completed.candidate.candidateRef,
