@@ -189,7 +189,7 @@ describeEachProviderHttpApplication(
           body: 'Validate the unchanged intake flow',
           externalId: null,
           uploads: [],
-          idempotencyKey: 'rfc370-valid-intake',
+          idempotencyKey: 'rfc370-valid-intake', // gitleaks:allow
         },
         201,
       )

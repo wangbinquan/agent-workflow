@@ -107,3 +107,8 @@ f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtu
 # credential); the constant is renamed RESOURCE_NAME, this exempts only the
 # fingerprint already in history.
 99944c201326544111573ca468861fb93c51f987:packages/backend/tests/rfc380-owned-resource-acl.test.ts:generic-api-key:17
+# RFC-370 收尾（9a900aaa5，非法请求体 422）：两条测试里作合法对照请求的幂等键
+# 字面量（rfc370-valid-launch / rfc370-valid-intake）是测试请求标识，不是凭据。
+# 当前行已带 `gitleaks:allow`，此处只钉已推送的历史 commit。
+9a900aaa5709b147838f3ea64420050e28468895:packages/backend/tests/rfc370-development-invalid-body.test.ts:generic-api-key:179
+9a900aaa5709b147838f3ea64420050e28468895:packages/backend/tests/rfc370-digital-employee-invalid-body.test.ts:generic-api-key:192

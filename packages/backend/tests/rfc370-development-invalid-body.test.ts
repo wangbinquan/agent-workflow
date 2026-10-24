@@ -176,7 +176,7 @@ describeEachProviderHttpApplication(
         ...selection,
         requestedEmployee: null,
         requestedPolicy: null,
-        idempotencyKey: 'rfc370-valid-launch',
+        idempotencyKey: 'rfc370-valid-launch', // gitleaks:allow
         submission: { kind: 'direct', title: 'Valid', body: 'Valid request', uploads: [] },
         delivery: { kind: 'create-merge-request' },
       }
