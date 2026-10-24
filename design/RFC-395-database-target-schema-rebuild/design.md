@@ -434,3 +434,12 @@ II-0 裁决（2026-10-21）：两 provider 统一采用「合同历史 + 类型�
 - 自本 RFC 的激活提交起，drizzle-kit 不再生成迁移、`drizzle.config.ts` 删除（此前 epoch-1 迁移照旧生成）；`db/migrations/*.sql`（epoch 1）与 PG 历史冻结在迁移包内，只供源识别与离线前滚。
 
 激活提交之前新增 epoch-1 迁移的过渡规则见 [migration §3](./migration.md)。
+
+## 14. II-b 的跨域收口与 RFC-294 演进（2026-10-23）
+
+II-b 先在现有表结构上收口 39 处被重塑表的跨域访问，再由各 owner 换表；任务分解、逐条去向与新增依赖边见 plan §6.13「跨域收口（O）」。用户 2026-10-23 确认该方案。
+
+- **落位**：模块间访问以 RFC-294 consumer-owned required SPI 收口（消费方 `composition/required-ports.ts` 声明，owner `application/adapters/` 实现，bootstrap 注入），新增 7 对实现边，另在已有的 collaboration ⇢ task-execution 上增加合同；不新增 offered 边，不改变 RFC-376 结构门基线。code-capability（非目标 context）与 system-operations 中不属于它的事实，由 bootstrap 把 owner 查询注入窄端口，不加边。模块外文件的业务 SQL 迁入 owner，platform 只留中性端口。
+- **承担的演进**：RFC-294 S5 中「工作区 GC 策略归 source-control / task-execution」与「任务生命周期写入序列迁回 task-execution」两步由本 RFC 完成。
+- **偏离（用户 2026-10-23 确认）**：webhook 触发记录清理保留单条 DELETE，task-execution 以 public 同语句片段供 integration 使用，新增 `PUBLIC_SURFACE_DEBT` 条目，与 II-a 的 38 条同类，后继随 RFC-294 S5 / S6 处理。人工门 journal 的任务锁（M17）暂以 required SPI 承接，S5 解开值依赖环后改用 task-execution 的 offered participant。
+- **行为说明**：缓存仓库列表的「被任务引用」筛选与计数改为两步查询（用户 2026-10-23 裁决），列表与计数不再出自同一快照（计数本就缓存 5 秒）；task-execution 一侧走索引探测，T18 做前后性能对比。

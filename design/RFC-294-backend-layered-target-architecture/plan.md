@@ -107,6 +107,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 ### S1 NodeRun 每任务单调序号（W7-A）
 
 > 后继：[RFC-374](../RFC-374-node-run-sequence/proposal.md)（Done，2026-10-19，`291a5c3f3`）。S1b（所有受支持二进制都晚于 RFC-374 后删除 id 回退）待立项。2026-10-17 研究发现：PostgreSQL 迁移链今天不能给已有表加列，需新增升级种类 V8；`max+1` 与 tasks 计数器都会重开 RFC-369 的同任务冲突，分配改用 identity 分配表；迁移只能接在 RFC-370 未发布的 0259 / 0035 之后，执行时机待用户决定。
+>
+> 2026-10-23：S1b 不再单独立项，由 RFC-395 II-b 删除清单 D4（nullable seq 与 ID 兜底退出新执行读取）承担，见 RFC-395 plan §6.13。
 
 - **目标**：消除“ULID 字典序 = 先后”的判据（review F6）。
 - **范围**：两种 provider 的 `node_runs` 增加 `seq`；唯一铸造程序在同一事务内分配每任务单调值并保证 `UNIQUE(task_id, seq)`；
@@ -174,6 +176,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   不再出现在模块 public 合同中。
 - **退出门**：context 值级依赖无环且 ⊆ design §3.1；`platform` → `modules` = 0；无 drizzle / schema 再导出桶。
 - **前置 / 冲突**：S2b 之后更便宜。**能力影响**：无。
+- **2026-10-23**：「工作区 GC 策略归 source-control / task-execution」与「任务生命周期写入序列迁回 task-execution」两步由 RFC-395 II-b 的跨域收口承担（RFC-395 plan §6.13、design §14）。
 
 ### S6 task-execution 执行机制归位
 

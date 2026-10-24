@@ -1,3 +1,27 @@
+## 2026-10-23 RFC-395 In Progress：II-b 开工（分解见 plan §6.13）
+
+**II-b 已开工**：用户 2026-10-23 要求继续推进。分解见 [RFC plan §6.13](design/RFC-395-database-target-schema-rebuild/plan.md)，仍是一次交付、T18 集中验证、一次激活。
+
+- **开发期两个 epoch 并存**：目标表（epoch 2）与现行表并列声明，经 `targetTablesOf(handle)` 取用；激活包之前，运行时、`tablesOf` 与 `@/db/schema` 不变。
+- **先收口、后换表**：39 处被重塑表的跨域访问先在现有表结构上收口，再由各 owner 换表。用户 2026-10-23 确认收口方案：
+  - 22 处用 required SPI，新增 7 对实现边；
+  - 其余由 bootstrap 注入 owner 查询，或把业务 SQL 迁入 owner；
+  - 缓存仓库引用筛选拆成两步查询；
+  - webhook 触发清理保留单条 DELETE（task-execution public 片段，记账为偏离）；
+  - 顺带完成 RFC-294 S5 中的工作区 GC 归属与生命周期写者迁入两步。
+- **已完成**：R2（合同历史、pointer v2、代次目录、目标库标记；库形态未接线）开发完成。**进行中**：R1（目标 registry）。
+
+**对其他会话的影响**：
+
+- 在 II-b 激活之前，新增表或列的 RFC 除改 epoch 1 的 contribution 与迁移外，还须同步修改目标 contribution（各域 `infrastructure/persistence/targetSchema.ts`），并登记为转换器支持的源版本（migration §3）。
+- 目标 registry、`targetTablesOf` 与 `platform/persistence/schema/history/` 目前不接入运行时，请勿在业务代码中引用。
+
+**同日的独立修复**：
+
+- `6198ae144`：单个非根成员仓库组的调用子任务布局、调用链展开与文件内容（§6.11 第 6 条的 4 处候选，按 Q5 作为缺陷单独修复）。
+- `9a900aaa5`：RFC-370 收尾——开发 Mission / 配置 / 数字员工接口的非法请求体返回 typed 422，不再 500。
+- RFC-374 的 S1b 由 RFC-395 D4 承担；RFC-294 S2c 的三项后续排在 II-b 之后。
+
 ## 2026-10-23 RFC-395 In Progress：II-a（端口先行）完成，下一步 II-b
 
 **II-a 已提交**（交付记录见 [RFC plan §6.11](design/RFC-395-database-target-schema-rebuild/plan.md)）：在现有物理 schema 上把业务改为经目标形状的端口读写；HTTP API、用户可见行为与持久化字节不变，唯一有意变化是记忆提炼读取多轮澄清时按 round id 二进制序排列。七个包：A1 测试造数 builder 与 fixture 直写 / 直读棘轮；A2 Task 主体与工作区端口（D1 宿主工作流停止播种，读侧不再依赖宿主行）；A3 NodeRun 选择端口 + 复现 HEAD 选择的 oracle、类型化分组写入、铸行显式 role；A4 澄清逐题模型、单一投影与写端口，中立 `ContentRef`；A5 资源引用单一写者、共享依赖收集与反查端口；A6 `platform/atomic-apply` 合一；A7 表归属守卫扩到全部 registry 表，并给模块外文件单独记账。

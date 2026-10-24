@@ -474,3 +474,114 @@ II-a 交付后向用户提了三项待定事项，用户 2026-10-23 回复「按
      判据位置：`packages/backend/src/modules/task-execution/infrastructure/runSelection/oracle/shards.ts:57-76`。`node_run_inputs` 照常记录聚合行实际消费的 shard 运行集合，但这个集合只记录，不参与判定。存量聚合行没有持久化的消费集合，转换器不为它们反推。如果改成「已消费集合 == 当前 shard 选择」，会带来用户可见的行为变化（反例见 §6.11「留给 II-b 的事项」第 2 条），因此另行立项。design §5.2 的相应表述以本条为准。
 
 3. **`util/zip.ts` 时区缺陷**：与 RFC-395 无关，已由 `7e48a0035` 单独修复。固定 mtime 改为按本地时间构造，并附五个时区的子进程回归测试；本机 e2e WG-06 已转为通过。§6.11 验证段对 WG-06 的归因不变。
+
+### 6.13 II-b 实施分解（2026-10-23）
+
+用户 2026-10-23 要求继续推进。II-b 仍是一次交付：全部包开发与用例写完后集中执行 T18，一次激活（§6.10）。
+
+**开发期两个 epoch 并存**：
+
+- 目标表（epoch 2）先与现行表（epoch 1）并列声明。`bootstrap` 另行汇集目标 registry，经 `targetTablesOf(handle)` 取目标表集；在激活包之前，运行时、`tablesOf` 与 `@/db/schema` 仍指向 epoch 1。
+- 激活包一次性完成以下切换：
+  - 运行时改指 epoch 2；
+  - epoch 1 的表声明与合同冻结进迁移区，只供转换器的源读者使用；
+  - 新库直接按目标 baseline 建库；
+  - 启用 pointer v2 与准入；
+  - 退役 `migrationRole`。
+- 理由：开发期间工作树的 typecheck 保持可用，不阻塞同一工作树里其他会话的静态自查。即使在制改动被其他会话的整文件提交带上 `main`，运行行为也不会改变：II-a 期间 `ba7b8c6c4` 就曾把在制改动带上 `main`，后由 `67ab6b9ae` 撤回。
+- 结构守卫：激活后，epoch 1 的被重塑表只允许迁移区 import。
+
+**先收口、后换表**：39 处被重塑表的跨域访问先在现有表结构上按下表 O 收口，消费方从此不依赖表结构；之后各 owner 换表时只改自己的内部存储。收口方案见下文「跨域收口（O）」。
+
+| 包 | 内容 | 依赖 | 主要落点 |
+| --- | --- | --- | --- |
+| R1 目标 registry（T2b） | 被重塑与新增表的目标 contribution（design §3～§7、§9；table-mapping §2、§3）。§2.4 的 provider 差异裁决：类型化行级规则 `immutableOnceSet` / `appendOnly` 及其两侧原生编译与错误映射；两侧 FK 与删除动作；`tasks.name` 非空；唯一约束的 NULL 语义；删除三个无类型触发器。退役与收缩：旧 code work 表归档 / 历史化、`employee_os_writer_state`、`committed_event_family_cutovers.mode`。install-only 种子；目标 registry、两侧编译产物与机读目标清单 | — | `platform/persistence/schema/**`、各域 `infrastructure/persistence/`、`bootstrap/` |
+| R2 合同历史与代次（T13 机制部分） | design §13 的合同历史 + 类型化边：编译、两侧应用、SQLite 重建表边、准入比较物理目录与头合同 plan、只扩展后继。`scripts/schema-history.ts`；meta 表机制；pointer v2 读写与原子替换；SQLite 代次目录；目标库哨兵与首写标记。全部以库的形式交付，由激活包接线 | — | `platform/persistence/schema/history/`、`platform/persistence/`、`scripts/` |
+| O 跨域收口（T11 余项） | 见下文；在现有表结构上完成 | — | 各消费模块、task-execution、bootstrap、RFC-294 DAG 登记 |
+| T 任务主体与工作区（T4、T5 写侧） | Task 拆表后的 owner 内部存储；挂载与逐仓 checkpoint 表；聚合写协议（`lockAggregateRoot`）；单一任务创建 participant 写全部从属表；D1 余项、D2 | R1、O | task-execution |
+| N NodeRun（T6 写侧） | 身份列与 `slot_key`；K1 / K3 / K6 稳定 role 与 canonical slot（§6.11 规则表；`deriveNodeRunRole` 生产 28 处、测试 58 处）；`node_run_selections` 表实现，与 oracle 双实现随机对拍；`node_run_inputs`；配置 / 运行态 / 结果 / checkpoint 表与写协议；envelope nonce；D3、D4（含 RFC-374 S1b 的 id 回退删除）、D5；oracle 移入迁移区 | R1、T | task-execution |
+| C 澄清（T7 写侧） | 逐题答案 / 草稿表；去掉 Task 锁与整 map 读写（D6）；归档内协作段改出逐题表（`ARCHIVE_SCHEMA_VERSION` 随 Q 定） | R1、O | collaboration |
+| F 资源依赖（T8 写侧） | agent 四类关系表、`workflow_dependency_index`；去掉 JSON LIKE 与名称充 ID 的回退（D7） | R1、O | resource-catalog、shared |
+| X 内容（T9 写侧） | `content_objects` / `content_bytes` / `content_publications`（取代 `hosted_object_publications`）；12 张内容引用表；技能内容按字节（D8） | R1 | platform/content、各内容表 owner |
+| P AtomicApply（T10 余项） | 旧 artifact codec 移入迁移区（D9） | R1 | platform/atomic-apply、intent、resource-catalog |
+| M 造数与测试基座 | A1 builder 改写到目标表；测试库按目标 baseline 直接建库，不再重放 260 个迁移；历史迁移测试移到转换器 | R1、R2、各写侧包 | `tests/helpers/**` |
+| V1 源识别与读者（T12 前半） | `SourceFingerprint`；四类源的版本化读者（`preflight / assertUnchanged / readChunk`）：epoch 1 SQLite 文件、VACUUM INTO 备份 + manifest v2、PG 逻辑工件、托管备份；RFC-374 之前的合同与本机差异样本 | R1 | 迁移区 |
+| V2 转换规则（T12 后半） | migration §4 全部转换规则；行处置、chunk 回执、`execution_legacy_evidence`、历史包；用 II-a 的读侧解码器与 oracle 计算选择 | V1、T、N、C、F、X | 迁移区 |
+| V3 迁移运行与切换（T13 余项、T14） | 迁移 run / chunk / receipt 与 trace；切换状态机：备份、静默、冻结、转换、验证、激活回执、pointer 替换、首写边界、首写前撤回；PG 目标库切换；CLI 与托管部署入口；旧 epoch 备份恢复 | R2、V2 | system-operations、bootstrap、CLI |
+| A 激活 | 运行时改指 epoch 2；epoch 1 冻结进迁移区；新装按目标 baseline 建库；pointer v2 与准入接线；`migrationRole` 退役；drizzle-kit 停止生成；二进制内嵌合同历史；启动序列删除旧数据升级步骤 | 以上全部 | `bootstrap/`、`db/`、`scripts/`、各 provider |
+| Q 兼容与收尾（T15～T17） | API / WS / 任务目录 / 历史 / 导出 / 归档 v3 / 浏览器草稿的兼容，新旧二进制 DTO 对拍；D1～D13 销账、守卫改指、架构清单；故障注入、完整旅程、二进制、操作手册与演练模板 | A | 全仓 |
+
+派发顺序：
+1. R1 ∥ R2。
+2. O（分三个 Codex 线程，文件冲突处只做局部修改）∥ V1。
+3. T ∥ C ∥ F ∥ X ∥ P。
+4. N ∥ M。
+5. V2。
+6. V3。
+7. A。
+8. Q。
+9. T18。
+
+同一工作树内只并行文件不相交的包，否则限定局部修改。
+
+#### 跨域收口（O）
+
+依据 2026-10-23 只读研究（39 处逐条：读写内容、事务语境、目标表、端口签名与 DAG 检查）。用户 2026-10-23 确认按此方案执行。
+
+**required SPI（模块间 31 处中的 22 处）**：消费方在自己的 `composition/required-ports.ts` 声明按用例拆分的端口。表 owner 在 `application/adapters/` 中以仅类型 import 实现，适配器委托 owner 内部端口，SQL 留在 owner 的 infrastructure。bootstrap 实例化并注入。事务内端口用 `(tx) => XxxParticipant` 工厂，不以 `Tx` 结尾命名。每条新边同一提交登记进 `tests/architecture/rfc294Target.ts` 的 `REQUIRED_CONTEXT_EDGES` 与 RFC-294 design §3.1 的 mermaid。这些边不改变 RFC-376 结构门的任何基线。
+
+| 实现方 ⇢ 消费方 | 合同 | 条目 |
+| --- | --- | --- |
+| task-execution ⇢ source-control | `WorkspaceGcTaskPort`、`TaskWorkspacePruneParticipant`、`CachedRepositoryTaskUsagePort`、`TaskRepositorySourceSealingPort`（事务工厂） | M9、M12、M13、M14、M25、M26、M27 |
+| task-execution ⇢ runtime-management | `RealtimeTaskFactsPort` | M8、M24 |
+| resource-catalog ⇢ runtime-management | `RealtimeResourceAclPort` | M31（原 `OFFERED_BUT_BLOCKED`） |
+| task-execution ⇢ resource-catalog | `SubjectTaskReferencePort`（事务工厂，在删除事务内执行） | M18、M22、M23 |
+| resource-catalog ⇢ collaboration | `ReviewUpstreamAgentPort` | M2 |
+| task-execution ⇢ collaboration | `HumanGateTaskLockPort`（事务工厂） | M17（原 `OFFERED_BUT_BLOCKED`；RFC-294 S5 解开值依赖环后改用 offered participant） |
+| collaboration ⇢ task-execution（该对已有） | `TaskArchiveCollaborationSectionsPort`、`TaskRecoveryHumanGateFactsPort`、`TaskNodeRunClarifyNavPort` | M4、M5、M6 |
+| task-execution ⇢ system-operations | `DoctorTaskLifecyclePort` | M29 |
+
+**不适合 required SPI 的 17 处**：
+- 代码能力 M1、M7、M11、M15、M16：code-capability 不是目标 context，不能作依赖边端点。由 bootstrap 把 owner 查询注入窄端口：resource-catalog 现有的 `existingIds`，以及 task-execution 新增的 `TaskCodeWorkspaceQueries` / `existingTaskIds`。不加边，并删除 code-capability 自己的实现。
+- 系统运维 M28（`/health`）、M10 / M30（资源限额）：这些事实不归 system-operations（RFC-294 design §3.4）。由 bootstrap 注入 task-execution 的计数与限额事实查询，system-operations 只保留恢复审计。
+- `findWorktreeTask`（M12 / M25 的一部分）：只有旧路由与 service 调用，改为由 bootstrap 注入 task-execution 的 `TaskWorktreeLocator`。
+- M3（启动期 frame 回填）：随 D5 删除。
+- M19～M21：没有生产调用的旧删除函数，直接删除，测试改指模块仓储。
+- 模块外 8 处：
+  - H2 / H7：旧生命周期写者迁入 task-execution。
+  - H3、H4 / H8：迁入 task-execution；H4 / H8 与 source-control 收口同包。
+  - H5：可见性谓词迁入 `task-execution/infrastructure/taskAuthorization.ts`。该文件已持有 `task_collaborators` 的账本键，每条语句仍完整留在 task-execution 内。
+  - H1：platform 的 `EventsArchiveStore` 由 task-execution 实现、bootstrap 注入。
+  - H6：platform 只保留清理的游标与阶段机制，以中性 `RetentionSweepPhase` 端口由各 owner 实现。
+
+**一条语句跨两个 owner 的两处（用户 2026-10-23 裁决）**：
+- M12 / M25 缓存仓库的「被任务引用」筛选与计数：**拆成两步**。source-control 先经 `CachedRepositoryTaskUsagePort` 取被引用集合（分批），再在本地过滤与计数，合同中不出现 SQL。task-execution 一侧必须走索引探测，不得全表扫描 `tasks`。列表与计数不再出自同一快照（计数本就缓存 5 秒）。锁定执行计划的 4 个测试改写：`rfc359-w8-t26-plan-reshape-conformance`、`rfc359-w6-t26-postgresql-plan-audit`、`rfc359-w20-repository-reference-counts`、`rfc359-w20-repository-search-conformance`。T18 做同库前后性能对比。
+- H6 webhook 触发记录清理：**保留一条 DELETE**。task-execution 公开同语句片段（形如 `nonTerminalTaskExists(db, taskIdColumn)`），由 integration 的清理阶段使用；integration → task-execution 是 offered 边。新增的 `PUBLIC_SURFACE_DEBT` 条目与 II-a 已接受的 38 条同类，属本 RFC 记账的偏离，后继随 RFC-294 S5 / S6 处理。
+
+**承担的 RFC-294 演进**：O 一并完成 RFC-294 S5 中的两步——工作区 GC 归 source-control 与 task-execution 各自所有（G1），旧生命周期写者迁入 task-execution（G16）。
+
+**收口顺序**：H2 / H7 先于或与 source-control 收口同包；H3 在代码能力收口之后；M16 与 G1 共用 `existingTaskIds`、M28 与 M29 共用任务状态计数，各只建一次。
+- resource-catalog 换表前须完成 M1、M2、M31；
+- collaboration 换表前须完成 M3～M6；
+- task-execution 换表前须完成其余全部。
+
+**待测试证明的口径**：
+- 引用计数今天同时计入挂载引用（design §4 的「只读 `requested_source`」不改变这一行为）；
+- 主体判据 `subject_kind / source_id` 与今天 `source_agent_id / workflow_id / workgroup_id` 等价；
+- runtime-management 的成员指任意 `task_collaborators` 行；
+- M6 同 `createdAt` 的平序保持今天的结果。
+
+#### 对已批准文本的修订
+
+- §3「NodeRun」测试矩阵中「聚合输入集合判据与旧『比每个 shard 都新』判据等价」一句，按 §6.12 改为：表实现在随机历史上复现今天的判据，并记录聚合行实际消费的 shard 集合。
+- RFC-374 留下的 S1b（删除 id 回退）由 D4 承担，不再单独立项。
+- §6.11「留给 II-b 的事项」第 6 条的 4 处候选缺陷已确认属实，于 2026-10-23 由 `6198ae144` 作为缺陷单独修复（不属于 RFC-395）。
+
+#### 进度
+
+- R2：2026-10-23 开发完成（库形态，未接线；64 个用例待 T18 执行）。偏离有四条，均待激活包处理：
+  - CLI 显式接收 registry；
+  - 每表 DDL 辅助暂放在 `history/compiler.ts`，与 R1 的编译器在激活包合并；
+  - PG 预期目录经注入的参照库 loader 取得；
+  - PG 侧拒绝列重排，expand-only 判据从严。
+- R1：进行中。
