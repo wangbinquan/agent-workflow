@@ -266,6 +266,12 @@ nonce 对所有角色生成的今日行为保持（工作组 host 账本等跨�
 
 **2026-10-24 更正（重复题目）**：两表主键改为 `(round_id, question_id, occurrence)`，与 agent 引用表同法，唯一 ordinal 保留。新写入的题集 question ID 唯一，`occurrence` 恒为 0；它只承接存量数据中的重复题目与重复答案。理由：migration §4.4 不允许截断或合并重复项，而今天的数组投影保留每一次出现（`modules/collaboration/domain/clarifyAnswers.ts`）。等待中的轮次若有无法消歧的重复，迁移阻塞。
 
+**2026-10-24 更正（归属与旧形状答案）**：
+
+- 归属不再挂在答案与草稿行上，改为独立的逐题关系 `clarify_answer_attributions`：主键 `(round_id, question_id, occurrence)`，`(round_id, ordinal)` 唯一，`value_json` 保存原值。上文两表的 attribution 列删除。理由：今天的写者在封口时保留归属并清空草稿（`modules/collaboration/infrastructure/clarifyAnswerWrite.ts:90`），reopen 只清答案（同文件:114），因此「既无答案也无草稿」的归属是正常产物，必须独立表示。
+- `clarify_rounds.attributions_recorded` 区分「从未记录」（SQL NULL 或 JSON `null`）与空 map。
+- `clarify_rounds.legacy_answers_json` 逐字保存非数组形状的旧答案文本（仅这类轮次写入）。今天的 REST 详情与记忆提炼 prompt 都会显示这类值（`modules/collaboration/infrastructure/clarifyRounds.ts:384`、`clarifyAnswerCodec.ts:95`），投影须照旧还原。
+
 questions snapshot 内 question ID 唯一，稳定顺序保留。脑图 follow-up 只在当前题集末尾追加，以 `questions_revision` CAS 推进；既有题目不可改写或删除。答案与草稿写入时校验题目存在于当前题集；封口冻结 `sealed_question_set_key`。答案值维持现有类型合同；引用 question 必须在该版本快照中。修改以 row revision CAS 进行；round 封口在同事务中冻结有效答案集合、记录 submitted/answered 元数据并调用现有协作 participant。单题更新不再锁 Task 聚合或整体重写答案 map；封口与编辑的竞态由 round 状态 / revision 与事务合同决定。API 可继续返回 JSON map 投影。
 
 `task_questions` 是人工交互 / 分发 / 续跑账本，不与 clarify answer 合表；`doc_versions` 归 collaboration，保留文档版本与内容；不复活已经删除的脑图物化表。

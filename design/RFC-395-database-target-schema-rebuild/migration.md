@@ -118,6 +118,8 @@ generation pointer 升至 v2（显式 epoch、角色、数据库位置、合同�
 
 已完成 delivery 不重放；未完成 delivery / effect 以持久状态和 receipt 交接到新 owner。lease 的历史 owner 可留证据，但不能把旧进程活跃租约当成新进程有效执行权。新会话通过现有 recovery 协议重新 claim；业务 execution generation 与连接 / daemon generation 不混用。
 
+（2026-10-24 补充：下段「`employee_os_writer_state` 必须处于 OS active」按启动步骤的判定执行。转换器在源快照上复现启动时的 `activate()`：没有未终结的旧 Mission（`development_missions.terminal_at IS NULL`）即视为 OS active，回执标明 boot-equivalent；仍有未终结的旧 Mission 则阻塞。依据见 `modules/digital-employee/infrastructure/writerCutoverPersistence.ts:97`，与 design §8 seq 回填更正同一原则。）
+
 旧 code work 历史、6 张 ARCHIVE 表和 writer drain receipt 保存离线包及原 ID 索引。当前 `committed_event_family_cutovers` 的有效家族路由必须复制成目标配置；不与 legacy-draining 一起删掉。源 `committed_event_family_cutovers.mode` 必须全部为 dispatchable，`employee_os_writer_state` 必须处于 OS active，否则阻塞（目标去掉 `mode` 列；`employee_os_writer_state` 不建表，其状态写入 activation receipt）。
 
 ### 4.6 持久化载荷
