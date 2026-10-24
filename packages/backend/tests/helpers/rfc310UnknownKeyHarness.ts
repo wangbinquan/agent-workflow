@@ -39,7 +39,7 @@ function injectAt(root: unknown, path: (string | number)[]): unknown {
 }
 
 /** 对 fixture 每个对象节点注入 unknown key；返回未被拒绝的路径（期望 []）。 */
-export function unknownKeySurvivors(schema: z.ZodTypeAny, fixture: unknown): string[] {
+export function unknownKeySurvivors(schema: z.ZodType, fixture: unknown): string[] {
   const survivors: string[] = []
   for (const path of objectPaths(fixture)) {
     const mutated = injectAt(fixture, path)

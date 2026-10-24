@@ -2,6 +2,7 @@
 // ScheduleSpec = interval | daily | weekly | monthly 判别联合（预设携创建者 IANA 时区）。
 // launchPayload 复用 StartTaskSchema——整份存启动 body，到点参数不变地重放。
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { StartAgentTaskSchema, StartTaskSchema } from './task'
 import { AgentNameSchema } from './agent'
 import { StartWorkgroupTaskSchema, WorkgroupNameSchema } from './workgroup'
@@ -119,7 +120,7 @@ export type ScheduledLaunchPayload = z.infer<typeof ScheduledLaunchPayloadSchema
  */
 export function scheduledPayloadSchemaFor(
   kind: ScheduledLaunchKind,
-): z.ZodType<ScheduledLaunchPayload, z.ZodTypeDef, unknown> {
+): z.ZodType<ScheduledLaunchPayload, unknown> {
   const schema =
     kind === 'workflow'
       ? ScheduledWorkflowPayloadSchema
@@ -130,11 +131,11 @@ export function scheduledPayloadSchemaFor(
   // per arm, which defeats a direct ZodType<union> assignment; output-wise
   // each arm IS a ScheduledLaunchPayload member and callers only need
   // parse/safeParse against unknown input.
-  return schema as unknown as z.ZodType<ScheduledLaunchPayload, z.ZodTypeDef, unknown>
+  return schema as unknown as z.ZodType<ScheduledLaunchPayload, unknown>
 }
 
 /** 定时任务名（管理用显示名，≠ 启动 body.name）；trim 后 1..255，拒纯空白。 */
-export const ScheduledTaskNameSchema = z.string().trim().min(1).max(255)
+export const ScheduledTaskNameSchema = z.string().trim().min(1).check(utf16MaxLength(255))
 
 /**
  * GET 返回 / 行视图。`lastStatus` = 循环上次尝试触发结果；`lastTaskId` = 最近一次成功启动的 task。
@@ -198,7 +199,7 @@ export const CreateScheduledTaskSchema = z
     name: ScheduledTaskNameSchema,
     /** RFC-165 §9b：执行主体；缺省 workflow（向后兼容旧客户端）。 */
     launchKind: ScheduledLaunchKindSchema.default('workflow'),
-    launchPayload: z.unknown(),
+    launchPayload: z.unknown().optional(),
     scheduleSpec: ScheduleSpecSchema,
     enabled: z.boolean().default(true),
   })

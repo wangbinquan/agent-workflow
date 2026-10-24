@@ -10,6 +10,7 @@
 // ids — RFC-099 prompt-isolation invariant, design §11).
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import {
   buildBatchShardKey,
   buildMsgShardKey,
@@ -269,9 +270,9 @@ export const WORKGROUP_SYSTEM_TEMPLATE_KEYS = [
 export const WorkgroupSystemTemplateKeySchema = z.enum(WORKGROUP_SYSTEM_TEMPLATE_KEYS)
 export type WorkgroupSystemTemplateKey = z.infer<typeof WorkgroupSystemTemplateKeySchema>
 
-const TemplateTitleSchema = z.string().max(200)
-const TemplateMemberSchema = z.string().max(64)
-const TemplateDetailSchema = z.string().max(65536)
+const TemplateTitleSchema = z.string().check(utf16MaxLength(200))
+const TemplateMemberSchema = z.string().check(utf16MaxLength(64))
+const TemplateDetailSchema = z.string().check(utf16MaxLength(65536))
 
 export const WorkgroupSystemTemplateSchema = z.discriminatedUnion('key', [
   z.object({
@@ -379,7 +380,7 @@ export const WorkgroupMessageSchema = z
     kind: WorkgroupMessageKindSchema,
     bodyMd: z.string(),
     /** Rolling-deploy wire: unknown future keys remain renderable via bodyMd fallback. */
-    templateKey: z.string().min(1).max(64).nullable().optional(),
+    templateKey: z.string().min(1).check(utf16MaxLength(64)).nullable().optional(),
     templateParams: z.record(z.string(), z.unknown()).nullable().optional(),
     /** Parsed @-mention member ids. */
     mentionMemberIds: z.array(z.string()),
@@ -491,9 +492,9 @@ const WgMemberRefSchema = z
 export const WgAssignmentItemSchema = z.object({
   /** Target member displayName (roster token; a copied leading @ is stripped). */
   member: WgMemberRefSchema,
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().min(1).check(utf16MaxLength(200)),
   /** Task brief — objective / expected output / boundaries (design §5). */
-  brief: z.string().min(1).max(16384),
+  brief: z.string().min(1).check(utf16MaxLength(16384)),
 })
 export type WgAssignmentItem = z.infer<typeof WgAssignmentItemSchema>
 export const WgAssignmentsPortSchema = z
@@ -503,7 +504,7 @@ export const WgAssignmentsPortSchema = z
 export const WgMessageItemSchema = z.object({
   /** Target member displayName, or null = blackboard broadcast. */
   to: WgMemberRefSchema.nullable(),
-  body: z.string().trim().min(1).max(8192),
+  body: z.string().trim().min(1).check(utf16MaxLength(8192)),
 })
 export type WgMessageItem = z.infer<typeof WgMessageItemSchema>
 export const WgMessagesPortSchema = z.array(WgMessageItemSchema).max(WG_MAX_MESSAGES_PER_TURN)
@@ -512,7 +513,7 @@ export const WgDecisionSchema = z
   .object({
     action: z.enum(['continue', 'done']),
     /** Group summary — REQUIRED when action='done' (becomes the decision message). */
-    summary: z.string().trim().max(65536).optional(),
+    summary: z.string().trim().check(utf16MaxLength(65536)).optional(),
   })
   .superRefine((d, ctx) => {
     if (d.action === 'done' && (d.summary === undefined || d.summary.length === 0)) {
@@ -522,8 +523,8 @@ export const WgDecisionSchema = z
 export type WgDecision = z.infer<typeof WgDecisionSchema>
 
 export const WgResultSchema = z.object({
-  summary: z.string().trim().min(1).max(16384),
-  detail: z.string().max(65536).optional(),
+  summary: z.string().trim().min(1).check(utf16MaxLength(16384)),
+  detail: z.string().check(utf16MaxLength(65536)).optional(),
 })
 export type WgResult = z.infer<typeof WgResultSchema>
 
@@ -535,15 +536,15 @@ export type WgResult = z.infer<typeof WgResultSchema>
 export const WgTaskResultItemSchema = z.object({
   task: z.number().int().min(1),
   status: z.enum(['done', 'failed']).default('done'),
-  summary: z.string().trim().min(1).max(16384),
-  detail: z.string().max(65536).optional(),
+  summary: z.string().trim().min(1).check(utf16MaxLength(16384)),
+  detail: z.string().check(utf16MaxLength(65536)).optional(),
 })
 export type WgTaskResultItem = z.infer<typeof WgTaskResultItemSchema>
 export const WgTaskResultsPortSchema = z.array(WgTaskResultItemSchema).max(WG_FC_CLAIM_BATCH_LIMIT)
 
 export const WgTaskAddItemSchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  brief: z.string().max(16384).default(''),
+  title: z.string().trim().min(1).check(utf16MaxLength(200)),
+  brief: z.string().check(utf16MaxLength(16384)).default(''),
 })
 export type WgTaskAddItem = z.infer<typeof WgTaskAddItemSchema>
 export const WgTasksAddPortSchema = z.array(WgTaskAddItemSchema).max(WG_MAX_TASKS_ADD_PER_TURN)
@@ -554,7 +555,7 @@ export const WgTasksAddPortSchema = z.array(WgTaskAddItemSchema).max(WG_MAX_TASK
 
 export type WgPortParseResult<T> = { ok: true; value: T } | { ok: false; errors: string[] }
 
-function parseJsonPort<S extends z.ZodTypeAny>(
+function parseJsonPort<S extends z.ZodType>(
   schema: S,
   raw: string,
 ): WgPortParseResult<z.output<S>> {

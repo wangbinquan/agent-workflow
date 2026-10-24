@@ -1,5 +1,6 @@
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { ExecutionContractParticipant } from '@/modules/execution-contract/public/types'
@@ -67,13 +68,16 @@ import { parseEmployeeInput } from './inputValidation'
 
 export const createJobTemplateBodySchema = z
   .object({
-    name: z.string().min(1).max(200),
-    description: z.string().max(2_000),
+    name: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(2_000)),
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
     defaultAdapterBindings: z.array(laneAdapterBindingSchema).max(100).default([]),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100).default([]),
     orderedDispatchConfigurations: z.array(orderedDispatchConfigurationSchema).max(100).default([]),
-    reactionLaneOrder: z.array(z.string().min(1).max(160)).max(30).default([]),
+    reactionLaneOrder: z
+      .array(z.string().min(1).check(utf16MaxLength(160)))
+      .max(30)
+      .default([]),
   })
   .strict()
 
@@ -81,9 +85,9 @@ export const updateJobTemplateBodySchema = createJobTemplateBodySchema
 
 export const createEmployeeDefinitionBodySchema = z
   .object({
-    name: z.string().min(1).max(200),
+    name: z.string().min(1).check(utf16MaxLength(200)),
     jobTemplateRef: exactResourceRefSchema,
-    workScope: z.unknown(),
+    workScope: z.unknown().optional(),
     toolOverrides: z.array(workItemToolBindingSchema).max(300).default([]),
     adapterOverrides: z.array(laneAdapterBindingSchema).max(100).default([]),
     collaborationOverrides: z.array(employeeCollaborationBindingSchema).max(100).default([]),

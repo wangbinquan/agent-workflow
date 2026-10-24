@@ -20,6 +20,7 @@
 // the frontend confirm UI).
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { AgentOutputKindSchema } from './review'
 import { AGENT_NAME_RE, AgentBranchPortsSchema } from './agent'
 import { asIntentResourceType, INTENT_RESOURCE_TYPES, type IntentResourceType } from './resourceAcl'
@@ -107,15 +108,15 @@ const utf8Bytes = (s: string): number => {
 const NameSchema = z
   .string()
   .min(1)
-  .max(128)
+  .check(utf16MaxLength(128))
   .regex(AGENT_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
 
-const DescriptionSchema = z.string().max(4096).default('')
+const DescriptionSchema = z.string().check(utf16MaxLength(4096)).default('')
 
 /** Repo-local (self-discovered) skill selector — the only non-handle skill
  *  form allowed, because project skills have no DB row to point a handle at. */
 const IntentProjectSkillSchema = z
-  .object({ kind: z.literal('project'), name: z.string().min(1).max(128) })
+  .object({ kind: z.literal('project'), name: z.string().min(1).check(utf16MaxLength(128)) })
   .strict()
 
 const IntentAgentSkillEntrySchema = z.union([IntentRefSchema, IntentProjectSkillSchema])
@@ -125,7 +126,10 @@ export const IntentAgentPayloadSchema = z
     name: NameSchema,
     description: DescriptionSchema,
     /** Output port names; duplicates rejected at resolve time by CreateAgentSchema. */
-    outputs: z.array(z.string().min(1).max(128)).max(64).default([]),
+    outputs: z
+      .array(z.string().min(1).check(utf16MaxLength(128)))
+      .max(64)
+      .default([]),
     outputKinds: z.record(z.string(), AgentOutputKindSchema).optional(),
     /** RFC-348 D5 — RFC-306 branch ports; subset of `outputs`, validated at resolve
      *  (`assertBranchPortsDeclared`). Omitted on an update ⇒ stored value kept. */
@@ -134,13 +138,13 @@ export const IntentAgentPayloadSchema = z
       .array(
         z
           .object({
-            name: z.string().min(1).max(128),
+            name: z.string().min(1).check(utf16MaxLength(128)),
             // Canonical RFC-060 kind grammar — a free string here let models
             // invent kinds that then exploded inside prepareAgentCreate
             // (live-run 500, 2026-07-28). Fail at parse with the same message.
             kind: AgentOutputKindSchema,
             required: z.boolean().optional(),
-            description: z.string().max(1024).optional(),
+            description: z.string().check(utf16MaxLength(1024)).optional(),
           })
           .strict(),
       )
@@ -151,7 +155,7 @@ export const IntentAgentPayloadSchema = z
     syncOutputsOnIterate: z.boolean().optional(),
     /** Runtime PROFILE NAME (not a resource handle — runtimes are not one of
      *  the six ACL types). Existence is validated at resolve time. */
-    runtime: z.string().min(1).max(128).optional(),
+    runtime: z.string().min(1).check(utf16MaxLength(128)).optional(),
     permission: z.record(z.string(), z.unknown()).optional(),
     skills: z.array(IntentAgentSkillEntrySchema).max(64).default([]),
     dependsOn: z.array(IntentRefSchema).max(64).default([]),
@@ -173,7 +177,7 @@ const SKILL_FILE_PATH_RE = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/
 export const IntentSkillFilePathSchema = z
   .string()
   .min(1)
-  .max(512)
+  .check(utf16MaxLength(512))
   .regex(SKILL_FILE_PATH_RE, 'path must be relative segments of [A-Za-z0-9._-]')
   .refine(
     (p) => !p.split('/').some((seg) => seg === '.' || seg === '..'),
@@ -230,10 +234,10 @@ export type IntentSkillPayload = z.infer<typeof IntentSkillPayloadSchema>
  *  scanner in ../intentSecretSlots.ts (sentinel-or-reject). */
 export const IntentMcpOAuthConfigSchema = z
   .object({
-    clientId: z.string().max(1024).optional(),
-    clientSecret: z.string().max(1024).optional(),
-    scope: z.string().max(1024).optional(),
-    redirectUri: z.string().max(2048).optional(),
+    clientId: z.string().check(utf16MaxLength(1024)).optional(),
+    clientSecret: z.string().check(utf16MaxLength(1024)).optional(),
+    scope: z.string().check(utf16MaxLength(1024)).optional(),
+    redirectUri: z.string().check(utf16MaxLength(2048)).optional(),
   })
   .strict()
 export const IntentMcpOAuthSchema = z.union([IntentMcpOAuthConfigSchema, z.literal(false)])
@@ -248,8 +252,13 @@ export const IntentMcpPayloadSchema = z.discriminatedUnion('type', [
       enabled: z.boolean().optional(),
       config: z
         .object({
-          command: z.array(z.string().min(1).max(1024)).min(1).max(64),
-          env: z.record(z.string().max(128), z.string().max(1024)).optional(),
+          command: z
+            .array(z.string().min(1).check(utf16MaxLength(1024)))
+            .min(1)
+            .max(64),
+          env: z
+            .record(z.string().check(utf16MaxLength(128)), z.string().check(utf16MaxLength(1024)))
+            .optional(),
           timeoutMs: z.number().int().positive().optional(),
         })
         .strict(),
@@ -266,12 +275,14 @@ export const IntentMcpPayloadSchema = z.discriminatedUnion('type', [
           url: z
             .string()
             .min(1)
-            .max(2048)
+            .check(utf16MaxLength(2048))
             .refine(
               (u) => u.startsWith('http://') || u.startsWith('https://'),
               'url must start with http:// or https://',
             ),
-          headers: z.record(z.string().max(128), z.string().max(1024)).optional(),
+          headers: z
+            .record(z.string().check(utf16MaxLength(128)), z.string().check(utf16MaxLength(1024)))
+            .optional(),
           /** RFC-348 D2 (user decision ②) — same keys as the platform's
            *  `McpOAuthConfigSchema`; `clientSecret` is a secret carrier: only the
            *  ‹secret› sentinel (a confirm-time slot) or '' is accepted, see
@@ -290,7 +301,7 @@ export const IntentPluginPayloadSchema = z
   .object({
     name: NameSchema,
     /** npm specifier / git URL. Scanned for embedded credentials (design §8). */
-    spec: z.string().min(1).max(1024),
+    spec: z.string().min(1).check(utf16MaxLength(1024)),
     optionsJson: z.record(z.string(), z.unknown()).optional(),
     description: DescriptionSchema,
     enabled: z.boolean().optional(),
@@ -306,8 +317,8 @@ export type IntentPluginPayload = z.infer<typeof IntentPluginPayloadSchema>
  *  the schema refine and the resolve seam use. */
 export const IntentWorkflowNodeSchema = z
   .object({
-    id: z.string().min(1).max(128),
-    kind: z.string().min(1).max(64),
+    id: z.string().min(1).check(utf16MaxLength(128)),
+    kind: z.string().min(1).check(utf16MaxLength(64)),
     agentRef: IntentRefSchema.optional(),
     /**
      * RFC-291 面 E — call node targets, in the SAME handle/tempRef domain as
@@ -451,15 +462,15 @@ export const IntentWorkgroupMemberSchema = z.discriminatedUnion('memberType', [
     .object({
       memberType: z.literal('agent'),
       agentRef: IntentRefSchema,
-      displayName: z.string().min(1).max(64),
-      roleDesc: z.string().max(1024).default(''),
+      displayName: z.string().min(1).check(utf16MaxLength(64)),
+      roleDesc: z.string().check(utf16MaxLength(1024)).default(''),
     })
     .strict(),
   z
     .object({
       memberType: z.literal('human'),
-      displayName: z.string().min(1).max(64),
-      roleDesc: z.string().max(1024).default(''),
+      displayName: z.string().min(1).check(utf16MaxLength(64)),
+      roleDesc: z.string().check(utf16MaxLength(1024)).default(''),
     })
     .strict(),
 ])
@@ -470,10 +481,10 @@ export const IntentWorkgroupPayloadSchema = z
     // RFC-264: same rule / normalizer as every other workgroup-name entry point.
     name: ResourceDisplayNameSchema,
     description: DescriptionSchema,
-    instructions: z.string().max(65536).default(''),
+    instructions: z.string().check(utf16MaxLength(65536)).default(''),
     mode: z.enum(['leader_worker', 'free_collab', 'dynamic_workflow']),
     outputContract: z.enum(['files', 'discussion']).optional(),
-    leaderDisplayName: z.string().min(1).max(64).optional(),
+    leaderDisplayName: z.string().min(1).check(utf16MaxLength(64)).optional(),
     switches: z
       .object({
         shareOutputs: z.boolean().default(true),
@@ -521,14 +532,14 @@ export const IntentOpIdSchema = z.string().regex(/^op-[1-9][0-9]{0,3}$/, 'opId m
 const opBase = {
   opId: IntentOpIdSchema,
   /** Optional one-line rationale surfaced on the change card. */
-  note: z.string().max(512).optional(),
+  note: z.string().check(utf16MaxLength(512)).optional(),
 }
 
 // `IntentResourceType`, not `AclResourceType`: an Intent session produces work
 // resources, never the platform's own capability templates. Typed by the wider
 // set, adding a template layer would silently declare it Intent-creatable while
 // `intent_provenance` cannot store the value.
-function opPair<T extends IntentResourceType, P extends z.ZodTypeAny>(resourceType: T, payload: P) {
+function opPair<T extends IntentResourceType, P extends z.ZodType>(resourceType: T, payload: P) {
   const create = z
     .object({
       ...opBase,
@@ -647,9 +658,12 @@ export function collectChangesetRefs(cs: IntentChangeset): string[] {
 
 export const IntentQuestionSchema = z
   .object({
-    id: z.string().min(1).max(64),
-    question: z.string().min(1).max(2048),
-    options: z.array(z.string().min(1).max(512)).min(2).max(4),
+    id: z.string().min(1).check(utf16MaxLength(64)),
+    question: z.string().min(1).check(utf16MaxLength(2048)),
+    options: z
+      .array(z.string().min(1).check(utf16MaxLength(512)))
+      .min(2)
+      .max(4),
     multiSelect: z.boolean().default(false),
   })
   .strict()
@@ -676,8 +690,8 @@ export const IntentQuestionsSchema = z
 export const IntentMountRequestSchema = z
   .object({
     resourceType: z.enum(INTENT_RESOURCE_TYPES),
-    name: z.string().min(1).max(200),
-    reason: z.string().max(512).optional(),
+    name: z.string().min(1).check(utf16MaxLength(200)),
+    reason: z.string().check(utf16MaxLength(512)).optional(),
   })
   .strict()
 export type IntentMountRequest = z.infer<typeof IntentMountRequestSchema>
@@ -770,18 +784,15 @@ export function formatChangesetIssues(issues: readonly z.ZodIssue[]): string[] {
   ]
 }
 
-function expandIssues(
-  issues: readonly z.ZodIssue[],
-  prefix: readonly (string | number)[],
-): string[] {
+function expandIssues(issues: readonly z.ZodIssue[], prefix: readonly PropertyKey[]): string[] {
   const out: string[] = []
   for (const issue of issues) {
     const path = [...prefix, ...issue.path]
     if (issue.code === 'invalid_union') {
-      const branches = (issue as z.ZodInvalidUnionIssue).unionErrors ?? []
+      const branches = issue.errors
       let best: string[] | null = null
       for (const branch of branches) {
-        const expanded = expandIssues(branch.issues, path)
+        const expanded = expandIssues(branch, path)
         if (best === null || expanded.length < best.length) best = expanded
       }
       out.push(...(best ?? [`${path.join('.') || '$'}: no union branch matched`]))

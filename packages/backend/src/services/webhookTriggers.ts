@@ -14,6 +14,7 @@
 // （对齐 services/resourceRefs.ts 的新增引用校验惯例）。
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import {
   CODE_HOST_EVENT_TYPES,
@@ -393,7 +394,9 @@ export async function resetWebhookTriggerStream(
 ): Promise<void> {
   const row = await loadRowOrThrow(deps.administration, id)
   requireWrite(actor, row)
-  const body = z.object({ streamKey: z.string().min(1).max(1000) }).safeParse(rawBody)
+  const body = z
+    .object({ streamKey: z.string().min(1).check(utf16MaxLength(1000)) })
+    .safeParse(rawBody)
   if (!body.success) {
     throw new ValidationError('webhook-stream-invalid', 'streamKey required')
   }

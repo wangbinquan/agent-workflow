@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
 import {
@@ -144,8 +145,8 @@ const observerCursorSubjectSchema = z
 const observerCursorSchema = z
   .object({
     schemaVersion: z.literal(1),
-    activationRef: z.string().min(1).max(200),
-    subjects: z.record(observerCursorSubjectSchema),
+    activationRef: z.string().min(1).check(utf16MaxLength(200)),
+    subjects: z.record(z.string(), observerCursorSubjectSchema),
   })
   .strict()
 
@@ -305,6 +306,7 @@ const approvalObserverCursorSchema = z
   .object({
     schemaVersion: z.literal(1),
     subjects: z.record(
+      z.string(),
       z
         .object({
           digest: z.string().regex(/^[a-f0-9]{64}$/),

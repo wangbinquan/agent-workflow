@@ -1,14 +1,15 @@
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 
 /** User-authored context, not evidence verification, assignment or a scheduled task. */
 export const ClarifyDecisionSchema = z
   .object({
     status: z.enum(['decided', 'provisional']).optional(),
-    rationale: z.string().max(2000).optional(),
-    tradeoff: z.string().max(2000).optional(),
-    uncertainty: z.string().max(2000).optional(),
-    validationOwner: z.string().max(200).optional(),
-    revisitWhen: z.string().max(500).optional(),
+    rationale: z.string().check(utf16MaxLength(2000)).optional(),
+    tradeoff: z.string().check(utf16MaxLength(2000)).optional(),
+    uncertainty: z.string().check(utf16MaxLength(2000)).optional(),
+    validationOwner: z.string().check(utf16MaxLength(200)).optional(),
+    revisitWhen: z.string().check(utf16MaxLength(500)).optional(),
   })
   .transform(normalizeClarifyDecision)
 

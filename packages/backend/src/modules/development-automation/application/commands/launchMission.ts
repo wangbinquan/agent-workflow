@@ -9,6 +9,7 @@
 
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import { automationPolicyContentSchema } from '../../domain/automationPolicy'
 import { canonicalDigest } from '../../domain/canonicalJson'
@@ -71,7 +72,7 @@ function refineUploadList(
 const directUploadSchema = z
   .object({
     /** POST /api/code/mission-input-uploads 返回的 upload 会话 id；bytes/sha256 从行取。 */
-    uploadRef: z.string().min(1).max(64),
+    uploadRef: z.string().min(1).check(utf16MaxLength(64)),
     repositoryTargetPath: repoRelativePathSchema,
     collisionMode: z.enum(['create-only', 'replace-existing']).optional(),
     contentPolicy: z.enum(['preserve-upload', 'agent-editable']).optional(),
@@ -81,14 +82,14 @@ const directUploadSchema = z
 
 export const launchMissionInputSchema = z
   .object({
-    idempotencyKey: z.string().min(8).max(200),
+    idempotencyKey: z.string().check(utf16MinLength(8)).check(utf16MaxLength(200)),
     repositoryId: z.string().min(1),
     repositoryGroupId: z.string().min(1).nullable(),
     submission: z.discriminatedUnion('kind', [
       z
         .object({
           kind: z.literal('direct'),
-          title: z.string().min(1).max(500),
+          title: z.string().min(1).check(utf16MaxLength(500)),
           body: z.string().nullable(),
           uploads: z.array(directUploadSchema).max(100),
         })
@@ -96,8 +97,8 @@ export const launchMissionInputSchema = z
       z
         .object({
           kind: z.literal('external-reference'),
-          externalId: z.string().min(1).max(500),
-          sourceKey: z.string().min(1).max(200).optional(),
+          externalId: z.string().min(1).check(utf16MaxLength(500)),
+          sourceKey: z.string().min(1).check(utf16MaxLength(200)).optional(),
         })
         .strict(),
     ]),
@@ -695,7 +696,7 @@ export const previewMissionAdmissionInputSchema = z
       z
         .object({
           kind: z.literal('external-reference'),
-          sourceKey: z.string().min(1).max(200).optional(),
+          sourceKey: z.string().min(1).check(utf16MaxLength(200)).optional(),
         })
         .strict(),
     ]),

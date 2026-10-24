@@ -1,6 +1,6 @@
 // RFC-344 — adapters for exact, versioned application-boundary codecs.
 
-import type { output, ZodTypeAny } from 'zod'
+import type { output, ZodType } from 'zod'
 import type { VersionedExactCodec } from '@/platform/operations/contracts'
 
 /**
@@ -8,7 +8,7 @@ import type { VersionedExactCodec } from '@/platform/operations/contracts'
  * objects (including nested objects where appropriate); this adapter does not
  * hide Zod failures or coerce an output after the use case returned it.
  */
-export function zodOperationCodec<TSchema extends ZodTypeAny>(
+export function zodOperationCodec<TSchema extends ZodType>(
   name: string,
   schema: TSchema,
   version = 1,

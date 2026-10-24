@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type { BusinessEnvironmentValue } from '@/platform/crewstation/nativeMaterial'
 import { computeGitCredentialResponse, parseGitCredentialRequest } from '@/util/gitCredentialLease'
 
 const line = z
   .string()
   .min(1)
-  .max(4096)
+  .check(utf16MaxLength(4096))
   .refine(
     (value) => !Array.from(value).some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127),
   )
@@ -68,7 +69,7 @@ const sshLocation = line.refine((value) => {
 const knownHosts = z
   .string()
   .min(1)
-  .max(65536)
+  .check(utf16MaxLength(65536))
   .refine((value) => !value.includes('\0'))
 const publicBinding = z.discriminatedUnion('kind', [
   z
@@ -76,14 +77,14 @@ const publicBinding = z.discriminatedUnion('kind', [
       kind: z.literal('http'),
       url: httpLocation,
       username: line,
-      passwordSecretId: z.string().uuid(),
+      passwordSecretId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     })
     .strict(),
   z
     .object({
       kind: z.literal('ssh'),
       url: sshLocation,
-      privateKeySecretId: z.string().uuid(),
+      privateKeySecretId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
       knownHosts,
     })
     .strict(),

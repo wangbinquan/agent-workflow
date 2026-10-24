@@ -19,8 +19,8 @@
 // what get exposed — otherwise the generated contract would omit exactly the
 // fields whose absence makes every update fail.
 
-import type { ZodTypeAny } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import type { ZodType } from 'zod'
+import { toInputJsonSchema } from '@/util/zodJsonSchema'
 import {
   CombinedSaveSkillSchema,
   CreateAgentSchema,
@@ -45,8 +45,8 @@ import {
 import type { McpResourceKind } from '@/mcp/tools'
 
 interface KindSchemas {
-  readonly create?: ZodTypeAny
-  readonly update?: ZodTypeAny
+  readonly create?: ZodType
+  readonly update?: ZodType
 }
 
 /**
@@ -73,13 +73,13 @@ const KIND_SCHEMAS: Partial<Record<McpResourceKind, KindSchemas>> = {
  * 但「透传什么」在此之前无处可查:模型只能猜一个参数名再读 422。与 body 一样,
  * 这里挂的就是路由自己校验用的那个 zod 对象,不是手抄的一份。
  */
-const KIND_QUERY_SCHEMAS: Partial<Record<McpResourceKind, ZodTypeAny>> = {
+const KIND_QUERY_SCHEMAS: Partial<Record<McpResourceKind, ZodType>> = {
   memory: MemoryListFilterSchema,
 }
 
 export function querySchemaFor(kind: McpResourceKind): unknown | undefined {
   const schema = KIND_QUERY_SCHEMAS[kind]
-  return schema === undefined ? undefined : zodToJsonSchema(schema, { $refStrategy: 'none' })
+  return schema === undefined ? undefined : toInputJsonSchema(schema)
 }
 
 export interface ResourceBodySchemas {
@@ -91,7 +91,7 @@ export interface ResourceBodySchemas {
  * JSON Schema for a kind's create/update bodies, or an empty object when the
  * kind has none to report.
  *
- * `$refStrategy: 'none'` inlines everything. A model reading this has no way to
+ * `reused: 'inline'` inlines everything. A model reading this has no way to
  * resolve a `$ref` against a document it was handed as a tool result, so a
  * ref-laden schema would be technically complete and practically unusable.
  */
@@ -100,10 +100,10 @@ export function bodySchemasFor(kind: McpResourceKind): ResourceBodySchemas {
   if (entry === undefined) return {}
   const out: { create?: unknown; update?: unknown } = {}
   if (entry.create !== undefined) {
-    out.create = zodToJsonSchema(entry.create, { $refStrategy: 'none' })
+    out.create = toInputJsonSchema(entry.create)
   }
   if (entry.update !== undefined) {
-    out.update = zodToJsonSchema(entry.update, { $refStrategy: 'none' })
+    out.update = toInputJsonSchema(entry.update)
   }
   return out
 }

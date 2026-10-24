@@ -1,3 +1,23 @@
+// happy-dom 21 puts nodeName on each concrete subclass, while its Node
+// getter returns ''. DOMPurify 3.4.17 invokes that base getter like a browser
+// does, so dispatch to the concrete prototype getter in this test DOM only.
+const nodeNameDescriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'nodeName')
+if (nodeNameDescriptor?.get?.call(document.createElement('div')) === '') {
+  Object.defineProperty(Node.prototype, 'nodeName', {
+    ...nodeNameDescriptor,
+    get(this: Node): string {
+      if (this.nodeType === Node.DOCUMENT_FRAGMENT_NODE) return '#document-fragment'
+      let prototype: object | null = Object.getPrototypeOf(this)
+      while (prototype !== null && prototype !== Node.prototype) {
+        const getter = Object.getOwnPropertyDescriptor(prototype, 'nodeName')?.get
+        if (getter !== undefined) return getter.call(this) as string
+        prototype = Object.getPrototypeOf(prototype)
+      }
+      return nodeNameDescriptor.get!.call(this) as string
+    },
+  })
+}
+
 // vitest setup — runs once before the suite.
 //
 // Node 22+ ships a native `localStorage` global, but vitest invokes Node with

@@ -7,6 +7,7 @@
 // 「模板留空」矛盾）；③投递/触发记录的 closed enum（emit 域，读域另行放宽时
 // 必须走独立常量，见 RFC-251 实现门 P0 的教训）。
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 
 // ---------------------------------------------------------------------------
 // Provider 与事件类型
@@ -145,7 +146,7 @@ export const CodeHostEventSchema = z.object({
   pipelineUrl: z.string().optional(),
   /** push 的前一个 sha（与 `commitSha` = after 配对）。 */
   commitBefore: z.string().optional(),
-  raw: z.unknown(),
+  raw: z.unknown().optional(),
 })
 export type CodeHostEvent = z.infer<typeof CodeHostEventSchema>
 
@@ -156,11 +157,14 @@ export type CodeHostEvent = z.infer<typeof CodeHostEventSchema>
 /** repo 匹配范围：全部 / path 前缀（GitLab group 天然是前缀）/ 精确清单。 */
 export const WebhookRepoScopeSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('all') }),
-  z.object({ kind: z.literal('prefix'), prefix: z.string().trim().min(1).max(500) }),
+  z.object({
+    kind: z.literal('prefix'),
+    prefix: z.string().trim().min(1).check(utf16MaxLength(500)),
+  }),
   z.object({
     kind: z.literal('exact'),
     paths: z
-      .array(z.string().trim().min(1).max(500))
+      .array(z.string().trim().min(1).check(utf16MaxLength(500)))
       .min(1)
       .max(500)
       .transform((a) => Array.from(new Set(a))),
@@ -406,7 +410,7 @@ export type WebhookVarGroupKey = (typeof WEBHOOK_VAR_GROUPS)[number]['key']
  * 映射（保存期拒绝，校验在服务层结合 workflow 定义做）。
  */
 export const WebhookInputMappingSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('template'), template: z.string().max(65536) }),
+  z.object({ kind: z.literal('template'), template: z.string().check(utf16MaxLength(65536)) }),
   z.object({ kind: z.literal('event-branch') }),
 ])
 export type WebhookInputMapping = z.infer<typeof WebhookInputMappingSchema>
@@ -459,9 +463,9 @@ export type WebhookWorkflowPayloadTemplate = z.infer<typeof WebhookWorkflowPaylo
 export const WebhookAgentPayloadTemplateSchema = z
   .object({
     /** 零端口 agent 的任务提示词模板（对齐 StartAgentTaskSchema.description ≤65536）。 */
-    description: z.string().trim().min(1).max(65536).optional(),
+    description: z.string().trim().min(1).check(utf16MaxLength(65536)).optional(),
     /** 声明端口 agent 的端口值模板（对齐 StartAgentTaskSchema.inputs）。 */
-    inputs: z.record(z.string(), z.string().max(65536)).optional(),
+    inputs: z.record(z.string(), z.string().check(utf16MaxLength(65536))).optional(),
     allowClarify: z.boolean().optional(),
     ...CommonTemplateFields,
   })
@@ -472,7 +476,7 @@ export type WebhookAgentPayloadTemplate = z.infer<typeof WebhookAgentPayloadTemp
 export const WebhookWorkgroupPayloadTemplateSchema = z
   .object({
     /** 工作组任务目标模板（对齐 StartWorkgroupTaskSchema.goal ≤65536）。 */
-    goal: z.string().trim().min(1).max(65536),
+    goal: z.string().trim().min(1).check(utf16MaxLength(65536)),
     ...CommonTemplateFields,
   })
   .strict()
@@ -483,14 +487,19 @@ export type WebhookWorkgroupPayloadTemplate = z.infer<typeof WebhookWorkgroupPay
 export const WebhookDigitalEmployeePayloadTemplateSchema = z
   .object({
     intakeKind: z.enum(['body', 'external-id']),
-    target: z.record(z.string().min(1).max(160), z.string().max(65_536)).default({}),
+    target: z
+      .record(
+        z.string().min(1).check(utf16MaxLength(160)),
+        z.string().check(utf16MaxLength(65_536)),
+      )
+      .default({}),
     body: z
       .string()
       .trim()
       .min(1)
-      .max(2 * 1024 * 1024)
+      .check(utf16MaxLength(2 * 1024 * 1024))
       .optional(),
-    externalId: z.string().trim().min(1).max(500).optional(),
+    externalId: z.string().trim().min(1).check(utf16MaxLength(500)).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -532,7 +541,7 @@ export type WebhookDigitalEmployeePayloadTemplate = z.infer<
  */
 export const WebhookCodeRoundPayloadTemplateSchema = z
   .object({
-    capability: z.string().min(1).max(64),
+    capability: z.string().min(1).check(utf16MaxLength(64)),
   })
   .strict()
 export type WebhookCodeRoundPayloadTemplate = z.infer<typeof WebhookCodeRoundPayloadTemplateSchema>
@@ -547,7 +556,7 @@ export type WebhookLaunchPayloadTemplate =
 /** save/edit/fire 共用的封套选择器（对齐 scheduledPayloadSchemaFor 的单选择器模式）。 */
 export function webhookPayloadTemplateSchemaFor(
   kind: WebhookLaunchKind,
-): z.ZodType<WebhookLaunchPayloadTemplate, z.ZodTypeDef, unknown> {
+): z.ZodType<WebhookLaunchPayloadTemplate, unknown> {
   const schema =
     kind === 'workflow'
       ? WebhookWorkflowPayloadTemplateSchema
@@ -558,7 +567,7 @@ export function webhookPayloadTemplateSchemaFor(
           : kind === 'code-round'
             ? WebhookCodeRoundPayloadTemplateSchema
             : WebhookWorkgroupPayloadTemplateSchema
-  return schema as unknown as z.ZodType<WebhookLaunchPayloadTemplate, z.ZodTypeDef, unknown>
+  return schema as unknown as z.ZodType<WebhookLaunchPayloadTemplate, unknown>
 }
 
 // ---------------------------------------------------------------------------
@@ -616,7 +625,7 @@ export type WebhookFireOutcome = z.infer<typeof WebhookFireOutcomeSchema>
 // 存储 secretBox 密封、读取面只有 hasSecret + 尾 4 位 hint —— RFC-255 姿势）
 // ---------------------------------------------------------------------------
 
-export const WebhookEndpointNameSchema = z.string().trim().min(1).max(255)
+export const WebhookEndpointNameSchema = z.string().trim().min(1).check(utf16MaxLength(255))
 
 export const CreateWebhookEndpointSchema = z
   .object({
@@ -665,7 +674,7 @@ export type WebhookEndpoint = z.infer<typeof WebhookEndpointSchema>
 // 触发器 wire schema（owner 制，D19 修订版——非 RFC-231 ACL）
 // ---------------------------------------------------------------------------
 
-export const WebhookTriggerNameSchema = z.string().trim().min(1).max(255)
+export const WebhookTriggerNameSchema = z.string().trim().min(1).check(utf16MaxLength(255))
 
 /** RFC-303：前后端与持久化坏行共用的稳定组合错误码。 */
 export const WEBHOOK_TRIGGER_TERMINAL_POLICY_CONFLICT =
@@ -703,11 +712,11 @@ const TriggerRuleFields = {
     .min(1)
     .transform((a) => Array.from(new Set(a))),
   /** glob；空/缺省 = 不过滤。MR 类事件按目标分支匹配，其余按事件分支（design §4.1）。 */
-  branchFilter: z.string().trim().max(500).optional(),
+  branchFilter: z.string().trim().check(utf16MaxLength(500)).optional(),
   /** note 事件的指令前缀（如 `/fix`）；非 note 类型忽略。 */
-  commandPrefix: z.string().trim().min(1).max(100).optional(),
+  commandPrefix: z.string().trim().min(1).check(utf16MaxLength(100)).optional(),
   ignoreUsernames: z
-    .array(z.string().trim().min(1).max(255))
+    .array(z.string().trim().min(1).check(utf16MaxLength(255)))
     .max(200)
     .transform((a) => Array.from(new Set(a)))
     .default([]),
@@ -725,7 +734,7 @@ export const CreateWebhookTriggerSchema = z
     ...TriggerRuleFields,
     launchKind: WebhookLaunchKindSchema,
     launchRefId: z.string().min(1),
-    launchPayload: z.unknown(),
+    launchPayload: z.unknown().optional(),
   })
   .superRefine((v, ctx) => {
     addTerminalPolicyIssue(v, ctx)
@@ -752,10 +761,10 @@ export const UpdateWebhookTriggerSchema = z
       .min(1)
       .transform((a) => Array.from(new Set(a)))
       .optional(),
-    branchFilter: z.string().trim().max(500).nullable().optional(),
-    commandPrefix: z.string().trim().min(1).max(100).nullable().optional(),
+    branchFilter: z.string().trim().check(utf16MaxLength(500)).nullable().optional(),
+    commandPrefix: z.string().trim().min(1).check(utf16MaxLength(100)).nullable().optional(),
     ignoreUsernames: z
-      .array(z.string().trim().min(1).max(255))
+      .array(z.string().trim().min(1).check(utf16MaxLength(255)))
       .max(200)
       .transform((a) => Array.from(new Set(a)))
       .optional(),
@@ -793,7 +802,7 @@ export const WebhookTriggerSchema = z.object({
   ignoreUsernames: z.array(z.string()).nullable(),
   launchKind: WebhookLaunchKindSchema,
   launchRefId: z.string(),
-  launchPayload: z.unknown().nullable(),
+  launchPayload: z.unknown().nullable().optional(),
   migrationError: z
     .object({
       repoScope: z.string().nullable(),

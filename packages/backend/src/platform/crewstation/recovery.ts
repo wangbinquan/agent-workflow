@@ -7,6 +7,7 @@
 // action is still readable, so the consumer can reject it explicitly instead
 // of failing every claim of that request.
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type { CrewStationPlatformApi } from './platformApi'
 import type { BusinessExecutionFence } from './businessExecution'
 
@@ -15,11 +16,11 @@ const Digest = z.string().regex(/^[a-f0-9]{64}$/)
 const Generation = z.number().int().positive()
 
 export const CrewStationRecoveryTarget = z.object({
-  action: z.string().min(1).max(64),
+  action: z.string().min(1).check(utf16MaxLength(64)),
   taskId: Id,
   expectedGeneration: Generation,
   materialDigest: Digest,
-  volumeUid: z.string().min(1).max(256).optional(),
+  volumeUid: z.string().min(1).check(utf16MaxLength(256)).optional(),
 })
 export type CrewStationRecoveryTarget = z.infer<typeof CrewStationRecoveryTarget>
 export const CrewStationRecoveryRequest = z.object({
@@ -27,14 +28,14 @@ export const CrewStationRecoveryRequest = z.object({
   projectId: Id,
   serviceId: Id,
   requestedBy: Id,
-  requestKey: z.string().min(1).max(128),
+  requestKey: z.string().min(1).check(utf16MaxLength(128)),
   target: CrewStationRecoveryTarget,
   assessmentDigest: Digest,
   state: z.enum(['pending', 'claimed', 'running', 'succeeded', 'failed', 'rejected']),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   operationId: Id.optional(),
-  reason: z.string().max(1024).optional(),
+  reason: z.string().check(utf16MaxLength(1024)).optional(),
 })
 export type CrewStationRecoveryRequest = z.infer<typeof CrewStationRecoveryRequest>
 const Claim = z.object({
@@ -59,7 +60,7 @@ export interface CrewStationRecoveryReceipt {
 const Operation = z.object({
   operationId: Id,
   taskId: Id,
-  state: z.string().min(1).max(64),
+  state: z.string().min(1).check(utf16MaxLength(64)),
 })
 
 const root = '/v3/business-execution/recovery'
@@ -138,7 +139,7 @@ export function createCrewStationRecoveryApi(input: {
     async reject(handle: CrewStationRecoveryClaim, reason: string) {
       const { claim, fence } = requireClaim(handle)
       if (claim.request.state !== 'claimed') throw new Error('hosted-recovery-already-running')
-      const detail = z.string().trim().min(1).max(1024).parse(reason)
+      const detail = z.string().trim().min(1).check(utf16MaxLength(1024)).parse(reason)
       const rejected = parseRequest(
         await input.api.post(
           `${root}/${claim.request.id}/reject`,

@@ -1,6 +1,7 @@
 // RFC-370: Integration owns the original nine envelopes and result policy.
 // Selected effects own program preparation and execution observations.
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type { EvidenceStagingReference } from '@/modules/development-automation/public/types'
 import type { DevelopmentAdapterOperation } from './developmentAdapterOperation'
 import type {
@@ -21,12 +22,15 @@ export const acquireEnvelopeSchema = z
   .object({
     protocol: z.literal('aw-adapter@1'),
     operation: z.literal('acquire'),
-    sourceRevision: z.string().min(1).max(200),
-    title: z.string().min(1).max(500),
+    sourceRevision: z.string().min(1).check(utf16MaxLength(200)),
+    title: z.string().min(1).check(utf16MaxLength(500)),
     files: z
       .array(
         z
-          .object({ relativePath: z.string().min(1).max(1024), role: z.string().min(1).max(60) })
+          .object({
+            relativePath: z.string().min(1).check(utf16MaxLength(1024)),
+            role: z.string().min(1).check(utf16MaxLength(60)),
+          })
           .strict(),
       )
       .max(1000),
@@ -37,7 +41,7 @@ export const writebackEnvelopeSchema = z
   .object({
     protocol: z.literal('aw-adapter@1'),
     operation: z.literal('questions.writeback'),
-    correlationRef: z.string().min(1).max(200),
+    correlationRef: z.string().min(1).check(utf16MaxLength(200)),
   })
   .strict()
 
@@ -46,7 +50,7 @@ export const collectAnswersEnvelopeSchema = z
     protocol: z.literal('aw-adapter@1'),
     operation: z.literal('answers.collect'),
     complete: z.boolean(),
-    answerRevision: z.string().min(1).max(200).nullable(),
+    answerRevision: z.string().min(1).check(utf16MaxLength(200)).nullable(),
     answers: z
       .array(z.object({ questionId: z.string().min(1), answer: z.string() }).strict())
       .max(200),
@@ -75,7 +79,7 @@ export const pipelineCollectEnvelopeSchema = z
   .object({
     protocol: z.literal('aw-adapter@1'),
     operation: z.literal('pipeline.collect'),
-    providerKey: z.string().min(1).max(200),
+    providerKey: z.string().min(1).check(utf16MaxLength(200)),
     /** provider 无法提供 head 绑定（partial）时为 null——fence 恒不判 pass。 */
     providerHeadSha: sha40.nullable(),
     targetSha: sha40.nullable(),
@@ -84,20 +88,20 @@ export const pipelineCollectEnvelopeSchema = z
       .array(
         z
           .object({
-            gateKey: z.string().min(1).max(200),
+            gateKey: z.string().min(1).check(utf16MaxLength(200)),
             required: z.boolean(),
             status: pipelineGateStatus,
-            runRef: z.string().min(1).max(200),
+            runRef: z.string().min(1).check(utf16MaxLength(200)),
             attempt: z.number().int().min(1),
             finishedAt: z.string().datetime({ offset: true }).nullable(),
             retryability: z.enum(['safe', 'unsafe', 'unknown']),
-            failureCategories: z.array(z.string().min(1).max(100)).max(50),
+            failureCategories: z.array(z.string().min(1).check(utf16MaxLength(100))).max(50),
             files: z
               .array(
                 z
                   .object({
-                    fileId: z.string().min(1).max(200),
-                    relativePath: z.string().min(1).max(1024),
+                    fileId: z.string().min(1).check(utf16MaxLength(200)),
+                    relativePath: z.string().min(1).check(utf16MaxLength(1024)),
                   })
                   .strict(),
               )
@@ -114,8 +118,8 @@ export const pipelineTriggerEnvelopeSchema = z
   .object({
     protocol: z.literal('aw-adapter@1'),
     operation: z.literal('pipeline.trigger'),
-    providerReceiptRef: z.string().min(1).max(200),
-    runRef: z.string().min(1).max(200),
+    providerReceiptRef: z.string().min(1).check(utf16MaxLength(200)),
+    runRef: z.string().min(1).check(utf16MaxLength(200)),
     headSha: sha40,
     /** true = 按 idempotencyKey 查到既有 run 并 adopt（未再造第二个）。 */
     adopted: z.boolean(),
@@ -126,8 +130,8 @@ export const pipelineRerunEnvelopeSchema = z
   .object({
     protocol: z.literal('aw-adapter@1'),
     operation: z.literal('pipeline.rerun'),
-    providerReceiptRef: z.string().min(1).max(200),
-    runRef: z.string().min(1).max(200),
+    providerReceiptRef: z.string().min(1).check(utf16MaxLength(200)),
+    runRef: z.string().min(1).check(utf16MaxLength(200)),
     attempt: z.number().int().min(1),
     headSha: sha40,
   })
@@ -135,9 +139,9 @@ export const pipelineRerunEnvelopeSchema = z
 
 const approvalReceiptFields = {
   intentDigest: z.string().regex(/^[0-9a-f]{64}$/),
-  correlationRef: z.string().min(1).max(500),
-  externalRequestRef: z.string().min(1).max(500),
-  submittedRevision: z.string().min(1).max(500),
+  correlationRef: z.string().min(1).check(utf16MaxLength(500)),
+  externalRequestRef: z.string().min(1).check(utf16MaxLength(500)),
+  submittedRevision: z.string().min(1).check(utf16MaxLength(500)),
   submittedAt: z.string().datetime({ offset: true }),
 } as const
 
@@ -171,10 +175,10 @@ export const approvalObserveEnvelopeSchema = z
   .object({
     protocol: z.literal('aw-adapter@1'),
     operation: z.literal('approval.observe'),
-    correlationRef: z.string().min(1).max(500),
-    observedRevision: z.string().min(1).max(500),
+    correlationRef: z.string().min(1).check(utf16MaxLength(500)),
+    observedRevision: z.string().min(1).check(utf16MaxLength(500)),
     status: z.enum(['pending', 'approved', 'rejected', 'expired', 'unavailable']),
-    evidenceRef: z.string().min(1).max(500).nullable(),
+    evidenceRef: z.string().min(1).check(utf16MaxLength(500)).nullable(),
     observedAt: z.string().datetime({ offset: true }),
   })
   .strict()

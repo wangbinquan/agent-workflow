@@ -5,6 +5,7 @@ import {
   type TaskLaunchOrigin,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
 import { employeeTypeRefSchema, exactResourceRefSchema } from './model'
@@ -23,7 +24,7 @@ function isStrictRepositoryAncestor(ancestor: string, candidate: string): boolea
 const repositoryTargetPathSchema = z
   .string()
   .min(1)
-  .max(1_000)
+  .check(utf16MaxLength(1_000))
   .refine(
     (value) =>
       !value.startsWith('/') &&
@@ -40,20 +41,23 @@ const repositoryTargetPathSchema = z
 export const employeeWorkIntakeSchema = z
   .object({
     /** Operator-owned logical task name; event admissions may derive one from event material. */
-    name: z.string().trim().min(1).max(255).optional(),
+    name: z.string().trim().min(1).check(utf16MaxLength(255)).optional(),
     kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
-    target: z.record(z.string().min(1).max(160), z.string().min(1).max(1_000)),
+    target: z.record(
+      z.string().min(1).check(utf16MaxLength(160)),
+      z.string().min(1).check(utf16MaxLength(1_000)),
+    ),
     body: z
       .string()
       .min(1)
-      .max(2 * 1024 * 1024)
+      .check(utf16MaxLength(2 * 1024 * 1024))
       .nullable(),
-    externalId: z.string().min(1).max(500).nullable(),
+    externalId: z.string().min(1).check(utf16MaxLength(500)).nullable(),
     uploads: z
       .array(
         z
           .object({
-            uploadRef: z.string().min(1).max(200),
+            uploadRef: z.string().min(1).check(utf16MaxLength(200)),
             placement: z.enum(['repository', 'temporary']).default('repository'),
             targetPath: repositoryTargetPathSchema.nullable().default(null),
           })
@@ -76,19 +80,27 @@ export const employeeWorkIntakeSchema = z
           }),
       )
       .max(500),
-    executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
+    executionOptions: z
+      .record(z.string().min(1).check(utf16MaxLength(160)), z.boolean())
+      .default({}),
     advanced: z
       .object({
-        collaboratorUserIds: z.array(z.string().min(1).max(200)).max(64).default([]),
+        collaboratorUserIds: z
+          .array(z.string().min(1).check(utf16MaxLength(200)))
+          .max(64)
+          .default([]),
         maxDurationMs: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
         maxTotalTokens: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
         typeOptions: z
-          .record(z.string().min(1).max(160), z.string().trim().min(1).max(1_000))
+          .record(
+            z.string().min(1).check(utf16MaxLength(160)),
+            z.string().trim().min(1).check(utf16MaxLength(1_000)),
+          )
           .default({}),
       })
       .strict()
       .default({ collaboratorUserIds: [], typeOptions: {} }),
-    idempotencyKey: z.string().min(1).max(500),
+    idempotencyKey: z.string().min(1).check(utf16MaxLength(500)),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -150,16 +162,19 @@ export type EmployeeWorkIntake = z.infer<typeof employeeWorkIntakeSchema>
 export const employeeCaseLaunchSchema = z
   .object({
     employeeRef: exactResourceRefSchema,
-    primaryContextTypeId: z.string().min(1).max(200),
+    primaryContextTypeId: z.string().min(1).check(utf16MaxLength(200)),
     primaryContextSchemaVersion: z.number().int().positive(),
     primaryContextState: contextLifecycleSchema,
     primaryContextJson: z
       .string()
-      .min(2)
-      .max(2 * 1024 * 1024),
-    artifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+      .check(utf16MinLength(2))
+      .check(utf16MaxLength(2 * 1024 * 1024)),
+    artifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(500),
     workSubject: z
-      .object({ typeId: z.string().min(1).max(200), subjectRef: z.string().min(1).max(1_000) })
+      .object({
+        typeId: z.string().min(1).check(utf16MaxLength(200)),
+        subjectRef: z.string().min(1).check(utf16MaxLength(1_000)),
+      })
       .strict(),
   })
   .strict()
@@ -326,7 +341,10 @@ export const attentionSubjectSchema = z
   .object({
     eventTypeRef: exactResourceRefSchema,
     subject: z
-      .object({ typeId: z.string().min(1).max(200), subjectRef: z.string().min(1).max(1_000) })
+      .object({
+        typeId: z.string().min(1).check(utf16MaxLength(200)),
+        subjectRef: z.string().min(1).check(utf16MaxLength(1_000)),
+      })
       .strict(),
   })
   .strict()
@@ -356,7 +374,7 @@ export const reactionExecutionPlanSchema = z
     connectionRef: exactResourceRefSchema.nullable(),
     implementationRef: exactResourceRefSchema.nullable(),
     implementationKind: z.enum(['agent', 'workflow', 'program', 'system', 'collaboration']),
-    implementationJson: z.string().min(2).nullable(),
+    implementationJson: z.string().check(utf16MinLength(2)).nullable(),
     inputSchemaId: z.string().min(1),
     outputSchemaId: z.string().min(1),
     semanticValidatorId: z.string().min(1),
@@ -369,11 +387,11 @@ export const reactionExecutionPlanSchema = z
       .object({
         mode: z.enum(['write', 'read-only', 'none']),
         businessChangeOnOk: z.enum(['required', 'forbidden', 'optional']),
-        writablePrefixes: z.array(z.string().min(1).max(1_000)).max(200),
+        writablePrefixes: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(200),
         platformWritePrefixes: z.array(z.enum(['inputs/requirements', 'pipeline'])).max(2),
       })
       .strict(),
-    inputEnvelopeJson: z.string().min(2),
+    inputEnvelopeJson: z.string().check(utf16MinLength(2)),
   })
   .strict()
 

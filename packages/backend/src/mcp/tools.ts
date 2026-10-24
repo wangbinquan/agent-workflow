@@ -23,6 +23,7 @@ import { ClarifyDecisionSchema } from '@agent-workflow/shared'
 // `describe_resource` hands back the schema for a kind on request.
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import {
   ClarifyRoundSchema,
   type ClarifyRound,
@@ -74,7 +75,7 @@ export interface McpToolDef {
    * valid token has (D3) — those tools are always listed.
    */
   readonly permissions: ReadonlyArray<Permission>
-  readonly inputSchema: z.ZodRawShape
+  readonly inputSchema: Record<string, z.ZodType>
   readonly handler: (args: Record<string, unknown>, ctx: McpToolContext) => Promise<unknown>
   /**
    * RFC-326 (P7) — what the audit row should name for this call. The converged
@@ -131,7 +132,11 @@ export class McpCallError extends Error {
 // 键集是此前唯一靠注释维系、实际漂移过的轴（首版漏掉预算/协作者/多仓字段）。
 const LAUNCH_TASK_INPUT_SCHEMA = {
   workflowId: z.string().min(1).describe('Workflow id to run'),
-  name: z.string().min(1).max(255).describe('Task name — required, shown in every list'),
+  name: z
+    .string()
+    .min(1)
+    .check(utf16MaxLength(255))
+    .describe('Task name — required, shown in every list'),
   cachedRepoId: z
     .string()
     .min(1)
@@ -190,7 +195,7 @@ const LAUNCH_TASK_INPUT_SCHEMA = {
         'old inline `repos[]` array — passing it now fails with 422. ' +
         'See resource_read(kind="repo-groups") for available groups.',
     ),
-} satisfies Partial<Record<keyof z.input<typeof StartTaskSchema>, z.ZodTypeAny>>
+} satisfies Partial<Record<keyof z.input<typeof StartTaskSchema>, z.ZodType>>
 
 const TASK_TOOLS: ReadonlyArray<McpToolDef> = [
   {
@@ -501,7 +506,7 @@ const REVIEW_LOCATOR_INPUT_SCHEMA = {
     .string()
     .trim()
     .min(1)
-    .max(REVIEW_ANCHOR_QUOTE_MAX_CHARS)
+    .check(utf16MaxLength(REVIEW_ANCHOR_QUOTE_MAX_CHARS))
     .optional()
     .describe(
       'Verbatim text copied from the document body (markdown markers included, e.g. the backticks of inline code). ' +
@@ -520,7 +525,7 @@ const REVIEW_LOCATOR_INPUT_SCHEMA = {
     .string()
     .trim()
     .min(1)
-    .max(REVIEW_ANCHOR_SECTION_MAX_CHARS)
+    .check(utf16MaxLength(REVIEW_ANCHOR_SECTION_MAX_CHARS))
     .optional()
     .describe(
       'Narrow the quote to one section: a heading text, a `#`-prefixed breadcrumb segment, or the full ' +
@@ -541,7 +546,7 @@ const REVIEW_LOCATOR_INPUT_SCHEMA = {
 const REVIEW_COMMENT_TEXT = z
   .string()
   .min(1)
-  .max(REVIEW_COMMENT_TEXT_MAX_CHARS)
+  .check(utf16MaxLength(REVIEW_COMMENT_TEXT_MAX_CHARS))
   .describe('The comment body (markdown)')
 
 /**
@@ -582,7 +587,7 @@ const SUBMIT_REVIEW_INPUT_SCHEMA = {
       'Multi-document rounds: accept / reject individual documents in the same transaction. ' +
         '`approved` requires every document to be decided (here or earlier).',
     ),
-} satisfies Record<keyof z.input<typeof SubmitReviewDecisionSchema> | 'nodeRunId', z.ZodTypeAny>
+} satisfies Record<keyof z.input<typeof SubmitReviewDecisionSchema> | 'nodeRunId', z.ZodType>
 
 const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
   {
@@ -709,7 +714,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
             'Without this declaration a sealed question keeps its exactly-once refusal even here.',
         ),
     } satisfies Partial<
-      Record<keyof z.input<typeof SubmitClarifyAnswersSchema> | 'nodeRunId', z.ZodTypeAny>
+      Record<keyof z.input<typeof SubmitClarifyAnswersSchema> | 'nodeRunId', z.ZodType>
     >,
     handler: async (args, ctx) =>
       unwrap(
@@ -911,7 +916,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
       roundId: z.string().min(1),
       questionId: z.string().min(1),
       selectedOptionIndices: z.array(z.number().int().nonnegative()).max(64).optional(),
-      customText: z.string().max(65536).optional(),
+      customText: z.string().check(utf16MaxLength(65536)).optional(),
       decision: ClarifyDecisionSchema.optional(),
     },
     audit: (args) => ({ kind: 'clarify-draft', id: String(args.nodeRunId) }),
@@ -960,7 +965,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: {
       id: taskId,
-      body: z.string().min(1).max(65536).describe('Message text; "@member" tokens dispatch cards'),
+      body: z
+        .string()
+        .min(1)
+        .check(utf16MaxLength(65536))
+        .describe('Message text; "@member" tokens dispatch cards'),
     },
     audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
     handler: async (args, ctx) =>
@@ -981,7 +990,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: {
       id: taskId,
       decision: z.enum(['approve', 'reject']),
-      comment: z.string().max(65536).optional().describe('Required when rejecting'),
+      comment: z
+        .string()
+        .check(utf16MaxLength(65536))
+        .optional()
+        .describe('Required when rejecting'),
     },
     audit: (args) => ({ kind: 'workgroup-gate', id: String(args.id) }),
     handler: async (args, ctx) =>
@@ -1002,7 +1015,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: {
       id: taskId,
       decision: z.enum(['approve', 'reject']),
-      comment: z.string().max(65536).optional().describe('Required when rejecting'),
+      comment: z
+        .string()
+        .check(utf16MaxLength(65536))
+        .optional()
+        .describe('Required when rejecting'),
     },
     audit: (args) => ({ kind: 'workgroup-gate', id: String(args.id) }),
     handler: async (args, ctx) =>
@@ -1027,7 +1044,7 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: {
       id: taskId,
       name: z.string().min(1).describe('Name for the new workflow'),
-      description: z.string().max(4096).optional(),
+      description: z.string().check(utf16MaxLength(4096)).optional(),
     },
     audit: (args) => ({ kind: 'workgroup-room', id: String(args.id) }),
     handler: async (args, ctx) =>
@@ -1048,9 +1065,23 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     inputSchema: {
       id: taskId,
       assignmentId: z.string().min(1),
-      body: z.string().min(1).max(65536).optional().describe('Chat-style delivery'),
-      summary: z.string().min(1).max(16384).optional().describe('Structured delivery: headline'),
-      detail: z.string().max(65536).optional().describe('Structured delivery: the rest'),
+      body: z
+        .string()
+        .min(1)
+        .check(utf16MaxLength(65536))
+        .optional()
+        .describe('Chat-style delivery'),
+      summary: z
+        .string()
+        .min(1)
+        .check(utf16MaxLength(16384))
+        .optional()
+        .describe('Structured delivery: headline'),
+      detail: z
+        .string()
+        .check(utf16MaxLength(65536))
+        .optional()
+        .describe('Structured delivery: the rest'),
     },
     audit: (args) => ({ kind: 'workgroup-assignment', id: String(args.assignmentId) }),
     handler: async (args, ctx) =>
@@ -1154,7 +1185,11 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
     permissions: ['tasks:execute'],
     inputSchema: {
       id: z.string().min(1),
-      feedback: z.string().min(1).max(4000).describe('What was wrong; the agent reads this'),
+      feedback: z
+        .string()
+        .min(1)
+        .check(utf16MaxLength(4000))
+        .describe('What was wrong; the agent reads this'),
     },
     audit: (args) => ({ kind: 'fusions', id: String(args.id) }),
     handler: async (args, ctx) =>
@@ -1559,7 +1594,7 @@ const RESOURCE_TOOLS: ReadonlyArray<McpToolDef> = [
       // RFC-327：过滤参数直通到 REST 的查询串。之前这个工具一个参数都不收,于是
       // 「按 scope / 标签找知识」在 MCP 上只能全量拉回来自己筛——正文还要逐条 get。
       query: z
-        .record(z.string())
+        .record(z.string(), z.string())
         .optional()
         .describe(
           'Filters, passed straight through as the query string. Call describe_resource for the ' +

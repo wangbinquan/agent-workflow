@@ -5,6 +5,7 @@
 // 明文 token 在任何 GET 响应里都没有位置。
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { CodeHostProviderSchema } from './webhook'
 import {
   CodeHostConnectionMutationConfirmationSchema,
@@ -45,7 +46,7 @@ export const CodeHostConnectionWireSchema = z.object({
   configured: z.boolean(),
   baseUrl: z.string(),
   /** GitLab-only clone URL prefixes that belong to the configured API instance. */
-  repositoryUrlPrefixes: z.array(z.string().min(1).max(2048)).max(32),
+  repositoryUrlPrefixes: z.array(z.string().min(1).check(utf16MaxLength(2048))).max(32),
   /** Typed SSH authority/path -> HTTP(S) mappings used only for managed Git publication. */
   transportMappings: z.array(RepositoryTransportMappingV1Schema).max(32),
   connectionGeneration: RepositoryConnectionGenerationSchema.nullable(),
@@ -69,10 +70,13 @@ export type CodeHostConnectionWire = z.infer<typeof CodeHostConnectionWireSchema
  */
 export const UpsertCodeHostConnectionSchema = z
   .object({
-    baseUrl: z.string().min(1).max(2048),
-    token: z.string().min(1).max(4096).optional(),
+    baseUrl: z.string().min(1).check(utf16MaxLength(2048)),
+    token: z.string().min(1).check(utf16MaxLength(4096)).optional(),
     /** GitLab-only; omission preserves the stored collection. */
-    repositoryUrlPrefixes: z.array(z.string().min(1).max(2048)).max(32).optional(),
+    repositoryUrlPrefixes: z
+      .array(z.string().min(1).check(utf16MaxLength(2048)))
+      .max(32)
+      .optional(),
     /** Both providers; omission preserves the stored mapping collection. */
     transportMappings: z.array(RepositoryTransportMappingV1Schema).max(32).optional(),
     /** 省略 = 首次配置为 true，已配置时保留原值；false 只允许 GitLab。 */
@@ -94,8 +98,8 @@ export type DeleteCodeHostConnection = z.infer<typeof DeleteCodeHostConnectionSc
  */
 export const TestCodeHostConnectionSchema = z
   .object({
-    baseUrl: z.string().min(1).max(2048).optional(),
-    token: z.string().min(1).max(4096).optional(),
+    baseUrl: z.string().min(1).check(utf16MaxLength(2048)).optional(),
+    token: z.string().min(1).check(utf16MaxLength(4096)).optional(),
     /** 省略即使用已保存值；未保存时为 true。 */
     rejectUnauthorized: z.boolean().optional(),
   })

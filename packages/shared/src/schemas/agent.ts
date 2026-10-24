@@ -4,6 +4,8 @@
 // these schemas describe the response/request shape after marshaling.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
+import { sparsePatch } from './sparsePatch'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { ImportRefSelectionSchema } from './importRef'
 import { AgentOutputKindSchema } from './review'
@@ -34,10 +36,13 @@ export type AgentOutputKindsMap = z.infer<typeof AgentOutputKindsMapSchema>
  * (string | markdown | signal | path<ext> | list<T>).
  */
 export const AgentInputPortSchema = z.object({
-  name: z.string().min(1, 'input port name is required').max(128, 'input port name too long'),
+  name: z
+    .string()
+    .min(1, 'input port name is required')
+    .check(utf16MaxLength(128, 'input port name too long')),
   kind: AgentOutputKindSchema.default('string'),
   required: z.boolean().optional(),
-  description: z.string().max(2048).optional(),
+  description: z.string().check(utf16MaxLength(2048)).optional(),
 })
 export type AgentInputPort = z.infer<typeof AgentInputPortSchema>
 
@@ -114,7 +119,7 @@ export const AGENT_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 export const AgentNameSchema = z
   .string()
   .min(1, 'name is required')
-  .max(128, 'name too long')
+  .check(utf16MaxLength(128, 'name too long'))
   .regex(AGENT_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
 
 /**
@@ -125,7 +130,7 @@ export const AgentNameSchema = z
 export const ResourceRefSchema = z
   .string()
   .min(1, 'reference is required')
-  .max(128, 'reference too long')
+  .check(utf16MaxLength(128, 'reference too long'))
 
 /**
  * RFC-223 (PR-1) — `agents.skills` element. Persistent, DB/wire/runtime shape.
@@ -136,8 +141,8 @@ export const ResourceRefSchema = z
  * name selectors are resolved separately before entering this persistent shape.
  */
 export const AgentSkillRefSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('managed'), skillId: z.string().min(1).max(128) }),
-  z.object({ kind: z.literal('project'), name: z.string().min(1).max(128) }),
+  z.object({ kind: z.literal('managed'), skillId: z.string().min(1).check(utf16MaxLength(128)) }),
+  z.object({ kind: z.literal('project'), name: z.string().min(1).check(utf16MaxLength(128)) }),
 ])
 export type AgentSkillRef = z.infer<typeof AgentSkillRefSchema>
 
@@ -151,10 +156,10 @@ export type AgentSkillRef = z.infer<typeof AgentSkillRefSchema>
 export const AgentSkillSelectorSchema = z.union([
   z.object({
     kind: z.literal('managed'),
-    name: z.string().min(1).max(128),
+    name: z.string().min(1).check(utf16MaxLength(128)),
     ownerUsername: z.string().optional(),
   }),
-  z.object({ kind: z.literal('project'), name: z.string().min(1).max(128) }),
+  z.object({ kind: z.literal('project'), name: z.string().min(1).check(utf16MaxLength(128)) }),
 ])
 export type AgentSkillSelector = z.infer<typeof AgentSkillSelectorSchema>
 
@@ -413,14 +418,12 @@ export const ResolveAgentImportRefsResultSchema = z
 export type ResolveAgentImportRefsResult = z.infer<typeof ResolveAgentImportRefsResultSchema>
 
 /** PUT /api/agents/:id body. Name changes happen via /rename. */
-export const UpdateAgentSchema = CreateAgentSchema.omit({ name: true })
-  .partial()
-  .extend({
-    // RFC-115: unlike create (absent already means "no pin"), an UPDATE can
-    // explicitly CLEAR a pinned runtime back to inherit by sending null.
-    // undefined = leave the current value untouched (sparse-patch semantics).
-    runtime: z.string().min(1).nullable().optional(),
-  })
+export const UpdateAgentSchema = sparsePatch(CreateAgentSchema.omit({ name: true })).extend({
+  // RFC-115: unlike create (absent already means "no pin"), an UPDATE can
+  // explicitly CLEAR a pinned runtime back to inherit by sending null.
+  // undefined = leave the current value untouched (sparse-patch semantics).
+  runtime: z.string().min(1).nullable().optional(),
+})
 export type UpdateAgent = z.infer<typeof UpdateAgentSchema>
 
 /** Exact ordinary-mutation revision returned by every Agent response. */

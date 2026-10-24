@@ -128,7 +128,7 @@ describe('rfc310 pr7b — handoff command', () => {
       ).rejects.toMatchObject({
         status: 422,
         code: 'mission-input-invalid',
-        message: 'reason: Expected string, received number',
+        message: 'reason: Invalid input: expected string, received number',
       })
     })
 

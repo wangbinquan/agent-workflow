@@ -4,6 +4,7 @@
 // along with the source digest (including historical restore contracts).
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type { LogicalSchemaContract } from './schemaContract'
 import { CanonicalLogicalValueSchema, type CanonicalLogicalRow } from './logicalDatabaseArtifact'
 
@@ -103,8 +104,8 @@ export const SqliteLogicalSourceWorkerEventSchema = z.discriminatedUnion('type',
     .object({
       ...EventBase,
       type: z.literal('failure'),
-      code: z.string().min(1).max(128),
-      message: z.string().min(1).max(2_000),
+      code: z.string().min(1).check(utf16MaxLength(128)),
+      message: z.string().min(1).check(utf16MaxLength(2_000)),
     })
     .strict(),
 ])

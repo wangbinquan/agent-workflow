@@ -75,7 +75,7 @@ const Profiles = z
     z.object({
       protocol: z.enum(['opencode', 'claude-code']),
       model: z.string().nullable(),
-      agentProfileId: z.string().uuid(),
+      agentProfileId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     }),
   )
   .min(1)

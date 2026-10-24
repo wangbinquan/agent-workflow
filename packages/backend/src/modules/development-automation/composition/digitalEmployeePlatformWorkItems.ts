@@ -6,6 +6,7 @@ import {
 import type { RepositoryBaselineEffectsFactory } from '../application/ports/repositoryBaselineEffects'
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 
@@ -68,13 +69,13 @@ const contextSchema = z
     id: z.string().min(1),
     revision: z.number().int().positive(),
     typeId: z.string().min(1),
-    stateJson: z.string().min(2),
+    stateJson: z.string().check(utf16MinLength(2)),
     lifecycleState: z.enum(['active', 'waiting', 'terminal']).default('active'),
     artifactRefs: z.array(z.string().min(1)).default([]),
   })
   .passthrough()
 
-const envelopeSchema = z.object({ contextsJson: z.string().min(2) }).passthrough()
+const envelopeSchema = z.object({ contextsJson: z.string().check(utf16MinLength(2)) }).passthrough()
 
 const issueSchema = z
   .object({
@@ -110,9 +111,9 @@ const issueSchema = z
     materialArtifactRefs: z.array(z.string().min(1)).default([]),
     deliveryContent: z
       .object({
-        commitMessage: z.string().trim().min(1).max(5_000),
-        mergeRequestTitle: z.string().trim().min(1).max(240),
-        mergeRequestDescription: z.string().trim().min(1).max(32_000),
+        commitMessage: z.string().trim().min(1).check(utf16MaxLength(5_000)),
+        mergeRequestTitle: z.string().trim().min(1).check(utf16MaxLength(240)),
+        mergeRequestDescription: z.string().trim().min(1).check(utf16MaxLength(32_000)),
       })
       .strict()
       .nullable()

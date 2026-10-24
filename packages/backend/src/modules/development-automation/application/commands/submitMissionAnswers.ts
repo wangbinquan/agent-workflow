@@ -9,6 +9,7 @@
 
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalDigest, canonicalStringify } from '../../domain/canonicalJson'
 import {
@@ -32,7 +33,12 @@ export const submitMissionAnswersInputSchema = z
     questionSetRef: z.string().min(1),
     answers: z
       .array(
-        z.object({ questionId: z.string().min(1), answer: z.string().min(1).max(8000) }).strict(),
+        z
+          .object({
+            questionId: z.string().min(1),
+            answer: z.string().min(1).check(utf16MaxLength(8000)),
+          })
+          .strict(),
       )
       .min(1)
       .max(50),

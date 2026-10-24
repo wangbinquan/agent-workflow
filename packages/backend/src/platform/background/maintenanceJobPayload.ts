@@ -3,7 +3,7 @@ import {
   type MaintenanceJobKey,
   WorktreeGcSchema,
 } from '@agent-workflow/shared'
-import { z, type ZodTypeAny } from 'zod'
+import { z, type ZodType } from 'zod'
 
 const EmptySchema = z.object({}).strict()
 const ActiveTaskIdsSchema = z.array(z.string()).max(100_000).default([])
@@ -79,7 +79,7 @@ export const MAINTENANCE_JOB_PAYLOAD_SCHEMAS = {
   hostedObjectRecovery: EmptySchema,
   humanGateRecovery: EmptySchema,
   walCheckpoint: EmptySchema,
-} as const satisfies Record<MaintenanceJobKey, ZodTypeAny>
+} as const satisfies Record<MaintenanceJobKey, ZodType>
 
 export type MaintenanceJobPayload<K extends MaintenanceJobKey> = z.infer<
   (typeof MAINTENANCE_JOB_PAYLOAD_SCHEMAS)[K]

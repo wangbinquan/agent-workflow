@@ -20,6 +20,7 @@
 
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalDigest, canonicalStringify } from '../../domain/canonicalJson'
 import type { FactCellValue } from '../../domain/facts'
@@ -105,7 +106,7 @@ async function persistCellsPatch(
 export const handoffMissionInputSchema = z
   .object({
     missionId: z.string().min(1),
-    reason: z.string().max(2000).optional(),
+    reason: z.string().check(utf16MaxLength(2000)).optional(),
   })
   .strict()
 
@@ -177,10 +178,10 @@ export async function handoffMission(
 export const attachMergeRequestInputSchema = z
   .object({
     missionId: z.string().min(1),
-    mrIid: z.string().min(1).max(64),
+    mrIid: z.string().min(1).check(utf16MaxLength(64)),
     /** 缺省从 repo binding 推导；显式入参可覆盖（自建实例多 provider 场景）。 */
     codeHostEndpointRef: z.enum(['gitlab', 'github']).optional(),
-    stableProjectRef: z.string().min(1).max(500).optional(),
+    stableProjectRef: z.string().min(1).check(utf16MaxLength(500)).optional(),
   })
   .strict()
 

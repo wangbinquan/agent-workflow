@@ -13,6 +13,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import type {
   WorkgroupTaskRoomEventIdentity,
@@ -98,12 +99,14 @@ export interface WorkgroupTaskRoomDependencies {
 }
 
 const JsonObjectSchema = z.record(z.string(), z.unknown())
-export const PostMessageSchema = z.object({ body: z.string().trim().min(1).max(65_536) })
+export const PostMessageSchema = z.object({
+  body: z.string().trim().min(1).check(utf16MaxLength(65_536)),
+})
 export const DeliverSchema = z
   .object({
-    body: z.string().trim().min(1).max(65_536).optional(),
-    summary: z.string().trim().min(1).max(16_384).optional(),
-    detail: z.string().max(65_536).optional(),
+    body: z.string().trim().min(1).check(utf16MaxLength(65_536)).optional(),
+    summary: z.string().trim().min(1).check(utf16MaxLength(16_384)).optional(),
+    detail: z.string().check(utf16MaxLength(65_536)).optional(),
   })
   .refine((input) => input.body !== undefined || input.summary !== undefined, {
     message: 'body or summary is required',
@@ -111,7 +114,7 @@ export const DeliverSchema = z
 export const ConfirmSchema = z
   .object({
     decision: z.enum(['approve', 'reject']),
-    comment: z.string().trim().max(65_536).optional(),
+    comment: z.string().trim().check(utf16MaxLength(65_536)).optional(),
   })
   .refine(
     (input) =>
@@ -120,7 +123,7 @@ export const ConfirmSchema = z
   )
 export const SaveAsWorkflowSchema = z.object({
   name: WorkflowNameSchema,
-  description: z.string().max(4096).optional(),
+  description: z.string().check(utf16MaxLength(4096)).optional(),
 })
 export const ConfigPatchSchema = z.object({
   switches: z
@@ -142,8 +145,8 @@ export const ConfigPatchSchema = z.object({
           memberType: z.enum(['agent', 'human']),
           agentId: z.string().min(1).optional(),
           userId: z.string().min(1).optional(),
-          displayName: z.string().trim().min(1).max(64),
-          roleDesc: z.string().max(2048).default(''),
+          displayName: z.string().trim().min(1).check(utf16MaxLength(64)),
+          roleDesc: z.string().check(utf16MaxLength(2048)).default(''),
         })
         .strict()
         .superRefine((member, context) => {

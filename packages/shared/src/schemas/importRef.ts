@@ -7,6 +7,7 @@
 // the same name.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { decodeImportSelectorRef } from '../ref/codecs'
 import { ResourceVisibilitySchema } from './resourceAcl'
 
@@ -26,9 +27,9 @@ export type ImportRefType = z.infer<typeof ImportRefTypeSchema>
 export const ImportRefSelectorSchema = z
   .object({
     type: ImportRefTypeSchema,
-    name: z.string().min(1).max(128),
+    name: z.string().min(1).check(utf16MaxLength(128)),
     /** Optional portable owner hint (currently emitted by managed skill export). */
-    ownerUsername: z.string().min(1).max(64).optional(),
+    ownerUsername: z.string().min(1).check(utf16MaxLength(64)).optional(),
   })
   .strict()
 export type ImportRefSelector = z.infer<typeof ImportRefSelectorSchema>

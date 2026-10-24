@@ -47,6 +47,7 @@ import {
 } from './composition/writerCutover'
 import { createDigitalEmployeeWriterCutoverPersistence } from './infrastructure/writerCutoverPersistence'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import {
   contractValidationCheckSchema,
   employeeTypePackageDescriptorSchema,
@@ -644,7 +645,7 @@ function runtimePackageOf(
   const programUpgradeResultSchema = z
     .object({
       runtimeKind: z.enum(['bash', 'node', 'python']),
-      source: z.string().min(1).max(5_000_000),
+      source: z.string().min(1).check(utf16MaxLength(5_000_000)),
     })
     .strict()
   return {
@@ -709,9 +710,9 @@ function toolView(
 
 const platformToolDraftSchema = z
   .object({
-    id: z.string().min(1).max(500),
+    id: z.string().min(1).check(utf16MaxLength(500)),
     typeRef: employeeTypeRefSchema,
-    workItemRef: z.string().min(1).max(160),
+    workItemRef: z.string().min(1).check(utf16MaxLength(160)),
     content: toolRegistrationContentSchema,
     validationReceipt: toolValidationReceiptSchema,
     publishedRevision: z.number().int().positive().nullable(),

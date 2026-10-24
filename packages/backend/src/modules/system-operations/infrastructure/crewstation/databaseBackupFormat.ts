@@ -24,10 +24,10 @@ export type HostedBackupContents = z.infer<typeof HostedBackupContents>
 export const HostedBackupSidecar = z
   .object({
     format: z.literal('aw-hosted-database-backup-v2'),
-    backupId: z.string().uuid(),
+    backupId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     kind: z.enum(['manual', 'scheduled']),
     installation: z.string().min(1),
-    objectSpaceId: z.string().uuid(),
+    objectSpaceId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     keyFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     createdAt: z.number().int().nonnegative(),
     snapshotAt: z.number().int().nonnegative(),

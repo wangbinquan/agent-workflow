@@ -19,7 +19,7 @@ import { ValidationError } from '@/util/errors'
 /** Decodes that destructure the body keep the operation codec's typed failure. */
 export function decodeOrInvalid<T>(
   descriptorId: string,
-  schema: { safeParse: (value: unknown) => z.SafeParseReturnType<unknown, T> },
+  schema: { safeParse: (value: unknown) => z.ZodSafeParseResult<T> },
   value: unknown,
 ): T {
   const parsed = schema.safeParse(value)

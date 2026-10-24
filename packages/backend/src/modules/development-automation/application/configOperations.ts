@@ -5,6 +5,7 @@
 // crosses the boundary.
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { nextDecisionSchema } from '../domain/decision'
 import { factCellSchema } from '../domain/factCell'
@@ -41,7 +42,7 @@ export interface DevelopmentConfigAclRow {
 
 export const developmentConfigCreateInputSchema = z
   .object({
-    name: z.string().min(1).max(200),
+    name: z.string().min(1).check(utf16MaxLength(200)),
     draft: z.unknown().optional(),
     capabilityId: z.string().min(1).optional(),
     purpose: z
@@ -51,13 +52,16 @@ export const developmentConfigCreateInputSchema = z
   .strict()
 
 export const developmentConfigReviseInputSchema = z
-  .object({ name: z.string().min(1).max(200).optional(), draft: z.unknown() })
+  .object({
+    name: z.string().min(1).check(utf16MaxLength(200)).optional(),
+    draft: z.unknown().optional(),
+  })
   .strict()
 
 export const developmentEmployeePlaybookInputSchema = z
   .object({
-    name: z.string().min(1).max(200).optional(),
-    playbook: z.unknown(),
+    name: z.string().min(1).check(utf16MaxLength(200)).optional(),
+    playbook: z.unknown().optional(),
   })
   .strict()
 
@@ -100,6 +104,7 @@ const guardSchema = z
   .strict()
 
 const cellsSchema = z.record(
+  z.string(),
   factCellSchema(z.union([z.string(), z.number(), z.boolean(), z.array(z.string())])),
 )
 
@@ -327,7 +332,7 @@ export function createDevelopmentConfigResourceDescriptors(
   })
 }
 
-const jsonRecordSchema = z.record(z.unknown())
+const jsonRecordSchema = z.record(z.string(), z.unknown())
 const employeeIdSchema = z.object({ employeeId: z.string().min(1).optional() }).strict()
 const playbookWithIdSchema = z
   .object({ id: z.string().min(1), ...developmentEmployeePlaybookInputSchema.shape })
@@ -398,7 +403,7 @@ export function createDevelopmentConfigSupplementalDescriptors(
       permissions: ['repository-employee-assignments:update'],
       publicErrors,
       inputSchema: developmentAssignmentInputSchema,
-      outputSchema: z.unknown(),
+      outputSchema: z.unknown().optional(),
       invoke: (actor: Actor, input: DevelopmentAssignmentInput) =>
         operations.upsertAssignment(actor, input),
     }),
@@ -418,7 +423,7 @@ export function createDevelopmentConfigSupplementalDescriptors(
       permissions: ['automation-policies:read'],
       publicErrors,
       inputSchema: developmentPolicyPreviewInputSchema,
-      outputSchema: z.unknown(),
+      outputSchema: z.unknown().optional(),
       invoke: (_actor: Actor, input: DevelopmentPolicyPreviewInput) =>
         operations.previewPolicy(input),
     }),
@@ -428,7 +433,7 @@ export function createDevelopmentConfigSupplementalDescriptors(
       permissions: ['digital-employees:read'],
       publicErrors,
       inputSchema: developmentSelectionPreviewInputSchema,
-      outputSchema: z.unknown(),
+      outputSchema: z.unknown().optional(),
       invoke: (_actor: Actor, input: DevelopmentSelectionPreviewInput) =>
         operations.previewSelection(input),
     }),

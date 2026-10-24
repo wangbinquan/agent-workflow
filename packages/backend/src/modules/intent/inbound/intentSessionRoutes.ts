@@ -35,6 +35,7 @@ import {
   IntentProvenanceRefSchema,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import type { Config } from '@agent-workflow/shared'
@@ -88,7 +89,7 @@ import type { DirectAuthorityBinding } from '@/modules/identity-access/public/pa
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
 const IntentListCursorSchema = z
-  .object({ updatedAt: z.number().int().min(0), id: z.string().min(1).max(128) })
+  .object({ updatedAt: z.number().int().min(0), id: z.string().min(1).check(utf16MaxLength(128)) })
   .strict()
 
 function decodeIntentListCursor(raw: string): { updatedAt: number; id: string } {

@@ -11,6 +11,7 @@
 
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import {
   ResourcePackageTypeSchema,
   BundleSchema,
@@ -81,7 +82,10 @@ export const PackageManifestSchema = z
     builtins: z
       .array(
         z
-          .object({ type: z.enum(['agent', 'workflow']), name: z.string().min(1).max(256) })
+          .object({
+            type: z.enum(['agent', 'workflow']),
+            name: z.string().min(1).check(utf16MaxLength(256)),
+          })
           .strict(),
       )
       // ⚠️ **数量上限**。这个数组由上传者决定，而它直接决定预检要做多少查询、在内存里

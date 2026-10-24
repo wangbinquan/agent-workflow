@@ -22,6 +22,7 @@
 // namespace and a sink-aware v4 -> v5 migration.
 
 import { z } from 'zod'
+import { utf16Length, utf16MaxLength } from './utf16Length'
 import { ImportRefSelectionSchema } from './importRef'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { WORKGROUP_NAME_RE, WorkgroupNameSchema } from './workgroup'
@@ -334,7 +335,7 @@ export const UploadInputSchema = WorkflowInputSchema.extend({
   targetDir: z
     .string()
     .min(1)
-    .max(256)
+    .check(utf16MaxLength(256))
     .refine((s) => !s.includes('..') && !s.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(s), {
       message: 'targetDir must be a repo-relative path without ".." or drive prefixes',
     }),
@@ -389,8 +390,8 @@ export type WorkflowDefinition = z.infer<typeof WorkflowDefinitionSchema>
  */
 export const WorkflowSelectorNodeSchema = WorkflowNodeSchema.extend({
   agentId: z.never().optional(),
-  agentName: z.string().min(1).max(128).optional(),
-  agentOwnerUsername: z.string().min(1).max(64).optional(),
+  agentName: z.string().min(1).check(utf16MaxLength(128)).optional(),
+  agentOwnerUsername: z.string().min(1).check(utf16MaxLength(64)).optional(),
 }).superRefine((node, ctx) => {
   if (node.kind === 'agent-single' && node.agentName === undefined) {
     ctx.addIssue({
@@ -446,7 +447,7 @@ export type WorkflowListItem = Omit<Workflow, 'definition'> & { nodeCount: numbe
 /** RFC-199: canonical 128-bit ULID used to correlate one submitted intent. */
 export const WorkflowMutationIdSchema = z
   .string()
-  .length(26)
+  .check(utf16Length(26))
   .regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
 export type WorkflowMutationId = z.infer<typeof WorkflowMutationIdSchema>
 
@@ -459,7 +460,7 @@ export const WorkflowDraftSnapshotSchema = z
   .object({
     // Preserve grandfathered names during autosave. A changed/new name is
     // still gated by WorkflowNameSchema in the service layer.
-    name: z.string().min(1).max(256),
+    name: z.string().min(1).check(utf16MaxLength(256)),
     description: z.string(),
     definition: WorkflowDefinitionSchema,
   })
@@ -972,7 +973,7 @@ export const CallWorkgroupNodeSchema = WorkflowNodeSchema.extend({
   kind: z.literal('call-workgroup'),
   workgroupName: z.string().min(1),
   workgroupId: z.string().min(1).optional(),
-  goalTemplate: z.string().min(1).max(65536),
+  goalTemplate: z.string().min(1).check(utf16MaxLength(65536)),
   limits: z
     .object({
       maxDurationMs: z.number().int().positive().optional(),
@@ -1011,9 +1012,9 @@ export const SCRIPT_DEPENDENCY_MAX_LEN = 200
 
 export const ScriptOutputPortSchema = z
   .object({
-    name: z.string().min(1).max(64),
+    name: z.string().min(1).check(utf16MaxLength(64)),
     /** AgentOutputKind grammar string; absent ⇒ plain text (D11). */
-    kind: z.string().min(1).max(128).optional(),
+    kind: z.string().min(1).check(utf16MaxLength(128)).optional(),
     /**
      * RFC-306 — branch port: the script may emit
      * `<port name="x" active="false">reason</port>` to deactivate every edge
@@ -1030,12 +1031,12 @@ export const ScriptNodeSchema = WorkflowNodeSchema.extend({
   kind: z.literal('script'),
   language: ScriptLanguageSchema,
   /** Inline body (D1). The platform NEVER substitutes into it (D5). */
-  script: z.string().max(SCRIPT_BODY_MAX),
+  script: z.string().check(utf16MaxLength(SCRIPT_BODY_MAX)),
   /** Absent/empty ⇒ single-port mode; non-empty ⇒ envelope mode (D3). */
   outputs: z.array(ScriptOutputPortSchema).max(SCRIPT_MAX_OUTPUT_PORTS).optional(),
   /** Pre-installed dependencies (D9); must be empty for `bash`. */
   dependencies: z
-    .array(z.string().min(1).max(SCRIPT_DEPENDENCY_MAX_LEN))
+    .array(z.string().min(1).check(utf16MaxLength(SCRIPT_DEPENDENCY_MAX_LEN)))
     .max(SCRIPT_MAX_DEPENDENCIES)
     .optional(),
   /** Process env overlay (D10); key rules reuse the MCP validator. */
@@ -1079,10 +1080,10 @@ export const CodeHostCustomRequestSchema = z
   .object({
     method: CodeHostMethodSchema,
     /** RELATIVE path, appended to the configured base URL. Never a full URL. */
-    path: z.string().min(1).max(CODE_HOST_PATH_MAX),
-    query: z.record(z.string(), z.string().max(CODE_HOST_PARAM_MAX)).optional(),
+    path: z.string().min(1).check(utf16MaxLength(CODE_HOST_PATH_MAX)),
+    query: z.record(z.string(), z.string().check(utf16MaxLength(CODE_HOST_PARAM_MAX))).optional(),
     /** JSON body template; skeleton must parse, vars may only sit inside strings. */
-    body: z.string().max(CODE_HOST_BODY_MAX).optional(),
+    body: z.string().check(utf16MaxLength(CODE_HOST_BODY_MAX)).optional(),
   })
   .strict()
 export type CodeHostCustomRequest = z.infer<typeof CodeHostCustomRequestSchema>
@@ -1091,9 +1092,9 @@ export const CodeHostCallNodeSchema = WorkflowNodeSchema.extend({
   kind: z.literal('code-host-call'),
   provider: z.enum(['gitlab', 'github']),
   /** Action key from the shared registry (`codeHost/actions.ts`), incl. 'custom'. */
-  action: z.string().min(1).max(64),
+  action: z.string().min(1).check(utf16MaxLength(64)),
   /** Typed-form field values. All templates, rendered at run time. */
-  params: z.record(z.string(), z.string().max(CODE_HOST_PARAM_MAX)).default({}),
+  params: z.record(z.string(), z.string().check(utf16MaxLength(CODE_HOST_PARAM_MAX))).default({}),
   request: CodeHostCustomRequestSchema.optional(),
   /** Explicit gate for DELETE (user decision Q9). */
   allowDestructive: z.boolean().optional(),

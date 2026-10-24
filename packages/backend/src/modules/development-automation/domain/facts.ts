@@ -203,7 +203,7 @@ export const missionFactSnapshotSchema = z
     schemaVersion: z.literal(1),
     missionRevision: z.number().int().nonnegative(),
     capturedAt: z.string().datetime({ offset: true }),
-    cells: z.record(factCellSchema(cellValueSchema)),
+    cells: z.record(z.string(), factCellSchema(cellValueSchema)),
     digest: z.string().regex(/^[0-9a-f]{64}$/),
   })
   .strict()

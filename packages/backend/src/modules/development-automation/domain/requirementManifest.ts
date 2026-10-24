@@ -6,6 +6,7 @@
 // digest 不进 manifest——那属于 RepositoryUploadPlan（平台 validator 侧）。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'sha256 hex')
 
@@ -13,7 +14,7 @@ const sha256 = z.string().regex(/^[0-9a-f]{64}$/, 'sha256 hex')
 export const repoRelativePathSchema = z
   .string()
   .min(1)
-  .max(4096)
+  .check(utf16MaxLength(4096))
   .refine(
     (p) =>
       !p.startsWith('/') &&

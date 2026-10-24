@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type { DatabaseMigrationControlPlane } from '../application/databaseMigrationControlPlane'
 import type {
   DatabaseMigrationArtifactInput,
@@ -40,8 +41,8 @@ const verificationArtifactSchema = z
     version: z.literal(1),
     operationId: operationIdSchema,
     sourceGenerationId: generationIdSchema,
-    sourceFingerprint: z.string().min(1).max(256),
-    targetFingerprint: z.string().min(1).max(256).nullable(),
+    sourceFingerprint: z.string().min(1).check(utf16MaxLength(256)),
+    targetFingerprint: z.string().min(1).check(utf16MaxLength(256)).nullable(),
     schemaDigest: digestSchema,
     logicalBackupDigest: digestSchema,
     legacyArchiveDigest: digestSchema,

@@ -72,58 +72,59 @@ import type { NodeBaseKey, StrictNodeSchemaOf } from './types'
 // ───────────────────────── zod introspection ─────────────────────────
 
 /** Any zod type that unwraps to an object (checked at runtime by `schemaKeys`). */
-export type ZodObjectLike = z.ZodTypeAny
+export type ZodObjectLike = z.ZodType
 
-/** Strip effects / optional / nullable / default / branded wrappers. */
-export function unwrapSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
+/** Unwrap input/output pipes, optional, nullable and default wrappers; refinements and brands are inline. */
+export function unwrapSchema(schema: z.ZodType): z.ZodType {
   let current = schema
   for (;;) {
-    if (current instanceof z.ZodEffects) current = current.innerType()
-    else if (current instanceof z.ZodOptional || current instanceof z.ZodNullable) {
-      current = current.unwrap()
-    } else if (current instanceof z.ZodDefault) current = current.removeDefault()
-    else if (current instanceof z.ZodBranded) current = current.unwrap()
-    else return current
+    if (current instanceof z.ZodPipe) {
+      current = (current.in instanceof z.ZodTransform ? current.out : current.in) as z.ZodType
+    } else if (current instanceof z.ZodOptional || current instanceof z.ZodNullable) {
+      current = current.unwrap() as z.ZodType
+    } else if (current instanceof z.ZodDefault || current instanceof z.ZodPrefault) {
+      current = current.unwrap() as z.ZodType
+    } else return current
   }
 }
 
 /** One level of keys of an object schema (throws on anything else). */
-export function schemaKeys(schema: z.ZodTypeAny, label = 'schema'): string[] {
+export function schemaKeys(schema: z.ZodType, label = 'schema'): string[] {
   const inner = unwrapSchema(schema)
   if (!(inner instanceof z.ZodObject)) {
-    throw new Error(`${label}: expected an object schema, got ${inner._def.typeName}`)
+    throw new Error(`${label}: expected an object schema, got ${inner.def.type}`)
   }
   return Object.keys(inner.shape as Record<string, unknown>)
 }
 
 /** Element schema of an array (after unwrapping). */
-export function elementSchemaOf(schema: z.ZodTypeAny): z.ZodTypeAny {
+export function elementSchemaOf(schema: z.ZodType): z.ZodType {
   const inner = unwrapSchema(schema)
   if (!(inner instanceof z.ZodArray)) {
-    throw new Error(`expected an array schema, got ${inner._def.typeName}`)
+    throw new Error(`expected an array schema, got ${inner.def.type}`)
   }
-  return inner.element as z.ZodTypeAny
+  return inner.element as z.ZodType
 }
 
 /** The single object option of a plain union (e.g. `z.union([ref, object])`). */
-export function objectOptionOf(schema: z.ZodTypeAny): z.ZodTypeAny {
+export function objectOptionOf(schema: z.ZodType): z.ZodType {
   const inner = unwrapSchema(schema)
   if (!(inner instanceof z.ZodUnion)) {
-    throw new Error(`expected a union schema, got ${inner._def.typeName}`)
+    throw new Error(`expected a union schema, got ${inner.def.type}`)
   }
-  const objects = (inner.options as z.ZodTypeAny[]).filter(
+  const objects = (inner.options as z.ZodType[]).filter(
     (option) => unwrapSchema(option) instanceof z.ZodObject,
   )
   if (objects.length !== 1) {
     throw new Error(`expected exactly one object option, found ${objects.length}`)
   }
-  return objects[0] as z.ZodTypeAny
+  return objects[0] as z.ZodType
 }
 
 export interface ObjectNode {
   /** '' for the root; `a.b`, `a[]`, `<variant>`, `a[]<variant>` … */
   readonly path: string
-  readonly schema: z.ZodTypeAny
+  readonly schema: z.ZodType
 }
 
 function joinPath(parent: string, key: string): string {
@@ -137,25 +138,25 @@ function joinPath(parent: string, key: string): string {
  * records, literals and primitives are leaves. Effects / optional / default /
  * nullable wrappers are transparent.
  */
-export function walkObjectNodes(root: z.ZodTypeAny, path = ''): ObjectNode[] {
+export function walkObjectNodes(root: z.ZodType, path = ''): ObjectNode[] {
   const out: ObjectNode[] = []
-  const visit = (schema: z.ZodTypeAny, at: string): void => {
+  const visit = (schema: z.ZodType, at: string): void => {
     const inner = unwrapSchema(schema)
     if (inner instanceof z.ZodObject) {
       out.push({ path: at, schema: inner })
-      for (const [key, child] of Object.entries(inner.shape as Record<string, z.ZodTypeAny>)) {
+      for (const [key, child] of Object.entries(inner.shape as Record<string, z.ZodType>)) {
         visit(child, joinPath(at, key))
       }
       return
     }
     if (inner instanceof z.ZodArray) {
-      visit(inner.element as z.ZodTypeAny, `${at}[]`)
+      visit(inner.element as z.ZodType, `${at}[]`)
       return
     }
     if (inner instanceof z.ZodDiscriminatedUnion) {
-      const discriminator = inner.discriminator as string
+      const discriminator = inner.def.discriminator as string
       for (const option of inner.options as z.ZodObject<z.ZodRawShape>[]) {
-        const literal = unwrapSchema(option.shape[discriminator] as z.ZodTypeAny)
+        const literal = unwrapSchema(option.shape[discriminator] as z.ZodType)
         const value = literal instanceof z.ZodLiteral ? String(literal.value) : '?'
         visit(option, `${at}<${value}>`)
       }
@@ -164,7 +165,7 @@ export function walkObjectNodes(root: z.ZodTypeAny, path = ''): ObjectNode[] {
     if (inner instanceof z.ZodUnion) {
       // Only options that actually contain object nodes count; a lone object
       // option keeps the parent path, several are labeled by index.
-      const objectOptions = (inner.options as z.ZodTypeAny[]).filter(
+      const objectOptions = (inner.options as z.ZodType[]).filter(
         (option) => walkObjectNodes(option).length > 0,
       )
       objectOptions.forEach((option, index) => {
@@ -261,7 +262,7 @@ const strictNodeEntries: ReconciliationEntry[] = (
   intentOnly: NONE,
 }))
 
-const intentWorkgroupShape = IntentWorkgroupPayloadSchema.innerType().shape
+const intentWorkgroupShape = IntentWorkgroupPayloadSchema.shape
 
 export const INTENT_PLATFORM_FIELD_RECONCILIATION: readonly ReconciliationEntry[] = [
   {
@@ -504,7 +505,7 @@ export const RECONCILIATION_UNCOVERED_PLATFORM_OBJECTS = {
 /** Intent object nodes claimed by no entry and inside no intent-only subtree (none today). */
 export const RECONCILIATION_UNCOVERED_INTENT_OBJECTS = {} as const
 
-export const PLATFORM_CREATE_SCHEMAS: Readonly<Record<IntentResourceType, z.ZodTypeAny>> = {
+export const PLATFORM_CREATE_SCHEMAS: Readonly<Record<IntentResourceType, z.ZodType>> = {
   agent: CreateAgentSchema,
   skill: CreateManagedSkillSchema,
   mcp: CreateMcpSchema,
@@ -513,7 +514,7 @@ export const PLATFORM_CREATE_SCHEMAS: Readonly<Record<IntentResourceType, z.ZodT
   workgroup: CreateWorkgroupSchema,
 }
 
-export const INTENT_PAYLOAD_SCHEMAS: Readonly<Record<IntentResourceType, z.ZodTypeAny>> = {
+export const INTENT_PAYLOAD_SCHEMAS: Readonly<Record<IntentResourceType, z.ZodType>> = {
   agent: IntentAgentPayloadSchema,
   skill: IntentSkillPayloadSchema,
   mcp: IntentMcpPayloadSchema,
@@ -557,8 +558,8 @@ export function teachingTableKeys(table: TeachingTableName, select?: string): st
 
 export interface ReconciliationInput {
   readonly entries: readonly ReconciliationEntry[]
-  readonly platformSchemas: Readonly<Record<IntentResourceType, z.ZodTypeAny>>
-  readonly intentSchemas: Readonly<Record<IntentResourceType, z.ZodTypeAny>>
+  readonly platformSchemas: Readonly<Record<IntentResourceType, z.ZodType>>
+  readonly intentSchemas: Readonly<Record<IntentResourceType, z.ZodType>>
   readonly uncoveredPlatform: Readonly<Record<string, string>>
   readonly uncoveredIntent: Readonly<Record<string, string>>
 }
@@ -668,7 +669,7 @@ export function checkObjectCoverage(input: ReconciliationInput): string[] {
     const seenUncovered = new Set<string>()
     for (const [resourceType, schema] of Object.entries(schemas) as [
       IntentResourceType,
-      z.ZodTypeAny,
+      z.ZodType,
     ][]) {
       for (const node of walkObjectNodes(schema)) {
         const fullId = `${resourceType}.${node.path}`

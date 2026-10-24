@@ -22,6 +22,7 @@
 // invisible required field is a form nobody can submit.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './schemas/utf16Length'
 
 /** The field kinds the platform can render and validate. */
 export const CAPABILITY_PARAM_KINDS = [
@@ -39,16 +40,16 @@ export const CapabilityParamFieldSchema = z
     name: z
       .string()
       .min(1)
-      .max(64)
+      .check(utf16MaxLength(64))
       // Kept to identifier characters because scripts read these as env keys
       // and object properties. A name with a space or a dot works in one and
       // not the other, which the author discovers at run time.
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'must be a plain identifier'),
     kind: z.enum(CAPABILITY_PARAM_KINDS),
     /** Shown as the field's label. Defaults to `name` when absent. */
-    label: z.string().max(120).optional(),
+    label: z.string().check(utf16MaxLength(120)).optional(),
     /** Shown under the field. This is where an author explains the units. */
-    hint: z.string().max(500).optional(),
+    hint: z.string().check(utf16MaxLength(500)).optional(),
     required: z.boolean().default(false),
     /** `enum` only. Rendered as a segmented control or select. */
     options: z.array(z.string().min(1)).max(50).optional(),

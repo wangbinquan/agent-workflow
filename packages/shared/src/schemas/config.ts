@@ -3,6 +3,8 @@
 // backfilled by the backend on load.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
+import { sparsePatch } from './sparsePatch'
 import { MaintenanceScheduleSchema } from './maintenance'
 import { SETTINGS_NUMERIC_BOUNDS, type SettingsNumericPath } from '../settingsNumericBounds'
 // RFC-366: `memoryDistillLaunchOrigins` is keyed by the same neutral launch-origin
@@ -556,7 +558,7 @@ export const ConfigSchema = z.object({
     .optional(),
   /** RFC-234 — admin instructions appended to the frozen system prompt
    *  (naming conventions, style constraints). ≤8 KiB. */
-  intentBuilderExtraInstructions: z.string().max(8192).optional(),
+  intentBuilderExtraInstructions: z.string().check(utf16MaxLength(8192)).optional(),
   /**
    * Per-scope token budget for runtime memory inject (PR3). When the
    * sum of "- [scope] title — body" lines for a scope exceeds its
@@ -880,7 +882,7 @@ export const DEFAULT_CONFIG: Config = {
  * Patch schema: any subset of the full config (except $schema_version),
  * sent by PUT /api/config and merged onto the current config.
  */
-export const ConfigPatchSchema = ConfigSchema.partial()
+export const ConfigPatchSchema = sparsePatch(ConfigSchema)
   .omit({ $schema_version: true })
   // RFC-117: the runtime-selector "Inherit" option clears these by sending null
   // (mergePatch deletes the key → back to inheriting the global default). The
@@ -1024,7 +1026,7 @@ export const ConfigPatchSchema = ConfigSchema.partial()
       .max(24 * 14)
       .nullable()
       .optional(),
-    intentBuilderExtraInstructions: z.string().max(8192).nullable().optional(),
+    intentBuilderExtraInstructions: z.string().check(utf16MaxLength(8192)).nullable().optional(),
   })
 export type ConfigPatch = z.infer<typeof ConfigPatchSchema>
 

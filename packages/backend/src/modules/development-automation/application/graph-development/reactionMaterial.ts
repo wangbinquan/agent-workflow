@@ -74,7 +74,7 @@ export async function graphReactionMaterial(
     const receipt = JSON.parse(requestRecord.payloadJson) as { payload: GraphArtifactReference }
     const json = await deps.artifacts.read(receipt.payload, 'request.json')
     if (!json) throw new Error('graph-request-material-missing')
-    request = z.record(z.unknown()).parse(JSON.parse(json))
+    request = z.record(z.string(), z.unknown()).parse(JSON.parse(json))
     if (plan.workItemRef !== 'design-and-clarify') {
       const ref = z
         .object({ basisId: z.string(), basisDigest: z.string() })

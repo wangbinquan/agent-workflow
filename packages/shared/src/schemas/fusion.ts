@@ -3,6 +3,7 @@
 // skill-merger opencode agent, gated by mandatory clarify + a before/after diff.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 
 /** Historical target identity could not be proven; never resolve/link by name. */
 export const QUARANTINED_FUSION_SKILL_ID = '__rfc223_fusion_skill_quarantined__'
@@ -21,7 +22,7 @@ export type FusionStatus = z.infer<typeof FusionStatusSchema>
 /** One memory the agent chose NOT to incorporate, with its reason. */
 export const FusionSkippedSchema = z.object({
   memoryId: z.string(),
-  reason: z.string().max(2000).default(''),
+  reason: z.string().check(utf16MaxLength(2000)).default(''),
 })
 export type FusionSkipped = z.infer<typeof FusionSkippedSchema>
 
@@ -56,7 +57,7 @@ export type Fusion = z.infer<typeof FusionSchema>
 export const LaunchFusionSchema = z.object({
   skillId: z.string().min(1),
   memoryIds: z.array(z.string().min(1)).min(1).max(32),
-  intent: z.string().max(4000).default(''),
+  intent: z.string().check(utf16MaxLength(4000)).default(''),
   /** Optional per-run model override for the skill-merger agent. */
   model: z.string().min(1).optional(),
   /** RFC-099 task membership — extra collaborators who may answer clarify / approve. */
@@ -66,7 +67,7 @@ export type LaunchFusion = z.infer<typeof LaunchFusionSchema>
 
 /** POST /api/fusions/:id/reject — request changes + re-run. */
 export const RejectFusionSchema = z.object({
-  feedback: z.string().min(1).max(4000),
+  feedback: z.string().min(1).check(utf16MaxLength(4000)),
 })
 export type RejectFusion = z.infer<typeof RejectFusionSchema>
 

@@ -4,7 +4,7 @@ import { ValidationError } from '@/util/errors'
 
 /** 请求输入校验失败保持 typed 422；存储内容的解析不走这里。 */
 export function parseEmployeeInput<T>(
-  schema: { safeParse: (value: unknown) => z.SafeParseReturnType<unknown, T> },
+  schema: { safeParse: (value: unknown) => z.ZodSafeParseResult<T> },
   value: unknown,
 ): T {
   const parsed = schema.safeParse(value)

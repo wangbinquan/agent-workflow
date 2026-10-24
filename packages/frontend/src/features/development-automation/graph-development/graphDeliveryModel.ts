@@ -76,7 +76,7 @@ export function projectGraphDeliveryCare(
   delivery: GraphMergeRequestDelivery | null,
   contexts: readonly GraphDeliveryContext[],
 ) {
-  function read<T extends z.ZodTypeAny>(typeId: string, schema: T) {
+  function read<T extends z.ZodType>(typeId: string, schema: T) {
     const context = contexts
       .filter((item) => item.typeId === typeId)
       .sort((a, b) => b.updatedAt - a.updatedAt)[0]

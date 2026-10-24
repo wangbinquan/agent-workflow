@@ -19,7 +19,7 @@ import { HOSTED_TASK_ARTIFACT_OWNER, retainHostedTaskArtifactInTx } from './task
 
 const Receipt = z
   .object({
-    id: z.string().uuid(),
+    id: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
     size: z.number().int().nonnegative(),
   })

@@ -13,8 +13,8 @@ import type { VerificationCommandEffects } from '../ports/verificationCommandEff
 const observation = z
   .object({
     states: z.array(z.string()).optional(),
-    assertions: z.record(z.boolean()),
-    outputs: z.array(z.record(z.unknown())).optional(),
+    assertions: z.record(z.string(), z.boolean()),
+    outputs: z.array(z.record(z.string(), z.unknown())).optional(),
   })
   .strict()
 /** Expected behavior is calculated here, independently of the candidate adapter's observations. */

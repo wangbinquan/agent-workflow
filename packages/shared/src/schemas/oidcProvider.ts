@@ -3,6 +3,8 @@
 // Code + PKCE flow against each enabled provider.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
+import { sparsePatch } from './sparsePatch'
 
 export const ProvisioningSchema = z.enum(['auto', 'allowlist', 'invite'])
 export type ProvisioningPolicy = z.infer<typeof ProvisioningSchema>
@@ -24,7 +26,7 @@ export const EMAIL_DOMAIN_REGEX = /^@[a-z0-9.-]+$/i
 const HttpUrlSchema = z
   .string()
   .url()
-  .max(2048)
+  .check(utf16MaxLength(2048))
   .regex(/^https?:\/\//i)
 
 // RFC-220 D5/D6 — claim-name selectors: plain-key whitelist plus a prototype
@@ -41,7 +43,7 @@ const ClaimNameSchema = z
 // max(519) = 8 tokens × 64 chars + 7 separator spaces.
 const ClaimNameListSchema = z
   .string()
-  .max(519)
+  .check(utf16MaxLength(519))
   .regex(/^[A-Za-z0-9_.-]{1,64}( [A-Za-z0-9_.-]{1,64}){0,7}$/)
   .refine((v) => v.split(' ').every((t) => !BANNED_CLAIM_KEYS.has(t)), {
     message: 'reserved claim name',
@@ -49,11 +51,11 @@ const ClaimNameListSchema = z
 
 export const OidcProviderSchema = z.object({
   id: z.string(),
-  slug: z.string().min(1).max(64).regex(PROVIDER_SLUG_REGEX),
-  displayName: z.string().min(1).max(128),
+  slug: z.string().min(1).check(utf16MaxLength(64)).regex(PROVIDER_SLUG_REGEX),
+  displayName: z.string().min(1).check(utf16MaxLength(128)),
   issuerUrl: z.string().url(),
-  clientId: z.string().min(1).max(256),
-  scopes: z.string().min(1).max(512),
+  clientId: z.string().min(1).check(utf16MaxLength(256)),
+  scopes: z.string().min(1).check(utf16MaxLength(512)),
   provisioning: ProvisioningSchema,
   allowedEmailDomains: z.array(z.string().regex(EMAIL_DOMAIN_REGEX)).default([]),
   iconUrl: z.string().url().nullable(),
@@ -96,7 +98,7 @@ export const CreateOidcProviderBodySchema = OidcProviderSchema.omit({
   createdAt: true,
   updatedAt: true,
 }).extend({
-  clientSecret: z.string().min(1).max(1024),
+  clientSecret: z.string().min(1).check(utf16MaxLength(1024)),
   // RFC-220 — every new field is optional on the wire so pre-RFC clients
   // (which never send them) keep working; the service defaults null/false.
   authorizationEndpoint: HttpUrlSchema.nullable().optional(),
@@ -113,6 +115,6 @@ export const CreateOidcProviderBodySchema = OidcProviderSchema.omit({
 
 export type CreateOidcProviderBody = z.infer<typeof CreateOidcProviderBodySchema>
 
-export const PatchOidcProviderBodySchema = CreateOidcProviderBodySchema.partial()
+export const PatchOidcProviderBodySchema = sparsePatch(CreateOidcProviderBodySchema)
 
 export type PatchOidcProviderBody = z.infer<typeof PatchOidcProviderBodySchema>

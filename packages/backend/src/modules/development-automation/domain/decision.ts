@@ -6,6 +6,7 @@
 // wire 层是 plain string（brand 见 refs.ts；decision 持久化为 canonical JSON）。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 const ref = z.string().min(1)
 const stepRunRef = { stepRunRef: ref.optional() } as const
@@ -60,10 +61,13 @@ export const nextDecisionSchema = z
         workSetRef: ref,
         problemInput: z
           .object({
-            producerId: z.string().min(1).max(120),
+            producerId: z.string().min(1).check(utf16MaxLength(120)),
             evidenceDigest: z.string().regex(/^[0-9a-f]{64}$/),
             headSha: z.string().regex(/^[0-9a-f]{40}$/),
-            allowedTypeIds: z.array(z.string().min(1).max(120)).min(1).max(100),
+            allowedTypeIds: z
+              .array(z.string().min(1).check(utf16MaxLength(120)))
+              .min(1)
+              .max(100),
             subjectRefs: z.array(ref).min(1).max(500),
             requiredSubjectRefs: z.array(ref).max(500),
           })
@@ -72,9 +76,9 @@ export const nextDecisionSchema = z
         approvalInput: z
           .object({
             stepRunRef: ref,
-            approvalType: z.string().min(1).max(120),
+            approvalType: z.string().min(1).check(utf16MaxLength(120)),
             evidenceRefs: z.array(ref).max(100),
-            requestedScopes: z.array(z.string().min(1).max(200)).max(100),
+            requestedScopes: z.array(z.string().min(1).check(utf16MaxLength(200))).max(100),
           })
           .strict()
           .optional(),

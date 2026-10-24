@@ -3,6 +3,7 @@
 // binary frames in v1.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { TaskActorRoleSchema } from './resourceAcl'
 import { TaskStatusSchema, TaskSummarySchema } from './task'
 import { NodeRunStatusSchema } from './task'
@@ -79,7 +80,7 @@ export const TaskWsMessageSchema = z.discriminatedUnion('type', [
     nodeRunId: z.string(),
     ts: z.number().int(),
     kind: NodeEventKindSchema,
-    payload: z.unknown(),
+    payload: z.unknown().optional(),
   }),
   z.object({
     id: z.number().int(),
@@ -472,9 +473,9 @@ export type IntentSessionWsMessage = z.infer<typeof IntentSessionWsMessageSchema
 export const McpRuntimeTestWsMessageSchema = z
   .object({
     type: z.literal('mcp-runtime-test.updated'),
-    sessionId: z.string().min(1).max(128),
+    sessionId: z.string().min(1).check(utf16MaxLength(128)),
     sessionVersion: z.number().int().nonnegative(),
-    inFlightTurnId: z.string().min(1).max(128).nullable(),
+    inFlightTurnId: z.string().min(1).check(utf16MaxLength(128)).nullable(),
     turnStatus: McpRuntimeTestTurnStatusSchema.nullable(),
     eventCursor: z.number().int().nonnegative(),
     captureState: McpRuntimeTestCaptureStateSchema.nullable(),

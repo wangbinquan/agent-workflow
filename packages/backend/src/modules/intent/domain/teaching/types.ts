@@ -12,7 +12,7 @@
 //     a schema-keyed `nested` table.
 // Every definition here is the verbatim text compiled by the RFC-348 type probe
 // (design/RFC-348-intent-capability-teaching-registry/type-probe.md): tsc 5.9 +
-// zod 3.25, zero diagnostics, eight `@ts-expect-error` negatives, five
+// zod 3.25 originally; migrated to zod 4, with the same negative probes and, eight `@ts-expect-error` negatives, five
 // mutations (see tests/intent-teaching-exhaustive.test.ts). Two TypeScript
 // facts shape it: `keyof (A | B)` is the INTERSECTION of keys, so `KeysOf`
 // distributes on a naked parameter; and `keyof never` is `string | number |
@@ -22,7 +22,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- `any` only ever appears as the
    "don't care" slot of zod's generic parameters inside `extends` / `infer` matching
-   (`ZodObject<infer Shape, any, any>`, `ZodEffects<infer I, any, any>`); a narrower
+   (`ZodObject<infer Shape, any>`, `ZodPipe<infer I, infer O>`); a narrower
    constraint there changes which schemas match, which the RFC-348 type probe verified
    against. Nothing is typed `any` for callers. */
 
@@ -49,8 +49,10 @@ import type {
 // ───────────────────────── zod shape extraction ─────────────────────────
 
 type Unwrap<S> =
-  S extends z.ZodEffects<infer I, any, any>
-    ? Unwrap<I>
+  S extends z.ZodPipe<infer I, infer O>
+    ? I extends z.ZodTransform
+      ? Unwrap<O>
+      : Unwrap<I>
     : S extends z.ZodOptional<infer T>
       ? Unwrap<T>
       : S extends z.ZodDefault<infer T>
@@ -58,9 +60,9 @@ type Unwrap<S> =
         : S extends z.ZodNullable<infer T>
           ? Unwrap<T>
           : S
-type ShapeOf<S> = Unwrap<S> extends z.ZodObject<infer Shape, any, any> ? Shape : never
+type ShapeOf<S> = Unwrap<S> extends z.ZodObject<infer Shape, any> ? Shape : never
 type OptionsOf<S> =
-  Unwrap<S> extends z.ZodDiscriminatedUnion<any, infer O>
+  Unwrap<S> extends z.ZodDiscriminatedUnion<infer O, any>
     ? O[number]
     : Unwrap<S> extends z.ZodUnion<infer O>
       ? O[number]
@@ -68,25 +70,25 @@ type OptionsOf<S> =
 /** Distributive over S (naked parameter): unions yield the UNION of keys, never the intersection. */
 export type KeysOf<S> = S extends unknown ? KeysOfInner<Unwrap<S>> : never
 type KeysOfInner<U> =
-  U extends z.ZodDiscriminatedUnion<any, infer O>
+  U extends z.ZodDiscriminatedUnion<infer O, any>
     ? KeysOf<O[number]>
     : U extends z.ZodUnion<infer O>
       ? KeysOf<O[number]>
-      : U extends z.ZodArray<infer E, any>
+      : U extends z.ZodArray<infer E>
         ? KeysOf<E>
-        : U extends z.ZodObject<infer Shape, any, any>
+        : U extends z.ZodObject<infer Shape, any>
           ? keyof Shape & string
           : never // primitives / records / literals contribute no keys
-type DiscriminatorOf<S> = Unwrap<S> extends z.ZodDiscriminatedUnion<infer D, any> ? D : never
+type DiscriminatorOf<S> = Unwrap<S> extends z.ZodDiscriminatedUnion<any, infer D> ? D : never
 export type VariantValues<S> =
   OptionsOf<S> extends infer O
-    ? O extends z.ZodTypeAny
+    ? O extends z.ZodType
       ? z.infer<O>[DiscriminatorOf<S> & keyof z.infer<O>] & string
       : never
     : never
 type OptionFor<S, V extends string> =
   OptionsOf<S> extends infer O
-    ? O extends z.ZodTypeAny
+    ? O extends z.ZodType
       ? z.infer<O> extends Record<DiscriminatorOf<S>, V>
         ? O
         : never
@@ -94,10 +96,10 @@ type OptionFor<S, V extends string> =
     : never
 type FieldSchemaAt<S, K extends string> =
   ShapeOf<S> extends infer Shape ? (K extends keyof Shape ? Shape[K] : never) : never
-type ElementOf<F> = Unwrap<F> extends z.ZodArray<infer E, any> ? Unwrap<E> : Unwrap<F>
+type ElementOf<F> = Unwrap<F> extends z.ZodArray<infer E> ? Unwrap<E> : Unwrap<F>
 type IsObjectLike<F> = [KeysOf<F>] extends [never] ? false : true
 type ObjectOptionsOf<U> =
-  U extends z.ZodUnion<infer O> ? Extract<O[number], z.ZodObject<any, any, any>> : never
+  U extends z.ZodUnion<infer O> ? Extract<O[number], z.ZodObject<any, any>> : never
 
 // ───────────────────────── teaching entry types ─────────────────────────
 

@@ -12,6 +12,7 @@ import { ClarifyDecisionSchema } from './clarifyDecision'
 // node fails with the standard retries path.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { ClarifyFollowupStatusSchema, ClarifyQuestionMindmapSchema } from './clarifyMindmap'
 import { TaskActorRoleSchema } from './resourceAcl'
 import {
@@ -36,10 +37,10 @@ export type ClarifyQuestionKind = z.infer<typeof ClarifyQuestionKindSchema>
  *  bare-minimum agent emission still parses cleanly. */
 export const ClarifyOptionSchema = z.object({
   /** Picker text (≤ 256 chars). */
-  label: z.string().min(1).max(256),
+  label: z.string().min(1).check(utf16MaxLength(256)),
   /** Free-form explanation of what this option means, the expected outcome,
    *  trade-offs. Rendered in muted text below the label. ≤ 512 chars. */
-  description: z.string().max(512).default(''),
+  description: z.string().check(utf16MaxLength(512)).default(''),
   /** When true, this option is highlighted as the agent's suggestion. The
    *  parser sorts recommended options first within their question so the
    *  user's eye lands on them. */
@@ -47,7 +48,7 @@ export const ClarifyOptionSchema = z.object({
   /** Why the agent recommends this option (rendered below the description
    *  in the recommended-callout style). Only meaningful when `recommended`
    *  is true. ≤ 512 chars. */
-  recommendationReason: z.string().max(512).default(''),
+  recommendationReason: z.string().check(utf16MaxLength(512)).default(''),
 })
 export type ClarifyOption = z.infer<typeof ClarifyOptionSchema>
 
@@ -68,9 +69,9 @@ export const ClarifyQuestionSchema = z.object({
   artifactAnchor: ArtifactElementAnchorSchema.optional(),
   mindmap: ClarifyQuestionMindmapSchema.optional(),
   /** Stable identifier chosen by the agent. ≤ 64 chars. */
-  id: z.string().min(1).max(64),
+  id: z.string().min(1).check(utf16MaxLength(64)),
   /** Question text (≤ 512 chars). */
-  title: z.string().min(1).max(512),
+  title: z.string().min(1).check(utf16MaxLength(512)),
   /** single = radio + mutually-exclusive custom row; multi = checkbox + parallel custom row. */
   kind: ClarifyQuestionKindSchema,
   /** DEPRECATED — kept for backward compatibility with already-stored sessions.
@@ -112,7 +113,7 @@ export type ClarifyEnvelopeBody = z.infer<typeof ClarifyEnvelopeBodySchema>
 
 /** One user answer for one question. */
 export const ClarifyAnswerSchema = z.object({
-  confirmedBasis: z.string().max(128).optional(),
+  confirmedBasis: z.string().check(utf16MaxLength(128)).optional(),
   decision: ClarifyDecisionSchema.optional(),
   questionId: z.string().min(1),
   /** Indices into question.options. Empty array means "no candidate selected". */
@@ -125,7 +126,7 @@ export const ClarifyAnswerSchema = z.object({
    *  row was chosen (mutually exclusive with selectedOptionIndices). For
    *  multi questions: filled means the user added supplementary text in
    *  addition to whatever candidates they ticked. */
-  customText: z.string().max(CLARIFY_MAX_CUSTOM_TEXT_LEN).default(''),
+  customText: z.string().check(utf16MaxLength(CLARIFY_MAX_CUSTOM_TEXT_LEN)).default(''),
 })
 export type ClarifyAnswer = z.infer<typeof ClarifyAnswerSchema>
 
@@ -147,7 +148,7 @@ export type ClarifyDirective = z.infer<typeof ClarifyDirectiveSchema>
 // flag. `ClarifyQuestionScope` / `CLARIFY_QUESTION_SCOPE_DEFAULT` / `questionScopes` removed.
 
 export const SubmitClarifyAnswersSchema = z.object({
-  questionSetKey: z.string().max(128).optional(),
+  questionSetKey: z.string().check(utf16MaxLength(128)).optional(),
   answers: z.array(ClarifyAnswerSchema),
   /** Optimistic-lock guard: must equal the session's current iterationIndex
    *  or the server returns 409 Conflict `clarify-iteration-mismatch` (defends against two-tab
@@ -479,7 +480,7 @@ export const ClarifyRoundSchema = z.object({
       z.object({
         selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
         customText: z.string().default(''),
-        confirmedBasis: z.string().max(128).optional(),
+        confirmedBasis: z.string().check(utf16MaxLength(128)).optional(),
         decision: ClarifyDecisionSchema.optional(),
       }),
     )

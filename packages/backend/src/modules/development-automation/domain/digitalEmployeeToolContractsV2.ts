@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 export const DEVELOPMENT_TOOL_CONTRACT_IDS_V2 = [
   'development.prepare-materials',
@@ -15,11 +16,14 @@ export const DEVELOPMENT_TOOL_CONTRACT_IDS_V2 = [
 export type DevelopmentToolContractIdV2 = (typeof DEVELOPMENT_TOOL_CONTRACT_IDS_V2)[number]
 
 const refSchema = z
-  .object({ id: z.string().min(1).max(500), revision: z.number().int().positive() })
+  .object({
+    id: z.string().min(1).check(utf16MaxLength(500)),
+    revision: z.number().int().positive(),
+  })
   .strict()
-const pathSchema = z.string().min(1).max(2_000)
-const versionSchema = z.string().min(1).max(500)
-const explanationSchema = z.string().trim().min(1).max(8_000)
+const pathSchema = z.string().min(1).check(utf16MaxLength(2_000))
+const versionSchema = z.string().min(1).check(utf16MaxLength(500))
+const explanationSchema = z.string().trim().min(1).check(utf16MaxLength(8_000))
 const optionalCompletionExplanation = { explanation: explanationSchema.optional() } as const
 const blockedSchema = z
   .object({ outcome: z.literal('blocked'), explanation: explanationSchema })
@@ -28,7 +32,7 @@ const blockedSchema = z
 const prepareMaterialsInputSchema = z
   .object({
     connection: refSchema,
-    externalItemId: z.string().trim().min(1).max(500),
+    externalItemId: z.string().trim().min(1).check(utf16MaxLength(500)),
     outputDirectory: pathSchema,
   })
   .strict()
@@ -47,14 +51,14 @@ const implementChangeInputSchema = z
 const reviewMessageSchema = z
   .object({
     author: z.enum(['human', 'bot', 'self']),
-    body: z.string().max(32_000),
+    body: z.string().check(utf16MaxLength(32_000)),
   })
   .strict()
 
 const reviewThreadSchema = z
   .object({
-    threadRef: z.string().min(1).max(500),
-    file: z.string().min(1).max(1_000).optional(),
+    threadRef: z.string().min(1).check(utf16MaxLength(500)),
+    file: z.string().min(1).check(utf16MaxLength(1_000)).optional(),
     messages: z.array(reviewMessageSchema).min(1).max(500),
   })
   .strict()
@@ -74,25 +78,25 @@ const resolveReviewFeedbackInputSchema = z
 const collectPipelineStatusInputSchema = z
   .object({
     connection: refSchema,
-    mergeRequest: z.string().min(1).max(1_000),
+    mergeRequest: z.string().min(1).check(utf16MaxLength(1_000)),
     evidenceDirectory: pathSchema,
   })
   .strict()
 
 const failedCheckSchema = z
   .object({
-    checkRef: z.string().min(1).max(500),
-    name: z.string().min(1).max(500),
-    summary: z.string().min(1).max(4_000).optional(),
+    checkRef: z.string().min(1).check(utf16MaxLength(500)),
+    name: z.string().min(1).check(utf16MaxLength(500)),
+    summary: z.string().min(1).check(utf16MaxLength(4_000)).optional(),
     evidenceFiles: z.array(pathSchema).min(1).max(100).optional(),
   })
   .strict()
 
 const failureCategorySchema = z
   .object({
-    type: z.string().min(1).max(160),
-    name: z.string().min(1).max(500),
-    description: z.string().max(4_000),
+    type: z.string().min(1).check(utf16MaxLength(160)),
+    name: z.string().min(1).check(utf16MaxLength(500)),
+    description: z.string().check(utf16MaxLength(4_000)),
   })
   .strict()
 
@@ -100,7 +104,7 @@ const classifyPipelineFailuresInputSchema = z
   .object({
     failedChecks: z.array(failedCheckSchema).min(1).max(500),
     categories: z.array(failureCategorySchema).min(1).max(100),
-    fallbackType: z.string().min(1).max(160),
+    fallbackType: z.string().min(1).check(utf16MaxLength(160)),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -128,12 +132,12 @@ const classifyPipelineFailuresInputSchema = z
 
 const repairPipelineFailuresInputSchema = z
   .object({
-    failureType: z.string().min(1).max(160),
+    failureType: z.string().min(1).check(utf16MaxLength(160)),
     problems: z
       .array(
         z
           .object({
-            summary: z.string().min(1).max(4_000),
+            summary: z.string().min(1).check(utf16MaxLength(4_000)),
             evidenceFiles: z.array(pathSchema).min(1).max(100).optional(),
           })
           .strict(),
@@ -154,22 +158,22 @@ const resolveMergeConflictsInputSchema = z
 
 const draftApprovalInputSchema = z
   .object({
-    mergeRequest: z.string().min(1).max(1_000),
+    mergeRequest: z.string().min(1).check(utf16MaxLength(1_000)),
     currentVersion: versionSchema,
-    approvalType: z.string().min(1).max(120),
+    approvalType: z.string().min(1).check(utf16MaxLength(120)),
     gateConclusions: z
       .array(
         z
           .object({
-            name: z.string().min(1).max(500),
+            name: z.string().min(1).check(utf16MaxLength(500)),
             conclusion: z.enum(['passed', 'failed', 'not-applicable']),
-            summary: z.string().min(1).max(4_000).optional(),
+            summary: z.string().min(1).check(utf16MaxLength(4_000)).optional(),
           })
           .strict(),
       )
       .min(1)
       .max(100),
-    formatGuide: z.string().min(1).max(8_000),
+    formatGuide: z.string().min(1).check(utf16MaxLength(8_000)),
   })
   .strict()
 
@@ -192,9 +196,9 @@ const deliveryResultSchema = z
   .object({
     outcome: z.literal('completed'),
     ...optionalCompletionExplanation,
-    commitMessage: z.string().trim().min(1).max(5_000),
-    mergeRequestTitle: z.string().trim().min(1).max(240),
-    mergeRequestDescription: z.string().trim().min(1).max(32_000),
+    commitMessage: z.string().trim().min(1).check(utf16MaxLength(5_000)),
+    mergeRequestTitle: z.string().trim().min(1).check(utf16MaxLength(240)),
+    mergeRequestDescription: z.string().trim().min(1).check(utf16MaxLength(32_000)),
   })
   .strict()
 
@@ -206,14 +210,14 @@ const reviewResultSchema = z
       .array(
         z
           .object({
-            threadRef: z.string().min(1).max(500),
-            reply: z.string().trim().min(1).max(8_000),
+            threadRef: z.string().min(1).check(utf16MaxLength(500)),
+            reply: z.string().trim().min(1).check(utf16MaxLength(8_000)),
           })
           .strict(),
       )
       .min(1)
       .max(100),
-    commitMessage: z.string().trim().min(1).max(5_000).optional(),
+    commitMessage: z.string().trim().min(1).check(utf16MaxLength(5_000)).optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -224,10 +228,10 @@ const reviewResultSchema = z
 
 const pipelineCheckSchema = z
   .object({
-    checkRef: z.string().min(1).max(500),
-    name: z.string().min(1).max(500),
+    checkRef: z.string().min(1).check(utf16MaxLength(500)),
+    name: z.string().min(1).check(utf16MaxLength(500)),
     status: z.enum(['queued', 'running', 'passed', 'failed', 'canceled', 'skipped']),
-    summary: z.string().min(1).max(4_000).optional(),
+    summary: z.string().min(1).check(utf16MaxLength(4_000)).optional(),
     evidenceFiles: z.array(pathSchema).min(1).max(100).optional(),
   })
   .strict()
@@ -271,8 +275,11 @@ const classificationResultSchema = z
       .array(
         z
           .object({
-            type: z.string().min(1).max(160),
-            checkRefs: z.array(z.string().min(1).max(500)).min(1).max(500),
+            type: z.string().min(1).check(utf16MaxLength(160)),
+            checkRefs: z
+              .array(z.string().min(1).check(utf16MaxLength(500)))
+              .min(1)
+              .max(500),
           })
           .strict(),
       )
@@ -294,7 +301,7 @@ const commitResultSchema = z
   .object({
     outcome: z.literal('completed'),
     ...optionalCompletionExplanation,
-    commitMessage: z.string().trim().min(1).max(5_000),
+    commitMessage: z.string().trim().min(1).check(utf16MaxLength(5_000)),
   })
   .strict()
 
@@ -302,7 +309,7 @@ const approvalDraftResultSchema = z
   .object({
     outcome: z.literal('completed'),
     ...optionalCompletionExplanation,
-    draft: z.string().trim().min(1).max(32_000),
+    draft: z.string().trim().min(1).check(utf16MaxLength(32_000)),
   })
   .strict()
 

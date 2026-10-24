@@ -2,6 +2,7 @@
 // root path = ''，它与其它节点同构，不承载“主仓”产品语义。
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 
 export const MAX_GROUP_DEPTH = 5
 export const MAX_FLAT_REPOS = 32
@@ -132,14 +133,14 @@ export const PlannedDirectoryNodeSchema = z.object({
 export type PlannedDirectoryNode = z.infer<typeof PlannedDirectoryNodeSchema>
 
 export const CreateRepoGroupSchema = z.object({
-  name: z.string().trim().min(1).max(255),
-  description: z.string().max(4096).default(''),
+  name: z.string().trim().min(1).check(utf16MaxLength(255)),
+  description: z.string().check(utf16MaxLength(4096)).default(''),
   nodes: z.array(RepoGroupNodeInputSchema).min(1).max(MAX_GROUP_NODES),
 })
 export type CreateRepoGroup = z.infer<typeof CreateRepoGroupSchema>
 
 export const PreviewRepoGroupSchema = z.object({
-  name: z.string().max(255).optional(),
+  name: z.string().check(utf16MaxLength(255)).optional(),
   nodes: z.array(RepoGroupNodeInputSchema).min(1).max(MAX_GROUP_NODES),
 })
 export type PreviewRepoGroup = z.infer<typeof PreviewRepoGroupSchema>

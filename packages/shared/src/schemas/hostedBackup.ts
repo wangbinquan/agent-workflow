@@ -4,7 +4,7 @@ import { z } from 'zod'
 // storage. Task workspaces are not part of it (they live on platform volumes).
 export const HostedBackupEntrySchema = z
   .object({
-    id: z.string().uuid(),
+    id: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     kind: z.enum(['manual', 'scheduled']),
     state: z.enum(['building', 'ready', 'failed', 'released']),
     createdAt: z.number().int().nonnegative(),
@@ -22,7 +22,7 @@ export const HostedBackupCatalogSchema = z
  * with its recorded size and digest. The restore Job verifies the bytes. */
 export const HostedBackupVerificationSchema = z
   .object({
-    backupId: z.string().uuid(),
+    backupId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     verifiedAt: z.number().int().nonnegative(),
     reference: z.string().min(1),
     schemaDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
@@ -35,5 +35,7 @@ export const HostedBackupVerificationSchema = z
 export type HostedBackupCatalog = z.infer<typeof HostedBackupCatalogSchema>
 export type HostedBackupVerification = z.infer<typeof HostedBackupVerificationSchema>
 
-export const HostedBackupIdSchema = z.object({ backupId: z.string().uuid() }).strict()
+export const HostedBackupIdSchema = z
+  .object({ backupId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }) })
+  .strict()
 export type HostedBackupId = z.infer<typeof HostedBackupIdSchema>

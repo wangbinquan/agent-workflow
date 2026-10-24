@@ -1,5 +1,6 @@
 import type { Context, Hono } from 'hono'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import {
   GraphDesignActionRequestSchema,
   GraphDesignDocumentSchema,
@@ -11,9 +12,9 @@ import { registerRoute } from '@/routes/registry'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import type { GraphDevelopment } from '../../composition/graphDevelopment'
 
-const id = z.string().min(1).max(200),
+const id = z.string().min(1).check(utf16MaxLength(200)),
   revision = z.number().int().positive()
-async function body<T extends z.ZodTypeAny>(context: Context, schema: T): Promise<z.infer<T>> {
+async function body<T extends z.ZodType>(context: Context, schema: T): Promise<z.infer<T>> {
   const parsed = schema.safeParse(await context.req.json())
   if (!parsed.success) throw new ValidationError('graph-request-invalid', parsed.error.message)
   return parsed.data as z.infer<T>
@@ -110,7 +111,7 @@ export function mountGraphDesignRoutes(
           revision: z.coerce.number().int().positive().optional(),
           offset: z.coerce.number().int().nonnegative().optional(),
           limit: z.coerce.number().int().min(1).max(250).optional(),
-          search: z.string().max(200).optional(),
+          search: z.string().check(utf16MaxLength(200)).optional(),
           focusId: id.optional(),
         })
         .parse(context.req.query())
@@ -251,7 +252,10 @@ export function mountGraphDesignRoutes(
         await body(
           context,
           z
-            .object({ expectedRevision: revision, views: z.record(GraphPresentationSchema) })
+            .object({
+              expectedRevision: revision,
+              views: z.record(z.string(), GraphPresentationSchema),
+            })
             .strict(),
         ),
       )
@@ -415,7 +419,7 @@ export function mountGraphDesignRoutes(
               .object({
                 requestId: id,
                 expectedRevision: revision,
-                instruction: z.string().min(1).max(20_000),
+                instruction: z.string().min(1).check(utf16MaxLength(20_000)),
                 anchor: GraphAnchorSchema.nullable(),
                 previousSourceIds: z.array(id),
                 withdrawReview: z.boolean(),
@@ -448,7 +452,7 @@ export function mountGraphDesignRoutes(
                 candidateTreeOid: id,
                 obligationIds: z.array(id).min(1),
                 result: z.enum(['passed', 'failed']),
-                comment: z.string().min(1).max(20_000),
+                comment: z.string().min(1).check(utf16MaxLength(20_000)),
               })
               .strict(),
           ),

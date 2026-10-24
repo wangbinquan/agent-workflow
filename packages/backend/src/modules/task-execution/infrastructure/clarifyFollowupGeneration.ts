@@ -1,6 +1,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import {
   DEFAULT_CONFIG_DIR_PROFILE,
   RuntimeStatusEntrySchema,
@@ -138,7 +139,7 @@ export function createClarifyFollowupGeneration(input: {
         .object({
           registrationId: z.string().min(1),
           configurationRevision: z.number().int().nonnegative(),
-          acceptedName: z.string().min(1).max(200).optional(),
+          acceptedName: z.string().min(1).check(utf16MaxLength(200)).optional(),
         })
         .safeParse(params.__observation)
       const protocol = RuntimeStatusEntrySchema.shape.protocol.safeParse(row?.protocol)

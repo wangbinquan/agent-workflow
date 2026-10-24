@@ -1,5 +1,6 @@
 import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
 import { eventExactRefSchema, localizedEventTextSchema, machineIdSchema } from './model'
@@ -19,7 +20,7 @@ export const customEventTypeDraftSchema = z
         namespace: z
           .string()
           .min(1)
-          .max(64)
+          .check(utf16MaxLength(64))
           .regex(/^[a-z][a-z0-9_-]*$/),
         fields: z
           .array(
@@ -28,7 +29,7 @@ export const customEventTypeDraftSchema = z
                 fieldId: z
                   .string()
                   .min(1)
-                  .max(128)
+                  .check(utf16MaxLength(128))
                   .regex(/^[a-z][a-z0-9_-]*$/),
                 displayName: localizedEventTextSchema,
                 description: localizedEventTextSchema,
@@ -59,7 +60,7 @@ export const customEventSourceDraftSchema = z
     program: z
       .object({
         language: z.enum(['bash', 'node', 'python']),
-        source: z.string().min(1).max(1_000_000),
+        source: z.string().min(1).check(utf16MaxLength(1_000_000)),
         /** True only while the UI-generated starter has never been edited. */
         templateManaged: z.boolean().optional(),
         timeoutMs: z
@@ -93,14 +94,14 @@ export const customEventSourceDraftSchema = z
             z
               .object({
                 typeId: machineIdSchema,
-                subjectRef: z.string().min(1).max(1_000),
+                subjectRef: z.string().min(1).check(utf16MaxLength(1_000)),
               })
               .strict(),
           )
           .max(100),
         cursorJson: z
           .string()
-          .max(64 * 1024)
+          .check(utf16MaxLength(64 * 1024))
           .nullable()
           .superRefine((value, ctx) => {
             if (value === null) return
@@ -135,10 +136,15 @@ export const customObserverInputEnvelopeSchema = z
     sourceRef: eventExactRefSchema,
     subjects: z
       .array(
-        z.object({ typeId: machineIdSchema, subjectRef: z.string().min(1).max(1_000) }).strict(),
+        z
+          .object({
+            typeId: machineIdSchema,
+            subjectRef: z.string().min(1).check(utf16MaxLength(1_000)),
+          })
+          .strict(),
       )
       .max(1_000),
-    cursor: z.unknown().nullable(),
+    cursor: z.unknown().nullable().optional(),
     deadlineAt: z.string().datetime({ offset: true }),
   })
   .strict()
@@ -148,18 +154,23 @@ export type CustomObserverInputEnvelope = z.infer<typeof customObserverInputEnve
 export const customObserverOutputEnvelopeSchema = z
   .object({
     protocol: z.literal(CUSTOM_EVENT_OBSERVER_PROTOCOL),
-    cursor: z.unknown().nullable(),
+    cursor: z.unknown().nullable().optional(),
     observations: z
       .array(
         z
           .object({
             eventKey: machineIdSchema,
-            subjectRef: z.string().min(1).max(1_000),
+            subjectRef: z.string().min(1).check(utf16MaxLength(1_000)),
             occurredAt: z.string().datetime({ offset: true }),
-            sourceEventKey: z.string().min(1).max(500),
-            sourceEventRevision: z.string().min(1).max(500),
-            summary: z.string().min(1).max(2_000),
-            payloadArtifactRef: z.string().min(1).max(1_000).nullable().optional(),
+            sourceEventKey: z.string().min(1).check(utf16MaxLength(500)),
+            sourceEventRevision: z.string().min(1).check(utf16MaxLength(500)),
+            summary: z.string().min(1).check(utf16MaxLength(2_000)),
+            payloadArtifactRef: z
+              .string()
+              .min(1)
+              .check(utf16MaxLength(1_000))
+              .nullable()
+              .optional(),
             triggerParameters: z.record(z.string(), z.string()).nullable().optional(),
           })
           .strict(),

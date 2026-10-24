@@ -3,16 +3,17 @@
 // response contract.
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from './utf16Length'
 import { PermissionSchema, RoleSchema } from './permission'
 
 export const USERNAME_REGEX = /^[a-z0-9][a-z0-9_-]{0,63}$/
-export const GitNameSchema = z.string().trim().min(1).max(128)
+export const GitNameSchema = z.string().trim().min(1).check(utf16MaxLength(128))
 
 export const UserSchema = z.object({
   id: z.string().min(1),
-  username: z.string().min(1).max(64).regex(USERNAME_REGEX),
-  email: z.string().email().max(254).nullable(),
-  displayName: z.string().min(1).max(128),
+  username: z.string().min(1).check(utf16MaxLength(64)).regex(USERNAME_REGEX),
+  email: z.string().email().check(utf16MaxLength(254)).nullable(),
+  displayName: z.string().min(1).check(utf16MaxLength(128)),
   role: RoleSchema,
   status: z.enum(['active', 'disabled', 'invited']),
   forcePasswordChange: z.boolean(),
@@ -28,7 +29,7 @@ export type User = z.infer<typeof UserSchema>
 export const GitCommitIdentitySchema = z
   .object({
     name: GitNameSchema,
-    email: z.string().email().max(254),
+    email: z.string().email().check(utf16MaxLength(254)),
   })
   .strict()
 
@@ -49,13 +50,13 @@ export type UserPrivateProfile = z.infer<typeof UserPrivateProfileSchema>
 /** RFC-320 — users edit their canonical commit identity at account scope. */
 export const UpdateOwnProfileBodySchema = z
   .object({
-    displayName: z.string().trim().min(1).max(128),
+    displayName: z.string().trim().min(1).check(utf16MaxLength(128)),
     gitName: GitNameSchema,
     email: z
       .string()
       .trim()
       .email()
-      .max(254)
+      .check(utf16MaxLength(254))
       .transform((value) => value.toLowerCase()),
   })
   .strict()
@@ -99,7 +100,7 @@ export const CreateUserBodySchema = z.object({
   email: UserSchema.shape.email.optional(),
   displayName: UserSchema.shape.displayName,
   role: UserSchema.shape.role,
-  password: z.string().min(8).max(256).optional(),
+  password: z.string().check(utf16MinLength(8)).check(utf16MaxLength(256)).optional(),
   sendInvite: z.boolean().optional(),
   additionalPermissions: z.array(PermissionSchema).default([]),
 })
@@ -143,7 +144,7 @@ export type PatchUserBody = z.infer<typeof PatchUserBodySchema>
 // schema 公开、service 收而不办（安全假旋钮）。未来要做「重置密码连带吊销 PAT」
 // 请连实现一起落，不再允许契约先行。
 export const ResetPasswordBodySchema = z.object({
-  newPassword: z.string().min(8).max(256),
+  newPassword: z.string().check(utf16MinLength(8)).check(utf16MaxLength(256)),
   force: z.boolean().optional(),
 })
 
@@ -184,7 +185,7 @@ export type PatPurpose = z.infer<typeof PatPurposeSchema>
 
 export const PatPublicSchema = z.object({
   id: z.string(),
-  name: z.string().min(1).max(128),
+  name: z.string().min(1).check(utf16MaxLength(128)),
   /**
    * The authorization matrix, stored as the permission points it resolves to.
    * RFC-247 keeps ONE representation: the matrix UI is a view over these points,
@@ -201,7 +202,7 @@ export const PatPublicSchema = z.object({
 export type PatPublic = z.infer<typeof PatPublicSchema>
 
 export const CreatePatBodySchema = z.object({
-  name: z.string().min(1).max(128),
+  name: z.string().min(1).check(utf16MaxLength(128)),
   scopes: z.array(PermissionSchema).default([]),
   /** Defaults to the narrower of the two channels. */
   purpose: PatPurposeSchema.default('mcp_only'),
@@ -216,16 +217,16 @@ export type CreatePatBody = z.infer<typeof CreatePatBodySchema>
 // ----------------------------------------------------------------------------
 
 export const LoginBodySchema = z.object({
-  username: z.string().min(1).max(64),
-  password: z.string().min(1).max(256),
+  username: z.string().min(1).check(utf16MaxLength(64)),
+  password: z.string().min(1).check(utf16MaxLength(256)),
 })
 
 export type LoginBody = z.infer<typeof LoginBodySchema>
 
 export const ChangePasswordBodySchema = z.object({
   /** Required unless caller's user row has forcePasswordChange=true. */
-  oldPassword: z.string().min(1).max(256).optional(),
-  newPassword: z.string().min(8).max(256),
+  oldPassword: z.string().min(1).check(utf16MaxLength(256)).optional(),
+  newPassword: z.string().check(utf16MinLength(8)).check(utf16MaxLength(256)),
 })
 
 export type ChangePasswordBody = z.infer<typeof ChangePasswordBodySchema>

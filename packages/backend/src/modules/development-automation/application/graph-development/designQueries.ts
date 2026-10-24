@@ -58,7 +58,7 @@ export function createGraphDesignQueries(
         currentRevision: identity.revision,
         presentationRevision: identity.presentationRevision,
         presentation: z
-          .record(GraphPresentationSchema)
+          .record(z.string(), GraphPresentationSchema)
           .parse(JSON.parse(identity.presentationJson)),
         host,
         revisions: revisions.map((row) => ({
@@ -227,7 +227,7 @@ export function createGraphDesignQueries(
       id: string,
       input: { expectedRevision: number; views: Record<string, GraphPresentation> },
     ) {
-      const views = z.record(GraphPresentationSchema).parse(input.views)
+      const views = z.record(z.string(), GraphPresentationSchema).parse(input.views)
       const current = await deps.commands.document(id)
       for (const [key, value] of Object.entries(views))
         if (key !== value.viewId || !current.views.some((view) => view.id === key))

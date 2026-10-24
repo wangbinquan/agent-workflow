@@ -13,6 +13,7 @@
 // are server-generated); the stored row keeps `leaderMemberId`.
 
 import { z } from 'zod'
+import { utf16Length, utf16MaxLength } from './utf16Length'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { RESOURCE_DISPLAY_NAME_RE, ResourceDisplayNameSchema } from './resourceName'
 
@@ -105,7 +106,7 @@ export const WorkgroupMemberDisplayNameSchema = z
   .string()
   .trim()
   .min(1, 'displayName is required')
-  .max(64, 'displayName too long')
+  .check(utf16MaxLength(64, 'displayName too long'))
   // '@' and whitespace would break mention parsing; commas break roster lists.
   .refine((s) => !/[@,\s]/.test(s), 'displayName must not contain @, comma or whitespace')
 
@@ -144,7 +145,7 @@ export const WorkgroupMemberInputSchema = z
     agentId: z.string().min(1).optional(),
     userId: z.string().min(1).optional(),
     displayName: WorkgroupMemberDisplayNameSchema,
-    roleDesc: z.string().max(2048).default(''),
+    roleDesc: z.string().check(utf16MaxLength(2048)).default(''),
   })
   .strict()
   .superRefine((m, ctx) => {
@@ -178,7 +179,7 @@ export const WorkgroupDraftMemberSchema = z
     agentId: z.string().min(1).optional(),
     userId: z.string().min(1).optional(),
     displayName: WorkgroupMemberDisplayNameSchema,
-    roleDesc: z.string().max(2048).default(''),
+    roleDesc: z.string().check(utf16MaxLength(2048)).default(''),
   })
   .strict()
   .superRefine((member, ctx) => {
@@ -265,7 +266,7 @@ export type Workgroup = z.infer<typeof WorkgroupSchema>
 /** RFC-225 canonical 128-bit ULID used to correlate one submitted intent. */
 export const WorkgroupMutationIdSchema = z
   .string()
-  .length(26)
+  .check(utf16Length(26))
   .regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
 export type WorkgroupMutationId = z.infer<typeof WorkgroupMutationIdSchema>
 
@@ -274,8 +275,8 @@ export const WorkgroupSnapshotHashSchema = z.string().regex(/^[0-9a-f]{64}$/)
 export type WorkgroupSnapshotHash = z.infer<typeof WorkgroupSnapshotHashSchema>
 
 const workgroupConfigFields = {
-  description: z.string().max(4096).default(''),
-  instructions: z.string().max(65536).default(''),
+  description: z.string().check(utf16MaxLength(4096)).default(''),
+  instructions: z.string().check(utf16MaxLength(65536)).default(''),
   mode: WorkgroupModeSchema.default('leader_worker'),
   // Optional on both create/full-save wire: create resolves to files; a full
   // save that omits it preserves the current value in the service layer.
@@ -366,8 +367,8 @@ export type CreateWorkgroup = z.infer<typeof CreateWorkgroupSchema>
 export const WorkgroupDraftSnapshotSchema = z
   .object({
     name: WorkgroupNameSchema,
-    description: z.string().max(4096).default(''),
-    instructions: z.string().max(65536).default(''),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
+    instructions: z.string().check(utf16MaxLength(65536)).default(''),
     mode: WorkgroupModeSchema,
     outputContract: WorkgroupOutputContractSchema.optional(),
     leaderDisplayName: WorkgroupMemberDisplayNameSchema.optional(),
@@ -450,7 +451,7 @@ export type DeleteWorkgroup = z.infer<typeof DeleteWorkgroupSchema>
  */
 export const RenameWorkgroupSchema = z.object({
   newName: WorkgroupNameSchema,
-  description: z.string().max(4096).optional(),
+  description: z.string().check(utf16MaxLength(4096)).optional(),
   expectedVersion: z.number().int().positive(),
   clientMutationId: WorkgroupMutationIdSchema,
 })
@@ -607,9 +608,9 @@ export const WG_LEADER_IDLE_NUDGE_LIMIT = 3
  * the repo-source cross-field rules stay single-sourced in schemas/task.ts.
  */
 export const StartWorkgroupTaskSchema = z.object({
-  name: z.string().trim().min(1).max(255),
+  name: z.string().trim().min(1).check(utf16MaxLength(255)),
   /** The group's mission statement — injected every turn (决策 #12 goal). */
-  goal: z.string().trim().min(1).max(65536),
+  goal: z.string().trim().min(1).check(utf16MaxLength(65536)),
   /** RFC-165: temporary-space launch (see StartTaskSchema.scratch). */
   scratch: z.boolean().optional(),
   repoUrl: z.string().min(1).optional(),

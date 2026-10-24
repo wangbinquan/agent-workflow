@@ -726,7 +726,7 @@ export const ENDPOINTS: EndpointSpec[] = [
     path: '/api/tasks/:id',
     happy: {
       pathParams: (h) => ({ id: h.fixtures.taskId }),
-      schema: z.object({ task: z.any() }).passthrough(),
+      schema: z.object({ task: z.any().optional() }).passthrough(),
     },
   },
   { method: 'POST', path: '/api/tasks' },

@@ -1,6 +1,7 @@
 // Task schemas. Mirrors design.md §3 (tasks table) + plan.md P-1-14.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { hasQueryCredential, isFileSchemeUrl } from '../git-url'
 import { WebhookTaskSourceLinkSchema } from '../webhookTaskSourceLink'
 import { InjectedMemorySnapshotSchema } from './memory'
@@ -38,7 +39,7 @@ export const TaskNameSchema = z
   .string()
   .trim()
   .min(1, 'name is required (1..255 chars after trim)')
-  .max(TASK_NAME_MAX, `name must be ≤ ${TASK_NAME_MAX} chars`)
+  .check(utf16MaxLength(TASK_NAME_MAX, `name must be ≤ ${TASK_NAME_MAX} chars`))
 
 /** RFC-320 — keep a schema-level fail-closed ratchet in addition to the raw
  * route gate. `never` preserves the output contract: successful parses cannot
@@ -449,7 +450,7 @@ export const TaskSchema = z.object({
    */
   workflowName: z.string().nullable(),
   /** Snapshotted workflow definition; survives later workflow edits. */
-  workflowSnapshot: z.unknown(),
+  workflowSnapshot: z.unknown().optional(),
   /**
    * RFC-109: the `workflows.version` the snapshot was taken from (or last
    * synced to). Null for legacy tasks launched before migration 0050.
@@ -824,7 +825,7 @@ const StartTaskFieldsSchema = z.object({
    * remote-latest base; an existing branch is reused + base merged in.
    * Omitted → legacy isolation branch, byte-for-byte unchanged.
    */
-  workingBranch: z.string().min(1).max(WORKING_BRANCH_MAX).optional(),
+  workingBranch: z.string().min(1).check(utf16MaxLength(WORKING_BRANCH_MAX)).optional(),
   /**
    * RFC-075 — when true, after each writer agent emits its final output the
    * framework commits all changes (LLM-summarized message) and pushes to
@@ -1579,7 +1580,7 @@ export const NodeRunEventSchema = z.object({
   nodeRunId: z.string(),
   ts: z.number().int(),
   kind: z.enum(NODE_EVENT_KIND),
-  payload: z.unknown(),
+  payload: z.unknown().optional(),
 })
 export type NodeRunEvent = z.infer<typeof NodeRunEventSchema>
 
@@ -1625,7 +1626,7 @@ export type SyncWorkflowBody = z.infer<typeof SyncWorkflowBodySchema>
  * `{{...}}` in the text is never re-expanded).
  */
 export const StartAgentTaskSchema = z.object({
-  name: z.string().trim().min(1).max(255),
+  name: z.string().trim().min(1).check(utf16MaxLength(255)),
   /**
    * The task prompt for a ZERO-PORT agent (proposal: 描述即提示词). RFC-218
    * made it optional at the schema layer because port-declaring agents launch
@@ -1633,14 +1634,14 @@ export const StartAgentTaskSchema = z.object({
    * declared ports, so the conditional matrix lives in the service
    * (`validateAgentLaunchShape`), not here.
    */
-  description: z.string().trim().min(1).max(65536).optional(),
+  description: z.string().trim().min(1).check(utf16MaxLength(65536)).optional(),
   /**
    * RFC-218 — port-driven launch values for an agent that declares input
    * ports (`agent.inputs`, RFC-166). Keys must match declared port names
    * (service-validated); upload-kind ports are multipart-only and their
    * values are server-written (client strings ignored, design D14).
    */
-  inputs: z.record(z.string(), z.string().max(65536)).optional(),
+  inputs: z.record(z.string(), z.string().check(utf16MaxLength(65536))).optional(),
   /**
    * RFC-165 D7: whether the host snapshot wires an OPTIONAL clarify channel
    * (the agent may ask the user questions before/instead of finishing).

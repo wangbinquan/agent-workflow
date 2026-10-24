@@ -7,13 +7,14 @@
 // address SERVER-ISSUED slots (design §9.3).
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from './utf16Length'
 import { AclResourceTypeSchema, INTENT_RESOURCE_TYPES } from './resourceAcl'
 
 export const INTENT_MESSAGE_MAX = 16 * 1024
 
 export const CreateIntentSessionSchema = z
   .object({
-    message: z.string().min(1).max(INTENT_MESSAGE_MAX),
+    message: z.string().min(1).check(utf16MaxLength(INTENT_MESSAGE_MAX)),
     /** Optional free-text nudge about the desired artifact kind(s). */
     /** RFC-348 D4b — the composer's artifact-type pre-selection; six-type enum
      *  (RFC-235 D33). Auto is `omitted`, never a value. */
@@ -37,15 +38,18 @@ export const CreateIntentSessionSchema = z
 export type CreateIntentSession = z.infer<typeof CreateIntentSessionSchema>
 
 export const PostIntentMessageSchema = z
-  .object({ message: z.string().min(1).max(INTENT_MESSAGE_MAX) })
+  .object({ message: z.string().min(1).check(utf16MaxLength(INTENT_MESSAGE_MAX)) })
   .strict()
 export type PostIntentMessage = z.infer<typeof PostIntentMessageSchema>
 
 export const IntentAnswerSchema = z
   .object({
-    id: z.string().min(1).max(64),
-    picked: z.array(z.string().min(1).max(512)).min(1).max(8),
-    other: z.string().max(2048).optional(),
+    id: z.string().min(1).check(utf16MaxLength(64)),
+    picked: z
+      .array(z.string().min(1).check(utf16MaxLength(512)))
+      .min(1)
+      .max(8),
+    other: z.string().check(utf16MaxLength(2048)).optional(),
   })
   .strict()
 export const PostIntentAnswersSchema = z
@@ -64,7 +68,7 @@ export type PostIntentAnswers = z.infer<typeof PostIntentAnswersSchema>
 export const IntentMountRefSchema = z
   .object({
     resourceType: z.enum(INTENT_RESOURCE_TYPES),
-    resourceId: z.string().min(1).max(128),
+    resourceId: z.string().min(1).check(utf16MaxLength(128)),
   })
   .strict()
 export type IntentMountRefWire = z.infer<typeof IntentMountRefSchema>
@@ -79,15 +83,15 @@ export const IntentMountSuggestionDecisionSchema = z.discriminatedUnion('action'
   z
     .object({
       resourceType: AclResourceTypeSchema,
-      name: z.string().min(1).max(200),
+      name: z.string().min(1).check(utf16MaxLength(200)),
       action: z.literal('approve'),
-      resourceId: z.string().min(1).max(128),
+      resourceId: z.string().min(1).check(utf16MaxLength(128)),
     })
     .strict(),
   z
     .object({
       resourceType: AclResourceTypeSchema,
-      name: z.string().min(1).max(200),
+      name: z.string().min(1).check(utf16MaxLength(200)),
       action: z.literal('reject'),
     })
     .strict(),
@@ -96,7 +100,7 @@ export type IntentMountSuggestionDecision = z.infer<typeof IntentMountSuggestion
 
 export const PostIntentMountApprovalsSchema = z
   .object({
-    sourceTurnId: z.string().min(1).max(128),
+    sourceTurnId: z.string().min(1).check(utf16MaxLength(128)),
     expectedTurnSeq: z.number().int().min(1),
     expectedContextRevision: z.number().int().min(0),
     decisions: z.array(IntentMountSuggestionDecisionSchema).min(1).max(16),
@@ -110,7 +114,7 @@ export type PostIntentMountApprovals = z.infer<typeof PostIntentMountApprovalsSc
 export const IntentWorkingSetDeltaSchema = z
   .object({
     additions: z.array(IntentMountRefSchema).default([]),
-    removals: z.array(z.string().min(1).max(128)).default([]),
+    removals: z.array(z.string().min(1).check(utf16MaxLength(128))).default([]),
   })
   .strict()
   .superRefine((delta, ctx) => {
@@ -151,11 +155,11 @@ export const IntentWorkingSetChangeStateSchema = z.enum([
 
 export const PostIntentWorkingSetChangeSchema = z
   .object({
-    clientMutationId: z.string().min(10).max(64),
+    clientMutationId: z.string().check(utf16MinLength(10)).check(utf16MaxLength(64)),
     expectedTurnSeq: z.number().int().min(0),
     expectedContextRevision: z.number().int().min(0),
     mode: IntentWorkingSetChangeModeSchema,
-    replacesChangeId: z.string().min(1).max(128).optional(),
+    replacesChangeId: z.string().min(1).check(utf16MaxLength(128)).optional(),
     delta: IntentWorkingSetDeltaSchema,
   })
   .strict()
@@ -189,7 +193,7 @@ export type IntentWorkingSetChangeDto = z.infer<typeof IntentWorkingSetChangeDto
 
 const IntentIterationFenceSchema = z
   .object({
-    clientMutationId: z.string().min(10).max(64),
+    clientMutationId: z.string().check(utf16MinLength(10)).check(utf16MaxLength(64)),
     expectedTurnSeq: z.number().int().min(0),
     expectedContextRevision: z.number().int().min(0),
   })
@@ -198,18 +202,18 @@ const IntentIterationFenceSchema = z
 export const PostIntentIterationSchema = z.discriminatedUnion('mode', [
   IntentIterationFenceSchema.extend({
     mode: z.literal('refine-current'),
-    sourceDraftId: z.string().min(1).max(128),
+    sourceDraftId: z.string().min(1).check(utf16MaxLength(128)),
     sourceDraftHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
-    feedback: z.string().trim().min(1).max(INTENT_MESSAGE_MAX),
+    feedback: z.string().trim().min(1).check(utf16MaxLength(INTENT_MESSAGE_MAX)),
   }).strict(),
   IntentIterationFenceSchema.extend({
     mode: z.literal('continue-checkpoint'),
     sourceCommitSeq: z.number().int().min(1),
-    feedback: z.string().trim().min(1).max(INTENT_MESSAGE_MAX),
+    feedback: z.string().trim().min(1).check(utf16MaxLength(INTENT_MESSAGE_MAX)),
   }).strict(),
   IntentIterationFenceSchema.extend({
     mode: z.literal('regenerate'),
-    sourceDraftId: z.string().min(1).max(128),
+    sourceDraftId: z.string().min(1).check(utf16MaxLength(128)),
     sourceDraftHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
   }).strict(),
 ])
@@ -226,8 +230,8 @@ export type IntentGenerationReceipt = z.infer<typeof IntentGenerationReceiptSche
 
 export const PostIntentCurrentActionSchema = z
   .object({
-    clientMutationId: z.string().min(10).max(64),
-    sourceTurnId: z.string().min(1).max(128),
+    clientMutationId: z.string().check(utf16MinLength(10)).check(utf16MaxLength(64)),
+    sourceTurnId: z.string().min(1).check(utf16MaxLength(128)),
     expectedTurnSeq: z.number().int().min(1),
     expectedContextRevision: z.number().int().min(0),
     answers: z.array(IntentAnswerSchema).default([]),
@@ -238,8 +242,8 @@ export type PostIntentCurrentAction = z.infer<typeof PostIntentCurrentActionSche
 
 export const PostIntentRetrySchema = z
   .object({
-    clientMutationId: z.string().min(10).max(64),
-    sourceTurnId: z.string().min(1).max(128),
+    clientMutationId: z.string().check(utf16MinLength(10)).check(utf16MaxLength(64)),
+    sourceTurnId: z.string().min(1).check(utf16MaxLength(128)),
     expectedTurnSeq: z.number().int().min(1),
     expectedContextRevision: z.number().int().min(0),
   })
@@ -247,18 +251,21 @@ export const PostIntentRetrySchema = z
 export type PostIntentRetry = z.infer<typeof PostIntentRetrySchema>
 
 export const IntentDecisionSlotSchema = z
-  .object({ slotId: z.string().min(1).max(256), value: z.string().max(8192) })
+  .object({
+    slotId: z.string().min(1).check(utf16MaxLength(256)),
+    value: z.string().check(utf16MaxLength(8192)),
+  })
   .strict()
 export const IntentCommitDecisionSchema = z
   .object({
-    opId: z.string().min(1).max(16),
+    opId: z.string().min(1).check(utf16MaxLength(16)),
     applyMode: z.enum(['modify', 'copy']).optional(),
     slots: z.array(IntentDecisionSlotSchema).max(64).optional(),
   })
   .strict()
 export const CommitIntentSchema = z
   .object({
-    clientMutationId: z.string().min(10).max(64),
+    clientMutationId: z.string().check(utf16MinLength(10)).check(utf16MaxLength(64)),
     draftRevision: z.number().int().min(1),
     draftHash: z.string().regex(/^sha256:[0-9a-f]{64}$/),
     decisions: z.array(IntentCommitDecisionSchema).max(64).default([]),
@@ -467,7 +474,7 @@ export const IntentDraftDtoSchema = z
   .object({
     id: z.string(),
     revision: z.number().int(),
-    changeset: z.unknown(),
+    changeset: z.unknown().optional(),
     validation: z
       .object({
         errors: z.array(z.string()),

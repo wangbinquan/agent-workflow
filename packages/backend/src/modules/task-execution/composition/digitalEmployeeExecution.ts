@@ -5,6 +5,7 @@ import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection
 import { eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import {
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -88,15 +89,15 @@ const planSchema = z
     connectionRef: exactRefSchema.nullable(),
     implementationRef: exactRefSchema.nullable(),
     implementationKind: z.enum(['agent', 'workflow', 'program']),
-    implementationJson: z.string().min(2),
-    inputEnvelopeJson: z.string().min(2),
+    implementationJson: z.string().check(utf16MinLength(2)),
+    inputEnvelopeJson: z.string().check(utf16MinLength(2)),
     inputSchemaId: z.string().min(1),
     outputSchemaId: z.string().min(1),
     workContractRef: z
       .object({ contractId: z.string().min(1), version: z.number().int().positive() })
       .strict(),
     semanticValidatorId: z.string().min(1),
-    allowedEffectKinds: z.array(z.string().min(1).max(200)).max(100),
+    allowedEffectKinds: z.array(z.string().min(1).check(utf16MaxLength(200))).max(100),
     roundBudgetMs: z.number().int().positive(),
     maxTotalTokens: z.number().int().positive().nullable().default(null),
   })
@@ -138,7 +139,7 @@ const humanReviewSchema = z
 
 const inputEnvelopeSchema = z
   .object({
-    executionEnvironmentJson: z.string().min(2),
+    executionEnvironmentJson: z.string().check(utf16MinLength(2)),
     humanReview: humanReviewSchema.nullable().default(null),
   })
   .passthrough()
@@ -147,7 +148,7 @@ const attemptSchema = z
   .object({
     ordinal: z.number().int().nonnegative(),
     mode: z.enum(['initial', 'same-scene', 'fresh-scene']),
-    previousError: z.string().max(4_000).nullable(),
+    previousError: z.string().check(utf16MaxLength(4_000)).nullable(),
   })
   .strict()
 
@@ -267,7 +268,7 @@ export async function inspectDigitalEmployeeHumanReviewSnapshot(
     db.select({ inputs: tasks.inputs }).from(tasks).where(eq(tasks.id, executionRef)),
   )
   if (task === undefined) return 'unknown'
-  let parsedInputs: z.SafeParseReturnType<unknown, Record<string, unknown>>
+  let parsedInputs: z.ZodSafeParseResult<Record<string, unknown>>
   try {
     parsedInputs = z.record(z.string(), z.unknown()).safeParse(JSON.parse(task.inputs) as unknown)
   } catch {

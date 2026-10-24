@@ -1,12 +1,13 @@
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { ClarifyDecisionSchema } from './clarifyDecision'
 import { RepositoryContentBaselineSchema } from './repositoryContentBaseline'
 import { ArtifactElementAnchorSchema } from './artifactElementAnchor'
 
-const id = z.string().min(1).max(200)
+const id = z.string().min(1).check(utf16MaxLength(200))
 const revision = z.number().int().positive()
 const digest = z.string().regex(/^[a-f0-9]{64}$/)
-const text = z.string().max(20_000)
+const text = z.string().check(utf16MaxLength(20_000))
 const ids = z.array(id)
 const scalar = z.union([z.string(), z.number().finite(), z.boolean(), z.null()])
 
@@ -33,7 +34,7 @@ export const GraphSourceSchema = z.discriminatedUnion('kind', [
       taskId: id,
       roundId: id,
       questionId: id,
-      confirmedBasis: z.string().max(128).nullable(),
+      confirmedBasis: z.string().check(utf16MaxLength(128)).nullable(),
       originalAnswer: text,
       answer: z
         .object({
@@ -224,7 +225,7 @@ export const GraphSubmodelSchema = z.discriminatedUnion('kind', [
             ruleId: id,
             priority: z.number().int(),
             conditions: z.array(GraphPredicateSchema),
-            output: z.record(scalar),
+            output: z.record(z.string(), scalar),
             assertionRefs: ids,
           })
           .strict(),
@@ -259,8 +260,8 @@ export type GraphViewSpec = z.infer<typeof GraphViewSpecSchema>
 export const GraphBehaviorCheckSchema = z
   .object({
     modelId: id,
-    programRef: z.string().startsWith('repo:').max(1000),
-    inputs: z.array(z.record(scalar)).min(1).max(100),
+    programRef: z.string().startsWith('repo:').check(utf16MaxLength(1000)),
+    inputs: z.array(z.record(z.string(), scalar)).min(1).max(100),
     depth: z.number().int().min(1).max(100),
     paths: z.number().int().min(1).max(200),
     timeoutMs: z.number().int().min(100).max(300_000),
@@ -408,7 +409,7 @@ export const GraphTraceLinkSchema = z
     elementId: id,
     obligationId: id.nullable(),
     candidateTreeOid: id,
-    path: z.string().min(1).max(1000),
+    path: z.string().min(1).check(utf16MaxLength(1000)),
     blobOid: id,
     symbol: text.nullable(),
     testRef: text.nullable(),
@@ -463,7 +464,10 @@ export const GraphPresentationSchema = z
     viewId: id,
     revision,
     collapsedIds: ids,
-    positions: z.record(z.object({ x: z.number().finite(), y: z.number().finite() }).strict()),
+    positions: z.record(
+      z.string(),
+      z.object({ x: z.number().finite(), y: z.number().finite() }).strict(),
+    ),
     viewport: z
       .object({ x: z.number().finite(), y: z.number().finite(), zoom: z.number().positive() })
       .strict(),

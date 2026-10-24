@@ -7,13 +7,14 @@
 
 import { canonicalJson } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
 
 const machineIdSchema = z
   .string()
   .min(1)
-  .max(160)
+  .check(utf16MaxLength(160))
   .regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/)
 
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/)
@@ -21,13 +22,13 @@ const digestSchema = z.string().regex(/^[a-f0-9]{64}$/)
 const formFieldRefSchema = z
   .string()
   .min(1)
-  .max(160)
+  .check(utf16MaxLength(160))
   .regex(/^[a-z][a-zA-Z0-9]*(?:[._-][a-zA-Z0-9]+)*$/)
 
 export const localizedTextSchema = z
   .object({
-    'zh-CN': z.string().min(1).max(500),
-    'en-US': z.string().min(1).max(500),
+    'zh-CN': z.string().min(1).check(utf16MaxLength(500)),
+    'en-US': z.string().min(1).check(utf16MaxLength(500)),
   })
   .strict()
 
@@ -35,7 +36,7 @@ export type LocalizedText = z.infer<typeof localizedTextSchema>
 
 export const exactResourceRefSchema = z
   .object({
-    id: z.string().min(1).max(200),
+    id: z.string().min(1).check(utf16MaxLength(200)),
     revision: z.number().int().positive(),
   })
   .strict()
@@ -91,8 +92,8 @@ export type LaneAdapterBinding = z.infer<typeof laneAdapterBindingSchema>
 export const dispatchRouteDefinitionSchema = z
   .object({
     routeRef: machineIdSchema,
-    displayName: z.string().min(1).max(200),
-    description: z.string().max(2_000),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(2_000)),
     fallback: z.boolean(),
   })
   .strict()
@@ -134,8 +135,8 @@ export type DispatchRouteDefinition = z.infer<typeof dispatchRouteDefinitionSche
 export const orderedDispatchRouteSchema = z
   .object({
     routeRef: machineIdSchema,
-    displayName: z.string().min(1).max(200),
-    description: z.string().max(2_000),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(2_000)),
     destinationWorkItemRef: machineIdSchema,
     registrationRef: exactResourceRefSchema.nullable(),
     fallback: z.boolean(),
@@ -360,7 +361,7 @@ export const workContractSchema = z
       .object({
         mode: z.enum(['write', 'read-only', 'none']),
         businessChangeOnOk: z.enum(['required', 'forbidden', 'optional']),
-        writablePrefixes: z.array(z.string().min(1).max(1_000)).max(200),
+        writablePrefixes: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(200),
         platformWritePrefixes: z.array(z.enum(['inputs/requirements', 'pipeline'])).max(2),
       })
       .strict(),
@@ -376,7 +377,7 @@ const contextProjectionFieldSchema = z
     path: z
       .string()
       .min(1)
-      .max(300)
+      .check(utf16MaxLength(300))
       .regex(/^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/),
     label: localizedTextSchema,
     format: z.enum(['text', 'count', 'short-hash', 'boolean', 'list', 'timestamp']),
@@ -547,7 +548,7 @@ const eventTypeRegistrationSchema = z
         namespace: z
           .string()
           .min(1)
-          .max(64)
+          .check(utf16MaxLength(64))
           .regex(/^[a-z][a-z0-9_-]*$/),
         fields: z
           .array(
@@ -556,7 +557,7 @@ const eventTypeRegistrationSchema = z
                 fieldId: z
                   .string()
                   .min(1)
-                  .max(128)
+                  .check(utf16MaxLength(128))
                   .regex(/^[a-z][a-z0-9_-]*$/),
                 displayName: localizedTextSchema,
                 description: localizedTextSchema,
@@ -575,7 +576,7 @@ const eventTypeRegistrationSchema = z
 const attentionSubscriptionSchema = z
   .object({
     eventTypeId: machineIdSchema,
-    subjectPath: z.string().min(1).max(300),
+    subjectPath: z.string().min(1).check(utf16MaxLength(300)),
     sourceProfileRef: exactResourceRefSchema.nullable(),
     deliveryClass: machineIdSchema,
   })
@@ -857,9 +858,9 @@ export interface ContractValidationCheck {
 
 export const contractValidationCheckSchema = z
   .object({
-    code: z.string().min(1).max(200),
+    code: z.string().min(1).check(utf16MaxLength(200)),
     ok: z.boolean(),
-    detail: z.string().max(2_000),
+    detail: z.string().check(utf16MaxLength(2_000)),
   })
   .strict()
 
@@ -881,9 +882,9 @@ const programToolImplementationSchema = z
   .object({
     kind: z.literal('program'),
     runtimeKind: z.enum(['bash', 'node', 'python']),
-    executableArtifactRef: z.string().min(1).max(500),
+    executableArtifactRef: z.string().min(1).check(utf16MaxLength(500)),
     executableDigest: digestSchema,
-    parameterValuesRef: z.string().min(1).max(500).nullable(),
+    parameterValuesRef: z.string().min(1).check(utf16MaxLength(500)).nullable(),
     runtimeProfileRef: exactResourceRefSchema,
   })
   .strict()
@@ -903,7 +904,7 @@ export const programToolAuthoringSchema = z
     source: z
       .string()
       .min(1)
-      .max(256 * 1024),
+      .check(utf16MaxLength(256 * 1024)),
     parameterValues: z
       .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
       .optional(),
@@ -958,8 +959,8 @@ const acceptedDispatchRoutesSchema = z
 
 export const createToolRegistrationBodySchema = z
   .object({
-    displayName: z.string().min(1).max(200),
-    description: z.string().max(2_000),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(2_000)),
     roleRef: machineIdSchema,
     implementation: toolAuthoringImplementationSchema,
     dispatchRouteDefinitions: dispatchRouteDefinitionsSchema.optional(),
@@ -976,8 +977,8 @@ export const toolRegistrationContentSchema = z
     workItemRef: machineIdSchema,
     workContractRef: workContractRefSchema,
     roleRef: machineIdSchema,
-    displayName: z.string().min(1).max(200),
-    description: z.string().max(2_000),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(2_000)),
     implementation: toolImplementationSchema,
     // Historical immutable revisions may still carry the field. New writes
     // always persist null and bind adapters at the employee lane instead.
@@ -1002,7 +1003,11 @@ export const toolValidationReceiptSchema = z
     checks: z
       .array(
         z
-          .object({ code: z.string().min(1), ok: z.boolean(), detail: z.string().max(2_000) })
+          .object({
+            code: z.string().min(1),
+            ok: z.boolean(),
+            detail: z.string().check(utf16MaxLength(2_000)),
+          })
           .strict(),
       )
       .min(1),
@@ -1017,7 +1022,7 @@ export const employeeJobTemplateContentSchema = z
   .object({
     schemaVersion: z.literal(1),
     typeRef: employeeTypeRefSchema,
-    description: z.string().max(2_000),
+    description: z.string().check(utf16MaxLength(2_000)),
     defaultToolBindings: z.array(workItemToolBindingSchema).max(300),
     defaultAdapterBindings: z.array(laneAdapterBindingSchema).max(100).default([]),
     defaultCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100),
@@ -1039,8 +1044,8 @@ export const digitalEmployeeDefinitionDraftSchema = z
     schemaVersion: z.literal(1),
     typeRef: employeeTypeRefSchema,
     jobTemplateRef: exactResourceRefSchema,
-    displayName: z.string().min(1).max(200),
-    workScope: z.unknown(),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
+    workScope: z.unknown().optional(),
     toolOverrides: z.array(workItemToolBindingSchema).max(300),
     adapterOverrides: z.array(laneAdapterBindingSchema).max(100).default([]),
     collaborationOverrides: z.array(employeeCollaborationBindingSchema).max(100),
@@ -1054,9 +1059,9 @@ export const digitalEmployeeDefinitionContentSchema = z
     schemaVersion: z.literal(1),
     typeRef: employeeTypeRefSchema,
     jobTemplateRef: exactResourceRefSchema,
-    displayName: z.string().min(1).max(200),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
     workScopeRef: exactResourceRefSchema,
-    workScopeSummary: z.string().min(1).max(500),
+    workScopeSummary: z.string().min(1).check(utf16MaxLength(500)),
     exactToolBindings: z.array(workItemToolBindingSchema).max(300),
     exactAdapterBindings: z.array(laneAdapterBindingSchema).max(100).default([]),
     exactCollaborationBindings: z.array(employeeCollaborationBindingSchema).max(100),

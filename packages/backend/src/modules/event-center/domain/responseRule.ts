@@ -1,10 +1,11 @@
 import { extractTemplateRefs } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { ValidationError } from '@/util/errors'
 import { eventExactRefSchema } from './model'
 
-const templateText = z.string().max(64 * 1024)
+const templateText = z.string().check(utf16MaxLength(64 * 1024))
 
 // Response targets carry field refs declared by the selected resource. These
 // refs are form identifiers (for example `repositoryId`), not Event Center
@@ -13,48 +14,48 @@ const templateText = z.string().max(64 * 1024)
 const targetFieldRefSchema = z
   .string()
   .min(1)
-  .max(160)
+  .check(utf16MaxLength(160))
   .regex(/^[a-z][a-zA-Z0-9]*(?:[._-][a-zA-Z0-9]+)*$/)
 
 export const eventResponseTargetSchema = z.discriminatedUnion('kind', [
   z
     .object({
       kind: z.literal('workflow'),
-      refId: z.string().min(1).max(200),
-      nameTemplate: z.string().min(1).max(255),
-      inputs: z.record(z.string().min(1).max(160), templateText),
+      refId: z.string().min(1).check(utf16MaxLength(200)),
+      nameTemplate: z.string().min(1).check(utf16MaxLength(255)),
+      inputs: z.record(z.string().min(1).check(utf16MaxLength(160)), templateText),
     })
     .strict(),
   z
     .object({
       kind: z.literal('agent'),
-      refId: z.string().min(1).max(200),
-      nameTemplate: z.string().min(1).max(255),
+      refId: z.string().min(1).check(utf16MaxLength(200)),
+      nameTemplate: z.string().min(1).check(utf16MaxLength(255)),
       descriptionTemplate: templateText.nullable(),
-      inputs: z.record(z.string().min(1).max(160), templateText),
+      inputs: z.record(z.string().min(1).check(utf16MaxLength(160)), templateText),
     })
     .strict(),
   z
     .object({
       kind: z.literal('workgroup'),
-      refId: z.string().min(1).max(200),
-      nameTemplate: z.string().min(1).max(255),
+      refId: z.string().min(1).check(utf16MaxLength(200)),
+      nameTemplate: z.string().min(1).check(utf16MaxLength(255)),
       goalTemplate: z
         .string()
         .min(1)
-        .max(64 * 1024),
+        .check(utf16MaxLength(64 * 1024)),
     })
     .strict(),
   z
     .object({
       kind: z.literal('digital-employee'),
-      refId: z.string().min(1).max(200),
+      refId: z.string().min(1).check(utf16MaxLength(200)),
       intakeKind: z.enum(['body', 'external-id']),
       target: z.record(targetFieldRefSchema, templateText),
       valueTemplate: z
         .string()
         .min(1)
-        .max(2 * 1024 * 1024),
+        .check(utf16MaxLength(2 * 1024 * 1024)),
     })
     .strict(),
 ])
@@ -89,11 +90,11 @@ export type EventResponseTarget =
 
 export const eventResponseRuleDraftSchema = z
   .object({
-    name: z.string().min(1).max(200),
+    name: z.string().min(1).check(utf16MaxLength(200)),
     enabled: z.boolean(),
     eventTypeRef: eventExactRefSchema,
     subjectMatch: z.enum(['all', 'exact', 'prefix']),
-    subjectPattern: z.string().min(1).max(1_000).nullable(),
+    subjectPattern: z.string().min(1).check(utf16MaxLength(1_000)).nullable(),
     target: eventResponseTargetSchema,
   })
   .strict()

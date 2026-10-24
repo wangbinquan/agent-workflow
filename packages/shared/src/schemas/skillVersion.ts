@@ -3,6 +3,7 @@
 // files/ tree under skills/{name}/versions/v{n}/files; DB holds metadata.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { FileNodeSchema, SkillContentSchema } from './skill'
 
 /**
@@ -52,7 +53,7 @@ export type SkillVersionDiff = z.infer<typeof SkillVersionDiffSchema>
 /** POST /api/skills/:id/versions/:v/restore body. */
 export const RestoreSkillVersionSchema = z.object({
   /** Optional human note recorded on the new (restore) version row. */
-  reason: z.string().max(2000).optional(),
+  reason: z.string().check(utf16MaxLength(2000)).optional(),
   // RFC-170 F3: composite precondition token — OCC-fences the restore in the
   // version-bump tx; the response returns the fresh token. Optional for
   // backward compatibility.

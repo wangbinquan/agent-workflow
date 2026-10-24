@@ -13,6 +13,7 @@
 
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalDigest, canonicalStringify } from '../../domain/canonicalJson'
 import { checkCommandAdmissible, checkMissionTransition } from '../../domain/mission'
@@ -23,7 +24,7 @@ import { parseOr422 } from './commandInput'
 export const confirmNoChangeInputSchema = z
   .object({
     missionId: z.string().min(1),
-    receiptNote: z.string().min(1).max(2000),
+    receiptNote: z.string().min(1).check(utf16MaxLength(2000)),
   })
   .strict()
 

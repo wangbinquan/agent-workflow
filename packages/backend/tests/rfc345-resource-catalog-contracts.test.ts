@@ -1409,7 +1409,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(operations).toContain('inputSchema: updateAgentInputSchema')
     expect(operations).toContain('inputSchema: deleteAgentInputSchema')
     expect(operations).toContain(
-      'const agentCatalogResourceSchema = AgentSchema.extend({ name: z.string().min(1).max(128) })',
+      'const agentCatalogResourceSchema = AgentSchema.extend({\n  name: z.string().min(1).check(utf16MaxLength(128)),\n})',
     )
     expect(operations).toContain('inputSchema: CreateAgentSchema')
     expect(operations).toContain('outputSchema: z.array(agentCatalogResourceSchema)')

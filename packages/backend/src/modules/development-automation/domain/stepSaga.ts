@@ -7,8 +7,9 @@
 // the exact same rules as the production coordinator.
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
-const ref = z.string().min(1).max(500)
+const ref = z.string().min(1).check(utf16MaxLength(500))
 const digest = z.string().regex(/^[0-9a-f]{64}$/)
 const iso = z.string().datetime({ offset: true })
 
@@ -58,14 +59,14 @@ export type ChildMissionReceipt = z.infer<typeof childMissionReceiptSchema>
 export const approvalRequestDraftEnvelopeV1Schema = z
   .object({
     protocol: z.literal('aw-approval-request-draft@1'),
-    nonce: z.string().min(16),
+    nonce: z.string().check(utf16MinLength(16)),
     stepRunRef: ref,
     inputDigest: digest,
-    approvalType: z.string().min(1).max(120),
-    title: z.string().min(1).max(500),
+    approvalType: z.string().min(1).check(utf16MaxLength(120)),
+    title: z.string().min(1).check(utf16MaxLength(500)),
     bodyArtifactRef: ref,
     evidenceRefs: z.array(ref).max(100),
-    requestedScopes: z.array(z.string().min(1).max(200)).max(100),
+    requestedScopes: z.array(z.string().min(1).check(utf16MaxLength(200))).max(100),
   })
   .strict()
 

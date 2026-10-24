@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type { ObservedInventoryFaces, StartupObservation } from '@agent-workflow/shared'
 
 /** The platform's verified startup report names how it observed each runtime. */
@@ -13,7 +14,7 @@ const INVENTORY_SOURCE = {
 const Name = z
   .string()
   .min(1)
-  .max(512)
+  .check(utf16MaxLength(512))
   .refine((s) =>
     [...s].every((character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127),
   )

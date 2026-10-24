@@ -155,7 +155,7 @@ describe('RFC-348 — platform ⇔ intent reconciliation', () => {
         ...entry,
         platform: {
           ...entry.platform,
-          schema: WorkgroupMemberInputSchema.innerType().extend({ zzzFake: z.string() }),
+          schema: WorkgroupMemberInputSchema.safeExtend({ zzzFake: z.string() }),
         },
       }
       const report = checkKeyReconciliation([mutated])

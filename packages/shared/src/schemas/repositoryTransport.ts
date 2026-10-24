@@ -5,6 +5,7 @@
 // endpoint candidate, publication receipt, or stable error response.
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from './utf16Length'
 import { CodeHostProviderSchema } from './webhook'
 
 /** Explicit ownership context for managed Git publication. Code-host REST
@@ -14,17 +15,21 @@ export type RepositoryCredentialSubject =
   | { readonly kind: 'user'; readonly userId: string }
   | { readonly kind: 'system' }
 
-export const RepositoryConnectionGenerationSchema = z.string().trim().min(1).max(128)
+export const RepositoryConnectionGenerationSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .check(utf16MaxLength(128))
 export const RepositoryEndpointBindingDigestSchema = z
   .string()
   .regex(/^[a-f0-9]{64}$/, 'expected a lowercase SHA-256 digest')
 
 export const RepositoryTransportMappingV1Schema = z
   .object({
-    sshHost: z.string().trim().min(1).max(255),
+    sshHost: z.string().trim().min(1).check(utf16MaxLength(255)),
     sshPort: z.number().int().min(1).max(65535).optional(),
-    sshPathPrefix: z.string().trim().min(1).max(2048).optional(),
-    httpBaseUrl: z.string().trim().min(1).max(2048),
+    sshPathPrefix: z.string().trim().min(1).check(utf16MaxLength(2048)).optional(),
+    httpBaseUrl: z.string().trim().min(1).check(utf16MaxLength(2048)),
   })
   .strict()
 export type RepositoryTransportMappingV1 = z.infer<typeof RepositoryTransportMappingV1Schema>
@@ -43,9 +48,9 @@ export type RepositoryEndpointSource = z.infer<typeof RepositoryEndpointSourceSc
 export const RepositoryEndpointCandidateSchema = z
   .object({
     provider: CodeHostProviderSchema,
-    project: z.string().trim().min(1).max(2048),
+    project: z.string().trim().min(1).check(utf16MaxLength(2048)),
     connectionGeneration: RepositoryConnectionGenerationSchema,
-    url: z.string().trim().min(1).max(4096),
+    url: z.string().trim().min(1).check(utf16MaxLength(4096)),
     source: z.literal('provider-api'),
   })
   .strict()
@@ -59,11 +64,11 @@ export const OwnCodeHostPushCredentialFallbackSchema = z.enum([
 export const OwnCodeHostPushCredentialSummarySchema = z
   .object({
     provider: CodeHostProviderSchema,
-    displayBaseUrl: z.string().max(2048),
+    displayBaseUrl: z.string().check(utf16MaxLength(2048)),
     connectionGeneration: RepositoryConnectionGenerationSchema,
     endpointBindingDigest: RepositoryEndpointBindingDigestSchema,
     configured: z.boolean(),
-    tokenHint: z.string().max(4).nullable(),
+    tokenHint: z.string().check(utf16MaxLength(4)).nullable(),
     updatedAt: z.number().int().nonnegative().nullable(),
     stale: z.boolean(),
     fallback: OwnCodeHostPushCredentialFallbackSchema,
@@ -81,7 +86,7 @@ export type OwnCodeHostPushCredentialList = z.infer<typeof OwnCodeHostPushCreden
 /** Write-only request. Never reuse this schema for a response or audit payload. */
 export const PutOwnCodeHostPushCredentialRequestSchema = z
   .object({
-    token: z.string().min(8).max(4096),
+    token: z.string().check(utf16MinLength(8)).check(utf16MaxLength(4096)),
     connectionGeneration: RepositoryConnectionGenerationSchema,
     endpointBindingDigest: RepositoryEndpointBindingDigestSchema,
   })
@@ -94,7 +99,7 @@ export type PutOwnCodeHostPushCredentialRequest = z.infer<
  * credential can be tested without ever reading it back into the browser. */
 export const TestOwnCodeHostPushCredentialRequestSchema = z
   .object({
-    token: z.string().min(8).max(4096).optional(),
+    token: z.string().check(utf16MinLength(8)).check(utf16MaxLength(4096)).optional(),
     connectionGeneration: RepositoryConnectionGenerationSchema,
     endpointBindingDigest: RepositoryEndpointBindingDigestSchema,
   })

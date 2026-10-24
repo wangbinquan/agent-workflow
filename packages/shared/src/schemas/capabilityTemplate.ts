@@ -30,6 +30,7 @@
 // the group chooses.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { CapabilityParamTableSchema } from '../capabilityParams'
 
 /** A script the framework runs at one of the monitor's four core steps. */
@@ -74,9 +75,9 @@ export const CapabilityHookSchema = z
  */
 export const CapabilityTemplateWriteSchema = z
   .object({
-    name: z.string().min(1).max(200),
-    description: z.string().max(2000).nullable().optional(),
-    capability: z.string().min(1).max(64),
+    name: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(2000)).nullable().optional(),
+    capability: z.string().min(1).check(utf16MaxLength(64)),
     /** Department-grade fields. Writing either requires `scripts:author`. */
     scripts: CapabilityScriptsSchema.default({}),
     hooks: z.array(CapabilityHookSchema).max(64).default([]),
@@ -105,7 +106,7 @@ export const TEMPLATE_PRIVILEGED_FIELDS = ['scripts', 'hooks'] as const
 export type TemplatePrivilegedField = (typeof TEMPLATE_PRIVILEGED_FIELDS)[number]
 
 export const CapabilityTemplateCopySchema = z
-  .object({ name: z.string().min(1).max(200).optional() })
+  .object({ name: z.string().min(1).check(utf16MaxLength(200)).optional() })
   .strict()
 
 /** What a template looks like on the wire. */

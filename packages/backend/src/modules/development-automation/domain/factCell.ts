@@ -7,7 +7,7 @@
 
 import { z } from 'zod'
 
-export function factCellSchema<T extends z.ZodTypeAny>(value: T) {
+export function factCellSchema<T extends z.ZodType>(value: T) {
   return z.discriminatedUnion('state', [
     z
       .object({

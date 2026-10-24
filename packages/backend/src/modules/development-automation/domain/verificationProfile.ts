@@ -8,16 +8,19 @@
 // 写入绝不回流 publication candidate——那是 engine 层合同（PR-5 T57）。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalDigest } from './canonicalJson'
 
 /** 单步墙钟硬上限：30 分钟。verification 是本地门禁，不是 soak 场。 */
 export const VERIFICATION_STEP_TIMEOUT_CAP_MS = 30 * 60 * 1000
 
-const resourceRef = z.string().min(1).max(200)
+const resourceRef = z.string().min(1).check(utf16MaxLength(200))
 
 export const verificationEvidenceSelectorSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('file-glob'), value: z.string().min(1).max(500) }).strict(),
+  z
+    .object({ kind: z.literal('file-glob'), value: z.string().min(1).check(utf16MaxLength(500)) })
+    .strict(),
   z
     .object({ kind: z.literal('stdout-tail'), value: z.number().int().min(1).max(1_000_000) })
     .strict(),
@@ -25,7 +28,7 @@ export const verificationEvidenceSelectorSchema = z.discriminatedUnion('kind', [
 
 export const verificationStepSchema = z
   .object({
-    stepId: z.string().min(1).max(120),
+    stepId: z.string().min(1).check(utf16MaxLength(120)),
     /** 可执行程序引用；写它需要 scripts:author（route 层字段级门）。 */
     programRef: resourceRef,
     argsRef: resourceRef.nullable(),

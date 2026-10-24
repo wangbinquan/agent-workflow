@@ -95,7 +95,7 @@ interface ResourcePackageAtomicApplyOrchestrator<TPackage> {
 
 const PACKAGE_IDEMPOTENCY_SCOPE = 'package'
 
-const ExpectedObjectSchema = z.record(z.unknown())
+const ExpectedObjectSchema = z.record(z.string(), z.unknown())
 
 export interface ResourcePackageAtomicApplyDependencies {
   readonly db: PersistenceDb

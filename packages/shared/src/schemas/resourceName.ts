@@ -64,7 +64,7 @@ export const RESOURCE_DISPLAY_NAME_MSG =
 /**
  * Normalizes on parse, so every write path that goes through a schema stores
  * the folded form without calling the normalizer by hand. `z.preprocess`
- * yields a `ZodEffects<ZodString>` — `.optional()` still chains (relied on by
+ * yields a `ZodPipe<ZodTransform, ZodString>` — `.optional()` still chains (relied on by
  * schemas/scheduledTask.ts).
  *
  * The length bound lives in the regex only: a second UTF-16-counting `.max()`

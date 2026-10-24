@@ -8,6 +8,7 @@
 // 命令要求 `scripts:author`（application 层收布尔，路由层判权限点）。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
 
@@ -40,11 +41,11 @@ export const developmentAdapterContentSchema = z
     operations: z.array(z.enum(DEVELOPMENT_ADAPTER_OPERATIONS)).min(1),
     contractVersion: z.literal(1),
     /** daemon 将执行的外部程序 ref（scripts:author 字段门的对象）。 */
-    executableRef: z.string().min(1).max(1024),
-    parameterSchemaRef: z.string().min(1).max(1024).nullable(),
-    connectionRef: z.string().min(1).max(1024).nullable(),
+    executableRef: z.string().min(1).check(utf16MaxLength(1024)),
+    parameterSchemaRef: z.string().min(1).check(utf16MaxLength(1024)).nullable(),
+    connectionRef: z.string().min(1).check(utf16MaxLength(1024)).nullable(),
     /** integration owner 校验过的 secret key 闭集投影；worker 从空环境加它。 */
-    secretProjection: z.array(z.string().min(1).max(256)),
+    secretProjection: z.array(z.string().min(1).check(utf16MaxLength(256))),
     outputBudget: z
       .object({
         maxFiles: z.number().int().min(1).max(10_000),

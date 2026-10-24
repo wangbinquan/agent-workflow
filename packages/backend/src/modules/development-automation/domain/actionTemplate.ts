@@ -9,6 +9,7 @@
 // ——唯一 selector 是 DigitalEmployee 的 CapabilityRoute（§3.4/§3.6）。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { POLICY_HARD_CAPS } from './automationPolicy'
 import { canonicalDigest } from './canonicalJson'
@@ -16,14 +17,14 @@ import { agentCapabilityIdSchema } from './capabilityDefinition'
 import { checkPredicateAgainstCatalog, type DecisionPhase } from './facts'
 import { checkPredicateBudget, factPredicateSchema } from './predicate'
 
-const resourceRef = z.string().min(1).max(200)
+const resourceRef = z.string().min(1).check(utf16MaxLength(200))
 
 export const actionTemplateContentSchema = z
   .object({
     schemaVersion: z.literal(1),
     capabilityId: agentCapabilityIdSchema,
     capabilityContractVersion: z.number().int().positive(),
-    labels: z.array(z.string().min(1).max(80)).max(20),
+    labels: z.array(z.string().min(1).check(utf16MaxLength(80))).max(20),
     /** 只拒绝不兼容选择，不做第二 selector（route 发布时证明 when ⇒ compatibility）。 */
     compatibility: z.array(factPredicateSchema).max(16),
     executor: z.discriminatedUnion('kind', [
@@ -39,14 +40,14 @@ export const actionTemplateContentSchema = z
     ]),
     runtimeProfileRef: resourceRef,
     /** 领域知识补充；放在不可覆盖 protocol block 之前，不能改变运行合同（§3.4）。 */
-    promptSupplement: z.string().max(20_000),
+    promptSupplement: z.string().check(utf16MaxLength(20_000)),
     skillRefs: z.array(resourceRef).max(32),
     mcpRefs: z.array(resourceRef).max(32),
     readOnlyResourceRefs: z.array(resourceRef).max(32),
     contextProfileRef: resourceRef.nullable(),
     /** 只能收窄 capability workspace mode；打开 Git/evidence roots 在 validator 层拒。 */
     writablePathPolicyRef: resourceRef.nullable(),
-    additionalProtectedPathClasses: z.array(z.string().min(1).max(120)).max(32),
+    additionalProtectedPathClasses: z.array(z.string().min(1).check(utf16MaxLength(120))).max(32),
     verificationProfileRef: resourceRef,
     retryDefaults: z
       .object({

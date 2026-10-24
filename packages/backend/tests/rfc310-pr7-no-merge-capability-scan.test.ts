@@ -81,7 +81,7 @@ describe('rfc310 pr7 T84 — no merge/approve/resolve/force-push reachability', 
 
   test('decision union and capability catalog carry no merge/approve/resolve arm', () => {
     // 决策联合的 kind 全集从 decision.ts 源码文本提取（schema 被 superRefine
-    // 包裹成 ZodEffects，运行时取 options 要碰私有 _def——文本级更稳）。
+    // Zod 4 将 refinement 内联，文本级仍直接锁定声明的完整 variant 集）。
     const decisionSource = readFileSync(
       join(import.meta.dir, '../src/modules/development-automation/domain/decision.ts'),
       'utf8',

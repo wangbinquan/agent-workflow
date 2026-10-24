@@ -18,6 +18,8 @@ import type { ApplicationConfigurationQueries } from '@/modules/system-operation
 // clever detour.
 
 import type { Hono, MiddlewareHandler } from 'hono'
+import { z } from 'zod'
+import { withInputJsonSchema } from '@/util/zodJsonSchema'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js'
 import type { Actor } from '@/auth/actor'
@@ -49,7 +51,7 @@ export function buildMcpServer(
       {
         title: tool.title,
         description: tool.description,
-        inputSchema: tool.inputSchema,
+        inputSchema: withInputJsonSchema(z.object(tool.inputSchema)),
       },
       // The SDK types the callback against the tool's own schema; the registry
       // is heterogeneous by construction, so the shape is re-widened here and

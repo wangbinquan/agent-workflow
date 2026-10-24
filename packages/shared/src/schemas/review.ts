@@ -10,6 +10,7 @@
 // will consume.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { TaskActorRoleSchema } from './resourceAcl'
 import {
   isNestedListPathKindString,
@@ -401,11 +402,16 @@ export const REVIEW_DECISION_BATCH_SELECTIONS_MAX = 500
 
 export const ReviewAnchorRequestSchema = z.object({
   /** Verbatim text from the document body; trimmed, no case / whitespace folding. */
-  quote: z.string().trim().min(1).max(REVIEW_ANCHOR_QUOTE_MAX_CHARS).optional(),
+  quote: z.string().trim().min(1).check(utf16MaxLength(REVIEW_ANCHOR_QUOTE_MAX_CHARS)).optional(),
   /** 1-based GLOBAL occurrence number (= stored occurrenceIndex = candidate number). */
   occurrence: z.number().int().positive().optional(),
   /** Heading text, a `#`-prefixed breadcrumb segment, or the full breadcrumb. */
-  section: z.string().trim().min(1).max(REVIEW_ANCHOR_SECTION_MAX_CHARS).optional(),
+  section: z
+    .string()
+    .trim()
+    .min(1)
+    .check(utf16MaxLength(REVIEW_ANCHOR_SECTION_MAX_CHARS))
+    .optional(),
 })
 export type ReviewAnchorRequest = z.infer<typeof ReviewAnchorRequestSchema>
 
@@ -441,7 +447,7 @@ export const SubmitReviewCommentSchema = z
     quote: ReviewAnchorRequestSchema.shape.quote,
     occurrence: ReviewAnchorRequestSchema.shape.occurrence,
     section: ReviewAnchorRequestSchema.shape.section,
-    commentText: z.string().min(1).max(REVIEW_COMMENT_TEXT_MAX_CHARS),
+    commentText: z.string().min(1).check(utf16MaxLength(REVIEW_COMMENT_TEXT_MAX_CHARS)),
     /**
      * RFC-079: the document this comment anchors to, in a multi-document review
      * round (several doc_versions pending at once). Omitted for single-document

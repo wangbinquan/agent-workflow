@@ -1,5 +1,6 @@
 import { MaintenanceJobKeySchema } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16Length } from '@agent-workflow/shared'
 
 export const MAINTENANCE_PROTOCOL_VERSION = 1 as const
 
@@ -7,7 +8,7 @@ const SqliteMaintenanceWorkerInitSchema = z
   .object({
     type: z.literal('init'),
     version: z.literal(MAINTENANCE_PROTOCOL_VERSION),
-    catalogDigest: z.string().length(64),
+    catalogDigest: z.string().check(utf16Length(64)),
     dbPath: z.string().min(1),
     migrationsFolder: z.string().min(1),
     appHome: z.string().min(1),
@@ -26,7 +27,7 @@ const PostgresqlMaintenanceWorkerInitSchema = z
   .object({
     type: z.literal('init'),
     version: z.literal(MAINTENANCE_PROTOCOL_VERSION),
-    catalogDigest: z.string().length(64),
+    catalogDigest: z.string().check(utf16Length(64)),
     provider: z.literal('postgresql'),
     generationId: z.string().min(1),
     appHome: z.string().min(1),
@@ -106,7 +107,7 @@ export const MaintenanceWorkerEventSchema = z.discriminatedUnion('type', [
     .object({
       type: z.literal('ready'),
       version: z.literal(MAINTENANCE_PROTOCOL_VERSION),
-      catalogDigest: z.string().length(64),
+      catalogDigest: z.string().check(utf16Length(64)),
       at: z.number().int().nonnegative(),
     })
     .strict(),

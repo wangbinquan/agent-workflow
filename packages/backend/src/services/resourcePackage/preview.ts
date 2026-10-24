@@ -170,7 +170,7 @@ const PreviewBaselineEntrySchema = z
   .object({
     localSlug: z.string().min(1),
     candidateIds: z.array(z.string().min(1)),
-    expectByCandidateId: z.record(z.unknown()),
+    expectByCandidateId: z.record(z.string(), z.unknown()),
     allowedActions: z.array(z.enum(['new', 'reuse', 'overwrite'])),
   })
   .strict()

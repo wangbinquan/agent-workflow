@@ -29,7 +29,7 @@ export const ExecutionStatusSchema = z
     mode: z.enum(['standalone', 'crewstation']),
     state: z.enum(['active', 'standby', 'frozen']),
     reason: z.string().nullable(),
-    unavailableGroups: z.record(ExecutionGroupSchema, z.string()).optional(),
+    unavailableGroups: z.partialRecord(ExecutionGroupSchema, z.string()).optional(),
   })
   .strict()
 export type ExecutionStatus = z.infer<typeof ExecutionStatusSchema>

@@ -21,6 +21,7 @@
 // 本文件的类型叫 `ResourceRefAst`。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '../schemas/utf16Length'
 import { AclResourceTypeSchema, type AclResourceType } from '../schemas/resourceAcl'
 
 /** bundle 内前向引用的 slug 词法（与 intent tempRef 的 slug 部分逐字相同）。 */
@@ -106,13 +107,21 @@ export const RESOURCE_REF_AST_KINDS = [
 // --- schema（用于跨进程/落盘时的校验；域 codec 见 ./codecs.ts） ---
 
 export const ResourceRefAstSchema = z.discriminatedUnion('k', [
-  z.object({ k: z.literal('id'), type: AclResourceTypeSchema, id: z.string().min(1).max(128) }),
-  z.object({ k: z.literal('name'), type: AclResourceTypeSchema, name: z.string().min(1).max(256) }),
+  z.object({
+    k: z.literal('id'),
+    type: AclResourceTypeSchema,
+    id: z.string().min(1).check(utf16MaxLength(128)),
+  }),
+  z.object({
+    k: z.literal('name'),
+    type: AclResourceTypeSchema,
+    name: z.string().min(1).check(utf16MaxLength(256)),
+  }),
   z.object({
     k: z.literal('selector'),
     type: AclResourceTypeSchema,
-    name: z.string().min(1).max(128),
-    ownerUsername: z.string().min(1).max(64).optional(),
+    name: z.string().min(1).check(utf16MaxLength(128)),
+    ownerUsername: z.string().min(1).check(utf16MaxLength(64)).optional(),
   }),
   z.object({
     k: z.literal('handle'),
@@ -120,15 +129,15 @@ export const ResourceRefAstSchema = z.discriminatedUnion('k', [
     ordinal: z.number().int().min(1).max(999999),
   }),
   z.object({ k: z.literal('local'), slug: z.string().regex(BUNDLE_SLUG_RE) }),
-  z.object({ k: z.literal('external'), token: z.string().min(1).max(128) }),
+  z.object({ k: z.literal('external'), token: z.string().min(1).check(utf16MaxLength(128)) }),
   z.object({
     k: z.literal('call'),
     type: z.enum(['workflow', 'workgroup']),
-    nodeId: z.string().min(1).max(128),
-    authoritativeName: z.string().min(1).max(256),
-    idHint: z.string().min(1).max(128).optional(),
+    nodeId: z.string().min(1).check(utf16MaxLength(128)),
+    authoritativeName: z.string().min(1).check(utf16MaxLength(256)),
+    idHint: z.string().min(1).check(utf16MaxLength(128)).optional(),
   }),
-  z.object({ k: z.literal('project-skill'), name: z.string().min(1).max(128) }),
+  z.object({ k: z.literal('project-skill'), name: z.string().min(1).check(utf16MaxLength(128)) }),
   z.object({
     k: z.literal('builtin'),
     // 键域刻意只有这两类：`builtin` 列虽然在三张表上（agents / workflows /
@@ -137,7 +146,7 @@ export const ResourceRefAstSchema = z.discriminatedUnion('k', [
     // 把全部 ACL type 放进来更是如此。（RFC-317 T66 订正：原注释说「只有两张表
     // 有 builtin 列」——列的分布与 seed 的分布是两件事，判据是后者。）
     type: z.enum(['agent', 'workflow']),
-    name: z.string().min(1).max(256),
+    name: z.string().min(1).check(utf16MaxLength(256)),
   }),
 ])
 

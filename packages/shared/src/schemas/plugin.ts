@@ -14,6 +14,7 @@
 // inject time when options are non-empty.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { ResourceVisibilitySchema } from './resourceAcl'
 import { OperationConfigHashSchema } from './operationRevision'
 
@@ -23,7 +24,7 @@ export const PLUGIN_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 export const PluginNameSchema = z
   .string()
   .min(1, 'name is required')
-  .max(64, 'name too long')
+  .check(utf16MaxLength(64, 'name too long'))
   .regex(PLUGIN_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
 
 /**
@@ -32,7 +33,10 @@ export const PluginNameSchema = z
  * tuple form `[spec, options]` from opencode is NOT accepted here — options
  * live in the dedicated `options` column.
  */
-export const PluginSpecSchema = z.string().min(1, 'spec is required').max(512, 'spec too long')
+export const PluginSpecSchema = z
+  .string()
+  .min(1, 'spec is required')
+  .check(utf16MaxLength(512, 'spec too long'))
 
 /** Plain JSON-serialisable options bag, passed through to opencode plugin Spec tuple. */
 export const PluginOptionsSchema = z.record(z.string(), z.unknown())
@@ -96,7 +100,7 @@ export const CreatePluginSchema = z.object({
   name: PluginNameSchema,
   spec: PluginSpecSchema,
   options: PluginOptionsSchema.default({}),
-  description: z.string().max(4096).default(''),
+  description: z.string().check(utf16MaxLength(4096)).default(''),
   enabled: z.boolean().default(true),
 })
 export type CreatePlugin = z.infer<typeof CreatePluginSchema>
@@ -109,7 +113,7 @@ export const UpdatePluginSchema = z
   .object({
     spec: PluginSpecSchema.optional(),
     options: PluginOptionsSchema.optional(),
-    description: z.string().max(4096).optional(),
+    description: z.string().check(utf16MaxLength(4096)).optional(),
     enabled: z.boolean().optional(),
   })
   .strict()

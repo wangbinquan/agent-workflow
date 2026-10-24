@@ -291,7 +291,7 @@ export function mountDigitalEmployeeRoutes(
   }
   // 只取改名围栏要比对的那一个字符串字段；用 zod 而不是 `as` 转型（routes-no-cast 守卫）。
   const submittedString = (body: unknown, key: string): string | undefined => {
-    const parsed = z.record(z.unknown()).safeParse(body)
+    const parsed = z.record(z.string(), z.unknown()).safeParse(body)
     const value = parsed.success ? parsed.data[key] : undefined
     return typeof value === 'string' ? value : undefined
   }

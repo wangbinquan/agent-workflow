@@ -12,6 +12,7 @@
 // services/runner.ts buildInlineConfig). Do NOT rename here.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { OperationConfigHashSchema } from './operationRevision'
 import { ResourceVisibilitySchema } from './resourceAcl'
 
@@ -21,7 +22,7 @@ export const MCP_NAME_RE = /^[a-z0-9][a-z0-9_-]*$/
 export const McpNameSchema = z
   .string()
   .min(1, 'name is required')
-  .max(128, 'name too long')
+  .check(utf16MaxLength(128, 'name too long'))
   .regex(MCP_NAME_RE, 'name must start with [a-z0-9] and contain only [a-z0-9_-]')
 
 /**

@@ -1,11 +1,15 @@
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 const payloadSchema = z
   .object({
     adapterRef: z
-      .object({ id: z.string().min(1).max(500), revision: z.number().int().positive() })
+      .object({
+        id: z.string().min(1).check(utf16MaxLength(500)),
+        revision: z.number().int().positive(),
+      })
       .strict(),
-    correlationRef: z.string().min(1).max(500),
+    correlationRef: z.string().min(1).check(utf16MaxLength(500)),
   })
   .strict()
 

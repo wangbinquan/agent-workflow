@@ -44,7 +44,7 @@ const FilePath = z
   )
 const ObjectReceipt = z
   .object({
-    id: z.string().uuid(),
+    id: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     sha256: z.string().regex(/^[a-f0-9]{64}$/),
     size: z.number().int().nonnegative(),
   })

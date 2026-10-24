@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import { utf16MaxLength } from '@agent-workflow/shared'
+import { toInputJsonSchema } from '@/util/zodJsonSchema'
 import {
   canonicalJson,
   GraphDesignActionRequestSchema,
@@ -36,7 +37,7 @@ export const GraphAssistOutputSchema = z
   .object({
     document: GraphDesignDocumentSchema,
     candidates: z.array(GraphViewProposalSchema).max(80),
-    explanation: z.string().min(1).max(20_000),
+    explanation: z.string().min(1).check(utf16MaxLength(20_000)),
   })
   .strict()
 
@@ -49,7 +50,7 @@ export function graphDesignAssistPrompt(request: Parameters<GraphDesignAssistPor
     catalog: JSON.parse(request.capabilityCatalogJson),
     planningBudget: request.planningBudget,
     authoringRules: GRAPH_DESIGN_AUTHORING_RULES,
-    outputSchema: zodToJsonSchema(GraphAssistOutputSchema, { $refStrategy: 'none' }),
+    outputSchema: toInputJsonSchema(GraphAssistOutputSchema),
     instructions:
       'Generate alternatives according to the request; preserve pinned views and original human source records. Return a proposal only. An anchored local action receives only its dependency-closed scope. Do not invent unseen existing identities or change the global title/goals in a local action. For update-view, return a refreshed candidate with the exact target view ID; a valid candidate may refresh that stale pinned view while keeping it pinned. For other selected-element or selected-path actions, an anchor view ID is only a locator and does not expand the supplied scope.',
   })

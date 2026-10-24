@@ -19,7 +19,7 @@ export interface ObservationRouteDependencies {
   readonly pricing: ObservationPricing
 }
 
-function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
+function parse<T extends z.ZodType>(schema: T, value: unknown): z.infer<T> {
   const parsed = schema.safeParse(value)
   if (!parsed.success)
     throw new ValidationError('invalid-query', 'Invalid observation query', parsed.error.flatten())

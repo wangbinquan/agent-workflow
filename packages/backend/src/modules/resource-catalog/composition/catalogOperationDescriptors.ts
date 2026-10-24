@@ -40,6 +40,7 @@ import {
   type ResourceAcl,
 } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 import type {
   AgentOperationDescriptors,
   McpOperationDescriptors,
@@ -382,7 +383,9 @@ const renameAgentInputSchema = z
 // rule and may contain an uppercase ULID suffix in `name`. Keep create/update/
 // rename inputs on the strict shared schemas, while preserving the established
 // response contract for already-persisted resources.
-const agentCatalogResourceSchema = AgentSchema.extend({ name: z.string().min(1).max(128) })
+const agentCatalogResourceSchema = AgentSchema.extend({
+  name: z.string().min(1).check(utf16MaxLength(128)),
+})
 const deleteAgentReceiptSchema = z.object({ deleted: agentCatalogResourceSchema }).strict()
 
 export function createAgentOperationDescriptors(
@@ -1246,7 +1249,7 @@ const RESOURCE_PACKAGE_PUBLIC_ERRORS = Object.freeze([
 const resourcePackageSubmissionSchema = z
   .object({
     kind: z.literal('staged-resource-package'),
-    handle: z.string().min(1).max(128),
+    handle: z.string().min(1).check(utf16MaxLength(128)),
   })
   .strict()
 const inspectResourcePackageSchema = z
@@ -1257,8 +1260,8 @@ const applyResourcePackageSchema = z
     submission: resourcePackageSubmissionSchema,
     idempotencyKey: z
       .string()
-      .min(8)
-      .max(256)
+      .check(utf16MinLength(8))
+      .check(utf16MaxLength(256))
       .regex(/^[A-Za-z0-9._:-]+$/),
   })
   .strict()

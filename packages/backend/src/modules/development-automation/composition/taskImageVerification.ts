@@ -10,6 +10,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 import {
   releaseCompletedWorkVolumeWriter,
@@ -27,9 +28,9 @@ const Request = z.discriminatedUnion('method', [
   z.object({
     method: z.literal('behavior'),
     path: z.string(),
-    id: z.string().uuid(),
+    id: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     programRef: z.string(),
-    inputJson: z.string().max(1024 * 1024),
+    inputJson: z.string().check(utf16MaxLength(1024 * 1024)),
     timeoutMs: z.number().int().positive().max(300_000),
   }),
   z.object({
@@ -41,11 +42,18 @@ const Request = z.discriminatedUnion('method', [
   z.object({
     method: z.literal('run'),
     path: z.string(),
-    id: z.string().uuid(),
+    id: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
     step: verificationStepSchema,
   }),
-  z.object({ method: z.literal('collect'), path: z.string(), pattern: z.string().max(500) }),
-  z.object({ method: z.literal('dispose'), id: z.string().uuid() }),
+  z.object({
+    method: z.literal('collect'),
+    path: z.string(),
+    pattern: z.string().check(utf16MaxLength(500)),
+  }),
+  z.object({
+    method: z.literal('dispose'),
+    id: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
+  }),
 ])
 export interface HostedVerificationReceipt {
   readonly exitCode: number

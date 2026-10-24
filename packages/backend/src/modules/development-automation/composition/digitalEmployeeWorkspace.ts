@@ -10,6 +10,7 @@ import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/ty
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -49,7 +50,7 @@ const planSchema = z
       .nullable()
       .optional(),
     workItemRef: z.string().min(1),
-    inputEnvelopeJson: z.string().min(2),
+    inputEnvelopeJson: z.string().check(utf16MinLength(2)),
     workspacePolicy: workspacePolicySchema,
   })
   .passthrough()
@@ -68,7 +69,7 @@ const issueContextSchema = z
       .object({
         body: z.string().nullable(),
         externalId: z.string().nullable(),
-        workingBranch: z.string().min(1).max(255).nullable().default(null),
+        workingBranch: z.string().min(1).check(utf16MaxLength(255)).nullable().default(null),
         uploads: z.array(
           z
             .object({
@@ -97,14 +98,14 @@ const issueContextSchema = z
 
 const inputEnvelopeSchema = z
   .object({
-    contextsJson: z.string().min(2),
+    contextsJson: z.string().check(utf16MinLength(2)),
   })
   .passthrough()
 
 const contextRecordSchema = z
   .object({
     typeId: z.string().min(1),
-    stateJson: z.string().min(2),
+    stateJson: z.string().check(utf16MinLength(2)),
     artifactRefs: z.array(z.string().min(1)).default([]),
   })
   .passthrough()

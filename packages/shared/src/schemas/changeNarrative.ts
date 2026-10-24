@@ -28,7 +28,7 @@ export const changeNarrativeReadingStepSchema = z.object({
 export type ChangeNarrativeReadingStep = z.infer<typeof changeNarrativeReadingStepSchema>
 
 /** Drop-invalid array: keeps elements that parse, silently discards the rest. */
-function lenientArray<T extends z.ZodTypeAny>(element: T) {
+function lenientArray<T extends z.ZodType>(element: T) {
   return z
     .array(z.unknown())
     .default([])

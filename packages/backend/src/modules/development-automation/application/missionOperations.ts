@@ -108,8 +108,8 @@ const publicErrors = Object.freeze([
 ] as const)
 const emptySchema = z.object({}).strict()
 const idSchema = z.object({ missionId: z.string().min(1) }).strict()
-const jsonRecordSchema = z.record(z.unknown())
-const bodySchema = z.record(z.unknown())
+const jsonRecordSchema = z.record(z.string(), z.unknown())
+const bodySchema = z.record(z.string(), z.unknown())
 const actorBodySchema = z.object({ body: bodySchema }).strict()
 const idBodySchema = z.object({ missionId: z.string().min(1), body: bodySchema }).strict()
 const listSchema = z

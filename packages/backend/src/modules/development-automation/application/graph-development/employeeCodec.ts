@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import type {
   EmployeeTypeContextCodec,
   EmployeeTypeReactionCodec,
@@ -7,7 +8,7 @@ import type {
 import { GRAPH_CONTEXT_TYPE, GRAPH_EMPLOYEE_TYPE, GraphEmployeeScopeSchema } from './employeeType'
 import { graphResultSchemas, graphToolResultSchema, type GraphWorkItem } from './toolContracts'
 
-const id = z.string().min(1).max(200)
+const id = z.string().min(1).check(utf16MaxLength(200))
 export const GraphEmployeeContextSchema = z
   .object({
     caseId: id,
@@ -113,10 +114,10 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
         workScopeJson: z.string(),
         intake: z
           .object({
-            target: z.record(z.string()),
+            target: z.record(z.string(), z.string()),
             kind: z.enum(['body', 'files', 'body-and-files']),
             body: z.string().nullable(),
-            typeOptions: z.record(z.string()).default({}),
+            typeOptions: z.record(z.string(), z.string()).default({}),
             uploads: z.array(
               z
                 .object({
@@ -253,7 +254,7 @@ export const graphEmployeeRuntimeCodec: EmployeeTypeContextCodec &
         schemaVersion: z.literal(1),
         roundRef: id,
         executionNonce: z.string(),
-        directResult: z.unknown(),
+        directResult: z.unknown().optional(),
       })
       .strict()
       .parse(JSON.parse(request.outputJson))

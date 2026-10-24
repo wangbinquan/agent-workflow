@@ -302,11 +302,8 @@ describe('RFC-326 AC-21 — the review tools and their tiers', () => {
     )
     // The value the pre-RFC-326 tool advertised and the route never accepted.
     expect(schema.safeParse({ ...base, decision: 'iterate' }).success).toBe(false)
-    // The shared schema is refined (twice); unwrap to the object underneath.
-    type Wrapped = { shape?: Record<string, unknown>; innerType?: () => Wrapped }
-    let wire = SubmitReviewDecisionSchema as unknown as Wrapped
-    while (wire.shape === undefined && wire.innerType !== undefined) wire = wire.innerType()
-    const wireKeys = Object.keys(wire.shape ?? {}).sort()
+    // Zod 4 keeps both refinements on the object itself.
+    const wireKeys = Object.keys(SubmitReviewDecisionSchema.shape).sort()
     expect(wireKeys.length).toBeGreaterThan(0)
     expect(Object.keys(toolNamed('submit_review').inputSchema).sort()).toEqual(
       [...wireKeys, 'nodeRunId'].sort(),

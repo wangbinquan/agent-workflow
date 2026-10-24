@@ -15,6 +15,7 @@
 //   call 目标                   → BundleCallRef（+ name: / builtin:）
 
 import { z } from 'zod'
+import { utf16MaxLength } from '../schemas/utf16Length'
 import {
   AgentInputPortsSchema,
   AgentOutputKindsMapSchema,
@@ -171,8 +172,8 @@ export const BundleWorkflowDefinitionSchema = z
 
 export const BundleAgentPayloadSchema = z
   .object({
-    name: z.string().min(1).max(128),
-    description: z.string().max(4096).default(''),
+    name: z.string().min(1).check(utf16MaxLength(128)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
     outputs: z.array(z.string()).default([]),
     outputKinds: AgentOutputKindsMapSchema.optional(),
     inputs: AgentInputPortsSchema.optional(),
@@ -181,7 +182,7 @@ export const BundleAgentPayloadSchema = z
     syncOutputsOnIterate: z.boolean().default(true),
     /** runtime PROFILE NAME（不是资源引用——runtime 不是六类 ACL 资源之一）。
      *  它进 manifest.requirements.runtimes，导入方需自备同名执行档。 */
-    runtime: z.string().min(1).max(128).optional(),
+    runtime: z.string().min(1).check(utf16MaxLength(128)).optional(),
     permission: AgentPermissionSchema.default({}),
     /** 第四个槽位域：唯一允许 `project:` 的地方。 */
     skills: z.array(BundleAgentSkillRefWireSchema).max(64).default([]),
@@ -203,19 +204,19 @@ export const BundleSkillFileSchema = z
     path: z
       .string()
       .min(1)
-      .max(1024)
+      .check(utf16MaxLength(1024))
       .refine((p) => !p.startsWith('/') && !p.split('/').includes('..'), {
         message: 'path must be relative and must not traverse',
       }),
     /** 载体引用：包内 zip 路径 / intent 的内联句柄。由 provider 的 readSkillFile 解。 */
-    ref: z.string().min(1).max(1024),
+    ref: z.string().min(1).check(utf16MaxLength(1024)),
   })
   .strict()
 
 export const BundleSkillPayloadSchema = z
   .object({
-    name: z.string().min(1).max(128),
-    description: z.string().max(4096).default(''),
+    name: z.string().min(1).check(utf16MaxLength(128)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
     /** SKILL.md 的 frontmatter + 正文（正式形态，见 shared/skill-md.ts）。 */
     frontmatterExtra: z.record(z.string(), z.unknown()).default({}),
     bodyMd: z.string().default(''),
@@ -248,8 +249,8 @@ export type BundleSkillPayload = z.infer<typeof BundleSkillPayloadSchema>
 export const BundleMcpPayloadSchema = z.discriminatedUnion('type', [
   z
     .object({
-      name: z.string().min(1).max(128),
-      description: z.string().max(4096).default(''),
+      name: z.string().min(1).check(utf16MaxLength(128)),
+      description: z.string().check(utf16MaxLength(4096)).default(''),
       type: z.literal('local'),
       enabled: z.boolean().default(true),
       config: McpLocalConfigSchema,
@@ -257,8 +258,8 @@ export const BundleMcpPayloadSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
-      name: z.string().min(1).max(128),
-      description: z.string().max(4096).default(''),
+      name: z.string().min(1).check(utf16MaxLength(128)),
+      description: z.string().check(utf16MaxLength(4096)).default(''),
       type: z.literal('remote'),
       enabled: z.boolean().default(true),
       config: McpRemoteConfigSchema,
@@ -271,11 +272,11 @@ export type BundleMcpPayload = z.infer<typeof BundleMcpPayloadSchema>
 
 export const BundlePluginPayloadSchema = z
   .object({
-    name: z.string().min(1).max(128),
+    name: z.string().min(1).check(utf16MaxLength(128)),
     /** ⚠️ 正式字段名是 `options`（intent 版叫 `optionsJson`）—— R7-P2-10。 */
     options: PluginOptionsSchema.default({}),
-    spec: z.string().min(1).max(512),
-    description: z.string().max(4096).default(''),
+    spec: z.string().min(1).check(utf16MaxLength(512)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
     enabled: z.boolean().default(true),
     sourceKind: PluginSourceKindSchema,
     // 决策 13：不带 cachedPath / resolvedVersion / installedAt（机器本地产物）。
@@ -288,8 +289,8 @@ export type BundlePluginPayload = z.infer<typeof BundlePluginPayloadSchema>
 /** 节点里的引用槽已经被 lowering 成 wire 形态；definition 其余部分原样。 */
 export const BundleWorkflowPayloadSchema = z
   .object({
-    name: z.string().min(1).max(256),
-    description: z.string().max(4096).default(''),
+    name: z.string().min(1).check(utf16MaxLength(256)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
     definition: BundleWorkflowDefinitionSchema,
   })
   .strict()
@@ -306,17 +307,17 @@ export const BundleWorkgroupMemberSchema = z.discriminatedUnion('memberType', [
     .object({
       memberType: z.literal('agent'),
       agentRef: BundleAgentIdentityRefWireSchema,
-      displayName: z.string().min(1).max(64),
-      roleDesc: z.string().max(2048).default(''),
+      displayName: z.string().min(1).check(utf16MaxLength(64)),
+      roleDesc: z.string().check(utf16MaxLength(2048)).default(''),
       sortOrder: z.number().int(),
     })
     .strict(),
   z
     .object({
       memberType: z.literal('human'),
-      username: z.string().min(1).max(64),
-      displayName: z.string().min(1).max(64),
-      roleDesc: z.string().max(2048).default(''),
+      username: z.string().min(1).check(utf16MaxLength(64)),
+      displayName: z.string().min(1).check(utf16MaxLength(64)),
+      roleDesc: z.string().check(utf16MaxLength(2048)).default(''),
       sortOrder: z.number().int(),
     })
     .strict(),
@@ -324,9 +325,9 @@ export const BundleWorkgroupMemberSchema = z.discriminatedUnion('memberType', [
 
 export const BundleWorkgroupPayloadSchema = z
   .object({
-    name: z.string().min(1).max(256),
-    description: z.string().max(4096).default(''),
-    instructions: z.string().max(65536).default(''),
+    name: z.string().min(1).check(utf16MaxLength(256)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
+    instructions: z.string().check(utf16MaxLength(65536)).default(''),
     mode: WorkgroupModeSchema,
     /** Optional only for packages exported before RFC-274. */
     outputContract: WorkgroupOutputContractSchema.optional(),
@@ -337,7 +338,7 @@ export const BundleWorkgroupPayloadSchema = z
     fanOut: z.boolean().optional(),
     members: z.array(BundleWorkgroupMemberSchema).max(64).default([]),
     /** `leaderMemberId` 是本地行 id，不可移植；组内 displayName 唯一，可作稳定键。 */
-    leaderDisplayName: z.string().min(1).max(64).nullable(),
+    leaderDisplayName: z.string().min(1).check(utf16MaxLength(64)).nullable(),
   })
   .strict()
 export type BundleWorkgroupPayload = z.infer<typeof BundleWorkgroupPayloadSchema>
@@ -354,9 +355,9 @@ export type BundleWorkgroupPayload = z.infer<typeof BundleWorkgroupPayloadSchema
  */
 export const BundleCapabilityFrameworkPayloadSchema = z
   .object({
-    name: z.string().min(1).max(200),
-    description: z.string().max(4096).default(''),
-    capability: z.string().min(1).max(64),
+    name: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
+    capability: z.string().min(1).check(utf16MaxLength(64)),
     /** `{entry,collect,classify,arbitrate,select}` → {language, script, env?}. */
     scripts: z.record(z.string(), z.unknown()).default({}),
     hooks: z.array(z.record(z.string(), z.unknown())).max(64).default([]),
@@ -383,8 +384,8 @@ export type BundleCapabilityFrameworkPayload = z.infer<
  */
 export const BundleCapabilityBindingPayloadSchema = z
   .object({
-    name: z.string().min(1).max(200),
-    description: z.string().max(4096).default(''),
+    name: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
     frameworkRef: BundleFrameworkIdentityRefWireSchema,
     agentBySlot: z.record(z.string(), BundleAgentIdentityRefWireSchema).default({}),
     promptBySlot: z.record(z.string(), z.string()).default({}),
@@ -408,9 +409,9 @@ export type BundleCapabilityBindingPayload = z.infer<typeof BundleCapabilityBind
  */
 export const BundleCapabilityTemplatePayloadSchema = z
   .object({
-    name: z.string().min(1).max(200),
-    description: z.string().max(4096).default(''),
-    capability: z.string().min(1).max(64),
+    name: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(4096)).default(''),
+    capability: z.string().min(1).check(utf16MaxLength(64)),
     scripts: z.record(z.string(), z.unknown()).default({}),
     hooks: z.array(z.record(z.string(), z.unknown())).max(64).default([]),
     paramSchema: z.array(z.record(z.string(), z.unknown())).max(50).default([]),

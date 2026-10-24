@@ -64,7 +64,7 @@ function reject(
   }
 }
 
-function pointerOf(path: readonly (string | number)[]): string {
+function pointerOf(path: readonly PropertyKey[]): string {
   return path.length === 0 ? '' : `/${path.map(String).join('/')}`
 }
 

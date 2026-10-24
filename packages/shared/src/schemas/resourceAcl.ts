@@ -19,6 +19,7 @@ import { ClarifyDecisionSchema } from './clarifyDecision'
 // reach agent prompts.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { UserPublicSchema } from './user'
 
 export const ACL_RESOURCE_TYPES = [
@@ -284,18 +285,18 @@ export type ClarifyAnswerAttributions = z.infer<typeof ClarifyAnswerAttributions
  * server-side at submit like the answers path.
  */
 export const ClarifyDraftSaveBodySchema = z.object({
-  confirmedBasis: z.string().max(128).optional(),
+  confirmedBasis: z.string().check(utf16MaxLength(128)).optional(),
   decision: ClarifyDecisionSchema.optional(),
   roundId: z.string().min(1),
   questionId: z.string().min(1),
   selectedOptionIndices: z.array(z.number().int().nonnegative()).max(64).default([]),
-  customText: z.string().max(65536).default(''),
+  customText: z.string().check(utf16MaxLength(65536)).default(''),
 })
 export type ClarifyDraftSaveBody = z.infer<typeof ClarifyDraftSaveBodySchema>
 
 /** Per-question draft value stored in clarify_rounds.draft_answers_json. */
 export const ClarifyDraftValueSchema = z.object({
-  confirmedBasis: z.string().max(128).optional(),
+  confirmedBasis: z.string().check(utf16MaxLength(128)).optional(),
   decision: ClarifyDecisionSchema.optional(),
   selectedOptionIndices: z.array(z.number().int().nonnegative()).default([]),
   customText: z.string().default(''),

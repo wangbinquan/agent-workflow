@@ -131,8 +131,8 @@ export type InventoryEntry = z.infer<typeof InventoryEntrySchema>
 // 面集合：显式五键，全可选（缺席 = 该运行时本轮未报告此面）
 // ---------------------------------------------------------------------------
 
-type ObservedFacesShape = { readonly [F in InventoryFace]: z.ZodOptional<z.ZodArray<z.ZodTypeAny>> }
-type EntryFacesShape = { readonly [F in InventoryFace]: z.ZodOptional<z.ZodArray<z.ZodTypeAny>> }
+type ObservedFacesShape = { readonly [F in InventoryFace]: z.ZodOptional<z.ZodArray<z.ZodType>> }
+type EntryFacesShape = { readonly [F in InventoryFace]: z.ZodOptional<z.ZodArray<z.ZodType>> }
 
 const observedFacesShape = {
   agents: z.array(ObservedInventoryItemSchema).optional(),

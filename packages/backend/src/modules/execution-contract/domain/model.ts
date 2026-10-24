@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 export interface LocalizedContractText {
   'zh-CN': string
@@ -114,11 +115,14 @@ export interface ExecutionContractAgentCandidateReceipt {
 const machineIdSchema = z
   .string()
   .min(1)
-  .max(240)
+  .check(utf16MaxLength(240))
   .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]*$/)
 
 export const localizedContractTextSchema = z
-  .object({ 'zh-CN': z.string().min(1).max(2_000), 'en-US': z.string().min(1).max(2_000) })
+  .object({
+    'zh-CN': z.string().min(1).check(utf16MaxLength(2_000)),
+    'en-US': z.string().min(1).check(utf16MaxLength(2_000)),
+  })
   .strict()
 
 export const executionContractRefSchema = z
@@ -127,14 +131,14 @@ export const executionContractRefSchema = z
 
 export const executionContractFieldSchema = z
   .object({
-    path: z.string().min(1).max(300),
+    path: z.string().min(1).check(utf16MaxLength(300)),
     label: localizedContractTextSchema,
     description: localizedContractTextSchema,
     valueType: z.enum(['string', 'number', 'boolean', 'enum', 'object', 'array', 'json']),
     required: z.boolean(),
     source: z.enum(['platform', 'work-input', 'event', 'context', 'artifact']),
     condition: localizedContractTextSchema.nullable().default(null),
-    example: z.string().max(2_000).nullable().default(null),
+    example: z.string().check(utf16MaxLength(2_000)).nullable().default(null),
   })
   .strict()
 
@@ -194,12 +198,15 @@ export const executionContractSchemaGuideSchema = z
     displayName: localizedContractTextSchema,
     description: localizedContractTextSchema,
     topLevelFields: z.array(machineIdSchema).min(1).max(100),
-    primaryFieldPaths: z.array(z.string().min(1).max(300)).max(20).default([]),
+    primaryFieldPaths: z
+      .array(z.string().min(1).check(utf16MaxLength(300)))
+      .max(20)
+      .default([]),
     fields: z.array(executionContractFieldSchema).min(1).max(200),
     exampleJson: z
       .string()
-      .min(2)
-      .max(128 * 1024),
+      .check(utf16MinLength(2))
+      .check(utf16MaxLength(128 * 1024)),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -288,10 +295,10 @@ export const executionContractSchemaGuideSchema = z
 
 const transportGuideSchema = z
   .object({
-    inputLocation: z.string().min(1).max(200),
-    outputLocation: z.string().min(1).max(200),
+    inputLocation: z.string().min(1).check(utf16MaxLength(200)),
+    outputLocation: z.string().min(1).check(utf16MaxLength(200)),
     outputPort: machineIdSchema.optional(),
-    outputKind: z.string().min(1).max(100).optional(),
+    outputKind: z.string().min(1).check(utf16MaxLength(100)).optional(),
     inputInstruction: localizedContractTextSchema,
     outputInstruction: localizedContractTextSchema,
   })
@@ -407,7 +414,11 @@ export const executionContractImplementationSchema = z.discriminatedUnion('kind'
 ])
 
 export const executionContractCheckSchema = z
-  .object({ code: machineIdSchema, ok: z.boolean(), detail: z.string().max(4_000) })
+  .object({
+    code: machineIdSchema,
+    ok: z.boolean(),
+    detail: z.string().check(utf16MaxLength(4_000)),
+  })
   .strict()
 
 export const executionContractValidationReceiptSchema = z

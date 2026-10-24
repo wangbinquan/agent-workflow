@@ -1,4 +1,4 @@
-import { zodToJsonSchema } from 'zod-to-json-schema'
+import { toInputJsonSchema } from '@/util/zodJsonSchema'
 import {
   CreateAgentSchema,
   WorkflowDefinitionSchema,
@@ -25,7 +25,7 @@ export const GRAPH_BUILTIN_IDS = {
 export function graphOutputInstructions(
   item: 'design-and-clarify' | 'implement-change' | 'review-design',
 ) {
-  return `Business output JSON schema:\n${JSON.stringify(zodToJsonSchema(graphToolResultSchema(item), { $refStrategy: 'none' }))}`
+  return `Business output JSON schema:\n${JSON.stringify(toInputJsonSchema(graphToolResultSchema(item)))}`
 }
 const base = {
   permission: {},

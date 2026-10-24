@@ -282,7 +282,11 @@ export function mountDevelopmentMissionRoutes(
     executionGroup: 'development',
     tokenAccess: 'allow',
     decode: async (c) => {
-      decodeOrInvalid(descriptor.resume.id, z.record(z.unknown()), await safeJsonOrEmpty(c.req.raw))
+      decodeOrInvalid(
+        descriptor.resume.id,
+        z.record(z.string(), z.unknown()),
+        await safeJsonOrEmpty(c.req.raw),
+      )
       return { missionId: c.req.param('id') }
     },
     context,

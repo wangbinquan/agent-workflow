@@ -1,23 +1,27 @@
 import { canonicalJson, type TriggerContext } from '@agent-workflow/shared'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
 
 export const machineIdSchema = z
   .string()
   .min(1)
-  .max(160)
+  .check(utf16MaxLength(160))
   .regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/)
 
 export const localizedEventTextSchema = z
   .object({
-    'zh-CN': z.string().min(1).max(500),
-    'en-US': z.string().min(1).max(500),
+    'zh-CN': z.string().min(1).check(utf16MaxLength(500)),
+    'en-US': z.string().min(1).check(utf16MaxLength(500)),
   })
   .strict()
 
 export const eventExactRefSchema = z
-  .object({ id: z.string().min(1).max(200), revision: z.number().int().positive() })
+  .object({
+    id: z.string().min(1).check(utf16MaxLength(200)),
+    revision: z.number().int().positive(),
+  })
   .strict()
 
 export type EventExactRef = z.infer<typeof eventExactRefSchema>
@@ -74,7 +78,7 @@ export const eventTypeDescriptorSchema = z
         namespace: z
           .string()
           .min(1)
-          .max(64)
+          .check(utf16MaxLength(64))
           .regex(/^[a-z][a-z0-9_-]*$/),
         fields: z
           .array(
@@ -83,7 +87,7 @@ export const eventTypeDescriptorSchema = z
                 fieldId: z
                   .string()
                   .min(1)
-                  .max(128)
+                  .check(utf16MaxLength(128))
                   .regex(/^[a-z][a-z0-9_-]*$/),
                 displayName: localizedEventTextSchema,
                 description: localizedEventTextSchema,
@@ -112,7 +116,7 @@ export const eventTypeDescriptorSchema = z
 export type EventTypeDescriptor = z.infer<typeof eventTypeDescriptorSchema>
 
 export const eventSubjectSchema = z
-  .object({ typeId: machineIdSchema, subjectRef: z.string().min(1).max(1_000) })
+  .object({ typeId: machineIdSchema, subjectRef: z.string().min(1).check(utf16MaxLength(1_000)) })
   .strict()
 
 export type EventSubject = z.infer<typeof eventSubjectSchema>
@@ -120,7 +124,7 @@ export type EventSubject = z.infer<typeof eventSubjectSchema>
 export const eventSubscriberSchema = z
   .object({
     kind: z.enum(['employee-case', 'employee-invocation', 'automation', 'system']),
-    subscriberRef: z.string().min(1).max(500),
+    subscriberRef: z.string().min(1).check(utf16MaxLength(500)),
   })
   .strict()
 
@@ -159,18 +163,18 @@ export const eventObservationSchema = z
     eventTypeRef: eventExactRefSchema,
     subject: eventSubjectSchema,
     occurredAt: z.number().int().nonnegative(),
-    dedupeKey: z.string().min(1).max(500),
-    summary: z.string().min(1).max(2_000),
-    payloadArtifactRef: z.string().min(1).max(1_000).nullable(),
+    dedupeKey: z.string().min(1).check(utf16MaxLength(500)),
+    summary: z.string().min(1).check(utf16MaxLength(2_000)),
+    payloadArtifactRef: z.string().min(1).check(utf16MaxLength(1_000)).nullable(),
     routingFacts: eventRoutingFactsSchema.nullable().default(null),
     triggerParameters: z
       .record(
         z
           .string()
           .min(1)
-          .max(128)
+          .check(utf16MaxLength(128))
           .regex(/^[a-z][a-z0-9_-]*$/),
-        z.string().max(64 * 1024),
+        z.string().check(utf16MaxLength(64 * 1024)),
       )
       .nullable()
       .default(null),
@@ -184,7 +188,7 @@ export const observerBatchSchema = z
     schemaVersion: z.literal(1),
     cursorJson: z
       .string()
-      .max(64 * 1024)
+      .check(utf16MaxLength(64 * 1024))
       .nullable(),
     observations: z.array(eventObservationSchema).max(1_000),
   })

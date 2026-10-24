@@ -82,7 +82,7 @@ describeEachProvider('rfc310 pr5 T55a — no-change human gate', (harness) => {
     await expect(confirmNoChange(fx.deps(), { missionId: 'missing' })).rejects.toMatchObject({
       status: 422,
       code: 'mission-input-invalid',
-      message: 'receiptNote: Required',
+      message: 'receiptNote: Invalid input: expected string, received undefined',
     })
     await expect(
       confirmNoChange(fx.deps(), { missionId: 'missing', receiptNote: 'a'.repeat(2001) }),
@@ -96,7 +96,8 @@ describeEachProvider('rfc310 pr5 T55a — no-change human gate', (harness) => {
     await expect(submitMissionAnswers(deps, { missionId: 'missing' })).rejects.toMatchObject({
       status: 422,
       code: 'mission-input-invalid',
-      message: 'questionSetRef: Required; answers: Required',
+      message:
+        'questionSetRef: Invalid input: expected string, received undefined; answers: Invalid input: expected array, received undefined',
     })
     await expect(
       submitMissionAnswers(deps, {

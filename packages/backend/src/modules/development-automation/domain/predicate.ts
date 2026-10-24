@@ -6,11 +6,12 @@
 // 不会收到未经预算检查的树。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 export const PREDICATE_MAX_DEPTH = 8
 export const PREDICATE_MAX_NODES = 64
 
-const factId = z.string().min(1).max(200)
+const factId = z.string().min(1).check(utf16MaxLength(200))
 
 export type FactPredicate =
   | { readonly kind: 'enum-equals'; readonly fact: string; readonly value: string }

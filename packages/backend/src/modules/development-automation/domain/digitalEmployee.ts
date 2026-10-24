@@ -8,6 +8,7 @@
 // 版本：Mission pin 后不因资源被编辑而漂移。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { agentCapabilityIdSchema } from './capabilityDefinition'
 import { canonicalDigest } from './canonicalJson'
@@ -20,11 +21,11 @@ const versionedRef = z
 
 export type VersionedRef = z.infer<typeof versionedRef>
 
-const ruleId = z.string().min(1).max(120)
+const ruleId = z.string().min(1).check(utf16MaxLength(120))
 const stepId = z
   .string()
   .min(1)
-  .max(120)
+  .check(utf16MaxLength(120))
   .regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
 
 const stepTargetSchema = z.union([stepId, z.enum(['reconcile', 'complete', 'block', 'handoff'])])
@@ -46,7 +47,12 @@ const stepFailureRuleSchema = z
   .strict()
 
 const targetRepositoryRuleSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('fixed'), repositoryId: z.string().min(1).max(200) }).strict(),
+  z
+    .object({
+      kind: z.literal('fixed'),
+      repositoryId: z.string().min(1).check(utf16MaxLength(200)),
+    })
+    .strict(),
   z
     .object({
       kind: z.literal('fact'),
@@ -93,7 +99,7 @@ export const employeeStepProducerSchema = z.discriminatedUnion('kind', [
       kind: z.literal('approval-prepare'),
       executor: z.enum(['agent', 'script']),
       implementationRef: versionedRef,
-      approvalType: z.string().min(1).max(120),
+      approvalType: z.string().min(1).check(utf16MaxLength(120)),
     })
     .strict(),
   z
@@ -116,7 +122,7 @@ export const employeeStepProducerSchema = z.discriminatedUnion('kind', [
         .int()
         .min(5_000)
         .max(30 * 24 * 60 * 60 * 1000),
-      webhookSourceKey: z.string().min(1).max(120).nullable(),
+      webhookSourceKey: z.string().min(1).check(utf16MaxLength(120)).nullable(),
     })
     .strict(),
 ])
@@ -129,7 +135,7 @@ const stepInputSchema = z.discriminatedUnion('kind', [
     .object({
       kind: z.literal('compose'),
       sources: z
-        .array(z.object({ name: z.string().min(1).max(80), stepId }).strict())
+        .array(z.object({ name: z.string().min(1).check(utf16MaxLength(80)), stepId }).strict())
         .min(1)
         .max(16),
     })
@@ -155,8 +161,8 @@ const stepJoinSchema = z
 export const employeeStepSchema = z
   .object({
     stepId,
-    displayName: z.string().min(1).max(200),
-    description: z.string().max(2_000),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
+    description: z.string().check(utf16MaxLength(2_000)),
     when: z.array(factPredicateSchema).max(16),
     producer: employeeStepProducerSchema,
     input: stepInputSchema,
@@ -169,7 +175,7 @@ export const employeeStepSchema = z
 export const problemTypeDefinitionSchema = z
   .object({
     typeId: stepId,
-    displayName: z.string().min(1).max(200),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
     evidenceDomain: z.enum(['pipeline', 'verification', 'feedback', 'conflict', 'mr']),
     repairable: z.boolean(),
     priority: z.number().int().min(0).max(10_000),
@@ -180,7 +186,7 @@ export const problemTypeDefinitionSchema = z
 export const problemProducerDefinitionSchema = z
   .object({
     producerId: stepId,
-    displayName: z.string().min(1).max(200),
+    displayName: z.string().min(1).check(utf16MaxLength(200)),
     kind: z.enum(['agent', 'script']),
     implementationRef: versionedRef,
     evidenceDomains: z.array(problemTypeDefinitionSchema.shape.evidenceDomain).min(1).max(5),
@@ -226,7 +232,7 @@ export const capabilityRouteSchema = z
 
 export const requirementSourceBindingSchema = z
   .object({
-    sourceKey: z.string().min(1).max(120),
+    sourceKey: z.string().min(1).check(utf16MaxLength(120)),
     adapterRef: versionedRef,
     isDefault: z.boolean(),
   })
@@ -234,7 +240,7 @@ export const requirementSourceBindingSchema = z
 
 export const pipelineProviderBindingSchema = z
   .object({
-    providerKey: z.string().min(1).max(120),
+    providerKey: z.string().min(1).check(utf16MaxLength(120)),
     adapterRef: versionedRef,
   })
   .strict()
@@ -242,7 +248,7 @@ export const pipelineProviderBindingSchema = z
 export const digitalEmployeeContentSchema = z
   .object({
     schemaVersion: z.literal(1),
-    description: z.string().max(4000),
+    description: z.string().check(utf16MaxLength(4000)),
     businessStatus: z.enum(['enabled', 'disabled']).optional(),
     supportedRepositoryFacts: z.array(factPredicateSchema),
     steps: z.array(employeeStepSchema).max(100).optional(),

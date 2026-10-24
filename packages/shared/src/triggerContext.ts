@@ -5,6 +5,7 @@
 // prompts are all equal consumers of the frozen task context.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './schemas/utf16Length'
 import {
   CodeHostEventTypeSchema,
   WEBHOOK_EVENT_VAR_MATRIX,
@@ -76,7 +77,10 @@ const triggerParameterContractSchema = z
   .object({
     namespace: z.string().regex(TRIGGER_NAMESPACE_RE),
     definitionRef: z
-      .object({ id: z.string().min(1).max(200), revision: z.number().int().positive() })
+      .object({
+        id: z.string().min(1).check(utf16MaxLength(200)),
+        revision: z.number().int().positive(),
+      })
       .strict(),
     availableFields: z
       .array(z.string().regex(TRIGGER_FIELD_RE))
@@ -90,7 +94,7 @@ const canonicalTriggerContextSchema = z
   .object({
     trigger: z.record(
       z.string().regex(TRIGGER_NAMESPACE_RE),
-      z.record(z.string().regex(TRIGGER_FIELD_RE), z.string().max(64 * 1024)),
+      z.record(z.string().regex(TRIGGER_FIELD_RE), z.string().check(utf16MaxLength(64 * 1024))),
     ),
     contract: triggerParameterContractSchema,
   })

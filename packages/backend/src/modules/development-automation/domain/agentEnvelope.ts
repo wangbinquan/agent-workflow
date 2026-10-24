@@ -10,12 +10,13 @@
 // zod 的 intersection 会让两侧 strict 互相把对方的键当 unknown 拒掉。
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 export const AGENT_RESULT_PORT = 'agent-result'
 
 const headerShape = {
   protocolVersion: z.literal(1),
-  nonce: z.string().min(16),
+  nonce: z.string().check(utf16MinLength(16)),
   port: z.literal(AGENT_RESULT_PORT),
   actionRunRef: z.string().min(1),
   inputDigest: z.string().min(1),
@@ -133,11 +134,11 @@ export const agentReadOnlyResultSchema = z.discriminatedUnion('capabilityId', [
         .array(
           z
             .object({
-              findingId: z.string().min(1).max(120),
-              path: z.string().min(1).max(500),
+              findingId: z.string().min(1).check(utf16MaxLength(120)),
+              path: z.string().min(1).check(utf16MaxLength(500)),
               severity: z.enum(['blocker', 'major', 'minor', 'info']),
               disposition: z.enum(['must-fix', 'should-fix', 'note']),
-              summary: z.string().min(1).max(2000),
+              summary: z.string().min(1).check(utf16MaxLength(2000)),
             })
             .strict(),
         )
@@ -147,7 +148,7 @@ export const agentReadOnlyResultSchema = z.discriminatedUnion('capabilityId', [
   z
     .object({
       capabilityId: z.literal('problem.classify'),
-      producerId: z.string().min(1).max(120),
+      producerId: z.string().min(1).check(utf16MaxLength(120)),
       evidenceDigest: z.string().regex(/^[0-9a-f]{64}$/),
       headSha: z.string().regex(/^[0-9a-f]{40}$/),
       complete: z.boolean(),
@@ -155,10 +156,13 @@ export const agentReadOnlyResultSchema = z.discriminatedUnion('capabilityId', [
         .array(
           z
             .object({
-              problemRef: z.string().min(1).max(200),
-              typeId: z.string().min(1).max(120),
-              subjectRefs: z.array(z.string().min(1).max(500)).min(1).max(200),
-              summary: z.string().min(1).max(2_000),
+              problemRef: z.string().min(1).check(utf16MaxLength(200)),
+              typeId: z.string().min(1).check(utf16MaxLength(120)),
+              subjectRefs: z
+                .array(z.string().min(1).check(utf16MaxLength(500)))
+                .min(1)
+                .max(200),
+              summary: z.string().min(1).check(utf16MaxLength(2_000)),
             })
             .strict(),
         )
@@ -169,11 +173,11 @@ export const agentReadOnlyResultSchema = z.discriminatedUnion('capabilityId', [
     .object({
       capabilityId: z.literal('approval.prepare'),
       stepRunRef: z.string().min(1),
-      approvalType: z.string().min(1).max(120),
-      title: z.string().min(1).max(500),
-      bodyArtifactRef: z.string().min(1).max(500),
-      evidenceRefs: z.array(z.string().min(1).max(500)).max(100),
-      requestedScopes: z.array(z.string().min(1).max(200)).max(100),
+      approvalType: z.string().min(1).check(utf16MaxLength(120)),
+      title: z.string().min(1).check(utf16MaxLength(500)),
+      bodyArtifactRef: z.string().min(1).check(utf16MaxLength(500)),
+      evidenceRefs: z.array(z.string().min(1).check(utf16MaxLength(500))).max(100),
+      requestedScopes: z.array(z.string().min(1).check(utf16MaxLength(200))).max(100),
     })
     .strict(),
 ])

@@ -16,8 +16,8 @@ export const HostedRuntimeCapabilitiesSchema = z.object({
   taskRuntimeImageVersionId: z.string().nullable().optional(),
   agentProfiles: z.array(
     z.object({
-      agentProfileId: z.string().uuid(),
-      computeProfileId: z.string().uuid(),
+      agentProfileId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
+      computeProfileId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
       profileRevision: z.number().int().positive(),
       capabilities: z.object({
         events: z.boolean(),

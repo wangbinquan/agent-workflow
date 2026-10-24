@@ -5,9 +5,10 @@
 // turns until the user ends the test or the 10-minute idle deadline expires.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { OperationConfigHashSchema } from './operationRevision'
 
-const IdSchema = z.string().min(1).max(128)
+const IdSchema = z.string().min(1).check(utf16MaxLength(128))
 
 export const McpRuntimeTestSessionStatusSchema = z.enum(['active', 'ending', 'ended'])
 export type McpRuntimeTestSessionStatus = z.infer<typeof McpRuntimeTestSessionStatusSchema>
@@ -107,8 +108,8 @@ export type McpRuntimeTestSessionDto = z.infer<typeof McpRuntimeTestSessionDtoSc
 export const McpRuntimeTestCreateRequestSchema = z
   .object({
     expectedMcpConfigHash: OperationConfigHashSchema,
-    runtimeName: z.string().min(1).max(128).nullable(),
-    message: z.string().min(1).max(65_536),
+    runtimeName: z.string().min(1).check(utf16MaxLength(128)).nullable(),
+    message: z.string().min(1).check(utf16MaxLength(65_536)),
     clientCreateId: IdSchema,
     clientMessageId: IdSchema,
   })
@@ -125,7 +126,7 @@ export type McpRuntimeTestCreateReceipt = z.infer<typeof McpRuntimeTestCreateRec
 
 export const McpRuntimeTestMessageRequestSchema = z
   .object({
-    message: z.string().min(1).max(65_536),
+    message: z.string().min(1).check(utf16MaxLength(65_536)),
     clientMessageId: IdSchema,
     expectedSessionVersion: z.number().int().nonnegative(),
   })

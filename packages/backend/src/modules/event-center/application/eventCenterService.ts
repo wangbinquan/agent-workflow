@@ -1,5 +1,6 @@
 import { ulid } from 'ulid'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import { createTriggerContext } from '@agent-workflow/shared'
 
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
@@ -796,7 +797,7 @@ export class EventCenterService {
       eventExactRefSchema.parse(definition.sourceRef)
       eventExactRefSchema.parse(match.eventTypeRef)
       eventSubscriberSchema.parse(definition.subscriber)
-      z.string().min(1).max(500).parse(match.materializedSubscriptionId)
+      z.string().min(1).check(utf16MaxLength(500)).parse(match.materializedSubscriptionId)
       if (definition.state !== 'active') {
         throw new ValidationError(
           'event-routing-subscription-inactive',

@@ -33,15 +33,16 @@ import { invokeOperation } from '@/platform/operations/invoke'
 import { registerOperationRoute } from '@/routes/operationRoute'
 import { ValidationError } from '@/util/errors'
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 /** 线上形状由 Zod 把关——routes 里禁止用 `as T` 绕过校验（RFC-054 W1-7）。 */
 const ImportDecisionsSchema = z.array(
   z
     .object({
-      localSlug: z.string().min(1).max(128),
+      localSlug: z.string().min(1).check(utf16MaxLength(128)),
       action: z.enum(['new', 'reuse', 'overwrite']),
-      targetId: z.string().min(1).max(64).optional(),
-      finalName: z.string().min(1).max(256).optional(),
+      targetId: z.string().min(1).check(utf16MaxLength(64)).optional(),
+      finalName: z.string().min(1).check(utf16MaxLength(256)).optional(),
     })
     .strict(),
 )
@@ -50,9 +51,9 @@ const ImportDecisionsSchema = z.array(
 const HumanMemberMappingsSchema = z.array(
   z
     .object({
-      workgroupSlug: z.string().min(1).max(128),
-      username: z.string().min(1).max(64),
-      userId: z.string().min(1).max(64).nullable().optional(),
+      workgroupSlug: z.string().min(1).check(utf16MaxLength(128)),
+      username: z.string().min(1).check(utf16MaxLength(64)),
+      userId: z.string().min(1).check(utf16MaxLength(64)).nullable().optional(),
     })
     .strict(),
 )

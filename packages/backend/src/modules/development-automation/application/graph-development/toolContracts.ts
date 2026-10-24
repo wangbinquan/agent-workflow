@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 import { GraphDesignDocumentSchema, GraphViewProposalSchema } from '@agent-workflow/shared'
 import type { ExecutionContractRegistration } from '@/modules/execution-contract/public/types'
 import { GRAPH_WORK_CONTRACTS, GRAPH_WORK_ITEMS, graphText as text } from './employeeType'
 
-const id = z.string().min(1).max(200)
+const id = z.string().min(1).check(utf16MaxLength(200))
 /** Semantic requirements supplement the JSON shape in every frozen work material. */
 export const GRAPH_DESIGN_AUTHORING_RULES = [
   'Use only the provided schema kinds and capability versions. Keep every referenced ID declared in its owning collection.',
@@ -45,10 +46,10 @@ export const GraphTraceProposalSchema = z
   .object({
     elementId: id,
     obligationId: id.nullable(),
-    path: z.string().min(1).max(1000),
-    symbol: z.string().max(2000).nullable(),
-    testRef: z.string().max(2000).nullable(),
-    reason: z.string().max(5000),
+    path: z.string().min(1).check(utf16MaxLength(1000)),
+    symbol: z.string().check(utf16MaxLength(2000)).nullable(),
+    testRef: z.string().check(utf16MaxLength(2000)).nullable(),
+    reason: z.string().check(utf16MaxLength(5000)),
   })
   .strict()
 export const graphResultSchemas = {
@@ -104,7 +105,10 @@ export const graphResultSchemas = {
 export type GraphWorkItem = keyof typeof graphResultSchemas
 export function graphToolResultSchema(workItem: GraphWorkItem) {
   return z
-    .object({ summary: z.string().min(1).max(5000), result: graphResultSchemas[workItem] })
+    .object({
+      summary: z.string().min(1).check(utf16MaxLength(5000)),
+      result: graphResultSchemas[workItem],
+    })
     .strict()
 }
 
@@ -188,11 +192,13 @@ export const graphExecutionContractRegistrations: readonly ExecutionContractRegi
             : [],
       projectInputJson(input) {
         const envelope = z
-          .object({ contractInput: z.object({ work: z.record(z.unknown()) }).passthrough() })
+          .object({
+            contractInput: z.object({ work: z.record(z.string(), z.unknown()) }).passthrough(),
+          })
           .passthrough()
           .parse(JSON.parse(input.inputEnvelopeJson))
         const projection = z
-          .object({ materials: z.record(z.unknown()) })
+          .object({ materials: z.record(z.string(), z.unknown()) })
           .parse(JSON.parse(input.projectionJson ?? '{"materials":{}}'))
         return JSON.stringify({
           work: envelope.contractInput.work,

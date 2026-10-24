@@ -8,16 +8,20 @@
 // （未知 questionId 一律拒绝——原渠道的自由文本不允许扩散进决策面）。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalDigest } from './canonicalJson'
 
 export const requirementQuestionSchema = z
   .object({
-    questionId: z.string().min(1).max(120),
-    text: z.string().min(1).max(4000),
+    questionId: z.string().min(1).check(utf16MaxLength(120)),
+    text: z.string().min(1).check(utf16MaxLength(4000)),
     /** closed 答案形状：v1 只有自由文本与单选（选项也是 closed 列表）。 */
     answerKind: z.enum(['text', 'single-choice']),
-    choices: z.array(z.string().min(1).max(200)).max(20).nullable(),
+    choices: z
+      .array(z.string().min(1).check(utf16MaxLength(200)))
+      .max(20)
+      .nullable(),
   })
   .strict()
 
@@ -63,7 +67,10 @@ export const questionSetV1Schema = z
 export type QuestionSetV1 = z.infer<typeof questionSetV1Schema>
 
 export const requirementAnswerSchema = z
-  .object({ questionId: z.string().min(1).max(120), answer: z.string().min(1).max(8000) })
+  .object({
+    questionId: z.string().min(1).check(utf16MaxLength(120)),
+    answer: z.string().min(1).check(utf16MaxLength(8000)),
+  })
   .strict()
 
 export const answerSetV1Schema = z
@@ -72,7 +79,7 @@ export const answerSetV1Schema = z
     questionSetRef: z.string().min(1),
     channel: z.enum(['platform', 'requirement-source']),
     /** exact revision：内容 canonical digest（见文件头）。 */
-    answerRevision: z.string().min(1).max(200),
+    answerRevision: z.string().min(1).check(utf16MaxLength(200)),
     answers: z.array(requirementAnswerSchema).min(1).max(50),
     complete: z.boolean(),
   })

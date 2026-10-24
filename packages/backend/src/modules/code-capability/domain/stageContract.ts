@@ -1,4 +1,4 @@
-import type { ZodTypeAny } from 'zod'
+import type { ZodType } from 'zod'
 
 // RFC-304 — the stage contract: what a capability's round actually runs.
 //
@@ -62,12 +62,12 @@ export function parseCodeCapabilityId(value: string): CodeCapabilityId | undefin
  *
  * A zod schema, not a hand-written JSON Schema object (design §4.1 deviation):
  * this repo has no JSON Schema validator, and its established practice is
- * zod-as-source with `zodToJsonSchema` for export (see `mcp/resourceSchemas.ts`).
+ * zod-as-source with `toInputJsonSchema` for export (see `mcp/resourceSchemas.ts`).
  * Writing JSON Schema by hand here would mean a second schema system and a new
  * dependency for one RFC. The model still receives JSON Schema text — it is
  * derived, not authored.
  */
-export type AiEnvelopeSchema = ZodTypeAny
+export type AiEnvelopeSchema = ZodType
 
 export interface StageBase {
   /** Public contract — hooks mount by this name, so renaming one breaks hooks. */

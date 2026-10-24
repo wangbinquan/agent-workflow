@@ -24,7 +24,7 @@ const LegacySkillVersionStageArtifactSchema = z
         filesDir: z.string().min(1),
         versionDir: z.string().min(1),
         stagingDir: z.string().min(1),
-        noop: z.unknown(),
+        noop: z.unknown().optional(),
       })
       .strict(),
   })

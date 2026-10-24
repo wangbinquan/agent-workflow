@@ -4,6 +4,7 @@
 // routes so bootstrap can never accidentally expose a mixed method set.
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from './utf16Length'
 import { OidcProviderPublicSchema } from './oidcProvider'
 import { UserSchema } from './user'
 
@@ -54,8 +55,8 @@ export const CreateBootstrapAdminBodySchema = z
   .object({
     username: UserSchema.shape.username,
     displayName: UserSchema.shape.displayName,
-    email: z.string().email().max(254).optional(),
-    password: z.string().min(8).max(256),
+    email: z.string().email().check(utf16MaxLength(254)).optional(),
+    password: z.string().check(utf16MinLength(8)).check(utf16MaxLength(256)),
   })
   .strict()
 

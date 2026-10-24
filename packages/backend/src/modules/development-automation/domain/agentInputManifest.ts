@@ -8,6 +8,7 @@
 // （§7.7：same B/E/T、new nonce），digest 必须稳定才能作 attempt 对拍键。
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import { canonicalDigest, type CanonicalJsonValue } from './canonicalJson'
 import { agentCapabilityIdSchema } from './capabilityDefinition'
@@ -116,21 +117,27 @@ export const agentInputManifestV1Schema = z
     verificationEvidence: verificationEvidenceDescriptorSchema.nullable(),
     problemEvidence: z
       .object({
-        producerId: z.string().min(1).max(120),
+        producerId: z.string().min(1).check(utf16MaxLength(120)),
         evidenceDigest: sha256,
         headSha: z.string().regex(/^[0-9a-f]{40}$/),
-        allowedTypeIds: z.array(z.string().min(1).max(120)).min(1).max(100),
-        subjectRefs: z.array(z.string().min(1).max(500)).min(1).max(500),
-        requiredSubjectRefs: z.array(z.string().min(1).max(500)).max(500),
+        allowedTypeIds: z
+          .array(z.string().min(1).check(utf16MaxLength(120)))
+          .min(1)
+          .max(100),
+        subjectRefs: z
+          .array(z.string().min(1).check(utf16MaxLength(500)))
+          .min(1)
+          .max(500),
+        requiredSubjectRefs: z.array(z.string().min(1).check(utf16MaxLength(500))).max(500),
       })
       .strict()
       .optional(),
     approvalContext: z
       .object({
         stepRunRef: z.string().min(1),
-        approvalType: z.string().min(1).max(120),
-        evidenceRefs: z.array(z.string().min(1).max(500)).max(100),
-        requestedScopes: z.array(z.string().min(1).max(200)).max(100),
+        approvalType: z.string().min(1).check(utf16MaxLength(120)),
+        evidenceRefs: z.array(z.string().min(1).check(utf16MaxLength(500))).max(100),
+        requestedScopes: z.array(z.string().min(1).check(utf16MaxLength(200))).max(100),
       })
       .strict()
       .optional(),
@@ -139,7 +146,7 @@ export const agentInputManifestV1Schema = z
     protectedRoots: z.array(logicalRootSchema),
     protocol: z
       .object({
-        nonce: z.string().min(16),
+        nonce: z.string().check(utf16MinLength(16)),
         port: z.literal(AGENT_RESULT_PORT),
         outcomeSchemaId: z.string().min(1),
       })

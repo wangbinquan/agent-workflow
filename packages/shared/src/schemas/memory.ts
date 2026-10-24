@@ -2,6 +2,7 @@
 // See design/RFC-041-platform-long-term-memory/design.md §3.1.
 
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import { SessionTreeSchema } from './sessionView'
 
 // RFC-248: 第 5 种 scope `repo_group`——用组启动的任务注入「组记忆 + 组内每个
@@ -65,7 +66,7 @@ export type DistillAction = z.infer<typeof DistillActionSchema>
 export const DistillJobStatusSchema = z.enum(['pending', 'running', 'done', 'failed', 'canceled'])
 export type DistillJobStatus = z.infer<typeof DistillJobStatusSchema>
 
-const tagsArraySchema = z.array(z.string().min(1).max(40)).max(16)
+const tagsArraySchema = z.array(z.string().min(1).check(utf16MaxLength(40))).max(16)
 
 export const MemorySchema = z
   .object({
@@ -74,8 +75,8 @@ export const MemorySchema = z
     scopeId: z.string().nullable(),
     /** RFC-099 (D12) — per-request manage flag (see MemorySummarySchema). */
     canManage: z.boolean().optional(),
-    title: z.string().trim().min(1).max(120),
-    bodyMd: z.string().trim().min(1).max(4000),
+    title: z.string().trim().min(1).check(utf16MaxLength(120)),
+    bodyMd: z.string().trim().min(1).check(utf16MaxLength(4000)),
     tags: tagsArraySchema,
     status: MemoryStatusSchema,
     sourceKind: MemorySourceKindSchema,
@@ -148,12 +149,18 @@ export type MemorySummary = z.infer<typeof MemorySummarySchema>
 export const MemoryCandidatePromoteSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('approve'),
-    tagsOverride: z.array(z.string().min(1).max(40)).max(16).optional(),
+    tagsOverride: z
+      .array(z.string().min(1).check(utf16MaxLength(40)))
+      .max(16)
+      .optional(),
   }),
   z.object({
     action: z.literal('approve_and_supersede'),
     supersedeIds: z.array(z.string().min(1)).min(1).max(8),
-    tagsOverride: z.array(z.string().min(1).max(40)).max(16).optional(),
+    tagsOverride: z
+      .array(z.string().min(1).check(utf16MaxLength(40)))
+      .max(16)
+      .optional(),
   }),
   z.object({
     action: z.literal('reject'),
@@ -168,8 +175,8 @@ export const MemoryCreateRequestSchema = z
   .object({
     scopeType: MemoryScopeSchema,
     scopeId: z.string().nullable(),
-    title: z.string().trim().min(1).max(120),
-    bodyMd: z.string().trim().min(1).max(4000),
+    title: z.string().trim().min(1).check(utf16MaxLength(120)),
+    bodyMd: z.string().trim().min(1).check(utf16MaxLength(4000)),
     tags: tagsArraySchema.optional(),
   })
   .superRefine((v, ctx) => {
@@ -198,8 +205,8 @@ export const MemoryPatchRequestSchema = z
   .object({
     scopeType: z.never().optional(),
     scopeId: z.never().optional(),
-    title: z.string().trim().min(1).max(120).optional(),
-    bodyMd: z.string().trim().min(1).max(4000).optional(),
+    title: z.string().trim().min(1).check(utf16MaxLength(120)).optional(),
+    bodyMd: z.string().trim().min(1).check(utf16MaxLength(4000)).optional(),
     tags: tagsArraySchema.optional(),
   })
   .superRefine((v, ctx) => {
@@ -381,8 +388,8 @@ export const InjectedMemorySnapshotSchema = z.object({
   version: z.number().int().nonnegative(),
   scopeType: MemoryScopeSchema,
   scopeId: z.string().nullable(),
-  title: z.string().min(1).max(120),
-  bodyMd: z.string().min(1).max(4000),
+  title: z.string().min(1).check(utf16MaxLength(120)),
+  bodyMd: z.string().min(1).check(utf16MaxLength(4000)),
   tags: z.array(z.string()).max(16),
   sourceKind: z.string(),
   approvedAt: z.number().int().nonnegative().nullable(),
@@ -397,11 +404,14 @@ export const MemoryListFilterSchema = z.object({
   status: MemoryStatusSchema.optional(),
   scopeType: MemoryScopeSchema.optional(),
   scopeId: z.string().min(1).optional(),
-  search: z.string().trim().min(1).max(200).optional(),
-  tag: z.string().min(1).max(40).optional(),
+  search: z.string().trim().min(1).check(utf16MaxLength(200)).optional(),
+  tag: z.string().min(1).check(utf16MaxLength(40)).optional(),
   // RFC-327: 多标签。wire 上 `tags=a,b`（或重复 `tags=a&tags=b`）由路由拆成数组；
   // 与 legacy 单值 `tag` 同时给时合并成一个集合再按 tagMode 判（shared/memoryTags.ts）。
-  tags: z.array(z.string().min(1).max(40)).max(16).optional(),
+  tags: z
+    .array(z.string().min(1).check(utf16MaxLength(40)))
+    .max(16)
+    .optional(),
   tagMode: MemoryTagModeSchema.optional(),
 })
 export type MemoryListFilter = z.infer<typeof MemoryListFilterSchema>

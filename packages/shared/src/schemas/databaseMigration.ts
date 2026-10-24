@@ -3,6 +3,7 @@
 // variable name and bounded non-secret pool settings are observable.
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from './utf16Length'
 import { canonicalJson } from '../workflow-canonical'
 
 export const DATABASE_MIGRATION_START_IDENTITY_DOMAIN_V1 = 'database-migration-start-identity/v1\n'
@@ -24,7 +25,7 @@ export const databaseMigrationSourceIdentitySchema = z
     provider: z.literal('sqlite'),
     generationId: z.string().regex(/^dbg_[A-Za-z0-9_-]{8,128}$/),
     schemaDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-    databaseFingerprint: z.string().min(1).max(256),
+    databaseFingerprint: z.string().min(1).check(utf16MaxLength(256)),
   })
   .strict()
 export type DatabaseMigrationSourceIdentity = z.infer<typeof databaseMigrationSourceIdentitySchema>
@@ -92,7 +93,7 @@ export type DatabaseMigrationPreflightInput = z.infer<typeof databaseMigrationPr
 export const databaseMigrationPreflightViewSchema = z
   .object({
     ok: z.literal(true),
-    databaseFingerprint: z.string().min(1).max(256),
+    databaseFingerprint: z.string().min(1).check(utf16MaxLength(256)),
     serverMajor: z.number().int().min(15).max(18),
     serverVersionNum: z.number().int().positive(),
     serverEncoding: z.literal('UTF8'),
@@ -101,7 +102,7 @@ export const databaseMigrationPreflightViewSchema = z
     targetState: z.enum(['empty', 'resumable']),
     applicationTableCount: z.number().int().nonnegative(),
     metadataTableCount: z.number().int().nonnegative(),
-    sourceDatabaseFingerprint: z.string().min(1).max(256),
+    sourceDatabaseFingerprint: z.string().min(1).check(utf16MaxLength(256)),
     sourceBytes: z.number().int().nonnegative(),
     sourceRows: z.number().int().nonnegative(),
     tableCounts: databaseMigrationTableCountsSchema,
@@ -114,8 +115,8 @@ export const databaseRuntimeOverviewSchema = z
     provider: z.enum(['sqlite', 'postgresql']),
     generationId: z.string().regex(/^dbg_[A-Za-z0-9_-]{8,128}$/),
     schemaDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
-    databaseFingerprint: z.string().min(1).max(256).nullable(),
-    serverVersion: z.string().min(1).max(256).nullable(),
+    databaseFingerprint: z.string().min(1).check(utf16MaxLength(256)).nullable(),
+    serverVersion: z.string().min(1).check(utf16MaxLength(256)).nullable(),
     operationId: z
       .string()
       .regex(/^dbm_[A-Za-z0-9_-]{8,128}$/)
@@ -123,7 +124,7 @@ export const databaseRuntimeOverviewSchema = z
     target: databaseMigrationTargetSchema.nullable(),
     source: z
       .object({
-        databaseFingerprint: z.string().min(1).max(256),
+        databaseFingerprint: z.string().min(1).check(utf16MaxLength(256)),
         fileBytes: z.number().int().nonnegative(),
         totalRows: z.number().int().nonnegative().nullable(),
       })
@@ -160,7 +161,7 @@ export function databaseMigrationStartIdentityFromOverview(
 
 export const startDatabaseMigrationInputSchema = z
   .object({
-    idempotencyKey: z.string().min(8).max(256),
+    idempotencyKey: z.string().check(utf16MinLength(8)).check(utf16MaxLength(256)),
     target: databaseMigrationTargetSchema,
   })
   .strict()
@@ -265,7 +266,7 @@ export const databaseMigrationStatusViewSchema = z
     targetProvider: z.literal('postgresql'),
     targetUrlEnv: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
     target: databaseMigrationTargetSchema,
-    targetDatabaseFingerprint: z.string().max(256).nullable(),
+    targetDatabaseFingerprint: z.string().check(utf16MaxLength(256)).nullable(),
     tableCounts: databaseMigrationTableCountsSchema,
     progress: z
       .object({

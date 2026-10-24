@@ -11,6 +11,7 @@
 // same-session、允许 fresh 但计入同一 fresh 预算（安全预算不单列，收紧留后续）。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalStringify } from './canonicalJson'
 import { sha256Hex } from '@/util/hash'
@@ -94,10 +95,10 @@ export function nonceDigestOf(nonce: string): string {
 /** structured feedback（§7.7 尾）：不是自由文本、不含 secret/raw log。 */
 export const attemptFeedbackSchema = z
   .object({
-    code: z.string().min(1).max(120),
-    jsonPointer: z.string().max(500).nullable(),
-    expected: z.string().max(500).nullable(),
-    observedSummary: z.string().min(1).max(500),
+    code: z.string().min(1).check(utf16MaxLength(120)),
+    jsonPointer: z.string().check(utf16MaxLength(500)).nullable(),
+    expected: z.string().check(utf16MaxLength(500)).nullable(),
+    observedSummary: z.string().min(1).check(utf16MaxLength(500)),
     retryOrdinal: z.number().int().nonnegative(),
   })
   .strict()

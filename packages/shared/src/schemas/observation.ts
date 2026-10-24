@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 import type { TaskStatus } from './task'
 
 // RFC-371 v2 (design/RFC-371-run-observability/redesign-v2-20261014.md) — the
@@ -38,9 +39,9 @@ export const ObservationTaskPageQuerySchema = z
   .object({
     from: z.coerce.number().int().min(0),
     to: z.coerce.number().int().min(1),
-    q: z.string().trim().min(1).max(200).optional(),
-    status: z.string().trim().min(1).max(40).optional(),
-    cursor: z.string().min(1).max(200).optional(),
+    q: z.string().trim().min(1).check(utf16MaxLength(200)).optional(),
+    status: z.string().trim().min(1).check(utf16MaxLength(40)).optional(),
+    cursor: z.string().min(1).check(utf16MaxLength(200)).optional(),
   })
   .refine((v) => v.to > v.from && v.to - v.from <= OBSERVATION_MAX_WINDOW_MS, {
     message: 'invalid-window',
@@ -51,8 +52,8 @@ export const ObservationSystemQuerySchema = z
   .object({
     from: z.coerce.number().int().min(0),
     to: z.coerce.number().int().min(1),
-    kind: z.string().trim().min(1).max(100).optional(),
-    cursor: z.string().min(1).max(200).optional(),
+    kind: z.string().trim().min(1).check(utf16MaxLength(100)).optional(),
+    cursor: z.string().min(1).check(utf16MaxLength(200)).optional(),
   })
   .refine((v) => v.to > v.from && v.to - v.from <= OBSERVATION_MAX_WINDOW_MS, {
     message: 'invalid-window',
@@ -265,12 +266,12 @@ export type ObservationRates = z.infer<typeof ObservationRatesSchema>
 
 export const SaveObservationPriceSchema = z
   .object({
-    model: z.string().trim().min(1).max(300),
+    model: z.string().trim().min(1).check(utf16MaxLength(300)),
     rates: ObservationRatesSchema,
     effectiveFrom: z.number().int().min(0),
-    note: z.string().trim().max(2000).default(''),
+    note: z.string().trim().check(utf16MaxLength(2000)).default(''),
     /** Compare-and-set against the newest version of this price line. */
-    expectedLatestId: z.string().min(1).max(64).nullable(),
+    expectedLatestId: z.string().min(1).check(utf16MaxLength(64)).nullable(),
   })
   .strict()
 export type SaveObservationPrice = z.infer<typeof SaveObservationPriceSchema>

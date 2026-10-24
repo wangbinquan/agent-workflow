@@ -5,6 +5,7 @@
 // 或 Agent 的自由错误文字永远不进决策面。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 export const OPERATION_FAILURE_CATEGORIES = [
   'transient',
@@ -24,10 +25,10 @@ export type Retryability = (typeof RETRYABILITY)[number]
 export const operationFailureReceiptSchema = z
   .object({
     category: z.enum(OPERATION_FAILURE_CATEGORIES),
-    code: z.string().min(1).max(120),
+    code: z.string().min(1).check(utf16MaxLength(120)),
     retryability: z.enum(RETRYABILITY),
     attemptOrdinal: z.number().int().nonnegative(),
-    remediation: z.string().min(1).max(200),
+    remediation: z.string().min(1).check(utf16MaxLength(200)),
     evidenceRef: z.string().min(1).nullable(),
   })
   .strict()

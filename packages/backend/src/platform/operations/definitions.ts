@@ -1,7 +1,7 @@
 // RFC-344 — typed constructors for owning-module operation descriptors.
 
 import type { Permission } from '@agent-workflow/shared'
-import type { output, ZodTypeAny } from 'zod'
+import type { output, ZodType } from 'zod'
 import type { PublicErrorCode } from '@/platform/errors/publicError'
 import { operationId } from '@/platform/operations/catalog'
 import { zodOperationCodec } from '@/platform/operations/codecs'
@@ -10,7 +10,7 @@ import type {
   QueryOperationDescriptor,
 } from '@/platform/operations/contracts'
 
-interface Definition<TInput extends ZodTypeAny, TOutput extends ZodTypeAny> {
+interface Definition<TInput extends ZodType, TOutput extends ZodType> {
   readonly id: string
   readonly summary: string
   readonly permissions: ReadonlyArray<Permission>
@@ -20,7 +20,7 @@ interface Definition<TInput extends ZodTypeAny, TOutput extends ZodTypeAny> {
   readonly outputSchema: TOutput
 }
 
-function codecs<TInput extends ZodTypeAny, TOutput extends ZodTypeAny>(
+function codecs<TInput extends ZodType, TOutput extends ZodType>(
   definition: Definition<TInput, TOutput>,
 ) {
   return {
@@ -34,11 +34,7 @@ function codecs<TInput extends ZodTypeAny, TOutput extends ZodTypeAny>(
   }
 }
 
-export function defineQueryOperation<
-  TInput extends ZodTypeAny,
-  TOutput extends ZodTypeAny,
-  TContext,
->(
+export function defineQueryOperation<TInput extends ZodType, TOutput extends ZodType, TContext>(
   definition: Definition<TInput, TOutput> & {
     readonly invoke: (
       context: TContext,
@@ -54,11 +50,7 @@ export function defineQueryOperation<
   })
 }
 
-export function defineCommandOperation<
-  TInput extends ZodTypeAny,
-  TOutput extends ZodTypeAny,
-  TContext,
->(
+export function defineCommandOperation<TInput extends ZodType, TOutput extends ZodType, TContext>(
   definition: Definition<TInput, TOutput> & {
     readonly invoke: (
       context: TContext,

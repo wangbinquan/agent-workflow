@@ -877,7 +877,7 @@ describe('RFC-247 impl-gate — launch_task can reach every field the route acce
   test('inputs tells the caller where port keys come from', () => {
     // The gap that made `inputs` unusable in practice: it is a free-form map and
     // nothing said which keys a given workflow wants.
-    const desc = JSON.stringify(launch!.inputSchema.inputs)
+    const desc = launch!.inputSchema.inputs!.description
     expect(desc).toContain('resource_read')
     expect(desc).toContain('definition.inputs')
   })

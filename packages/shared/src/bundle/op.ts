@@ -62,7 +62,7 @@ export type BundleExpectToken = z.infer<typeof BundleExpectTokenSchema>
 
 // --- 16 分支 ---
 
-const createOp = <K extends string, P extends z.ZodTypeAny>(kind: K, payload: P) =>
+const createOp = <K extends string, P extends z.ZodType>(kind: K, payload: P) =>
   z
     .object({
       opId: BundleOpIdSchema,
@@ -72,7 +72,7 @@ const createOp = <K extends string, P extends z.ZodTypeAny>(kind: K, payload: P)
     })
     .strict()
 
-const updateOp = <K extends string, P extends z.ZodTypeAny, E extends z.ZodTypeAny>(
+const updateOp = <K extends string, P extends z.ZodType, E extends z.ZodType>(
   kind: K,
   payload: P,
   expect: E,

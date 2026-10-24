@@ -8,6 +8,7 @@
 // schema 的配置面里——它们是产品宪法（proposal §2.5/§6.4），无处可关。
 
 import { z } from 'zod'
+import { utf16MaxLength } from '@agent-workflow/shared'
 
 import { canonicalDigest } from './canonicalJson'
 import { agentCapabilityIdSchema } from './capabilityDefinition'
@@ -36,7 +37,7 @@ export const POLICY_HARD_CAPS = {
 } as const
 
 const bounded = (cap: number) => z.number().int().min(0).max(cap)
-const ruleId = z.string().min(1).max(120)
+const ruleId = z.string().min(1).check(utf16MaxLength(120))
 
 // ------------------------------------------------------------ rule groups
 
@@ -133,7 +134,7 @@ export const deliveryPolicySchema = z
     sourceBranchPrefix: z
       .string()
       .min(1)
-      .max(80)
+      .check(utf16MaxLength(80))
       .regex(/^[A-Za-z0-9][A-Za-z0-9/_-]*$/, 'branch prefix must be a plain ref-safe segment'),
     sourceBranchCollision: z.enum(['deterministic-suffix', 'block']),
     draft: z.boolean(),
@@ -221,7 +222,7 @@ export function validatePolicyForPublish(
 ): PolicyPublishViolation[] {
   const violations: PolicyPublishViolation[] = []
   const checkRules = (
-    rules: readonly { ruleId: string; when: readonly (typeof factPredicateSchema._type)[] }[],
+    rules: readonly { ruleId: string; when: readonly z.infer<typeof factPredicateSchema>[] }[],
     phase: DecisionPhase,
     where: string,
   ): void => {

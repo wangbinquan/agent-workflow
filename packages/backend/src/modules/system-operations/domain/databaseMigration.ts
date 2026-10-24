@@ -3,6 +3,7 @@
 // user data are forbidden from the manifest by construction.
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 import {
   databaseMigrationStartIdempotencyKeyWith,
   type DatabaseMigrationStartIdentity,
@@ -32,7 +33,7 @@ const DigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/)
 const OperationIdSchema = z.string().regex(/^dbm_[A-Za-z0-9_-]{8,128}$/)
 const GenerationIdSchema = z.string().regex(/^dbg_[A-Za-z0-9_-]{8,128}$/)
 const OwnerIdSchema = z.string().regex(/^dbo_[A-Za-z0-9_-]{8,128}$/)
-const IdempotencyKeySchema = z.string().min(8).max(256)
+const IdempotencyKeySchema = z.string().check(utf16MinLength(8)).check(utf16MaxLength(256))
 const EnvNameSchema = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/)
 
 export const DatabaseMigrationTargetConfigSchema = z
@@ -139,11 +140,11 @@ export const DatabaseMigrationManifestPayloadSchema = z
         provider: z.literal('sqlite'),
         generationId: GenerationIdSchema,
         schemaDigest: DigestSchema,
-        databaseFingerprint: z.string().min(1).max(256),
+        databaseFingerprint: z.string().min(1).check(utf16MaxLength(256)),
       })
       .strict(),
     target: DatabaseMigrationTargetConfigSchema.extend({
-      databaseFingerprint: z.string().max(256).nullable(),
+      databaseFingerprint: z.string().check(utf16MaxLength(256)).nullable(),
     }).strict(),
     tableCounts: z
       .object({

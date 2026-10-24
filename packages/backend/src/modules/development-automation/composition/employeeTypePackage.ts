@@ -3,6 +3,7 @@
 // through digital-employee's public contract; the OS never imports this module.
 
 import { z } from 'zod'
+import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 
@@ -116,9 +117,17 @@ const minimalDirectResultWorkItemRefs = new Set([
 ])
 
 const scopeSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('repository'), repositoryId: z.string().min(1).max(200) }).strict(),
   z
-    .object({ kind: z.literal('repository-group'), repositoryGroupId: z.string().min(1).max(200) })
+    .object({
+      kind: z.literal('repository'),
+      repositoryId: z.string().min(1).check(utf16MaxLength(200)),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal('repository-group'),
+      repositoryGroupId: z.string().min(1).check(utf16MaxLength(200)),
+    })
     .strict(),
   z.object({ kind: z.literal('task') }).strict(),
 ])
@@ -537,8 +546,8 @@ const contractField = (
 const standardWorkRequestSchema = z
   .object({
     kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
-    body: z.string().max(1_000_000).nullable(),
-    externalId: z.string().trim().min(1).max(500).nullable(),
+    body: z.string().check(utf16MaxLength(1_000_000)).nullable(),
+    externalId: z.string().trim().min(1).check(utf16MaxLength(500)).nullable(),
     uploads: z.array(z.unknown()).max(1_000),
   })
   .passthrough()
@@ -546,7 +555,7 @@ const standardWorkRequestSchema = z
 const prepareMaterialsStandardInputSchema = z
   .object({
     workRequest: standardWorkRequestSchema,
-    outputDirectory: z.string().min(1).max(2_000),
+    outputDirectory: z.string().min(1).check(utf16MaxLength(2_000)),
   })
   .strict()
 
@@ -625,7 +634,7 @@ const prepareMaterialsStandardRegistration: ExecutionContractRegistration = (() 
         .object({
           contractInput: z.object({ workRequest: standardWorkRequestSchema }).passthrough(),
           platformPaths: z
-            .object({ externalMaterialDirectory: z.string().min(1).max(2_000) })
+            .object({ externalMaterialDirectory: z.string().min(1).check(utf16MaxLength(2_000)) })
             .passthrough(),
         })
         .passthrough()
@@ -1829,7 +1838,7 @@ const optionalPrimaryRole = (
 const pipelineFailureTypeSchema = z
   .string()
   .min(1)
-  .max(160)
+  .check(utf16MaxLength(160))
   .regex(/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/)
   .refine((value) => value !== 'review', 'review is reserved for review feedback')
 
@@ -1837,15 +1846,15 @@ const orderedDispatchConfigurationRuntimeSchema = z
   .array(
     z
       .object({
-        classifierWorkItemRef: z.string().min(1).max(160),
+        classifierWorkItemRef: z.string().min(1).check(utf16MaxLength(160)),
         routes: z
           .array(
             z
               .object({
                 routeRef: pipelineFailureTypeSchema,
-                displayName: z.string().min(1).max(200),
-                description: z.string().max(2_000),
-                destinationWorkItemRef: z.string().min(1).max(160),
+                displayName: z.string().min(1).check(utf16MaxLength(200)),
+                description: z.string().check(utf16MaxLength(2_000)),
+                destinationWorkItemRef: z.string().min(1).check(utf16MaxLength(160)),
                 registrationRef: z
                   .object({ id: z.string().min(1), revision: z.number().int().positive() })
                   .strict()
@@ -3136,7 +3145,7 @@ export const mergeRequestLifecycleDescriptor = (() => {
 
 const uploadSeedSchema = z
   .object({
-    artifactRef: z.string().min(1).max(1_000),
+    artifactRef: z.string().min(1).check(utf16MaxLength(1_000)),
     /** The verified upload digest; the artifact reference itself is opaque. */
     sha256: z
       .string()
@@ -3146,7 +3155,7 @@ const uploadSeedSchema = z
     targetPath: z
       .string()
       .min(1)
-      .max(1_000)
+      .check(utf16MaxLength(1_000))
       .refine(
         (value) =>
           !value.startsWith('/') &&
@@ -3156,7 +3165,7 @@ const uploadSeedSchema = z
             .split('/')
             .every((segment) => segment !== '' && segment !== '.' && segment !== '..'),
       ),
-    originalName: z.string().min(1).max(500),
+    originalName: z.string().min(1).check(utf16MaxLength(500)),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -3182,32 +3191,34 @@ const uploadSeedSchema = z
 
 const deliveryContentSchema = z
   .object({
-    commitMessage: z.string().trim().min(1).max(5_000),
-    mergeRequestTitle: z.string().trim().min(1).max(240),
-    mergeRequestDescription: z.string().trim().min(1).max(32_000),
+    commitMessage: z.string().trim().min(1).check(utf16MaxLength(5_000)),
+    mergeRequestTitle: z.string().trim().min(1).check(utf16MaxLength(240)),
+    mergeRequestDescription: z.string().trim().min(1).check(utf16MaxLength(32_000)),
   })
   .strict()
 
 export const issueHandlingContextSchema = z
   .object({
     status: z.enum(['active', 'waiting', 'terminal']),
-    subjectRef: z.string().min(1).max(1_000),
-    repositoryRef: z.string().min(1).max(500),
+    subjectRef: z.string().min(1).check(utf16MaxLength(1_000)),
+    repositoryRef: z.string().min(1).check(utf16MaxLength(500)),
     request: z
       .object({
         kind: z.enum(['body', 'files', 'body-and-files', 'external-id']),
         body: z
           .string()
           .min(1)
-          .max(2 * 1024 * 1024)
+          .check(utf16MaxLength(2 * 1024 * 1024))
           .nullable(),
-        externalId: z.string().min(1).max(500).nullable(),
+        externalId: z.string().min(1).check(utf16MaxLength(500)).nullable(),
         uploads: z.array(uploadSeedSchema).max(200),
-        executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
-        workingBranch: z.string().min(1).max(255).nullable().default(null),
+        executionOptions: z
+          .record(z.string().min(1).check(utf16MaxLength(160)), z.boolean())
+          .default({}),
+        workingBranch: z.string().min(1).check(utf16MaxLength(255)).nullable().default(null),
       })
       .strict(),
-    materialArtifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+    materialArtifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(500),
     deliveryContent: deliveryContentSchema.nullable().default(null),
   })
   .strict()
@@ -3233,21 +3244,21 @@ export const issueHandlingContextSchema = z
 
 const reviewThreadContextSchema = z
   .object({
-    threadRef: z.string().min(1).max(500),
-    revision: z.string().min(1).max(500),
+    threadRef: z.string().min(1).check(utf16MaxLength(500)),
+    revision: z.string().min(1).check(utf16MaxLength(500)),
     authorClass: z.enum(['human', 'bot', 'self']),
     resolved: z.boolean(),
-    body: z.string().max(32_000),
-    path: z.string().min(1).max(1_000).nullable(),
+    body: z.string().check(utf16MaxLength(32_000)),
+    path: z.string().min(1).check(utf16MaxLength(1_000)).nullable(),
     messages: z
       .array(
         z
           .object({
-            messageRef: z.string().min(1).max(500),
-            parentMessageRef: z.string().min(1).max(500).nullable(),
+            messageRef: z.string().min(1).check(utf16MaxLength(500)),
+            parentMessageRef: z.string().min(1).check(utf16MaxLength(500)).nullable(),
             authorClass: z.enum(['human', 'bot', 'self']),
-            body: z.string().max(32_000),
-            path: z.string().min(1).max(1_000).nullable(),
+            body: z.string().check(utf16MaxLength(32_000)),
+            path: z.string().min(1).check(utf16MaxLength(1_000)).nullable(),
             createdAt: z.string().nullable(),
           })
           .strict(),
@@ -3260,9 +3271,9 @@ const reviewThreadContextSchema = z
 export const mergeRequestContextSchema = z
   .object({
     status: z.enum(['active', 'merged', 'closed']),
-    mergeRequestRef: z.string().min(1).max(1_000),
+    mergeRequestRef: z.string().min(1).check(utf16MaxLength(1_000)),
     headSha: z.string().regex(/^[a-f0-9]{40}$/),
-    issueHandlingContextRef: z.string().min(1).max(500),
+    issueHandlingContextRef: z.string().min(1).check(utf16MaxLength(500)),
     readyToMerge: z.boolean(),
     factsHeadSha: z
       .string()
@@ -3284,10 +3295,10 @@ export const mergeRequestContextSchema = z
     approvalHold: z.boolean().nullable().default(null),
     unresolvedReviewCount: z.number().int().nonnegative().default(0),
     reviewThreads: z.array(reviewThreadContextSchema).max(100).default([]),
-    repositoryRef: z.string().min(1).max(500).nullable().default(null),
-    providerMrRef: z.string().min(1).max(500).nullable().default(null),
-    sourceBranch: z.string().min(1).max(500).nullable().default(null),
-    targetBranch: z.string().min(1).max(500).nullable().default(null),
+    repositoryRef: z.string().min(1).check(utf16MaxLength(500)).nullable().default(null),
+    providerMrRef: z.string().min(1).check(utf16MaxLength(500)).nullable().default(null),
+    sourceBranch: z.string().min(1).check(utf16MaxLength(500)).nullable().default(null),
+    targetBranch: z.string().min(1).check(utf16MaxLength(500)).nullable().default(null),
     webUrl: z.string().url().nullable().default(null),
   })
   .strict()
@@ -3309,8 +3320,8 @@ export const changeCandidateContextSchema = z
     candidateRef: z.string().regex(/^[a-f0-9]{64}$/),
     baselineSha: z.string().regex(/^[a-f0-9]{40}$/),
     treeOid: z.string().regex(/^[a-f0-9]{40,64}$/),
-    summarySource: z.string().min(1).max(5_000),
-    changedPaths: z.array(z.string().min(1).max(1_000)).max(5_000),
+    summarySource: z.string().min(1).check(utf16MaxLength(5_000)),
+    changedPaths: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(5_000),
     commitSha: z
       .string()
       .regex(/^[a-f0-9]{40}$/)
@@ -3321,7 +3332,7 @@ export const changeCandidateContextSchema = z
 export const pipelineContextSchema = z
   .object({
     status: z.enum(['pending', 'passed', 'failed']),
-    mergeRequestRef: z.string().min(1).max(1_000),
+    mergeRequestRef: z.string().min(1).check(utf16MaxLength(1_000)),
     headSha: z.string().regex(/^[a-f0-9]{40}$/),
     targetSha: z
       .string()
@@ -3334,11 +3345,15 @@ export const pipelineContextSchema = z
       .array(
         z
           .object({
-            checkRef: z.string().min(1).max(500),
-            name: z.string().min(1).max(500),
+            checkRef: z.string().min(1).check(utf16MaxLength(500)),
+            name: z.string().min(1).check(utf16MaxLength(500)),
             status: z.enum(['queued', 'running', 'passed', 'failed', 'canceled', 'skipped']),
-            summary: z.string().min(1).max(4_000).optional(),
-            evidenceFiles: z.array(z.string().min(1).max(2_000)).min(1).max(100).optional(),
+            summary: z.string().min(1).check(utf16MaxLength(4_000)).optional(),
+            evidenceFiles: z
+              .array(z.string().min(1).check(utf16MaxLength(2_000)))
+              .min(1)
+              .max(100)
+              .optional(),
           })
           .strict(),
       )
@@ -3362,10 +3377,10 @@ export const problemSetContextSchema = z
       .array(
         z
           .object({
-            problemId: z.string().min(1).max(500),
+            problemId: z.string().min(1).check(utf16MaxLength(500)),
             type: problemTypeSchema,
-            summary: z.string().min(1).max(2_000),
-            evidenceArtifactRefs: z.array(z.string().min(1).max(1_000)).max(100),
+            summary: z.string().min(1).check(utf16MaxLength(2_000)),
+            evidenceArtifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(100),
             reviewThread: reviewThreadContextSchema.nullable().default(null),
           })
           .strict(),
@@ -3420,15 +3435,15 @@ export const problemSetContextSchema = z
 
 const reviewReplyReceiptSchema = z
   .object({
-    marker: z.string().min(1).max(1_000),
-    noteRef: z.string().min(1).max(500),
+    marker: z.string().min(1).check(utf16MaxLength(1_000)),
+    noteRef: z.string().min(1).check(utf16MaxLength(500)),
   })
   .strict()
 
 export const reviewResolutionContextSchema = z
   .object({
     status: z.enum(['collected', 'acknowledged', 'prepared', 'replied']),
-    mergeRequestRef: z.string().min(1).max(1_000),
+    mergeRequestRef: z.string().min(1).check(utf16MaxLength(1_000)),
     sourceHeadSha: z.string().regex(/^[a-f0-9]{40}$/),
     publishedHeadSha: z
       .string()
@@ -3442,11 +3457,11 @@ export const reviewResolutionContextSchema = z
       .array(
         z
           .object({
-            threadRef: z.string().min(1).max(500),
-            revision: z.string().min(1).max(500),
+            threadRef: z.string().min(1).check(utf16MaxLength(500)),
+            revision: z.string().min(1).check(utf16MaxLength(500)),
             acknowledgement: reviewReplyReceiptSchema.nullable(),
             disposition: z.enum(['addressed', 'needs-human']).nullable(),
-            replyBody: z.string().min(1).max(8_000).nullable(),
+            replyBody: z.string().min(1).check(utf16MaxLength(8_000)).nullable(),
             finalReply: reviewReplyReceiptSchema.nullable(),
           })
           .strict(),
@@ -3515,53 +3530,56 @@ export const reviewResolutionContextSchema = z
 const delegationContextSchema = z
   .object({
     status: z.enum(['requested', 'waiting', 'satisfied', 'failed']),
-    groupRef: z.string().min(1).max(500),
+    groupRef: z.string().min(1).check(utf16MaxLength(500)),
     joinMode: z.enum(['all', 'any', 'quorum']),
     quorum: z.number().int().positive().nullable(),
     members: z
       .array(
         z
           .object({
-            memberRef: z.string().min(1).max(160),
-            invocationRef: z.string().min(1).max(500),
-            targetEmployeeRef: z.string().min(1).max(500),
+            memberRef: z.string().min(1).check(utf16MaxLength(160)),
+            invocationRef: z.string().min(1).check(utf16MaxLength(500)),
+            targetEmployeeRef: z.string().min(1).check(utf16MaxLength(500)),
             state: z.enum(['waiting', 'satisfied', 'failed', 'detached']),
-            resultArtifactRefs: z.array(z.string().min(1).max(1_000)).max(200),
+            resultArtifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(200),
           })
           .strict(),
       )
       .min(1)
       .max(16),
-    resultArtifactRefs: z.array(z.string().min(1).max(1_000)).max(200),
+    resultArtifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(200),
   })
   .strict()
 
 export const approvalContextSchema = z
   .object({
     status: z.enum(['draft', 'pending', 'approved', 'rejected', 'expired', 'unavailable']),
-    mergeRequestRef: z.string().min(1).max(1_000).nullable().default(null),
+    mergeRequestRef: z.string().min(1).check(utf16MaxLength(1_000)).nullable().default(null),
     headSha: z
       .string()
       .regex(/^[a-f0-9]{40}$/)
       .nullable()
       .default(null),
-    approvalType: z.string().min(1).max(120),
+    approvalType: z.string().min(1).check(utf16MaxLength(120)),
     adapterRef: z
-      .object({ id: z.string().min(1).max(500), revision: z.number().int().positive() })
+      .object({
+        id: z.string().min(1).check(utf16MaxLength(500)),
+        revision: z.number().int().positive(),
+      })
       .strict(),
-    validatedDraftRef: z.string().min(1).max(500),
-    draft: z.string().min(1).max(32_000).nullable().default(null),
-    subjectRef: z.string().min(1).max(1_000).nullable(),
+    validatedDraftRef: z.string().min(1).check(utf16MaxLength(500)),
+    draft: z.string().min(1).check(utf16MaxLength(32_000)).nullable().default(null),
+    subjectRef: z.string().min(1).check(utf16MaxLength(1_000)).nullable(),
     deadlineAt: z.string().datetime({ offset: true }).nullable(),
     idempotencyKey: z
       .string()
       .regex(/^[a-f0-9]{64}$/)
       .nullable(),
-    correlationRef: z.string().min(1).max(500).nullable(),
-    externalRequestRef: z.string().min(1).max(500).nullable(),
-    submittedRevision: z.string().min(1).max(500).nullable(),
-    observedRevision: z.string().min(1).max(500).nullable(),
-    evidenceRef: z.string().min(1).max(1_000).nullable(),
+    correlationRef: z.string().min(1).check(utf16MaxLength(500)).nullable(),
+    externalRequestRef: z.string().min(1).check(utf16MaxLength(500)).nullable(),
+    submittedRevision: z.string().min(1).check(utf16MaxLength(500)).nullable(),
+    observedRevision: z.string().min(1).check(utf16MaxLength(500)).nullable(),
+    evidenceRef: z.string().min(1).check(utf16MaxLength(1_000)).nullable(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -3581,7 +3599,7 @@ export const approvalContextSchema = z
     }
   })
 
-const contextSchemas: Record<string, z.ZodTypeAny> = {
+const contextSchemas: Record<string, z.ZodType> = {
   'development.issue-handling': issueHandlingContextSchema,
   'development.change-candidate': changeCandidateContextSchema,
   'development.merge-request': mergeRequestContextSchema,
@@ -3598,16 +3616,16 @@ const reactionOutputSchema = z
     roundRef: z.string().min(1),
     executionNonce: z.string().regex(/^[a-f0-9]{64}$/),
     status: z.enum(['ok', 'needs-input', 'blocked']),
-    summary: z.string().min(1).max(5_000),
+    summary: z.string().min(1).check(utf16MaxLength(5_000)),
     deliveryContent: deliveryContentSchema.nullable().optional(),
     reviewReplies: z
       .array(
         z
           .object({
-            threadRef: z.string().min(1).max(500),
-            revision: z.string().min(1).max(500),
+            threadRef: z.string().min(1).check(utf16MaxLength(500)),
+            revision: z.string().min(1).check(utf16MaxLength(500)),
             disposition: z.enum(['addressed', 'needs-human']),
-            replyBody: z.string().trim().min(1).max(8_000),
+            replyBody: z.string().trim().min(1).check(utf16MaxLength(8_000)),
           })
           .strict(),
       )
@@ -3617,45 +3635,48 @@ const reactionOutputSchema = z
       .array(
         z
           .object({
-            contextId: z.string().min(1).max(200).nullable(),
-            contextTypeId: z.string().min(1).max(200),
+            contextId: z.string().min(1).check(utf16MaxLength(200)).nullable(),
+            contextTypeId: z.string().min(1).check(utf16MaxLength(200)),
             schemaVersion: z.number().int().positive(),
             expectedRevision: z.number().int().positive().nullable(),
             lifecycleState: z.enum(['active', 'waiting', 'terminal']),
             stateJson: z
               .string()
-              .min(2)
-              .max(2 * 1024 * 1024),
-            artifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+              .check(utf16MinLength(2))
+              .check(utf16MaxLength(2 * 1024 * 1024)),
+            artifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(500),
           })
           .strict(),
       )
       .max(50),
-    effectSuggestions: z.array(z.string().min(1).max(200)).max(50),
-    artifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+    effectSuggestions: z.array(z.string().min(1).check(utf16MaxLength(200))).max(50),
+    artifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(500),
   })
   .strict()
 
 const reactionInputEnvelopeSchema = z
   .object({
-    contextsJson: z.string().min(2),
+    contextsJson: z.string().check(utf16MinLength(2)),
     contractInput: z.unknown().default({}),
   })
   .passthrough()
 
 const reactionContextRecordSchema = z
-  .object({ typeId: z.string().min(1), stateJson: z.string().min(2) })
+  .object({ typeId: z.string().min(1), stateJson: z.string().check(utf16MinLength(2)) })
   .passthrough()
 
 const initialCaseRequestSchema = z
   .object({
     schemaVersion: z.literal(1),
     employeeTypeRef: runtimeEmployeeTypeRefSchema.optional(),
-    caseRef: z.string().min(1).max(200),
+    caseRef: z.string().min(1).check(utf16MaxLength(200)),
     employeeRef: z
-      .object({ id: z.string().min(1).max(200), revision: z.number().int().positive() })
+      .object({
+        id: z.string().min(1).check(utf16MaxLength(200)),
+        revision: z.number().int().positive(),
+      })
       .strict(),
-    workScopeJson: z.string().min(2),
+    workScopeJson: z.string().check(utf16MinLength(2)),
     receivedAt: z.number().int().nonnegative(),
     intake: z
       .object({
@@ -3663,9 +3684,16 @@ const initialCaseRequestSchema = z
         target: z.record(z.string(), z.string()),
         body: z.string().min(1).nullable(),
         externalId: z.string().min(1).nullable(),
-        idempotencyKey: z.string().min(1).max(500),
-        executionOptions: z.record(z.string().min(1).max(160), z.boolean()).default({}),
-        typeOptions: z.record(z.string().min(1).max(160), z.string().max(1_000)).default({}),
+        idempotencyKey: z.string().min(1).check(utf16MaxLength(500)),
+        executionOptions: z
+          .record(z.string().min(1).check(utf16MaxLength(160)), z.boolean())
+          .default({}),
+        typeOptions: z
+          .record(
+            z.string().min(1).check(utf16MaxLength(160)),
+            z.string().check(utf16MaxLength(1_000)),
+          )
+          .default({}),
         uploads: z.array(
           z
             .object({
@@ -3694,8 +3722,8 @@ const invokedCaseRequestSchema = z
     targetEmployeeRef: z
       .object({ id: z.string().min(1), revision: z.number().int().positive() })
       .strict(),
-    targetWorkScopeJson: z.string().min(2),
-    inputEnvelopeJson: z.string().min(2),
+    targetWorkScopeJson: z.string().check(utf16MinLength(2)),
+    inputEnvelopeJson: z.string().check(utf16MinLength(2)),
     receivedAt: z.number().int().nonnegative(),
   })
   .strict()
@@ -3726,9 +3754,9 @@ const invocationOutputRequestSchema = z
       .optional(),
     joinMode: z.enum(['all', 'any', 'quorum']).optional(),
     quorum: z.number().int().positive().nullable().optional(),
-    contextsJson: z.string().min(2),
-    resultEnvelopeJson: z.string().min(2).optional(),
-    joinResultEnvelopeJson: z.string().min(2).optional(),
+    contextsJson: z.string().check(utf16MinLength(2)),
+    resultEnvelopeJson: z.string().check(utf16MinLength(2)).optional(),
+    joinResultEnvelopeJson: z.string().check(utf16MinLength(2)).optional(),
   })
   .strict()
 
@@ -3766,7 +3794,7 @@ const employeeInvocationJoinResultSchema = z
               .object({ id: z.string().min(1), revision: z.number().int().positive() })
               .strict(),
             state: z.enum(['waiting', 'satisfied', 'failed', 'detached']),
-            resultEnvelopeJson: z.string().min(2).nullable(),
+            resultEnvelopeJson: z.string().check(utf16MinLength(2)).nullable(),
           })
           .strict(),
       )
@@ -3833,7 +3861,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const scope = runtimeScopeSchema.parse(JSON.parse(request.targetWorkScopeJson) as unknown)
     const parentEnvelope = z
       .object({
-        contextsJson: z.string().min(2),
+        contextsJson: z.string().check(utf16MinLength(2)),
         contractInput: z
           .object({ assignedFailureType: pipelineFailureTypeSchema.optional() })
           .passthrough(),
@@ -4179,8 +4207,8 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         schemaVersion: z.literal(1),
         workItemRef: z.string().min(1),
         defaultSlotRef: z.string().min(1),
-        contextsJson: z.string().min(2),
-        orderedDispatchConfigurationsJson: z.string().min(2).default('[]'),
+        contextsJson: z.string().check(utf16MinLength(2)),
+        orderedDispatchConfigurationsJson: z.string().check(utf16MinLength(2)).default('[]'),
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
@@ -4242,10 +4270,10 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           .default(null),
         inputSchemaId: z.string().min(1),
         outputSchemaId: z.string().min(1),
-        eventJson: z.string().min(2),
-        contextsJson: z.string().min(2),
-        orderedDispatchConfigurationsJson: z.string().min(2).default('[]'),
-        toolBindingsJson: z.string().min(2).default('[]'),
+        eventJson: z.string().check(utf16MinLength(2)),
+        contextsJson: z.string().check(utf16MinLength(2)),
+        orderedDispatchConfigurationsJson: z.string().check(utf16MinLength(2)).default('[]'),
+        toolBindingsJson: z.string().check(utf16MinLength(2)).default('[]'),
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
@@ -4536,8 +4564,8 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           .strict()
           .nullable()
           .default(null),
-        inputEnvelopeJson: z.string().min(2),
-        outputJson: z.string().min(2),
+        inputEnvelopeJson: z.string().check(utf16MinLength(2)),
+        outputJson: z.string().check(utf16MinLength(2)),
       })
       .strict()
       .parse(JSON.parse(requestJson) as unknown)
@@ -4586,7 +4614,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
           schemaVersion: z.number().int().positive(),
           revision: z.number().int().positive(),
           lifecycleState: z.enum(['active', 'waiting', 'terminal']),
-          artifactRefs: z.array(z.string().min(1).max(1_000)).max(500),
+          artifactRefs: z.array(z.string().min(1).check(utf16MaxLength(1_000))).max(500),
         })
         .passthrough()
         .safeParse(context)
@@ -5071,10 +5099,10 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
         employeeTypeRef: runtimeEmployeeTypeRefSchema.nullable().default(null),
         workItemRef: z.string().min(1),
         toolSlotRef: z.string().min(1),
-        outputJson: z.string().min(2),
-        contextsJson: z.string().min(2),
-        inputEnvelopeJson: z.string().min(2).optional(),
-        enabledWorkItemRefsJson: z.string().min(2).default('[]'),
+        outputJson: z.string().check(utf16MinLength(2)),
+        contextsJson: z.string().check(utf16MinLength(2)),
+        inputEnvelopeJson: z.string().check(utf16MinLength(2)).optional(),
+        enabledWorkItemRefsJson: z.string().check(utf16MinLength(2)).default('[]'),
         allowedNextWorkItemRefs: z.array(z.string().min(1)).max(20),
       })
       .strict()
@@ -5087,7 +5115,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
             id: z.string().min(1),
             revision: z.number().int().positive(),
             typeId: z.string().min(1),
-            stateJson: z.string().min(2),
+            stateJson: z.string().check(utf16MinLength(2)),
             artifactRefs: z.array(z.string()).default([]),
           })
           .passthrough(),
@@ -5125,7 +5153,7 @@ export const developmentEmployeeRuntimeCodec: EmployeeTypeRuntimeCodec = {
     const failureTypeDefinitions = executionConfiguration.failureTypeDefinitions
     const enabledWorkItemRefs = new Set(
       z
-        .array(z.string().min(1).max(160))
+        .array(z.string().min(1).check(utf16MaxLength(160)))
         .parse(JSON.parse(request.enabledWorkItemRefsJson) as unknown),
     )
     const capabilityEnabled = (workItemRef: string): boolean =>

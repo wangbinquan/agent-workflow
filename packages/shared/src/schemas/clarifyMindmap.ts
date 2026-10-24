@@ -1,9 +1,10 @@
 /** RFC-372: optional metadata on the existing clarify protocol. */
 import { z } from 'zod'
+import { utf16MaxLength } from './utf16Length'
 
 export const ClarifyInteractionModeSchema = z.enum(['questions', 'mindmap'])
 export type ClarifyInteractionMode = z.infer<typeof ClarifyInteractionModeSchema>
-const categoryName = z.string().trim().min(1).max(120)
+const categoryName = z.string().trim().min(1).check(utf16MaxLength(120))
 /** Legacy strings are one category name, including any literal slash. */
 export function clarifyCategoryPaths(
   categories: readonly (string | readonly string[])[],
@@ -16,7 +17,7 @@ export const ClarifyMindmapConfigSchema = z
       .array(z.union([categoryName, z.array(categoryName).min(1).max(40)]))
       .max(40)
       .default([]),
-    instructions: z.string().max(8000).default(''),
+    instructions: z.string().check(utf16MaxLength(8000)).default(''),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -37,20 +38,20 @@ export function resolveClarifyInteractionMode(node: {
   return node.interactionMode === 'mindmap' ? 'mindmap' : 'questions'
 }
 export const ClarifyQuestionMindmapSchema = z.object({
-  categoryPath: z.array(z.string().trim().min(1).max(120)).min(1),
-  parentQuestionId: z.string().min(1).max(64).optional(),
+  categoryPath: z.array(z.string().trim().min(1).check(utf16MaxLength(120))).min(1),
+  parentQuestionId: z.string().min(1).check(utf16MaxLength(64)).optional(),
   // Set by the append operation, so accepted retries recover from the original questions JSON.
-  requestId: z.string().max(64).optional(),
-  requestBasis: z.string().max(128).optional(),
+  requestId: z.string().check(utf16MaxLength(64)).optional(),
+  requestBasis: z.string().check(utf16MaxLength(128)).optional(),
 })
 export const ClarifyFollowupSchema = z
   .object({
-    requestId: z.string().uuid(),
-    parentQuestionId: z.string().min(1).max(64).optional(),
+    requestId: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
+    parentQuestionId: z.string().min(1).check(utf16MaxLength(64)).optional(),
     /** Empty means the root; a nonempty path selects an existing category. */
-    categoryPath: z.array(z.string().trim().min(1).max(120)).optional(),
-    basis: z.string().min(1).max(128),
-    instruction: z.string().trim().max(2000).default(''),
+    categoryPath: z.array(z.string().trim().min(1).check(utf16MaxLength(120))).optional(),
+    basis: z.string().min(1).check(utf16MaxLength(128)),
+    instruction: z.string().trim().check(utf16MaxLength(2000)).default(''),
   })
   .refine(
     (value) => (value.parentQuestionId !== undefined) !== (value.categoryPath !== undefined),
@@ -74,7 +75,7 @@ export const ClarifyFollowupStatusSchema = z.object({
   target: z.union([z.string(), z.array(z.string())]),
   startedAt: z.number().int(),
   /** Original request, for a faithful retry after refresh. Absent in legacy status. */
-  instruction: z.string().max(2000).optional(),
+  instruction: z.string().check(utf16MaxLength(2000)).optional(),
   error: z.object({ code: z.string(), message: z.string() }).optional(),
 })
 export type ClarifyFollowupStatus = z.infer<typeof ClarifyFollowupStatusSchema>

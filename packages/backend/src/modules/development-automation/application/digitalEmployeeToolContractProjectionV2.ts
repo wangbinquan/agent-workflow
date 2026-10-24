@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { utf16MinLength } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
 import { isLexicallyInsideForHost } from '@/util/platformExec'
@@ -18,7 +19,7 @@ const contextRecordSchema = z
     typeId: z.string().min(1),
     schemaVersion: z.number().int().positive().default(1),
     lifecycleState: z.enum(['active', 'waiting', 'terminal']).default('active'),
-    stateJson: z.string().min(2),
+    stateJson: z.string().check(utf16MinLength(2)),
     artifactRefs: z.array(z.string()).default([]),
   })
   .passthrough()
@@ -26,8 +27,8 @@ const contextRecordSchema = z
 const hostEnvelopeSchema = z
   .object({
     connectionRef: refSchema.nullable().default(null),
-    contractInput: z.unknown(),
-    contextsJson: z.string().min(2),
+    contractInput: z.unknown().optional(),
+    contextsJson: z.string().check(utf16MinLength(2)),
     platformPaths: z
       .object({
         requirementDirectory: z.string().min(1),
