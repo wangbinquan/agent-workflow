@@ -1,0 +1,516 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-24T07:06:28.720572+00:00",
+  "sourceSha": "ac5c96bf760472d78b7cbc93ac3a00b30fd5f878",
+  "scope": "Acceptance of the two RFC396 diagnostic repairs and direct Windows output comparison; production repair and full Windows care remain unaccepted.",
+  "mainCI": {
+    "runId": 40069434115,
+    "headSha": "ac5c96bf760472d78b7cbc93ac3a00b30fd5f878",
+    "status": "completed",
+    "conclusion": "failure",
+    "successCount": 46,
+    "failed": [
+      {
+        "id": 120799476219,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "failure"
+      },
+      {
+        "id": 120801915853,
+        "name": "Playwright e2e (windows-latest shard 3/4)",
+        "conclusion": "failure"
+      },
+      {
+        "id": 120806584533,
+        "name": "CI required",
+        "conclusion": "failure"
+      }
+    ],
+    "observedAt": "2026-10-24T06:55:43Z"
+  },
+  "nodeRuntimeGuard": {
+    "schemaVersion": 1,
+    "recordedAt": "2026-10-24T06:49:32.559529+00:00",
+    "scope": "Read the requested local main-CI snapshot once, then download only this completed functional job log once. No other CI job query, polling, repository modification or test execution.",
+    "sourceSha": "ac5c96bf760472d78b7cbc93ac3a00b30fd5f878",
+    "runId": 40069434115,
+    "jobId": 120799476379,
+    "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40069434115/job/120799476379",
+    "snapshotEvidence": {
+      "path": "/tmp/rfc396-win-diagnostic-files-main-ci.json",
+      "observedAt": "2026-10-24T06:45:38Z",
+      "targetJob": {
+        "id": 120799476379,
+        "name": "Backend tests (ubuntu-latest shard 24/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      "overallRunStatusAtSnapshot": "in_progress",
+      "overallRunConclusionAtSnapshot": null
+    },
+    "checkoutEvidence": [
+      {
+        "line": 97,
+        "rawLine": "2026-10-24T06:31:40.6433310Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ac5c96bf760472d78b7cbc93ac3a00b30fd5f878:refs/remotes/origin/main"
+      },
+      {
+        "line": 99,
+        "rawLine": "2026-10-24T06:31:47.4141481Z  * [new ref]         ac5c96bf760472d78b7cbc93ac3a00b30fd5f878 -> origin/main"
+      },
+      {
+        "line": 115,
+        "rawLine": "2026-10-24T06:31:48.4728739Z ac5c96bf760472d78b7cbc93ac3a00b30fd5f878"
+      }
+    ],
+    "guard": {
+      "testFile": "packages/backend/tests/rfc254-e2e-node-runtime-guard.test.ts",
+      "counts": {
+        "rfc254Passed": 6,
+        "matcherSelfTestsPassed": 3,
+        "failed": 0
+      },
+      "passes": [
+        {
+          "line": 608,
+          "rawLine": "2026-10-24T06:33:23.2491807Z (pass) RFC-317 T14 —— matcher 自证：伪造的 Bun 用法必须被抓到 > bun: 模块的各种引入写法都命中 [0.51ms]"
+        },
+        {
+          "line": 609,
+          "rawLine": "2026-10-24T06:33:23.2495125Z (pass) RFC-317 T14 —— matcher 自证：伪造的 Bun 用法必须被抓到 > Bun 全局的属性访问 / 下标 / 赋值都命中，同名前缀不误报 [0.39ms]"
+        },
+        {
+          "line": 610,
+          "rawLine": "2026-10-24T06:33:23.2504169Z (pass) RFC-317 T14 —— matcher 自证：伪造的 Bun 用法必须被抓到 > 注释 / 字符串里提到 Bun 不算违规（否则规则没法在它适用的地方被解释） [0.46ms]"
+        },
+        {
+          "line": 611,
+          "rawLine": "2026-10-24T06:33:23.2636141Z (pass) RFC-254 — the Playwright-loaded e2e files stay Node-compatible > no Playwright-loaded file imports out of the fixtures directory [13.58ms]"
+        },
+        {
+          "line": 612,
+          "rawLine": "2026-10-24T06:33:23.2785280Z (pass) RFC-254 — the Playwright-loaded e2e files stay Node-compatible > none of them import a `bun:` module [14.91ms]"
+        },
+        {
+          "line": 613,
+          "rawLine": "2026-10-24T06:33:23.3476675Z (pass) RFC-254 — the Playwright-loaded e2e files stay Node-compatible > none of them touch the `Bun` global [69.04ms]"
+        },
+        {
+          "line": 614,
+          "rawLine": "2026-10-24T06:33:23.3481883Z (pass) RFC-254 — the Playwright-loaded e2e files stay Node-compatible > the scan actually sees files [0.62ms]"
+        },
+        {
+          "line": 615,
+          "rawLine": "2026-10-24T06:33:23.3485122Z (pass) RFC-254 — the Playwright-loaded e2e files stay Node-compatible > the Bun-side runner it delegates to is still there [0.30ms]"
+        },
+        {
+          "line": 616,
+          "rawLine": "2026-10-24T06:33:23.3930217Z (pass) RFC-254 — the Playwright-loaded e2e files stay Node-compatible > RFC-395 II-a: the model fixture and every bundled dependency remain Node compatible [44.34ms]"
+        }
+      ],
+      "previousSourceBlob": "cd8f6da44c1c1c1cc6ad32c39ef108e46cb0b983",
+      "candidateSourceBlob": "cd8f6da44c1c1c1cc6ad32c39ef108e46cb0b983",
+      "sourceGuardUnchanged": true
+    },
+    "shard": {
+      "passed": 1129,
+      "failed": 0,
+      "files": 103,
+      "expectCalls": 17064,
+      "durationSeconds": 505.01,
+      "summaryLines": [
+        {
+          "line": 2369,
+          "rawLine": "2026-10-24T06:40:36.9467287Z  1129 pass"
+        },
+        {
+          "line": 2370,
+          "rawLine": "2026-10-24T06:40:36.9467581Z  0 fail"
+        },
+        {
+          "line": 2371,
+          "rawLine": "2026-10-24T06:40:36.9467863Z  17064 expect() calls"
+        },
+        {
+          "line": 2372,
+          "rawLine": "2026-10-24T06:40:36.9468241Z Ran 1129 tests across 103 files. [505.01s]"
+        }
+      ]
+    },
+    "log": {
+      "path": "/tmp/rfc396-win-diagnostic-ci-logs/120799476379.log",
+      "bytes": 415325,
+      "sha256": "b73482ec73a934d17d7283aafd1dcbf438a37dce53d34b51f66dfca360b58e06"
+    },
+    "repairConclusion": "The exact ac5c96bf7 job actually ran and passed the unchanged RFC254 Bun-global guard that previously named only rfc396-windows-profile-diagnostic.ts. The previous helper/guard integration failure is confirmed repaired for this exact SHA.",
+    "boundary": "This proves the Node-compatibility guard and this backend shard, not overall main-CI success, Windows care acceptance, or a fix for the underlying Windows missing-profile-marker behavior."
+  },
+  "windows": {
+    "job": {
+      "id": 120801915853,
+      "name": "Playwright e2e (windows-latest shard 3/4)",
+      "head_sha": "ac5c96bf760472d78b7cbc93ac3a00b30fd5f878",
+      "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40069434115/job/120801915853",
+      "status": "completed",
+      "conclusion": "failure",
+      "started_at": "2026-10-24T06:37:58Z",
+      "completed_at": "2026-10-24T06:50:25Z"
+    },
+    "jobTestResult": {
+      "passed": 132,
+      "failed": 1,
+      "flaky": 1,
+      "duration": "11.1m",
+      "failedTest": "RFC-396 graph care hydrates approved material, repairs a real Task and re-verifies the same MR",
+      "failure": "profileProof expected RFC396_PROFILE_PROOF line; received undefined; both attempts artifact paths only execution.json",
+      "logLines": [488, 553, 584, 594]
+    },
+    "artifact": {
+      "id": 12551686823,
+      "name": "playwright-trace-windows-latest-shard3",
+      "size_in_bytes": 11801798,
+      "digest": "sha256:13710fff9725f8b3b27a120b7f60cc8380920c7edcd3fda9a02d564f510f216b"
+    },
+    "rawFiles": [
+      {
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/run.json",
+        "bytes": 13153,
+        "sha256": "e669e22f59d678c0d03adc4cd70b5675a7ac9b7c58b3a49fbf13c94446c7401b",
+        "source": "https://api.github.com/repos/wangbinquan/agent-workflow/actions/runs/40069434115"
+      },
+      {
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/job.json",
+        "bytes": 3663,
+        "sha256": "d62550584fff5a066495d9a62e58cf88598d654b756aa2390ce2c29e9d9cac54",
+        "source": "https://api.github.com/repos/wangbinquan/agent-workflow/actions/jobs/120801915853"
+      },
+      {
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/artifacts.json",
+        "bytes": 5744,
+        "sha256": "b38e8567f8441c38258229dd83c55d932b3665b49ad2e1f1c18787da23c01561",
+        "source": "https://api.github.com/repos/wangbinquan/agent-workflow/actions/runs/40069434115/artifacts"
+      },
+      {
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/job-120801915853.log",
+        "bytes": 73093,
+        "sha256": "c8a68744f96835998a92a75d808cd3f1e87d01700b4e0163cf99bd27d1791642",
+        "source": "https://api.github.com/repos/wangbinquan/agent-workflow/actions/jobs/120801915853/logs"
+      },
+      {
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/playwright-trace-windows-latest-shard3-12551686823.zip",
+        "bytes": 11801798,
+        "sha256": "13710fff9725f8b3b27a120b7f60cc8380920c7edcd3fda9a02d564f510f216b",
+        "source": "https://api.github.com/repos/wangbinquan/agent-workflow/actions/artifacts/12551686823/zip"
+      }
+    ],
+    "zipEvidence": [
+      {
+        "zipMember": "test-results/rfc396-graph-care-repair-R-779fa-and-re-verifies-the-same-MR-chromium/attachments/graph-profile-eacf6481f76c-json-c7e57c2a011e60b298e8b8005bcaca1e7bf5ed5e.json",
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/first-attempt/graph-profile-eacf6481f76c-json-c7e57c2a011e60b298e8b8005bcaca1e7bf5ed5e.json",
+        "bytes": 7591,
+        "sha256": "f4375d1b7acdb5dd371458c57867170b1df155527e0aabe7c6871960d4c70622"
+      },
+      {
+        "zipMember": "test-results/rfc396-graph-care-repair-R-779fa-and-re-verifies-the-same-MR-chromium/attachments/windows-profile-detached-diagnostic-json-7406d73996c9be0b23df0bd0c301a2002a8c0216.json",
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/first-attempt/windows-profile-detached-diagnostic-json-7406d73996c9be0b23df0bd0c301a2002a8c0216.json",
+        "bytes": 1985,
+        "sha256": "982f076a592b2542a6662186cc3a8ca570b5706d5bd3531dfbf53e657d16038d"
+      },
+      {
+        "zipMember": "test-results/rfc396-graph-care-repair-R-779fa-and-re-verifies-the-same-MR-chromium/graph-profile-eacf6481f76c.json",
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/first-attempt/graph-profile-eacf6481f76c.json",
+        "bytes": 7591,
+        "sha256": "f4375d1b7acdb5dd371458c57867170b1df155527e0aabe7c6871960d4c70622"
+      },
+      {
+        "zipMember": "test-results/rfc396-graph-care-repair-R-779fa-and-re-verifies-the-same-MR-chromium/windows-profile-detached-diagnostic.json",
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/first-attempt/windows-profile-detached-diagnostic.json",
+        "bytes": 1985,
+        "sha256": "982f076a592b2542a6662186cc3a8ca570b5706d5bd3531dfbf53e657d16038d"
+      },
+      {
+        "zipMember": "test-results/rfc396-graph-care-repair-R-779fa-and-re-verifies-the-same-MR-chromium-retry1/attachments/graph-profile-6fd095cd39ce-json-e62d8364c11b001b7f2ff25e815d2f880a5856d8.json",
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/retry1/graph-profile-6fd095cd39ce-json-e62d8364c11b001b7f2ff25e815d2f880a5856d8.json",
+        "bytes": 7590,
+        "sha256": "40325dd8b1a61c2f9b4ba0de15faecefbfbc7ed77aaa3ffdea4128bc2d0fef57"
+      },
+      {
+        "zipMember": "test-results/rfc396-graph-care-repair-R-779fa-and-re-verifies-the-same-MR-chromium-retry1/graph-profile-6fd095cd39ce.json",
+        "path": "/tmp/rfc396-ac5c-windows-profile-evidence/retry1/graph-profile-6fd095cd39ce.json",
+        "bytes": 7590,
+        "sha256": "40325dd8b1a61c2f9b4ba0de15faecefbfbc7ed77aaa3ffdea4128bc2d0fef57"
+      }
+    ],
+    "productionProfiles": [
+      {
+        "attempt": "first-attempt",
+        "attachment": "/tmp/rfc396-ac5c-windows-profile-evidence/first-attempt/graph-profile-eacf6481f76c.json",
+        "execution": {
+          "path": "/tmp/rfc396-ac5c-windows-profile-evidence/first-attempt/execution.raw.json",
+          "bytes": 1931,
+          "sha256": "5b4094ee76cc940957bc65fcc6ad7b72f1a4422232b86f264877426d67a9671d"
+        },
+        "bindingId": "execution:01M5PAD0WZHJXS6XDHTJJ48WJF:31fe0682712834c4",
+        "artifactRef": "01M5PAD3W7XXDAMP22768C3F8K",
+        "baselineSha": "1c1692cfcb04ab3bb70f84cbf4b77dcad8932d6e",
+        "candidateTreeOid": "68702c6d766ce7adc9d5d3ea5ddea9b6b7915e56",
+        "basisDigest": "73c05d6c2c1ecf75256278832d795a01a22e3d98e519513d0e2f74a15e04027d",
+        "profile": {
+          "digest": "c8d32c062146864b77bf5b1de3adb6376bb13e74061bc28a4f1d7ba03a520fcc",
+          "id": "01M5PAC20N9H85J6MASF5TKPBT",
+          "revision": 1
+        },
+        "environment": {
+          "arch": "x64",
+          "dependencies": {},
+          "locale": "en_US.UTF-8",
+          "osRelease": "10.0.26100",
+          "pathRuntimes": {
+            "bun": {
+              "executable": "C:\\Users\\runneradmin\\.bun\\bin\\bun.exe",
+              "status": "observed",
+              "version": "1.4.3"
+            },
+            "node": {
+              "executable": "C:\\Program Files\\nodejs\\node.exe",
+              "status": "observed",
+              "version": "v22.23.4"
+            }
+          },
+          "platform": "win32",
+          "runtimeProbeScope": "PATH bun/node only; profile scripts may select other tools",
+          "timezone": null,
+          "verifierRuntime": {
+            "bun": "1.4.3",
+            "node": "26.3.0"
+          }
+        },
+        "receipt": {
+          "ok": true,
+          "receiptDigest": "9f71923ac035b60d21093b8f0ffa2ecbe8b23814c508d6ff0018483f293ad707",
+          "steps": [
+            {
+              "durationMs": 1085,
+              "evidenceFiles": [],
+              "exitCode": 0,
+              "ok": true,
+              "outputTailRef": null,
+              "stepId": "graph-behavior",
+              "timedOut": false
+            }
+          ],
+          "stopPolicy": "first-failure"
+        },
+        "artifactFiles": ["execution.json"]
+      },
+      {
+        "attempt": "retry1",
+        "attachment": "/tmp/rfc396-ac5c-windows-profile-evidence/retry1/graph-profile-6fd095cd39ce.json",
+        "execution": {
+          "path": "/tmp/rfc396-ac5c-windows-profile-evidence/retry1/execution.raw.json",
+          "bytes": 1930,
+          "sha256": "f96c1e85ad5bc50ffb596668923f2d6acb533741599154962fba1629f0a44108"
+        },
+        "bindingId": "execution:01M5PAF2B979ZWV1WXWV25KD45:3503561fbd9b5928",
+        "artifactRef": "01M5PAF4EBE0YK3F4AT66DCBGS",
+        "baselineSha": "a29f92336e51f28ab9be06e50c47cf387c264a3e",
+        "candidateTreeOid": "68702c6d766ce7adc9d5d3ea5ddea9b6b7915e56",
+        "basisDigest": "9fd08f47d267006e400b7ece9e96b1583f3b4175fffdbd6bae5bc93865831dc1",
+        "profile": {
+          "digest": "c8d32c062146864b77bf5b1de3adb6376bb13e74061bc28a4f1d7ba03a520fcc",
+          "id": "01M5PAE9PGPTAPFRBXQ0F2A72F",
+          "revision": 1
+        },
+        "environment": {
+          "arch": "x64",
+          "dependencies": {},
+          "locale": "en_US.UTF-8",
+          "osRelease": "10.0.26100",
+          "pathRuntimes": {
+            "bun": {
+              "executable": "C:\\Users\\runneradmin\\.bun\\bin\\bun.exe",
+              "status": "observed",
+              "version": "1.4.3"
+            },
+            "node": {
+              "executable": "C:\\Program Files\\nodejs\\node.exe",
+              "status": "observed",
+              "version": "v22.23.4"
+            }
+          },
+          "platform": "win32",
+          "runtimeProbeScope": "PATH bun/node only; profile scripts may select other tools",
+          "timezone": null,
+          "verifierRuntime": {
+            "bun": "1.4.3",
+            "node": "26.3.0"
+          }
+        },
+        "receipt": {
+          "ok": true,
+          "receiptDigest": "9f71923ac035b60d21093b8f0ffa2ecbe8b23814c508d6ff0018483f293ad707",
+          "steps": [
+            {
+              "durationMs": 302,
+              "evidenceFiles": [],
+              "exitCode": 0,
+              "ok": true,
+              "outputTailRef": null,
+              "stepId": "graph-behavior",
+              "timedOut": false
+            }
+          ],
+          "stopPolicy": "first-failure"
+        },
+        "artifactFiles": ["execution.json"]
+      }
+    ],
+    "diagnosticReport": {
+      "schemaVersion": 1,
+      "platform": "win32",
+      "fixture": "initial",
+      "variants": [true, false],
+      "compilerVersion": {
+        "code": 0,
+        "timedOut": false,
+        "stdout": "1.4.3\n",
+        "stderr": "",
+        "durationMs": 40,
+        "error": null
+      },
+      "compile": {
+        "code": 0,
+        "timedOut": false,
+        "stdout": "  [12ms]  bundle  1 modules\n[1.952s] compile  C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\rfc396-profile-diagnostic-FpQdJ5\\caller.exe\n",
+        "stderr": "",
+        "durationMs": 2040,
+        "error": null
+      },
+      "caller": {
+        "code": 0,
+        "timedOut": false,
+        "stdout": "",
+        "stderr": "",
+        "durationMs": 869,
+        "error": null
+      },
+      "results": {
+        "bunVersion": "1.4.3",
+        "platform": "win32",
+        "cases": [
+          {
+            "detached": true,
+            "code": 0,
+            "timedOut": false,
+            "error": null,
+            "durationMs": 458,
+            "stdout": {
+              "exists": true,
+              "bytes": 0,
+              "content": ""
+            },
+            "stderr": {
+              "exists": true,
+              "bytes": 0,
+              "content": ""
+            },
+            "completion": {
+              "completed": true,
+              "nodeVersion": "v22.23.4",
+              "nodePath": "C:\\Program Files\\nodejs\\node.exe"
+            }
+          },
+          {
+            "detached": false,
+            "code": 0,
+            "timedOut": false,
+            "error": null,
+            "durationMs": 202,
+            "stdout": {
+              "exists": true,
+              "bytes": 198,
+              "content": "RFC396_PROFILE_PROOF {\"pipelineRevision\":\"initial\",\"sourceSha256\":\"cca76ec7d245b569a14fa8ff9594f35c14c9e149258343909d8fec3fc26dd347\",\"testRef\":\"graph-result.test.cjs#graph-result-test\",\"care\":null}\n"
+            },
+            "stderr": {
+              "exists": true,
+              "bytes": 0,
+              "content": ""
+            },
+            "completion": {
+              "completed": true,
+              "nodeVersion": "v22.23.4",
+              "nodePath": "C:\\Program Files\\nodejs\\node.exe"
+            }
+          }
+        ]
+      }
+    },
+    "sourceComparison": {
+      "path": "packages/backend/src/modules/development-automation/infrastructure/local/verificationCommandEffects.ts",
+      "blobs": {
+        "dfc098c33b3ff94300cf217d9a09298792617a8f": "c4a96a83402add5739ee08abc28b19aa011c36cc",
+        "ac5c96bf760472d78b7cbc93ac3a00b30fd5f878": "c4a96a83402add5739ee08abc28b19aa011c36cc"
+      },
+      "identical": true,
+      "productionSpawnLines": [134, 148],
+      "productionOutputReadLines": [164, 187],
+      "diagnosticFixtureCopyAndMarkerLines": [97, 106],
+      "diagnosticResultCaptureLines": [112, 122],
+      "callSiteLines": [598, 621]
+    },
+    "conclusion": {
+      "firstAttemptRetention": "Both original outputPath JSONs and path-attachment copies are uploaded in exact artifact; matching content hashes.",
+      "controlledAB": "Compiled Bun 1.4.3 caller with original initial fixture plus final independent completion marker reproduces stdout loss only with detached=true. Both variants exit 0, finish marker, and do not time out; detached=false preserves all 198 bytes of business proof.",
+      "productionMatch": "Both actual production receipts exit 0 with outputTailRef null and no log artifacts, matching the detached=true A/B symptom. Production execution file is byte-identical from dfc098c33 to ac5c96bf7.",
+      "causalBoundary": "Direct evidence establishes detached-dependent stdout loss for this Windows/Bun 1.4.3 compiled caller + .cmd + Bun.file fixture. It is not a generic assertion that all detached executions lose output. Probe uses isolated copied fixture and projected system environment, not the literal daemon workspace/process.",
+      "acceptanceBoundary": "No production repair applied or revalidated. This run still fails initial profile proof before red-CI repair stimulus; cannot claim complete Windows care journey or MR repair acceptance.",
+      "missingEvidence": "No retry A/B by design (retry===0 guard); no direct-node variant. No diagnostic error, cleanupError, or resultReadError fields were recorded. Caller stdout empty is expected because results are written directly to JSON."
+    },
+    "flaky": {
+      "test": "task lifecycle: canceled (POST /api/tasks/:id/cancel mid-running)",
+      "path": "e2e/task-lifecycle-states.spec.ts:549",
+      "firstAttempt": "waitForStatus(running-precancel) timed out after 10000ms; last=pending",
+      "firstDurationSeconds": 40.7,
+      "retry": "passed",
+      "retryDurationSeconds": 13.4,
+      "logLines": [460, 468, 564, 573, 584],
+      "attribution": "Undetermined. A previous different task-lifecycle running case had a similar pending timeout, which does not establish a common cause or RFC396 responsibility."
+    }
+  },
+  "scheduledWorkflows": {
+    "observedAt": "2026-10-24T06:24:18Z",
+    "workflowCount": 10,
+    "successCount": 6,
+    "failureCount": 3,
+    "cancelledCount": 1,
+    "newRunAttemptOrStatus": false,
+    "source": "/tmp/rfc396-schedule-refresh-20261024T062416Z/summary.json",
+    "sha256": "13f0c0f7f58588408d3268efc800b783255afcfc064d3bba263908e5607a9ed4"
+  },
+  "gitlabReadiness": {
+    "observedAt": "2026-10-24T06:42:41.521881+00:00",
+    "ready": false,
+    "requests": [
+      {
+        "path": "/projects/571",
+        "status": 500
+      }
+    ],
+    "mode": "single-read-only-check",
+    "createdCase": false
+  },
+  "historicalFixProposal": {
+    "applied": false,
+    "approval": "pending explicit user scope exception to AGENTS rule 4",
+    "patchPath": "/tmp/rfc396-windows-verification-proposal/proposed.patch",
+    "patchSha256": "2c962091f34c8efbb0ee132afc4adcff070456ae6067c91e8e37f70712a7c16e",
+    "pathCount": 3,
+    "changes": [
+      "Use non-detached Windows verification execution while retaining POSIX groups",
+      "Cover actual stdout/stderr, nonzero exit and timeout descendant cleanup",
+      "Preserve spawn guard with the exact platform condition"
+    ],
+    "productionRepairAccepted": false,
+    "fullWindowsCareAccepted": false
+  },
+  "rfcStatus": "In Progress"
+}

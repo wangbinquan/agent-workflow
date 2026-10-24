@@ -1,3 +1,9 @@
+## 2026-10-24 RFC-396 In Progress：取证修复已在 CI 接受，Windows 输出差异已实证
+
+准确 `ac5c96bf760472d78b7cbc93ac3a00b30fd5f878` 的主 CI `40069434115` 已终态 **46 success / 3 failure**：Windows care、Static scans 及派生 CI required 仍失败。本会话新增诊断的两处缺陷已确认修复：原 Node 守卫全部 9 项实际通过，所在分片 **1129 pass / 0 fail**；首次 profile 与 A/B JSON 均真实上传，原文件和附件副本 hash 一致。[结构化证据](design/RFC-396-adaptive-graph-development/windows-profile-acceptance-2026-10-24.json)保留原始来源、生产回执和接受边界。
+
+同一 Windows/Bun 1.4.3 编译调用器、原 `.cmd` 夹具和 `Bun.file` 输出实测：两个变体都退出0且完成独立末尾标记；`detached=true` stdout 0字节，`detached=false` 保留198字节完整业务证明。现有执行器固定detached，与实际profile的空输出回执吻合；受控探针不是生产修复后的接受。历史三文件最小补丁已准备，仍待明确范围授权，尚未应用；Windows完整care仍停在初次profile。GitLab571于06:42 UTC单次只读检查仍500，真实Case未创建；新版托管及默认恢复仍开放。定时CI于06:24 UTC补查无新run/attempt/状态变化，仍6成功/3失败/1取消。既有CI观察任务已正常结束，没有重复触发流水线或重跑未变化的候选。RFC保持In Progress。
+
 ## 2026-10-23 RFC-396 In Progress：R23 已发布，Windows 日志证明及真实环境验收待收口
 
 [AC01～AC26 完成度审计](design/RFC-396-adaptive-graph-development/completion-audit-2026-10-23.md) 保留完整退出条件。R23 发布后证据误标过期的修复已随 `dfc098c33b3ff94300cf217d9a09298792617a8f` 上库：本地 3 pass / 0 fail、61 assertions；准确 CI 实际提供 SQLite 2、PostgreSQL 2、纯合同 1 的通过行。相同 GitHub macOS artifact 的 care 完整旅程 1 pass / 0 fail / 0 flaky，真实修复 Task、profile、同 MR 新 head 与 current evidence 均断言通过，旧树仍 stale。[原始接受记录](design/RFC-396-adaptive-graph-development/graph-care-repair-acceptance-2026-10-23.json)区分受控外部系统与真实 GitLab。

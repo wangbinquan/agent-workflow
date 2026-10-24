@@ -2,6 +2,8 @@
 
 当前生产与用例候选为 `dfc098c33b3ff94300cf217d9a09298792617a8f`；2026-10-24 05:29 UTC 更新。原逐项审计、R01～R23及历史失败保留，已有候选内容不因共享HEAD变化重跑。R23修复已发布，准确artifact的care旅程、SQLite/PostgreSQL相关回归已通过。
 
+**2026-10-24 06:55 UTC后继更新：** 取证候选 `ac5c96bf760472d78b7cbc93ac3a00b30fd5f878` 的主CI终态46成功/3失败。本会话新增诊断的Node守卫和首次附件保存问题均已取得准确CI实际接受。Windows/Bun1.4.3对照已确认：两个变体都真实完成，detached=true丢失stdout，false保留完整198字节业务证明；实际生产回执同样缺日志。历史执行器补丁尚待范围授权，生产修复和完整Windows care未接受。详见[结构化实证](./windows-profile-acceptance-2026-10-24.json)。已有共享main的并发提交不撤销这份准确候选证据，也不由此取得整合后版本的全仓接受。
+
 **裁决：RFC保持In Progress。** 准确主CI终态46成功/3失败；Windows新增care用例两次缺少首次profile日志证明，尚未进入CI修复段。Ubuntu/macOS各五个图用例首轮通过。完整graph@2真实GitLab MR/CI、新版托管执行及默认恢复仍无直接接受证据，不能由graph@1或受控外部系统代签。当前结构化证据见[care接受](./graph-care-repair-acceptance-2026-10-23.json)和[准确CI](./r23-ci-acceptance-2026-10-23.json)。
 
 ## 1. 逐项完成度
@@ -59,8 +61,8 @@ R01～R22 的发现、修复和证据逐项保留在 [全面回顾与 MR 能力�
 
 ## 3. 仍需完成的退出条件
 
-1. **Windows care及准确CI归因。** R23已随dfc发布，CI40063460648终态46 success / 3 failure。Windows新care两次停在初次profile证明，原始输出缺失原因尚须直接证据；新用例将保留Node fetch取得的完整artifact响应，因为浏览器trace没有该API回执。历史执行器固定detached行为来自6545db54/e676，execute不在本会话改动内；在未获明确范围授权前不代改。Booking及另两个flaky保留实际失败与重试，不凭文件未改排除生产关联。Static scans仅记失败元数据，汇总失败仍保留。其他定时workflow仍按[CI归因记录](./ci-audit-2026-10-23.md)的注明时间快照记账。
-2. **graph@2真实企业MR/CI。** 同一Case串起真实模型/原生设计批准、代码和独立profile、真实MR、真实CI失败日志、分类/修复、重新验证、同MR新head、准确head/target结果与外部终态。专用GitLab571 fixture及runner已真实完成baseline pipeline285/job1155；业务Case尚未创建。准备脚本两处错误已修，05:29 UTC项目接口500阻断接续；正式原行retry未执行。未配置的审批/协同lane仍只引用继承能力证据，不宣称整条直接接受。
+1. **Windows care及准确CI归因。** R23和两处取证修复已发布，ac5准确CI为46 success / 3 failure。Windows仍停在初次profile证明，但实际回执、首次附件及文件输出A/B已取得，确认固定detached配置在该Windows/Bun1.4.3条件下丢失stdout。历史执行器来自6545db54/e676，execute不在本会话改动内；三文件补丁已经准备，在明确范围授权前不代改。应用后仍须实际日志、非零退出、超时树清理以及完整care接受。当前分片1flaky及此前重试失败保留，不凭文件未改排除生产关联。Static scans仅记失败元数据，汇总失败仍保留。定时workflow已于06:24 UTC补查无新run/attempt/状态变化，仍6 success / 3 failure / 1 cancelled。
+2. **graph@2真实企业MR/CI。** 同一Case串起真实模型/原生设计批准、代码和独立profile、真实MR、真实CI失败日志、分类/修复、重新验证、同MR新head、准确head/target结果与外部终态。专用GitLab571 fixture及runner已真实完成baseline pipeline285/job1155；业务Case尚未创建。准备脚本两处错误已修，06:42 UTC单次只读检查项目接口仍500；正式原行retry未执行。未配置的审批/协同lane仍只引用继承能力证据，不宣称整条直接接受。
 3. **新版托管执行与默认恢复。** 04:47～04:50 UTC实际应用503、挂载0可用空间，服务与任务仍是旧镜像。控制面可读不等于应用就绪，profile声明不等于任务升级。恢复后须核对服务与实际任务准确镜像、真实数据库/传输/运行位置、批准材料、MR身份与默认恢复。旧托管内部交付和单机SIGKILL恢复分别保留，不互相替代。
 4. **最终关闭记录与发布。** Windows证据、真实企业和托管结论齐备后再更新T20/T21及RFC状态；当前保持In Progress。已验证的代码和历史证据继续有效，当前取证与文档改动另行精确提交，不重建旧任务来抹去失败。
 
