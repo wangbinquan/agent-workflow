@@ -1,0 +1,584 @@
+{
+  "schemaVersion": 1,
+  "rfc": "RFC-396",
+  "status": "scoped-acceptance-completed",
+  "scope": "Real browser connected-diagram interaction and fixed synthetic graph measurements on standalone SQLite; no enterprise/hosted MR or model-quality acceptance.",
+  "artifact": {
+    "headSha": "2e562fb54a6c5fcd396601aa7fc82bafd755fff1",
+    "runId": 40055423143,
+    "artifactId": 12545362841,
+    "artifactName": "agent-workflow-e2e-macos-latest",
+    "artifactDigest": "sha256:9cd432a4fcc02f0873bc63d2fec32401e19110b10c4e1e65e8b00d8037373b16",
+    "binaries": [
+      {
+        "file": "agent-workflow-e2e-macos-arm64",
+        "sha256": "6e365b7483cfdc043fc21778285e1281c7c50f0f533ab26a261805b3a5c251fe"
+      },
+      {
+        "file": "stub-opencode-macos-arm64",
+        "sha256": "bb86312319d9e40b3660e938468b2006224aa159eff7a7ca97748b43bfbd4f66"
+      },
+      {
+        "file": "system-mock-tool-macos-arm64",
+        "sha256": "49416d45bd1f4192fab1bb3f73ccec60c1ed7c8f7a5e77f5c0c8f3a692497bab"
+      }
+    ]
+  },
+  "environment": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "osRelease": "25.6.0",
+    "node": "v24.3.0",
+    "bun": "1.3.13",
+    "cpuModel": "Apple M1 Max",
+    "logicalCpus": 10,
+    "hostTotalMemoryBytes": 68719476736,
+    "hostFreeMemoryBytesAtStart": 10052304896,
+    "providerFromLauncher": "sqlite",
+    "deploymentFromLauncher": "standalone",
+    "browserVersion": "148.0.7778.96"
+  },
+  "connectedDiagramRegression": {
+    "status": "passed",
+    "test": "RFC-396 connected diagrams select only their semantic nodes by mouse and keyboard",
+    "formats": ["flow", "state", "sequence", "data"],
+    "semantics": [
+      "node-only mouse selection",
+      "Enter and Space each select one semantic node",
+      "semantic list synchronization",
+      "sequence top and bottom mirrors share selection",
+      "edges and lifelines have no node button role"
+    ],
+    "stats": {
+      "startTime": "2026-10-24T03:00:36.347Z",
+      "duration": 13424.003999999999,
+      "expected": 1,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "rawResult": {
+      "path": "/tmp/rfc396-graph-node-connected.json",
+      "sha256": "577447ef1b9b2f4ba18807b20b6a31b210806bcd111bf4f96e41ea413384b2cc"
+    }
+  },
+  "measurementMethod": {
+    "scenarios": [
+      "1000 elements / six views",
+      "300 dependency edges / 301 levels / four views",
+      "320px / 1000-element directory / three views"
+    ],
+    "preparation": "New disposable Cases through public API; compiled graph-development protocol fixture stops at the original clarify gate. Semantic edits use the production changes API and retain original sources.",
+    "timing": "Wall-clock observations including Playwright synchronization and two animation frames. No latency pass/fail threshold. Timeouts are execution ceilings, not product targets.",
+    "cache": "One fresh browser context per scenario. Daemon/database/OS caches are warm. Switches are explicitly tagged first visit or revisit; no browser cache disable or forced GC.",
+    "polling": "Workspace normally polls every 5000ms. Dependency projection latency includes that cadence; semantic-save HTTP latency is recorded separately.",
+    "memory": "Chromium CDP page-target JS heap and DOM counters, plus performance.memory when available. Snapshots are not process RSS, peak memory, retained-leak proof or cross-browser benchmarks."
+  },
+  "limits": [
+    "Synthetic fixed semantic models; no model quality, business correctness, MR lifecycle or enterprise connection claim.",
+    "Large overview views intentionally use the production paged directory: more than 250 elements suppresses SVG rendering. Smaller section views exercise actual Mermaid rendering.",
+    "Three fixed scenarios on one machine/browser; raw timings and min/median/max for the three repeated workspace reads only. No p95 or general performance promise.",
+    "No daemon restart, load concurrency, production data distribution or other browser engine is covered.",
+    "Artifact bytes and supplied launcher evidence are checked/recorded. The operator must start this daemon from that artifact; a remote HTTP origin alone cannot attest its running binary.",
+    "Accepted multiview and mobile observations come from the first attempt; only the dependency scenario was rerun after repairing a selected-label expectation in the measurement script. The compiled product did not change.",
+    "CDP JS heap values are observation snapshots, not peak memory or retained-leak measurements. Repeated resource timings and task observations may appear in several snapshots; no aggregate p95 is inferred."
+  ],
+  "attempts": [
+    {
+      "report": {
+        "path": "/tmp/rfc396-large-graph-graph-node-results/report.json",
+        "sha256": "7796713d53c2713bc587f60dfaacd5cc79f3fe76bec696fd1da34cbcbbdb6a29"
+      },
+      "status": "failed",
+      "completedScenarios": ["multiview", "mobile"],
+      "failedScenario": "dependencies",
+      "failureStage": "locate-last-element-via-content-link",
+      "failureClass": "measurement-expectation",
+      "failureReason": "The final page starts with the selected element, whose exact accessible button name includes the selection checkmark. The original helper expected the unselected label."
+    },
+    {
+      "report": {
+        "path": "/tmp/rfc396-large-graph-dependency-repair-results/report.json",
+        "sha256": "e5173f6988b4fd33993113a5427a147f5a08659f936e151ac0789359411cc6f8"
+      },
+      "status": "completed",
+      "scenarioWhitelist": ["dependencies"],
+      "measurementScriptSha256": "60a52cda40b983876b416a2313b2c84a787b98d089de24ddd0e941f312129a78",
+      "change": "Explicit expectedSelectedIds requires exact selected names and aria-pressed; SVG node assertions retained."
+    }
+  ],
+  "expectationFailureDiagnosis": {
+    "report": {
+      "path": "/tmp/rfc396-large-graph-dependency-content-link-diagnostic.json",
+      "sha256": "a2b6d8319b6f2cddb371478271399f8d3d7ad44ed56941ef041b79984ff11910"
+    },
+    "artifactSha": "2e562fb54a6c5fcd396601aa7fc82bafd755fff1",
+    "locators": {
+      "unselectedNameCount": 0,
+      "selectedNameCount": 1,
+      "selectedVisible": true,
+      "inspectorHeadingVisible": true
+    },
+    "directoryButtons": [
+      {
+        "text": "✓ dep node 0300",
+        "ariaPressed": "true",
+        "ariaLabel": null
+      }
+    ],
+    "viewReads": [
+      {
+        "path": "/api/development-designs/design%3A01M5NXNDYGRPGCJ0Q8CYTSHPB1/views/dep-view-0",
+        "query": "?revision=4&offset=0&limit=50&focusId=dep-node-0300",
+        "status": 200,
+        "scope": {
+          "digest": "ee01cac3d71084cd2468a203037994130df65e7d3329f2a19ebf5073b6f95374",
+          "total": 301,
+          "completeTotal": 301,
+          "offset": 300,
+          "limit": 50,
+          "truncated": true
+        },
+        "relationScope": {
+          "total": 300,
+          "completeTotal": 300,
+          "offset": 300,
+          "limit": 50,
+          "truncated": true
+        },
+        "elements": [
+          {
+            "id": "dep-node-0300",
+            "label": "dep node 0300"
+          }
+        ]
+      }
+    ],
+    "navigationToInspectorMs": 337.1439999999998,
+    "cleanedUp": true
+  },
+  "acceptedScenarios": [
+    {
+      "kind": "multiview",
+      "caseId": "01M5NXNACGVN426KFW7418HQY9",
+      "designId": "design:01M5NXNACGVN426KFW7418HQY9",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "elementCount": 1000,
+      "relationCount": 999,
+      "viewCount": 6,
+      "dependencyDepthEdges": 0,
+      "status": "completed",
+      "workspaceReads": {
+        "samples": [
+          {
+            "sample": 1,
+            "wallMs": 23.21,
+            "responseBytes": 525653
+          },
+          {
+            "sample": 2,
+            "wallMs": 14.55,
+            "responseBytes": 525653
+          },
+          {
+            "sample": 3,
+            "wallMs": 18.09,
+            "responseBytes": 525653
+          }
+        ],
+        "minMs": 14.55,
+        "medianMs": 18.09,
+        "maxMs": 23.21
+      },
+      "operations": [
+        {
+          "name": "initial-load",
+          "cache": "fresh browser context, warm server",
+          "expectedDirectoryTotal": 1000,
+          "wallMs": 369.54,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "multi-view-1",
+          "elements": 200,
+          "cache": "first visit",
+          "wallMs": 490.92,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "multi-view-5",
+          "elements": 200,
+          "cache": "first visit",
+          "wallMs": 423.29,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "multi-view-1",
+          "elements": 200,
+          "cache": "revisit",
+          "wallMs": 572.53,
+          "status": "completed"
+        },
+        {
+          "name": "return-to-directory",
+          "wallMs": 45.96,
+          "status": "completed"
+        },
+        {
+          "name": "directory-next-page",
+          "expectedOffset": 50,
+          "wallMs": 68.45,
+          "status": "completed"
+        },
+        {
+          "name": "search-last-element",
+          "elementId": "multi-node-0999",
+          "wallMs": 39.07,
+          "status": "completed"
+        },
+        {
+          "name": "locate-last-element-via-content-link",
+          "elementId": "multi-node-0999",
+          "note": "Includes full Case navigation and selection hydration, not just in-page selection",
+          "wallMs": 225.61,
+          "status": "completed"
+        }
+      ],
+      "initialRevision": 3,
+      "sourceReport": {
+        "path": "/tmp/rfc396-large-graph-graph-node-results/report.json",
+        "sha256": "7796713d53c2713bc587f60dfaacd5cc79f3fe76bec696fd1da34cbcbbdb6a29"
+      },
+      "memorySnapshots": [
+        {
+          "label": "blank-page-before-navigation",
+          "cdpJsHeapUsedMiB": 0.53,
+          "cdpDomNodes": 8,
+          "pageDomElements": 3
+        },
+        {
+          "label": "initial-directory-ready",
+          "cdpJsHeapUsedMiB": 18.86,
+          "cdpDomNodes": 1356,
+          "pageDomElements": 625
+        },
+        {
+          "label": "three-switches-complete",
+          "cdpJsHeapUsedMiB": 42.91,
+          "cdpDomNodes": 57434,
+          "pageDomElements": 3654
+        },
+        {
+          "label": "final",
+          "cdpJsHeapUsedMiB": 47.71,
+          "cdpDomNodes": 6193,
+          "pageDomElements": 630
+        }
+      ],
+      "longestObservedMainThreadTaskMs": 409
+    },
+    {
+      "kind": "dependencies",
+      "caseId": "01M5NY25JK5R8A7G9MJVZ7ZWH3",
+      "designId": "design:01M5NY25JK5R8A7G9MJVZ7ZWH3",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "elementCount": 301,
+      "relationCount": 300,
+      "viewCount": 4,
+      "dependencyDepthEdges": 300,
+      "status": "completed",
+      "workspaceReads": {
+        "samples": [
+          {
+            "sample": 1,
+            "wallMs": 9.31,
+            "responseBytes": 149743
+          },
+          {
+            "sample": 2,
+            "wallMs": 7.92,
+            "responseBytes": 149743
+          },
+          {
+            "sample": 3,
+            "wallMs": 7.5,
+            "responseBytes": 149743
+          }
+        ],
+        "minMs": 7.5,
+        "medianMs": 7.92,
+        "maxMs": 9.31
+      },
+      "operations": [
+        {
+          "name": "initial-load",
+          "cache": "fresh browser context, warm server",
+          "expectedDirectoryTotal": 301,
+          "wallMs": 375.77,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "dep-view-1",
+          "elements": 50,
+          "cache": "first visit",
+          "wallMs": 205.32,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "dep-view-3",
+          "elements": 51,
+          "cache": "first visit",
+          "wallMs": 192.08,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "dep-view-1",
+          "elements": 50,
+          "cache": "revisit",
+          "wallMs": 191.14,
+          "status": "completed"
+        },
+        {
+          "name": "return-to-directory",
+          "wallMs": 56.01,
+          "status": "completed"
+        },
+        {
+          "name": "directory-next-page",
+          "expectedOffset": 50,
+          "wallMs": 66.29,
+          "status": "completed"
+        },
+        {
+          "name": "search-last-element",
+          "elementId": "dep-node-0300",
+          "wallMs": 41.34,
+          "status": "completed"
+        },
+        {
+          "name": "dependency-root-change-and-ui-observation",
+          "depthEdges": 300,
+          "note": "HTTP save and subsequent UI polling are separate sub-timings",
+          "wallMs": 90.54,
+          "status": "completed",
+          "data": {
+            "semanticSaveHttpMs": 36.88,
+            "responseBytes": 148601,
+            "editStartToUiObservedMs": 79.78,
+            "affectedViewIds": ["dep-view-0", "dep-view-1", "dep-view-2", "dep-view-3"],
+            "deepestViewId": "dep-view-3"
+          }
+        },
+        {
+          "name": "locate-last-element-via-content-link",
+          "elementId": "dep-node-0300",
+          "note": "Includes full Case navigation and selection hydration, not just in-page selection",
+          "wallMs": 208.47,
+          "status": "completed"
+        }
+      ],
+      "initialRevision": 3,
+      "sourceReport": {
+        "path": "/tmp/rfc396-large-graph-dependency-repair-results/report.json",
+        "sha256": "e5173f6988b4fd33993113a5427a147f5a08659f936e151ac0789359411cc6f8"
+      },
+      "memorySnapshots": [
+        {
+          "label": "blank-page-before-navigation",
+          "cdpJsHeapUsedMiB": 0.53,
+          "cdpDomNodes": 8,
+          "pageDomElements": 3
+        },
+        {
+          "label": "initial-directory-ready",
+          "cdpJsHeapUsedMiB": 17.74,
+          "cdpDomNodes": 1344,
+          "pageDomElements": 619
+        },
+        {
+          "label": "three-switches-complete",
+          "cdpJsHeapUsedMiB": 21.89,
+          "cdpDomNodes": 6146,
+          "pageDomElements": 1396
+        },
+        {
+          "label": "final",
+          "cdpJsHeapUsedMiB": 42.6,
+          "cdpDomNodes": 10034,
+          "pageDomElements": 460
+        }
+      ],
+      "longestObservedMainThreadTaskMs": 116
+    },
+    {
+      "kind": "mobile",
+      "caseId": "01M5NXNHDPSGD7HKA611RV9R0M",
+      "designId": "design:01M5NXNHDPSGD7HKA611RV9R0M",
+      "viewport": {
+        "width": 320,
+        "height": 900
+      },
+      "elementCount": 1000,
+      "relationCount": 999,
+      "viewCount": 3,
+      "dependencyDepthEdges": 0,
+      "status": "completed",
+      "workspaceReads": {
+        "samples": [
+          {
+            "sample": 1,
+            "wallMs": 14.05,
+            "responseBytes": 472885
+          },
+          {
+            "sample": 2,
+            "wallMs": 14.63,
+            "responseBytes": 472885
+          },
+          {
+            "sample": 3,
+            "wallMs": 15.74,
+            "responseBytes": 472885
+          }
+        ],
+        "minMs": 14.05,
+        "medianMs": 14.63,
+        "maxMs": 15.74
+      },
+      "operations": [
+        {
+          "name": "initial-load",
+          "cache": "fresh browser context, warm server",
+          "expectedDirectoryTotal": 1000,
+          "wallMs": 341.22,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "mobile-view-1",
+          "elements": 80,
+          "cache": "first visit",
+          "wallMs": 265.95,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "mobile-view-2",
+          "elements": 80,
+          "cache": "first visit",
+          "wallMs": 255.88,
+          "status": "completed"
+        },
+        {
+          "name": "switch-view",
+          "viewId": "mobile-view-1",
+          "elements": 80,
+          "cache": "revisit",
+          "wallMs": 266.06,
+          "status": "completed"
+        },
+        {
+          "name": "return-to-directory",
+          "wallMs": 57.15,
+          "status": "completed"
+        },
+        {
+          "name": "directory-next-page",
+          "expectedOffset": 50,
+          "wallMs": 57.48,
+          "status": "completed"
+        },
+        {
+          "name": "search-last-element",
+          "elementId": "mobile-node-0999",
+          "wallMs": 57.75,
+          "status": "completed"
+        },
+        {
+          "name": "locate-last-element-via-content-link",
+          "elementId": "mobile-node-0999",
+          "note": "Includes full Case navigation and selection hydration, not just in-page selection",
+          "wallMs": 199.51,
+          "status": "completed"
+        },
+        {
+          "name": "html-horizontal-visibility",
+          "viewId": "mobile-view-0",
+          "checked": 162,
+          "overflow": [],
+          "viewportWidth": 320,
+          "status": "completed"
+        },
+        {
+          "name": "html-horizontal-visibility",
+          "viewId": "mobile-view-2",
+          "checked": 156,
+          "overflow": [],
+          "viewportWidth": 320,
+          "status": "completed"
+        }
+      ],
+      "initialRevision": 3,
+      "sourceReport": {
+        "path": "/tmp/rfc396-large-graph-graph-node-results/report.json",
+        "sha256": "7796713d53c2713bc587f60dfaacd5cc79f3fe76bec696fd1da34cbcbbdb6a29"
+      },
+      "memorySnapshots": [
+        {
+          "label": "blank-page-before-navigation",
+          "cdpJsHeapUsedMiB": 0.53,
+          "cdpDomNodes": 8,
+          "pageDomElements": 3
+        },
+        {
+          "label": "initial-directory-ready",
+          "cdpJsHeapUsedMiB": 18.94,
+          "cdpDomNodes": 1119,
+          "pageDomElements": 425
+        },
+        {
+          "label": "three-switches-complete",
+          "cdpJsHeapUsedMiB": 26.62,
+          "cdpDomNodes": 17771,
+          "pageDomElements": 1654
+        },
+        {
+          "label": "final",
+          "cdpJsHeapUsedMiB": 28.81,
+          "cdpDomNodes": 15868,
+          "pageDomElements": 1654
+        }
+      ],
+      "longestObservedMainThreadTaskMs": 166
+    }
+  ],
+  "cleanup": {
+    "browserDaemonAndMocksStopped": true,
+    "evidenceLogs": [
+      {
+        "path": "/tmp/rfc396-graph-node-connected.log",
+        "sha256": "028b507c6052e0d8ae5678fa951a01afa0d7ae9f594ea46b7b2e86b2daaec8df"
+      },
+      {
+        "path": "/tmp/rfc396-large-graph-graph-node.log",
+        "sha256": "ded66aa4c4a04f84b1159ca751136b49b28f8b3902eb26a6fa1c8396dfeb94c5"
+      },
+      {
+        "path": "/tmp/rfc396-large-graph-dependency-repair.log",
+        "sha256": "d564c01f62a1ca906df8ecf8b46e6c4f0a3e352de30d7ca0ecfab8e40d16a3dd"
+      }
+    ]
+  }
+}

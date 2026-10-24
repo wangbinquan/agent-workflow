@@ -66,7 +66,7 @@
 
 ## 2026-10-21 RFC-396 In Progress：自适应图驱动研发数字人
 
-**2026-10-23 图交互验收发现本人缺陷并完成修复候选**：`abcacb` 的固定大图测量在可交互节点处失败；真实 DOM 证明宽泛 render ID 匹配把200元素视图的199条连线全部标成按钮，首节点失去入口。约478ms即可见 SVG，跨两次轮询没有替换，不能归为慢机器或脚本误判。现已改为精确节点/参与者容器映射，组件回归10/0、前端类型检查和相关ESLint通过；四类真实 Mermaid 图的鼠标、键盘和镜像同步E2E已写齐，等待新准确artifact执行。[诊断](design/RFC-396-adaptive-graph-development/graph-interaction-diagnostic-2026-10-23.json)保留原失败。类型夹具修复 `338babd1f` 已进入远端，后继 `9a900aaa5` / CI `40054322444` 待终态。大图测量、真实企业MR/CI与最新托管验收仍未完成，不标Done。
+**2026-10-23 图交互修复已发布并完成运行验收**：`2e562fb54` 精确绑定真实节点/参与者，修复 `abcacb` 将连线当按钮的本人缺陷；组件回归10/0、前端类型/lint通过。该准确GitHub artifact的四类真实Mermaid图鼠标/键盘/镜像同步回归 **1/0、无重试、13.4s**。1000元素多视图、300层依赖与320px窄屏测量已完成；首轮2场景完成，依赖场景因测量脚本漏算选中前缀失败，经原Case DOM证实后只修脚本并补跑该场景成功，生产未改。完整指标、原失败和修后来源见[运行验收](design/RFC-396-adaptive-graph-development/graph-runtime-acceptance-2026-10-23.json)与[验收记录](design/RFC-396-adaptive-graph-development/validation.md)。类型修复338的后继9a900 CI Typecheck与真实PG成功，另有6198单非根挂载修复漏更新旧架构锁的失败，仅记录不代改。2e562当前CI待终态；真实GitLab项目接口11次GET仍500，真实企业MR/CI和新版托管仍未完成，不标Done。
 
 **2026-10-23 无变化重验修复已发布**：`abcacb0166fc` 已推送12个准确路径；首轮CI `40053286328` 的Typecheck暴露本会话新增fixture `publication` 字段同名冲突（3处TS2345），现已更名，后端类型复验退出0，生产未变。该SHA GitHub macOS artifact的新增通知MR恢复旅程 **1/0、无重试、96.7s**，直接证明关闭全部页面、daemon崩溃、离线外部状态变化、同home恢复原MR且无重复、无页面时观察closed；模型/codehost仍为受控fixture。新候选hosted结果与性能测量继续记录，真实企业MR/CI和新版托管仍受下述满盘前提阻塞，RFC保持In Progress。
 

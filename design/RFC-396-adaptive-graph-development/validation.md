@@ -1,5 +1,25 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-23 图节点修复的真实浏览器与大图验收
+
+修复提交 `2e562fb54a6c5fcd396601aa7fc82bafd755fff1` 已推送。准确 [GitHub CI 40055423143](https://github.com/wangbinquan/agent-workflow/actions/runs/40055423143) 的 macOS 构建成功，artifact **12545362841** 的压缩包 digest 为 `sha256:9cd432a4fcc02f0873bc63d2fec32401e19110b10c4e1e65e8b00d8037373b16`，三份可执行文件均逐项校验。完整CI仍待终态，单个构建成功不等于整条通过。
+
+新增四类 connected-diagram 浏览器回归实际 **1 passed / 0 failed / 0 skipped / 0 flaky，13.4s**，用例自身6.3s且没有重试。真实 Mermaid flow/state/sequence/data 均能通过鼠标、Enter、Space独立选中目标节点，语义列表同步，sequence上下镜像同步；边与生命线不获得节点按钮角色。原三条MR旅程未改。原始记录 `/tmp/rfc396-graph-node-connected.json`、日志 `/tmp/rfc396-graph-node-connected.log`，汇总身份、结果和限制见[运行验收记录](./graph-runtime-acceptance-2026-10-23.json)。
+
+固定大图测量的三个场景已完成，均运行同一准确artifact、单机SQLite、真实Chromium148。机器为Apple M1 Max / 10逻辑核 / 64GiB内存；每场景使用新浏览器context，服务端与系统缓存温热。超过250元素的总览按产品既有规则使用分页目录，局部图执行真实Mermaid绘制。记录包含Playwright同步与两帧绘制，没有人为延迟通过阈值，也未推导p95。
+
+| 场景 | 目录首次加载 | 三次局部图切换 | 下一页 | 搜索末元素 | 内容链接定位与选择恢复 |
+| --- | ---: | --- | ---: | ---: | ---: |
+| 1000元素 / 999关系 / 6视图 / 每局部图200元素 | 369.54ms | 490.92 / 423.29 / 572.53ms | 68.45ms | 39.07ms | 225.61ms |
+| 301元素 / 300依赖边 / 4视图 | 375.77ms | 205.32 / 192.08 / 191.14ms | 66.29ms | 41.34ms | 208.47ms |
+| 320px / 1000元素目录 / 局部图80元素 | 341.22ms | 265.95 / 255.88 / 266.06ms | 57.48ms | 57.75ms | 199.51ms |
+
+300条依赖的根元素变化实际使4个相关视图进入需更新状态：保存HTTP36.88ms，变化开始至UI观察到状态79.78ms；页面保留正常5秒轮询，本次未隔离轮询相位与通知时机，不能把观测当成延迟上限。320px完整目录与局部图分别检查162/156个HTML内容与控件，横向越界均为0；SVG保留自身滚动。已目检多视图及窄屏截图。200元素绘制期间观察到最长409ms主线程任务；三个场景的JS堆快照及完整响应字节另存机器记录，不把快照当作峰值、泄漏证明或一般性能承诺。
+
+首轮测量中的多视图和窄屏直接完成；依赖场景最后的content-link定位因脚本遗漏选中按钮的 `✓ ` 前缀而失败。用同artifact、原home和原Case直接DOM诊断确认末页offset300、唯一末元素按钮 `aria-pressed=true`、详情可见，生产定位正确。随后只修改临时测量脚本：显式传入期望选择，仍断言精确名称和pressed，保留SVG可交互节点断言，并仅补跑依赖场景。该场景退出0且无错误，另外两场景复用有效结果；不声称首轮三项全过。原失败报告及脚本快照未覆盖，汇总记录包含每份原始文件的SHA-256、修后数据来源和清理证据。
+
+以上关闭本轮图交互和有限大图测量缺口。真实企业MR/CI、最新托管部署/恢复及当前共享CI仍单列：2026-10-24 02:47 UTC对验收GitLab项目570/571的11个有界GET全部500，当前分支、CI定义、runner和MR状态不可确认；CS/托管AW仍500，未部署或触发真实MR/流水线。RFC保持In Progress。
+
 ## 2026-10-23 大图测量发现的真实节点交互缺陷
 
 对 `abcacb0166fc2434d406ef59b43bddf45e4f0b01` 的准确 GitHub macOS artifact 进行固定大图测量，三个场景均在首个局部 SVG 的可交互节点等待处失败，未记录为性能通过。独立有界 DOM 诊断确认 200 元素视图的生产缺陷：`GraphModelView` 在所有 `[id],[data-id]` 上用 `id.includes(renderId)` 取首个匹配，而 Mermaid 连线 ID 同时包含两个端点 ID。两个语义节点因此命中同一 `path`，后者覆盖前者的可访问名称，真实 `g.node` 没有点击或键盘入口。
@@ -10,7 +30,9 @@
 
 新增独立 E2E 通过普通 `/changes` 接口创建四种有连线的图，验证目标节点独立选择、语义列表同步以及时序图上下镜像同步，原三条 MR 旅程保持。E2E 静态语法、格式与 ESLint 检查通过；准确新 artifact 的四类真实 SVG 验收和大图测量仍待执行，组件 fixture 不代签真实渲染结果。
 
-类型夹具修复提交 `338babd1f08aa281c7d2a532431ca1dcc1fd2a6a` 已随共享 `main` 发布。包含它的后继 `9a900aaa5709b147838f3ea64420050e28468895` 已核对祖先关系及三个修复路径内容保留；[CI 40054322444](https://github.com/wangbinquan/agent-workflow/actions/runs/40054322444)仍待终态。原 `abcacb` 的 Typecheck 失败保留，不能以本地类型复验替代后继 hosted 结果。
+类型夹具修复提交 `338babd1f08aa281c7d2a532431ca1dcc1fd2a6a` 已随共享 `main` 发布。包含它的后继 `9a900aaa5709b147838f3ea64420050e28468895` 已核对祖先关系及三个修复路径内容保留；[CI 40054322444](https://github.com/wangbinquan/agent-workflow/actions/runs/40054322444)的功能检查job `120753813066` 已于2026-10-24 02:48:38 UTC成功，Typecheck step于02:48:10成功，lint、格式、shared/system-mocks也成功；真实PostgreSQL job `120753813007` 于02:44:50成功。这是该类型修复的后继hosted接受证据，原 `abcacb` 的 Typecheck 失败仍保留。
+
+该后继run另有功能失败：[Backend shard10/24 job 120753813179](https://github.com/wangbinquan/agent-workflow/actions/runs/40054322444/job/120753813179)，1180 pass / 1 fail。唯一失败为 `architecture/rfc395-checkpoint-boundary.test.ts:106` 的旧源文本锁，仍要求 `nodeMechanics` 包含四处 `state.repos.length > 1`。准确差异证明 `6198ae14495285d15c4ec7369ef0b8af53a31869` 已将这些判断改为 `isSingleRootRepository` / `inheritedCallSpace`，但未同步该锁；属于其他会话单非根挂载修复的测试配套遗漏。本会话仅保留 `/tmp/rfc396-9a900aaa-backend10-job-120753813179.log` 的失败证据，不修改其代码/断言。整条CI不能记成功；Static scans仅记录状态，未取日志。
 
 ## 2026-10-23 无变化重验候选发布与直接恢复旅程
 
