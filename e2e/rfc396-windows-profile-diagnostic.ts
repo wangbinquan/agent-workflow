@@ -89,7 +89,7 @@ export async function attachWindowsProfileDiagnostic(
     await writeFile(join(directory, 'fixture.json'), JSON.stringify(files))
     const caller = `import * as fs from 'node:fs'
 import * as path from 'node:path'
-const root = ${JSON.stringify(directory)}
+const root = process.cwd()
 const files = JSON.parse(fs.readFileSync(path.join(root, 'fixture.json'), 'utf8'))
 const results = { bunVersion: Bun.version, platform: process.platform, cases: [] }
 const save = () => fs.writeFileSync(path.join(root, 'results.json'), JSON.stringify(results, null, 2))
