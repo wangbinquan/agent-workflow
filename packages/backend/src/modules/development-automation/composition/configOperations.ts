@@ -548,7 +548,10 @@ export function composeDevelopmentConfigOperationsFromPersistence(
         await config.employees.get(id),
       )
       access.assertNameUnchangedForEditor(resourceAccess, row.name, input.name)
-      digitalEmployeeContentSchema.parse(input.playbook)
+      const parsed = digitalEmployeeContentSchema.safeParse(input.playbook)
+      if (!parsed.success) {
+        throw invalidDraft('digital-employee-draft-invalid', parsed.error.issues)
+      }
       await config.employees.revise({
         id,
         draftJson: JSON.stringify(input.playbook),

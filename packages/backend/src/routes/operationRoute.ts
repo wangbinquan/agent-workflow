@@ -2,6 +2,7 @@
 
 import type { Context, Handler, Hono, MiddlewareHandler } from 'hono'
 import type { BlankEnv } from 'hono/types'
+import type { z } from 'zod'
 import type { ExecutionGroup } from '@agent-workflow/shared'
 import { declareHttpOperation, registerOperationDescriptor } from '@/platform/operations/catalog'
 import type {
@@ -13,6 +14,20 @@ import type {
 } from '@/platform/operations/contracts'
 import { invokeOperation } from '@/platform/operations/invoke'
 import { registerRoute } from '@/routes/registry'
+import { ValidationError } from '@/util/errors'
+
+/** Decodes that destructure the body keep the operation codec's typed failure. */
+export function decodeOrInvalid<T>(
+  descriptorId: string,
+  schema: { safeParse: (value: unknown) => z.SafeParseReturnType<unknown, T> },
+  value: unknown,
+): T {
+  const parsed = schema.safeParse(value)
+  if (!parsed.success) {
+    throw new ValidationError('validation-failed', `invalid input for operation '${descriptorId}'`)
+  }
+  return parsed.data
+}
 
 type HttpDescriptor<I, O, C> =
   | CommandOperationDescriptor<I, O, C>

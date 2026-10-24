@@ -33,6 +33,7 @@ import { ConflictError, NotFoundError } from '@/util/errors'
 import { invalidateInFlightAction } from '../actionInvalidation'
 import type { MissionRow, MissionPersistence } from '../ports/missionStore'
 import type { FactSnapshotReader, ReconcilerPorts } from '../ports/reconcilerPorts'
+import { parseOr422 } from './commandInput'
 
 export interface MissionHandoverDeps {
   readonly store: MissionPersistence
@@ -119,7 +120,7 @@ export async function handoffMission(
   deps: MissionHandoverDeps,
   rawInput: unknown,
 ): Promise<HandoffMissionResult> {
-  const input = handoffMissionInputSchema.parse(rawInput)
+  const input = parseOr422(handoffMissionInputSchema, rawInput)
   const mission = await loadMission(deps, input.missionId)
   assertAdmissible(mission, 'handoff')
   const now = deps.now()
@@ -195,7 +196,7 @@ export async function attachMergeRequest(
   deps: MissionHandoverDeps,
   rawInput: unknown,
 ): Promise<AttachMergeRequestResult> {
-  const input = attachMergeRequestInputSchema.parse(rawInput)
+  const input = parseOr422(attachMergeRequestInputSchema, rawInput)
   const mission = await loadMission(deps, input.missionId)
   assertAdmissible(mission, 'attach-merge-request')
 
@@ -331,7 +332,7 @@ export async function resumeMission(
   deps: MissionHandoverDeps,
   rawInput: unknown,
 ): Promise<ResumeMissionResult> {
-  const input = resumeMissionInputSchema.parse(rawInput)
+  const input = parseOr422(resumeMissionInputSchema, rawInput)
   const mission = await loadMission(deps, input.missionId)
   assertAdmissible(mission, 'resume-automation')
 

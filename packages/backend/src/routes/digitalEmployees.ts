@@ -51,10 +51,16 @@ function actorId(c: Parameters<typeof actorOf>[0]): string | null {
 }
 
 function actorForToolAuthoring(c: Parameters<typeof actorOf>[0], body: unknown) {
-  const toolKind = z
+  const parsed = z
     .object({ implementation: z.object({ kind: z.string() }).passthrough() })
     .passthrough()
-    .parse(body).implementation.kind
+    .safeParse(body)
+  if (!parsed.success) {
+    throw new ValidationError('validation-failed', 'invalid tool authoring input', {
+      issues: parsed.error.issues,
+    })
+  }
+  const toolKind = parsed.data.implementation.kind
   const actor = actorOf(c)
   if (toolKind === 'program' && !actor.permissions.has('scripts:author')) {
     throw new ForbiddenError(
@@ -490,10 +496,17 @@ export function mountDigitalEmployeeRoutes(
         summary: 'Preview an explicit active-case global policy upgrade',
       },
       async (c) => {
-        const body = z
+        const parsed = z
           .object({ targetPolicyRevision: z.number().int().positive() })
           .strict()
-          .parse(await safeJsonOrEmpty(c.req.raw))
+          .safeParse(await safeJsonOrEmpty(c.req.raw))
+        if (!parsed.success) {
+          throw new ValidationError(
+            'employee-policy-preview-invalid',
+            'invalid policy upgrade input',
+          )
+        }
+        const body = parsed.data
         const row = await requireCaseOperator(runtime, actorOf(c), c.req.param('id'))
         return c.json({
           previewToken: await runtime.commands.previewPolicyUpgrade(
@@ -514,10 +527,17 @@ export function mountDigitalEmployeeRoutes(
         summary: 'Apply a previously previewed active-case policy upgrade',
       },
       async (c) => {
-        const body = z
+        const parsed = z
           .object({ previewToken: z.string().min(1) })
           .strict()
-          .parse(await safeJsonOrEmpty(c.req.raw))
+          .safeParse(await safeJsonOrEmpty(c.req.raw))
+        if (!parsed.success) {
+          throw new ValidationError(
+            'employee-policy-preview-invalid',
+            'invalid policy preview token',
+          )
+        }
+        const body = parsed.data
         await requireCaseOperator(
           runtime,
           actorOf(c),
@@ -555,10 +575,14 @@ export function mountDigitalEmployeeRoutes(
         summary: 'Fence one employee case at an observed external terminal state',
       },
       async (c) => {
-        const body = z
+        const parsed = z
           .object({ terminalKind: z.string().min(1) })
           .strict()
-          .parse(await safeJsonOrEmpty(c.req.raw))
+          .safeParse(await safeJsonOrEmpty(c.req.raw))
+        if (!parsed.success) {
+          throw new ValidationError('employee-terminal-kind-invalid', 'invalid terminal kind')
+        }
+        const body = parsed.data
         const row = await requireCaseOperator(runtime, actorOf(c), c.req.param('id'))
         const document = await runtime.commands.terminate(row.id, body.terminalKind)
         return jsonDocumentResponse(document.projectionJson)
@@ -952,12 +976,7 @@ export function mountDigitalEmployeeRoutes(
       const { name, access } = await requireEditableEmployee(c, id)
       const body = await safeJsonOrEmpty(c.req.raw)
       // RFC-324 —— 保存 body 带 name（updateEmployeeDefinitionBodySchema），改名归 owner。
-      const submittedName = (body as { name?: unknown }).name
-      persistence.assertNameUnchangedForEditor(
-        access,
-        name,
-        typeof submittedName === 'string' ? submittedName : undefined,
-      )
+      persistence.assertNameUnchangedForEditor(access, name, submittedString(body, 'name'))
       return c.json(
         await module.commands.updateEmployee({
           id,

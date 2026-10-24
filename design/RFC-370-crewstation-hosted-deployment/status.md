@@ -123,6 +123,7 @@ v4 实机验收中发现两个问题，按 redesign §10.5 与 §9.2 的补正�
 - 平台 PostgreSQL（`max_connections` 100）长期占用 97～98 个连接：CS 控制面约 50 个，其余项目约 26 个，正式 AW 两个槽约 17 个。AW 维护作业每 15 分钟新开连接，偶尔在满额时失败，下一轮重试。这是本机平台的容量问题；AW 已在 10-17 把托管连接池降到 8。
 - rfc042 上有一条创建请求先被额度拒绝、随后对应的 AW 任务被删，CS 一直把它列为 admitting（不占额度与卷）。
 - 数字员工创作接口对不合法的请求体返回 500（服务内的 ZodError 没有映射成 400），与托管无关。
+  - 2026-10-23 收口后 bug fix 已修：非法创作/受理请求体及 `null` body 返回 422 `validation-failed`；策略升级返回 422 `employee-policy-preview-invalid`，终止请求返回 422 `employee-terminal-kind-invalid`。原验收记录保留。
 
 ### v0.6.27 托管实机验收（2026-10-19）
 
@@ -203,6 +204,7 @@ F14 随 `b1c28ff0b` 提交。其 CI `39354883311` 红在 backend 分片 7/24 与
 - 正式 AW 项目的 PVC 再次用满（20/20）：多数是已结束 AW 任务保留的卷。按用户裁定，经归档（默认关闭）或删除任务释放，由用户决定何时做。
 - CS 判失败的父任务为恢复动作保留卷，其中从未绑定（Pending）的卷没有数据，却同样占配额（正式 AW 1 个，rfc042 2 个）。属 CS 的保留策略，未改动。
 - 开发数字员工的编排接口收到非法请求体时返回 500（原样的 ZodError），与托管无关。
+  - 2026-10-23 收口后 bug fix 已修：Mission / 配置路由解码返回 422 `validation-failed`，Mission / adopt-mr 命令返回 422 `mission-input-invalid`，playbook 内容返回 422 `digital-employee-draft-invalid`（含 `details.issues`）。原验收记录保留。
 
 ## 2026-10-17 托管实机验收（M1～M3，已完成）
 

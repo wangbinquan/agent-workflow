@@ -11,6 +11,7 @@
 import { expect, setDefaultTimeout, test } from 'bun:test'
 
 import { confirmNoChange } from '../src/modules/development-automation/application/commands/confirmNoChange'
+import { submitMissionAnswers } from '../src/modules/development-automation/application/commands/submitMissionAnswers'
 import { runMissionReconcile } from '../src/modules/development-automation/application/missionReconciler'
 import type { RepositoryFactsCollectorPort } from '../src/modules/development-automation/application/ports/reconcilerPorts'
 import { buildPr3Fixture, PR3_JAVA_CELLS } from './helpers/rfc310Pr3Fixture'
@@ -76,6 +77,36 @@ async function settleNoChange(
 }
 
 describeEachProvider('rfc310 pr5 T55a — no-change human gate', (harness) => {
+  test('RFC-370: confirm and answers reject malformed input with mission-input-invalid', async () => {
+    const fx = await buildPr3Fixture({ db: harness.db })
+    await expect(confirmNoChange(fx.deps(), { missionId: 'missing' })).rejects.toMatchObject({
+      status: 422,
+      code: 'mission-input-invalid',
+      message: 'receiptNote: Required',
+    })
+    await expect(
+      confirmNoChange(fx.deps(), { missionId: 'missing', receiptNote: 'a'.repeat(2001) }),
+    ).rejects.toMatchObject({ status: 422, code: 'mission-input-invalid' })
+    const deps = {
+      store: fx.store,
+      snapshots: fx.snapshots,
+      requirement: fx.materializer,
+      now: () => Date.now(),
+    }
+    await expect(submitMissionAnswers(deps, { missionId: 'missing' })).rejects.toMatchObject({
+      status: 422,
+      code: 'mission-input-invalid',
+      message: 'questionSetRef: Required; answers: Required',
+    })
+    await expect(
+      submitMissionAnswers(deps, {
+        missionId: 'missing',
+        questionSetRef: 'question-set',
+        answers: [{ questionId: 'q1', answer: 'a'.repeat(8001) }],
+      }),
+    ).rejects.toMatchObject({ status: 422, code: 'mission-input-invalid' })
+  })
+
   test('human-confirmation policy: gate redispatch → awaiting-information → confirm → completed-no-change', async () => {
     // 规则用默认链形态（implement 读 scopeDisposition）：no-change 后该 fact
     // 缺席 ⇒ fact-unavailable block ⇒ gate 重派可拦（COLLECT 类决策不拦）。

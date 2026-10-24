@@ -24,6 +24,7 @@ import type {
   RequirementMaterializePort,
 } from '../ports/reconcilerPorts'
 import { invalidateInFlightAction } from '../actionInvalidation'
+import { parseOr422 } from './commandInput'
 
 export const submitMissionAnswersInputSchema = z
   .object({
@@ -57,7 +58,7 @@ export async function submitMissionAnswers(
   deps: SubmitAnswersDeps,
   rawInput: unknown,
 ): Promise<SubmitAnswersResult> {
-  const input = submitMissionAnswersInputSchema.parse(rawInput)
+  const input = parseOr422(submitMissionAnswersInputSchema, rawInput)
   const mission = await deps.store.getMission(input.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({

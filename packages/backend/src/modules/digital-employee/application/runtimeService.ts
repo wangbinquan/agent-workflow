@@ -35,6 +35,7 @@ import type {
   DigitalEmployeePlatformToolCatalog,
 } from './ports/authoringStore'
 import { EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG } from './ports/authoringStore'
+import { parseEmployeeInput } from './inputValidation'
 import type { ExecutionPolicyRevisionRecord } from './ports/authoringStore'
 import type {
   AttentionBindingRecord,
@@ -739,7 +740,7 @@ export class DigitalEmployeeRuntimeService {
         'the employee type package is unavailable at work admission',
       )
     }
-    const parsedIntake = employeeWorkIntakeSchema.parse(input.intake)
+    const parsedIntake = parseEmployeeInput(employeeWorkIntakeSchema, input.intake)
     const optionDefinitions = admittedType.descriptor.workIntakeAuthoring.executionOptions
     const allowedOptionRefs = new Set(optionDefinitions.map((option) => option.optionRef))
     const unknownOption = Object.keys(parsedIntake.executionOptions).find(
@@ -3690,7 +3691,7 @@ export class DigitalEmployeeRuntimeService {
     } catch {
       throw new ValidationError('employee-policy-preview-invalid', 'invalid policy preview token')
     }
-    const preview = z
+    const parsed = z
       .object({
         caseId: z.string().min(1),
         expectedCaseRevision: z.number().int().positive(),
@@ -3700,7 +3701,11 @@ export class DigitalEmployeeRuntimeService {
         digest: z.string().regex(/^[a-f0-9]{64}$/),
       })
       .strict()
-      .parse(decoded)
+      .safeParse(decoded)
+    if (!parsed.success) {
+      throw new ValidationError('employee-policy-preview-invalid', 'invalid policy preview token')
+    }
+    const preview = parsed.data
     const { digest, ...payload } = preview
     if (runtimeDigest(payload) !== digest) {
       throw new ValidationError('employee-policy-preview-invalid', 'policy preview digest mismatch')

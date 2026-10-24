@@ -18,7 +18,7 @@ import {
   developmentConfigReviseInputSchema,
   developmentEmployeePlaybookInputSchema,
 } from '@/modules/development-automation/public/operations'
-import { registerOperationRoute } from '@/routes/operationRoute'
+import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { NotFoundError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
@@ -124,7 +124,11 @@ function mountConfigResource(
     tokenAccess: 'allow',
     decode: async (c) => ({
       id: c.req.param('id'),
-      ...developmentConfigReviseInputSchema.parse(await safeJsonOrEmpty(c.req.raw)),
+      ...decodeOrInvalid(
+        descriptors.revise.id,
+        developmentConfigReviseInputSchema,
+        await safeJsonOrEmpty(c.req.raw),
+      ),
     }),
     context,
     encode: (c) => c.json({ ok: true }),
@@ -184,7 +188,11 @@ export function mountDevelopmentConfigRoutes(
     tokenAccess: 'allow',
     decode: async (c) => ({
       id: c.req.param('id'),
-      ...developmentEmployeePlaybookInputSchema.parse(await safeJsonOrEmpty(c.req.raw)),
+      ...decodeOrInvalid(
+        descriptors.reviseEmployeePlaybook.id,
+        developmentEmployeePlaybookInputSchema,
+        await safeJsonOrEmpty(c.req.raw),
+      ),
     }),
     context,
     encode: (c, output) => c.json(output),

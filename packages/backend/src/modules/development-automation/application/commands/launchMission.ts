@@ -22,6 +22,7 @@ import {
   type EmployeeSelectionRule,
 } from '../../engine/policy/workSelection'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
+import { parseOr422 } from './commandInput'
 import type { AdmissionLookup } from '../ports/admissionLookup'
 import type { MissionRow, MissionPersistence } from '../ports/missionStore'
 import type { MissionInputUploadPersistence } from '../missionInputUploadOperations'
@@ -462,24 +463,6 @@ function resolveRequirementSource(
     }
   }
   return { kind: 'needs-selection', options }
-}
-
-/** 裸 ZodError 到中央 handler 会渲染成 500——统一折成 typed 422（仓内定式）。 */
-function parseOr422<T>(
-  schema: { safeParse: (v: unknown) => z.SafeParseReturnType<unknown, T> },
-  rawInput: unknown,
-): T {
-  const parsed = schema.safeParse(rawInput)
-  if (!parsed.success) {
-    throw new ValidationError(
-      'mission-input-invalid',
-      parsed.error.issues
-        .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-        .join('; ')
-        .slice(0, 500),
-    )
-  }
-  return parsed.data
 }
 
 export async function launchMission(deps: LaunchDeps, rawInput: unknown): Promise<LaunchResult> {

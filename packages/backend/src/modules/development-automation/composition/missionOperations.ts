@@ -4,6 +4,7 @@ import type { RepositoryBaselineEffectsFactory } from '../application/ports/repo
 import { ulid } from 'ulid'
 import { z } from 'zod'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { parseOr422 } from '../application/commands/commandInput'
 import {
   cancelMission,
   launchMission,
@@ -654,17 +655,19 @@ function composeDevelopmentMissionOperationsFromPersistence(
       return { state: result.state }
     },
     async adoptMergeRequest(actor, raw) {
-      const body = z
-        .object({
-          repositoryId: z.string().min(1),
-          mrIid: z.string().min(1),
-          employee: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
-          policy: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
-          legacyWorkItemId: z.string().nullish(),
-          legacyRoundId: z.string().nullish(),
-        })
-        .strict()
-        .parse(raw)
+      const body = parseOr422(
+        z
+          .object({
+            repositoryId: z.string().min(1),
+            mrIid: z.string().min(1),
+            employee: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
+            policy: z.object({ id: z.string(), revision: z.number().int() }).nullish(),
+            legacyWorkItemId: z.string().nullish(),
+            legacyRoundId: z.string().nullish(),
+          })
+          .strict(),
+        raw,
+      )
       const claimKey = await resolveRepoClaimKey(deps.deliveryProvider, body.repositoryId)
       if (claimKey === null) {
         throw new ValidationError(

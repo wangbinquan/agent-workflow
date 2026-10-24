@@ -8,13 +8,10 @@ import {
   createDevelopmentMissionDescriptors,
   type DevelopmentMissionOperations,
 } from '@/modules/development-automation/public/operations'
-import { registerOperationRoute } from '@/routes/operationRoute'
+import { decodeOrInvalid, registerOperationRoute } from '@/routes/operationRoute'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { DomainError } from '@/util/errors'
 import { safeJsonOrEmpty, safeJsonOrThrowInvalid } from '@/util/http'
-
-const recordBody = async (request: Request): Promise<Record<string, unknown>> =>
-  z.record(z.unknown()).parse(await safeJsonOrEmpty(request))
 
 export function mountDevelopmentMissionRoutes(
   app: Hono,
@@ -31,7 +28,7 @@ export function mountDevelopmentMissionRoutes(
     path: '/api/code/missions',
     executionGroup: 'development',
     tokenAccess: 'allow',
-    decode: async (c) => ({ body: await recordBody(c.req.raw) }),
+    decode: async (c) => ({ body: await safeJsonOrEmpty(c.req.raw) }),
     context,
     encode: (c, output) => c.json(output.body, output.created ? 201 : 200),
   })
@@ -40,7 +37,7 @@ export function mountDevelopmentMissionRoutes(
     method: 'POST',
     path: '/api/code/missions/preview',
     tokenAccess: 'allow',
-    decode: async (c) => ({ body: await recordBody(c.req.raw) }),
+    decode: async (c) => ({ body: await safeJsonOrEmpty(c.req.raw) }),
     context,
     encode: (c, output) => c.json(output),
   })
@@ -49,7 +46,7 @@ export function mountDevelopmentMissionRoutes(
     method: 'POST',
     path: '/api/code/missions/direct-input/preview',
     tokenAccess: 'allow',
-    decode: async (c) => ({ body: await recordBody(c.req.raw) }),
+    decode: async (c) => ({ body: await safeJsonOrEmpty(c.req.raw) }),
     context,
     encode: (c, output) => c.json(output),
   })
@@ -152,10 +149,11 @@ export function mountDevelopmentMissionRoutes(
     tokenAccess: 'allow',
     decode: async (c) => ({
       missionId: c.req.param('id'),
-      ...z
-        .object({ sourceKey: z.string().min(1) })
-        .strict()
-        .parse(await safeJsonOrEmpty(c.req.raw)),
+      ...decodeOrInvalid(
+        descriptor.selectRequirementSource.id,
+        z.object({ sourceKey: z.string().min(1) }).strict(),
+        await safeJsonOrEmpty(c.req.raw),
+      ),
     }),
     context,
     encode: (c, output) => c.json(output),
@@ -168,7 +166,7 @@ export function mountDevelopmentMissionRoutes(
     tokenAccess: 'allow',
     decode: async (c) => ({
       missionId: c.req.param('id'),
-      body: await recordBody(c.req.raw),
+      body: await safeJsonOrEmpty(c.req.raw),
     }),
     context,
     encode: (c, output) => c.json(output),
@@ -180,7 +178,7 @@ export function mountDevelopmentMissionRoutes(
     tokenAccess: 'allow',
     decode: async (c) => ({
       missionId: c.req.param('id'),
-      body: await recordBody(c.req.raw),
+      body: await safeJsonOrEmpty(c.req.raw),
     }),
     context,
     encode: (c, output) => c.json(output),
@@ -260,7 +258,7 @@ export function mountDevelopmentMissionRoutes(
     tokenAccess: 'allow',
     decode: async (c) => ({
       missionId: c.req.param('id'),
-      body: await recordBody(c.req.raw),
+      body: await safeJsonOrEmpty(c.req.raw),
     }),
     context,
     encode: (c, output) => c.json(output),
@@ -272,7 +270,7 @@ export function mountDevelopmentMissionRoutes(
     tokenAccess: 'allow',
     decode: async (c) => ({
       missionId: c.req.param('id'),
-      body: await recordBody(c.req.raw),
+      body: await safeJsonOrEmpty(c.req.raw),
     }),
     context,
     encode: (c, output) => c.json(output),
@@ -284,7 +282,7 @@ export function mountDevelopmentMissionRoutes(
     executionGroup: 'development',
     tokenAccess: 'allow',
     decode: async (c) => {
-      await recordBody(c.req.raw)
+      decodeOrInvalid(descriptor.resume.id, z.record(z.unknown()), await safeJsonOrEmpty(c.req.raw))
       return { missionId: c.req.param('id') }
     },
     context,

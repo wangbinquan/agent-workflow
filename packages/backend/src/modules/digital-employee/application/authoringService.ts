@@ -63,6 +63,7 @@ import type {
   WorkScopeRevisionRecord,
 } from './ports/authoringStore'
 import { EMPTY_DIGITAL_EMPLOYEE_PLATFORM_TOOL_CATALOG } from './ports/authoringStore'
+import { parseEmployeeInput } from './inputValidation'
 
 export const createJobTemplateBodySchema = z
   .object({
@@ -1675,7 +1676,7 @@ export class DigitalEmployeeAuthoringService {
         `${input.workItemRef} is a ${item.nodeKind} node`,
       )
     }
-    const body = createToolRegistrationBodySchema.parse(input.body)
+    const body = parseEmployeeInput(createToolRegistrationBodySchema, input.body)
     const role = findToolRole(item, body.roleRef)
     if (role === null) {
       throw new ValidationError(
@@ -2434,7 +2435,7 @@ export class DigitalEmployeeAuthoringService {
   }): Promise<JobTemplateRecord> {
     await this.ready()
     this.#runtime(input.typeRef)
-    const body = createJobTemplateBodySchema.parse(input.body)
+    const body = parseEmployeeInput(createJobTemplateBodySchema, input.body)
     for (const binding of body.defaultToolBindings) {
       await this.#validateBinding(input.typeRef, binding)
     }
@@ -2493,7 +2494,7 @@ export class DigitalEmployeeAuthoringService {
         `job template not found: ${input.id}`,
       )
     }
-    const body = updateJobTemplateBodySchema.parse(input.body)
+    const body = parseEmployeeInput(updateJobTemplateBodySchema, input.body)
     for (const binding of body.defaultToolBindings) {
       await this.#validateBinding(existing.typeRef, binding)
     }
@@ -2625,7 +2626,7 @@ export class DigitalEmployeeAuthoringService {
   }): Promise<EmployeeDefinitionRecord> {
     await this.ready()
     const runtime = this.#runtime(input.typeRef)
-    const body = createEmployeeDefinitionBodySchema.parse(input.body)
+    const body = parseEmployeeInput(createEmployeeDefinitionBodySchema, input.body)
     const template = await this.#store.getJobTemplateRevision(body.jobTemplateRef)
     if (template === null || !sameType(template.content.typeRef, input.typeRef)) {
       throw new ValidationError(
@@ -2686,7 +2687,7 @@ export class DigitalEmployeeAuthoringService {
       throw new NotFoundError('employee-definition-not-found', `employee not found: ${input.id}`)
     }
     const runtime = this.#runtime(existing.typeRef)
-    const body = updateEmployeeDefinitionBodySchema.parse(input.body)
+    const body = parseEmployeeInput(updateEmployeeDefinitionBodySchema, input.body)
     const template = await this.#store.getJobTemplateRevision(body.jobTemplateRef)
     if (template === null || !sameType(template.content.typeRef, existing.typeRef)) {
       throw new ValidationError(

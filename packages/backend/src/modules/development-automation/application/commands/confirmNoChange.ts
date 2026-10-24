@@ -18,6 +18,7 @@ import { canonicalDigest, canonicalStringify } from '../../domain/canonicalJson'
 import { checkCommandAdmissible, checkMissionTransition } from '../../domain/mission'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { ReconcileDeps } from '../missionReconciler'
+import { parseOr422 } from './commandInput'
 
 export const confirmNoChangeInputSchema = z
   .object({
@@ -35,7 +36,7 @@ export async function confirmNoChange(
   deps: ReconcileDeps,
   rawInput: unknown,
 ): Promise<ConfirmNoChangeResult> {
-  const input = confirmNoChangeInputSchema.parse(rawInput)
+  const input = parseOr422(confirmNoChangeInputSchema, rawInput)
   const mission = await deps.store.getMission(input.missionId)
   if (mission === null) throw new NotFoundError('mission-not-found', 'mission not found')
   const admissible = checkCommandAdmissible({

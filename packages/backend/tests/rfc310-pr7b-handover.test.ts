@@ -121,6 +121,17 @@ function handoverDeps(fx: ProviderPr3Fixture, mrEffects?: MrEffectsPort) {
 
 describe('rfc310 pr7b — handoff command', () => {
   describeEachProvider('provider', (harness) => {
+    test('RFC-370: malformed handoff input returns mission-input-invalid', async () => {
+      const fx = await buildPr3Fixture({ db: harness.db })
+      await expect(
+        handoffMission(handoverDeps(fx), { missionId: 'missing', reason: 5 }),
+      ).rejects.toMatchObject({
+        status: 422,
+        code: 'mission-input-invalid',
+        message: 'reason: Expected string, received number',
+      })
+    })
+
     test('fences, revokes in-flight action, invalidates prepared effects; dispatched effects keep the fence pending', async () => {
       const fx = await buildPr3Fixture({ db: harness.db })
       const now = Date.now()
@@ -212,6 +223,13 @@ describe('rfc310 pr7b — handoff command', () => {
 
 describe('rfc310 pr7b — attach command', () => {
   describeEachProvider('provider', (harness) => {
+    test('RFC-370: malformed attach input returns mission-input-invalid', async () => {
+      const fx = await buildPr3Fixture({ db: harness.db })
+      await expect(
+        attachMergeRequest(handoverDeps(fx), { missionId: 'missing', mrIid: '' }),
+      ).rejects.toMatchObject({ status: 422, code: 'mission-input-invalid' })
+    })
+
     test('binds an open MR (adopt + claim + cells); merged MR settles terminal with honest fulfillment; typed refusals', async () => {
       const fx = await buildPr3Fixture({ db: harness.db })
 
@@ -332,6 +350,14 @@ describe('rfc310 pr7b — attach command', () => {
 
 describe('rfc310 pr7b — resume command', () => {
   describeEachProvider('provider', (harness) => {
+    test('RFC-370: malformed resume input returns mission-input-invalid', async () => {
+      const fx = await buildPr3Fixture({ db: harness.db })
+      await expect(resumeMission(handoverDeps(fx), {})).rejects.toMatchObject({
+        status: 422,
+        code: 'mission-input-invalid',
+      })
+    })
+
     test('marks facts stale, bumps epoch, returns to active; refuses non-tracking missions', async () => {
       const fx = await buildPr3Fixture({ db: harness.db })
       const tracked = await seedMission(fx.store, { automationMode: 'tracking-only' })

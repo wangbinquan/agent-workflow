@@ -4030,6 +4030,8 @@ approved/archived**，候选行走的是 `MemoryApprovalQueue`、不经 `MemoryR
    真正的形状校验在下游领域层抛的是无类型错误。对照本仓其它端点的惯例，这里应当是
    422 + 专门机器码。DE-41 的用例只断言**齐全时**的那四条机器码，没有把 500 写进断言。
 
+   **2026-10-23 已修（RFC-370 收口后 bug fix）**：保留上述历史记录。缺字段/空字段的 Mission 命令现返回 422 `mission-input-invalid`；非对象请求体、requirement-source 与配置 revise 解码返回 422 `validation-failed`；playbook 内容返回 422 `digital-employee-draft-invalid`（含 `details.issues`）。同因的数字员工创作/受理接口返回 422 `validation-failed`，策略升级/终止沿用 `employee-policy-preview-invalid` / `employee-terminal-kind-invalid`。新增双 provider HTTP 回归及 PR-5 / PR-7b 命令回归。
+
 3. **【信息】遗留 Mission 的详情页运维入口分两套，且互斥。**
    `mission-resume` / `mission-attach-open` 这两个 testid 只在
    `mission.journey === undefined` 时渲染（`code.missions.$id.tsx:308,322`），而
