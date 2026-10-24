@@ -553,7 +553,7 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       ...f.candidateRows.get(initial.candidateState.candidateRef)!,
       state: 'published',
     })
-    const publication: GraphMrHandoffResult = {
+    const publishedDelivery: GraphMrHandoffResult = {
       ...initial,
       candidateState: { ...initial.candidateState, status: 'published' },
     }
@@ -563,12 +563,12 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     }
     const workspace = (await f.bridge.continuationWorkspace('design-a'))!
     const published = {
-      candidateRef: publication.candidateState.candidateRef,
+      candidateRef: publishedDelivery.candidateState.candidateRef,
       commitSha: f.committed.commitSha,
       repositoryRef: 'repo-a',
       sourceBranch: 'graph/booking',
       targetBranch: 'main',
-      issueStateJson: canonicalJson(publication.issueState),
+      issueStateJson: canonicalJson(publishedDelivery.issueState),
     }
     const verificationWorkspace = await f.bridge.verificationWorkspace({
       work,
@@ -584,7 +584,7 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     return {
       ...f,
       work,
-      publication,
+      publishedDelivery,
       published,
       workspace,
       verificationWorkspace,
@@ -742,14 +742,14 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
               { ...f.work, request: { ...f.work.request, ...patch } },
               'deliver-result',
               'changed-identity',
-              f.publication,
+              f.publishedDelivery,
             ),
           ),
         ).rejects.toThrow('graph-mr-publication-inputs-changed')
       workspace = { ...workspace, uploadPlan: { planDigest: 'changed-plan', entries: [] } }
       await expect(
         platform.execute(
-          platformPlan(f.work, 'deliver-result', 'changed-upload-plan', f.publication),
+          platformPlan(f.work, 'deliver-result', 'changed-upload-plan', f.publishedDelivery),
         ),
       ).rejects.toThrow('graph-mr-publication-inputs-changed')
       workspace = f.workspace
@@ -778,21 +778,21 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
         expect(
           JSON.parse(
             await platform.execute(
-              platformPlan(f.work, 'verify-change', `${roundRef}-checks`, f.publication),
+              platformPlan(f.work, 'verify-change', `${roundRef}-checks`, f.publishedDelivery),
             ),
           ).result.passed,
         ).toBe(true)
         await expect(
-          platform.execute(platformPlan(f.work, 'deliver-result', roundRef, f.publication)),
+          platform.execute(platformPlan(f.work, 'deliver-result', roundRef, f.publishedDelivery)),
         ).rejects.toThrow('graph-mr-publication-inputs-changed')
       }
       expect(git(f.repo, 'log', '-1', '--format=%s', f.committed.commitSha)).toBe(publishedSubject)
       expect(git(f.repo, 'rev-list', '--all', '--count')).toBe(count)
       expect(commits).toBe(0)
       expect(pushes).toBe(0)
-      expect(f.candidateRows.get(f.publication.candidateState.candidateRef)).toMatchObject({
+      expect(f.candidateRows.get(f.publishedDelivery.candidateState.candidateRef)).toMatchObject({
         state: 'published',
-        baselineSha: f.publication.candidateState.baselineSha,
+        baselineSha: f.publishedDelivery.candidateState.baselineSha,
         commitSha: f.committed.commitSha,
       })
     },
@@ -823,13 +823,13 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       expect(
         JSON.parse(
           await platform.execute(
-            platformPlan(f.work, 'verify-change', 'changed-code-checks', f.publication),
+            platformPlan(f.work, 'verify-change', 'changed-code-checks', f.publishedDelivery),
           ),
         ).result.passed,
       ).toBe(true)
       const delivered = JSON.parse(
         await platform.execute(
-          platformPlan(f.work, 'deliver-result', 'changed-code-delivery', f.publication),
+          platformPlan(f.work, 'deliver-result', 'changed-code-delivery', f.publishedDelivery),
         ),
       ).result
       expect(commits).toBe(1)
@@ -1004,13 +1004,13 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       expect(
         JSON.parse(
           await platform.execute(
-            platformPlan(work, 'verify-change', 'new-basis-checks', f.publication),
+            platformPlan(work, 'verify-change', 'new-basis-checks', f.publishedDelivery),
           ),
         ).result.passed,
       ).toBe(true)
       const delivered = JSON.parse(
         await platform.execute(
-          platformPlan(work, 'deliver-result', 'new-basis-delivery', f.publication),
+          platformPlan(work, 'deliver-result', 'new-basis-delivery', f.publishedDelivery),
         ),
       ).result
       expect(delivered.commitSha).toBe(f.committed.commitSha)

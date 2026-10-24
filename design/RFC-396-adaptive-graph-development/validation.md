@@ -1,5 +1,13 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-23 无变化重验候选发布与直接恢复旅程
+
+候选 `abcacb0166fc2434d406ef59b43bddf45e4f0b01` 已按12个准确路径发布。[CI 40053286328](https://github.com/wangbinquan/agent-workflow/actions/runs/40053286328) 的功能检查job `120750501934` 在Typecheck失败：新增测试 `publishedFixture()` 的 `publication` 回执字段被 `...f` 传入应用工厂，与其同名 `publication.remoteUrl` 依赖冲突，出现三处 `TS2345`。这是本会话测试配套问题，不能归为环境或其他会话。现已只将该fixture字段改名 `publishedDelivery` 并更新引用，未加类型断言/抑制、未改生产；后端 `NODE_OPTIONS=--max-old-space-size=8192 bun run typecheck` 退出0。原失败日志 `/tmp/rfc396-abcacb-functional-lint-job.log` 与修后 `/tmp/rfc396-noop-backend-types-repair.log` 保留，hosted修复结果等待后继准确SHA。Static scans失败仅记录状态。
+
+该候选的GitHub macOS artifact **12544371859**（压缩包digest `sha256:1aedd2d339a625ab30afb4180ae08e2b059e725da54b29e2b0ab9887735fd49d`）已校验。新增通知MR恢复旅程实际 **1 passed / 0 failed / 0 skipped / 0 flaky，96.7s**：MR发布后关闭全部页面，SIGKILL daemon，在服务离线期间只改变外部fixture的MR状态；使用原数据目录重启后，真实observer在没有页面打开时消费closed终态，原MR ref/编号/source/target/head保持且没有重复MR，随后重开页面检查终态。退出时daemon与fixture服务清理完成。原始结果为 `/tmp/rfc396-abcacb-recovery.json`、日志 `/tmp/rfc396-abcacb-recovery.log`，artifact身份为 `/tmp/rfc396-abcacb-artifact-provenance.json`。代码托管与模型为受控fixture，此结果证明直接恢复接线，不替代企业连接验收。
+
+后继测试字段更名未改变生产或E2E内容，上述准确artifact证据按其范围复用；有限大图测量单独记录。
+
 ## 2026-10-23 接续候选与外部验收前提
 
 文档提交 `5912ec43b94a7c3646fbb41a6892c418f709f913` 的 [CI 39978754925](https://github.com/wangbinquan/agent-workflow/actions/runs/39978754925) 已完成 **47 success / 2 failure**。所有功能 jobs 成功，失败为 Static scans（job `120500185914`）及派生汇总（job `120513349817`）；仅读取状态元数据。该提交保留 `ae210` 的源码和测试内容，提供后继功能 CI 证据；没有据此抹去或归因原 `ae210` 的 macOS 超时，整条 CI 仍为 failure。
