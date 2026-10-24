@@ -1,3 +1,11 @@
+## 2026-10-23 RFC-396 In Progress：发布后证据修复与新版验收边界
+
+[AC01～AC26 完成度审计](design/RFC-396-adaptive-graph-development/completion-audit-2026-10-23.md) 已逐项核对生产、断言与实际运行；R01～R22 已有修复和有效证据。后继 care 直连验收发现 R23：MR 已修复发布，但无差异的当前树被误判为空，导致有效验证显示 stale。R23 修复已改为通过既有 stage 读取当前真实树，并在 finally 中清理；独立功能静态复核通过，Bun 1.4.3 的 SQLite 集中回归 3 pass / 0 fail、61 assertions（2.89s）。首次及修复发布后无差异保持 current，旧树、实际文件漂移、环境/读集变化和不可读取场景均保留失效断言。PostgreSQL、三平台 CI 与新准确 artifact 的 care 完整旅程仍待本轮候选发布后验证。
+
+代码候选 `2e562fb54`、验收记录 `d5f08f9cd` 已发布。后继 main `52d642b102bb7cab4f8907aeb31a3139a5604c49` 已由对应会话修正 checkpoint 源码守卫；[CI 40059956104](https://github.com/wangbinquan/agent-workflow/actions/runs/40059956104) 终态 **47 success / 2 failure**，只余 Static scans 与派生 CI required。它未包含本轮尚未发布的 R23 修复与新增 care 用例，不能代签新候选。 本会话历史 Windows 类型错误已由 `338babd1f` 修复，Windows 修后验证 `40059478522` 成功。普通 Ubuntu 分片实际提供旧后端候选的 SQLite/PostgreSQL 证据（MR bridge 24+24、runtime-wiring 4+4+5 等）；新 R23 不冒用旧测试结果。
+
+仍开放：本轮修复和配套用例上库、准确 CI 与 care 直连旅程、graph@2 真实企业 MR/CI、新版托管执行及默认恢复。2026-10-24 03:48 UTC 的只读检查中，验收 console/AW/GitLab570/571 均 HTTP 500；旧节点满盘/ENOSPC 与实际任务旧镜像证据保留。历史 graph@1 的内部交付不替代新版验收，RFC 保持 In Progress。
+
 ## 2026-10-23 RFC-395 In Progress：II-b 开工（分解见 plan §6.13）
 
 **II-b 已开工**：用户 2026-10-23 要求继续推进。分解见 [RFC plan §6.13](design/RFC-395-database-target-schema-rebuild/plan.md)，仍是一次交付、T18 集中验证、一次激活。

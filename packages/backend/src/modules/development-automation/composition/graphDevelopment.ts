@@ -235,21 +235,24 @@ export function composeGraphDevelopment(input: {
   async function currentEvidenceTarget(id: string) {
     const continuation = await care.continuationWorkspace(id)
     const current = continuation ?? (await workspace.state(id))
-    const candidate = await input.candidates.derive({
-      repositoryBaseline: current.baseline,
+    // Publication advances the baseline to the verified commit. Deriving a new
+    // delivery candidate then correctly reports no delta, but evidence still
+    // needs the actual current tree, including any later workspace drift.
+    const candidate = await input.candidates.stage({
       baselineRepoPath: current.baselineRepoPath,
       baselineSha: repositoryMaterializationCommit(current.baseline),
       overlayRoot: current.workspacePath,
       uploadPlan: current.uploadPlan,
-      uploadsAlreadyPublished: current.uploadsAlreadyPublished,
-      excludePolicyDigest: graphDigest(['.git', '.agent-workflow']),
-      agentOutcomeRef: `graph-evidence:${id}`,
     })
-    return {
-      candidateTreeOid: candidate.ok ? candidate.receipt.treeOid : null,
-      commitSha: continuation?.remoteHeadSha ?? null,
-      environmentDigest:
-        (await input.verification.environment?.(current.workspacePath))?.digest ?? null,
+    try {
+      return {
+        candidateTreeOid: candidate.ok ? candidate.treeOid : null,
+        commitSha: continuation?.remoteHeadSha ?? null,
+        environmentDigest:
+          (await input.verification.environment?.(current.workspacePath))?.digest ?? null,
+      }
+    } finally {
+      if (candidate.ok) await candidate.cleanup()
     }
   }
   const detailProjection: EmployeeCaseDetailProjectionParticipant = {

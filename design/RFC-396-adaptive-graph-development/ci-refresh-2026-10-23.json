@@ -1,0 +1,1206 @@
+{
+  "schemaVersion": 1,
+  "scheduleAudit": {
+    "schema_version": 1,
+    "observed_at": "2026-10-24T03:36:44.709607+00:00",
+    "repository": "wangbinquan/agent-workflow",
+    "scope": "Latest run and latest schedule for10active scheduled workflows; main CI not queried or watched.",
+    "baseline_audit": "design/RFC-396-adaptive-graph-development/ci-audit-2026-10-23.md",
+    "schedule_counts": {
+      "success": 6,
+      "failure": 3,
+      "cancelled": 1
+    },
+    "latest_any_event_counts": {
+      "success": 6,
+      "failure": 4
+    },
+    "workflows": [
+      {
+        "workflow": "backend-macos-nightly",
+        "latest": {
+          "id": 39929652114,
+          "name": "backend-macos-nightly",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-10-23T09:08:08Z",
+          "updated_at": "2026-10-23T09:26:56Z",
+          "run_started_at": "2026-10-23T09:08:08Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39929652114"
+        },
+        "latest_schedule": {
+          "id": 39929652114,
+          "name": "backend-macos-nightly",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-10-23T09:08:08Z",
+          "updated_at": "2026-10-23T09:26:56Z",
+          "run_started_at": "2026-10-23T09:08:08Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39929652114"
+        }
+      },
+      {
+        "workflow": "e2e-full-nightly",
+        "latest": {
+          "id": 39943317488,
+          "name": "e2e-full-nightly",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-10-23T11:02:43Z",
+          "updated_at": "2026-10-23T11:35:07Z",
+          "run_started_at": "2026-10-23T11:02:43Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39943317488"
+        },
+        "latest_schedule": {
+          "id": 39943317488,
+          "name": "e2e-full-nightly",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-10-23T11:02:43Z",
+          "updated_at": "2026-10-23T11:35:07Z",
+          "run_started_at": "2026-10-23T11:02:43Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39943317488"
+        }
+      },
+      {
+        "workflow": "e2e-webkit-nightly",
+        "latest": {
+          "id": 39953945275,
+          "name": "e2e-webkit-nightly",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-10-23T12:31:22Z",
+          "updated_at": "2026-10-23T13:53:49Z",
+          "run_started_at": "2026-10-23T12:31:22Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39953945275"
+        },
+        "latest_schedule": {
+          "id": 39953945275,
+          "name": "e2e-webkit-nightly",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-10-23T12:31:22Z",
+          "updated_at": "2026-10-23T13:53:49Z",
+          "run_started_at": "2026-10-23T12:31:22Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39953945275"
+        }
+      },
+      {
+        "workflow": "evidence-soak-nightly",
+        "latest": {
+          "id": 39963552221,
+          "name": "evidence-soak-nightly",
+          "head_sha": "b0afe1b6411f8e3e2333f633871079dd21d636da",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T13:43:16Z",
+          "updated_at": "2026-10-23T13:45:35Z",
+          "run_started_at": "2026-10-23T13:43:16Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39963552221"
+        },
+        "latest_schedule": {
+          "id": 39963552221,
+          "name": "evidence-soak-nightly",
+          "head_sha": "b0afe1b6411f8e3e2333f633871079dd21d636da",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T13:43:16Z",
+          "updated_at": "2026-10-23T13:45:35Z",
+          "run_started_at": "2026-10-23T13:43:16Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39963552221"
+        }
+      },
+      {
+        "workflow": "git-protocols-e2e",
+        "latest": {
+          "id": 40012778784,
+          "name": "git-protocols-e2e",
+          "head_sha": "106d06d84858f050d80bfefb00d5928e31d0acd5",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T19:36:52Z",
+          "updated_at": "2026-10-23T19:38:42Z",
+          "run_started_at": "2026-10-23T19:36:52Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40012778784"
+        },
+        "latest_schedule": {
+          "id": 39957558956,
+          "name": "git-protocols-e2e",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T12:59:37Z",
+          "updated_at": "2026-10-23T13:01:34Z",
+          "run_started_at": "2026-10-23T12:59:37Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39957558956"
+        }
+      },
+      {
+        "workflow": "integration-opencode",
+        "latest": {
+          "id": 40012778743,
+          "name": "integration-opencode",
+          "head_sha": "106d06d84858f050d80bfefb00d5928e31d0acd5",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T19:36:52Z",
+          "updated_at": "2026-10-23T19:37:41Z",
+          "run_started_at": "2026-10-23T19:36:52Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40012778743"
+        },
+        "latest_schedule": {
+          "id": 39955605417,
+          "name": "integration-opencode",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T12:44:28Z",
+          "updated_at": "2026-10-23T12:44:55Z",
+          "run_started_at": "2026-10-23T12:44:28Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39955605417"
+        }
+      },
+      {
+        "workflow": "maintenance-soak-nightly",
+        "latest": {
+          "id": 40012778842,
+          "name": "maintenance-soak-nightly",
+          "head_sha": "106d06d84858f050d80bfefb00d5928e31d0acd5",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T19:36:52Z",
+          "updated_at": "2026-10-23T19:46:15Z",
+          "run_started_at": "2026-10-23T19:36:52Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40012778842"
+        },
+        "latest_schedule": {
+          "id": 39934213838,
+          "name": "maintenance-soak-nightly",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T09:45:47Z",
+          "updated_at": "2026-10-23T09:59:15Z",
+          "run_started_at": "2026-10-23T09:45:47Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39934213838"
+        }
+      },
+      {
+        "workflow": "postgresql-evidence",
+        "latest": {
+          "id": 39824667609,
+          "name": "postgresql-evidence",
+          "head_sha": "9e66d89dfcb16fb6ffe1be39870942ffd0811686",
+          "head_branch": "main",
+          "event": "workflow_dispatch",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-22T17:39:50Z",
+          "updated_at": "2026-10-22T17:45:10Z",
+          "run_started_at": "2026-10-22T17:39:50Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39824667609"
+        },
+        "latest_schedule": {
+          "id": 39110472887,
+          "name": "postgresql-evidence",
+          "head_sha": "bb48c1f8bde8bc73ea8e8f5ae66e95f53a7e022f",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-18T08:11:09Z",
+          "updated_at": "2026-10-18T08:32:55Z",
+          "run_started_at": "2026-10-18T08:11:09Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39110472887"
+        }
+      },
+      {
+        "workflow": "visual-regression-nightly",
+        "latest": {
+          "id": 40055423149,
+          "name": "visual-regression-nightly",
+          "head_sha": "2e562fb54a6c5fcd396601aa7fc82bafd755fff1",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-24T02:44:24Z",
+          "updated_at": "2026-10-24T02:53:17Z",
+          "run_started_at": "2026-10-24T02:44:24Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40055423149"
+        },
+        "latest_schedule": {
+          "id": 39965677740,
+          "name": "visual-regression-nightly",
+          "head_sha": "b0afe1b6411f8e3e2333f633871079dd21d636da",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "created_at": "2026-10-23T13:58:34Z",
+          "updated_at": "2026-10-23T14:00:06Z",
+          "run_started_at": "2026-10-23T13:58:34Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39965677740"
+        }
+      },
+      {
+        "workflow": "windows-platform",
+        "latest": {
+          "id": 40053745125,
+          "name": "windows-platform",
+          "head_sha": "6198ae14495285d15c4ec7369ef0b8af53a31869",
+          "head_branch": "main",
+          "event": "push",
+          "status": "completed",
+          "conclusion": "failure",
+          "created_at": "2026-10-24T02:20:14Z",
+          "updated_at": "2026-10-24T02:27:43Z",
+          "run_started_at": "2026-10-24T02:20:14Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40053745125"
+        },
+        "latest_schedule": {
+          "id": 39948054934,
+          "name": "windows-platform",
+          "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+          "head_branch": "main",
+          "event": "schedule",
+          "status": "completed",
+          "conclusion": "success",
+          "created_at": "2026-10-23T11:43:13Z",
+          "updated_at": "2026-10-23T11:54:36Z",
+          "run_started_at": "2026-10-23T11:43:13Z",
+          "run_attempt": 1,
+          "html_url": "https://github.com/wangbinquan/agent-workflow/actions/runs/39948054934"
+        }
+      }
+    ],
+    "functional_failures": [
+      {
+        "workflow": "windows-platform",
+        "run_id": 40053745125,
+        "event": "push",
+        "head_sha": "6198ae14495285d15c4ec7369ef0b8af53a31869",
+        "job_id": 120751966430,
+        "job_name": "Windows platform surface",
+        "step_number": 15,
+        "step": "Typecheck",
+        "classification": "this_session_introduced_already_fixed",
+        "new_since_previous_audit": true,
+        "evidence": "Three TS2345 errors in rfc396-mr-bridge.test.ts:715/811/990: publication receipt shadows the publication.remoteUrl dependency through ...f.",
+        "introduced_commit": "abcacb0166fc2434d406ef59b43bddf45e4f0b01",
+        "failed_file_blob": "b7f016c1aa131f5850dccf8481845744af31738d",
+        "fix_commit": "338babd1f08aa281c7d2a532431ca1dcc1fd2a6a",
+        "fixed_file_blob": "f63001d6e2a6317062616fdbae87233f46f1d5b7",
+        "fixed_content_preserved_at": "2e562fb54a6c5fcd396601aa7fc82bafd755fff1",
+        "repair_evidence": "Backend local typecheck exit0; main CI40054322444@9a900aaa5709b147838f3ea64420050e28468895 functional job120753813066 Typecheck success at2026-10-24T02:48:10Z, per validation.md:33. No post-fix windows-platform run at this snapshot.",
+        "log": "windows-typecheck-functional-step.log"
+      },
+      {
+        "workflow": "e2e-full-nightly",
+        "run_id": 39943317488,
+        "event": "schedule",
+        "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+        "job_id": 120379789904,
+        "step_number": 7,
+        "step": "Run e2e (full tier, shard 2/4)",
+        "classification": "other_change_preexisting",
+        "new_since_previous_audit": false,
+        "failure": "MEM-X8 expected four sources; extra agent-run.",
+        "evidence": "Same failure before RFC396 in run39590195097@b54a6316; previous source audit traced two designer runs to RFC387 commit684972dbb and stale exact-count fixture expectation. Existing ci-audit section3 reused; no old logs downloaded.",
+        "derived_failure": {
+          "job_id": 120392264654,
+          "step": "Refuse to reconcile on incomplete data",
+          "cause": "Upstream E2E incomplete; not a separate root cause."
+        },
+        "unresolved_flaky": "human-gate-restart initial30s review wait, retry passed; task/node state unavailable, attribution unknown."
+      },
+      {
+        "workflow": "e2e-webkit-nightly",
+        "run_id": 39953945275,
+        "event": "schedule",
+        "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+        "job_ids": [
+          120414977312,
+          120414977318
+        ],
+        "step_number": 7,
+        "step": "Run e2e (webkit, shard 2/4)",
+        "classification": "other_change_preexisting",
+        "new_since_previous_audit": false,
+        "failure": "Same MEM-X8 extra agent-run on Ubuntu and macOS, initial and retry.",
+        "evidence": "Both platforms failed identically in pre-RFC396 run39602745623@85c9a1075dc9; spec and distillation source blobs unchanged. Existing ci-audit section3 reused."
+      },
+      {
+        "workflow": "backend-macos-nightly",
+        "run_id": 39929652114,
+        "event": "schedule",
+        "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+        "job_id": 120334471247,
+        "step_number": 8,
+        "step": "Test backend (macOS shard — no coverage)",
+        "classification": "preexisting_failure_not_introduced_here",
+        "new_since_previous_audit": false,
+        "failures": [
+          {
+            "test": "RFC376 committed source report repeated read",
+            "observed_ms": 128520.09,
+            "limit_ms": 120000,
+            "pre396_evidence": "run39112064631 job117630122504 @bb48c1f8bde8:122312.85ms"
+          },
+          {
+            "test": "RFC346 coordinator consumption/composition scan",
+            "observed_ms": 5801.46,
+            "limit_ms": 5000,
+            "pre396_evidence": "run39574768916 job119137438306 @8263febd3b62:5075.24ms"
+          }
+        ],
+        "boundary": "Pre-existing same failures are proven; current wall-time contributions are not fully decomposed. Old audited logs not re-read."
+      },
+      {
+        "workflow": "backend-macos-nightly",
+        "run_id": 39929652114,
+        "event": "schedule",
+        "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+        "job_id": 120334471172,
+        "step_number": 8,
+        "step": "Test backend (macOS shard — no coverage)",
+        "classification": "insufficient_evidence",
+        "new_since_previous_audit": false,
+        "failure": "CLI migrate 5031.46ms >5000ms.",
+        "evidence": "Earlier530.13ms was warmed by another migration in the same process; pre396 first-call2389.81ms. Graph migration inputs increased~0.83%, insufficient causal evidence.",
+        "missing_minimum_evidence": "Segment times for contract construction, migration history read/validation and actual SQLite migration."
+      },
+      {
+        "workflow": "backend-macos-nightly",
+        "run_id": 39929652114,
+        "event": "schedule",
+        "head_sha": "67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6",
+        "job_id": 120334471337,
+        "step_number": 8,
+        "step": "Test backend (macOS shard — no coverage)",
+        "classification": "insufficient_evidence",
+        "new_since_previous_audit": false,
+        "failure": "RFC380 full-backend module ordering scan6056.80ms >5000ms; no order assertion failure.",
+        "evidence": "Corpus+0.33% between adjacent runs; same-run scans6056.80/4880.66/2498.42ms; immutable test alone does not rule out new-source cost.",
+        "missing_minimum_evidence": "Read/parse/GC segmented timing or equivalent causal measurement."
+      }
+    ],
+    "attribution_summary": {
+      "this_session": "One newly recorded failure: push-triggered windows-platform typecheck at pre-fix6198; introduced by abcacb, fixed338, preserved2e.",
+      "other_change_or_preexisting": "MEM-X8 traced to pre396RFC387 behavior/test mismatch; two macOS timeout signatures have pre396 counterexamples.",
+      "external_dependency": "No latest terminal functional failure newly established as an external-dependency failure; do not relabel unknown timeouts as environment.",
+      "insufficient_evidence": "CLI migrate andRFC380timeouts; fullnightlyhuman-gate-restartflaky; no new cause evidence for cancelled latest visual schedule."
+    },
+    "windows_dispatch": {
+      "available": true,
+      "inputs": [],
+      "command": "gh workflow run windows-platform.yml --repo wangbinquan/agent-workflow --ref main",
+      "ui": "https://github.com/wangbinquan/agent-workflow/actions/workflows/windows-platform.yml",
+      "job": "Windows platform surface",
+      "runner": "windows-latest",
+      "timeout_minutes": 25,
+      "purpose": "Validation: tests,typecheck,build and local executable smoke; no business publication/deployment step.",
+      "post_fix_equivalent_run": false,
+      "concurrency_group": "windows-platform-${{ github.ref }}",
+      "cancel_in_progress": true,
+      "triggered_by_this_audit": false
+    },
+    "method": {
+      "read_only_github_requests": true,
+      "old_failure_logs_reused_from_audit": true,
+      "new_log_scope": "Only exact failed Typecheck step of windows-platform",
+      "repository_edits": false,
+      "tests_builds_services": false,
+      "ci_rerun_or_dispatch": false,
+      "watcher": false,
+      "main_ci_queries": false,
+      "temporary_log_cache_removed": true
+    }
+  },
+  "scheduleAuditSourceSha256": "addd7677498cd4e401b45bebe697b62b110de3e93366316fa491b59743ae4c0d",
+  "windowsRepairDispatch": {
+    "workflow": "windows-platform",
+    "dispatchRequestedAt": "2026-10-24T03:43:38.247124+00:00",
+    "expectedHeadSha": "d5f08f9cd032567ddd07b7ac103bb52c947a69d3",
+    "runId": 40059478522,
+    "actualHeadSha": "d5f08f9cd032567ddd07b7ac103bb52c947a69d3",
+    "status": "queued",
+    "purpose": "Verify published fixture type repair on real Windows; no deployment; no rerun of old failing SHA."
+  },
+  "sourceCiSnapshot": {
+    "runId": 40055423143,
+    "headSha": "2e562fb54a6c5fcd396601aa7fc82bafd755fff1",
+    "status": "completed",
+    "conclusion": "failure",
+    "successCount": 46,
+    "failed": [
+      {
+        "id": 120757238248,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "failure"
+      },
+      {
+        "id": 120757238699,
+        "name": "Backend tests (ubuntu-latest shard 10/24)",
+        "conclusion": "failure"
+      },
+      {
+        "id": 120772441897,
+        "name": "CI required",
+        "conclusion": "failure"
+      }
+    ],
+    "pending": [],
+    "jobs": [
+      {
+        "id": 120757238248,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "id": 120757238360,
+        "name": "Frontend tests (ubuntu-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238366,
+        "name": "Build production binary + e2e artifact (smoke) (windows-latest)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238370,
+        "name": "Frontend tests (ubuntu-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238389,
+        "name": "Frontend tests (windows-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238407,
+        "name": "Build production binary + e2e artifact (smoke) (macos-latest)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238408,
+        "name": "Backend tests (ubuntu-latest shard 1/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238410,
+        "name": "Lint + Typecheck + Format + Shared + system mock tests",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238425,
+        "name": "Frontend tests (ubuntu-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238431,
+        "name": "Perf microbenchmark gate",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238451,
+        "name": "Markdown link check (design/)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238466,
+        "name": "Backend tests (real PostgreSQL)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238470,
+        "name": "Frontend tests (windows-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238497,
+        "name": "Build production binary + e2e artifact (smoke) (ubuntu-latest)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238516,
+        "name": "Backend tests (ubuntu-latest shard 13/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238570,
+        "name": "Frontend tests (windows-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238574,
+        "name": "Backend tests (ubuntu-latest shard 8/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238580,
+        "name": "Backend tests (ubuntu-latest shard 3/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238588,
+        "name": "Backend tests (ubuntu-latest shard 22/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238598,
+        "name": "Backend tests (ubuntu-latest shard 2/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238600,
+        "name": "Backend tests (ubuntu-latest shard 5/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238604,
+        "name": "Backend tests (ubuntu-latest shard 23/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238611,
+        "name": "Backend tests (ubuntu-latest shard 6/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238620,
+        "name": "Backend tests (ubuntu-latest shard 16/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238637,
+        "name": "Backend tests (ubuntu-latest shard 4/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238643,
+        "name": "Backend tests (ubuntu-latest shard 11/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238659,
+        "name": "Backend tests (ubuntu-latest shard 14/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238669,
+        "name": "Backend tests (ubuntu-latest shard 24/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238685,
+        "name": "Backend tests (ubuntu-latest shard 18/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238695,
+        "name": "Backend tests (ubuntu-latest shard 15/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238699,
+        "name": "Backend tests (ubuntu-latest shard 10/24)",
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "id": 120757238707,
+        "name": "Backend tests (ubuntu-latest shard 19/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238710,
+        "name": "Backend tests (ubuntu-latest shard 21/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238722,
+        "name": "Backend tests (ubuntu-latest shard 20/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238723,
+        "name": "Backend tests (ubuntu-latest shard 7/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238742,
+        "name": "Backend tests (ubuntu-latest shard 17/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238762,
+        "name": "Backend tests (ubuntu-latest shard 9/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120757238796,
+        "name": "Backend tests (ubuntu-latest shard 12/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120759799570,
+        "name": "Playwright e2e (macos-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120759799583,
+        "name": "Playwright e2e (macos-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120759799584,
+        "name": "Playwright e2e (macos-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120763875088,
+        "name": "Playwright e2e (windows-latest shard 1/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120763875105,
+        "name": "Playwright e2e (windows-latest shard 2/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120763875122,
+        "name": "Playwright e2e (windows-latest shard 3/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120763875136,
+        "name": "Playwright e2e (windows-latest shard 4/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120767269254,
+        "name": "Playwright e2e (ubuntu-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120767269314,
+        "name": "Playwright e2e (ubuntu-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120767269367,
+        "name": "Playwright e2e (ubuntu-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 120772441897,
+        "name": "CI required",
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ],
+    "observedAt": "2026-10-24T04:07:46Z"
+  },
+  "sourceCiFunctionalFailure": {
+    "jobId": 120757238699,
+    "test": "architecture/rfc395-checkpoint-boundary.test.ts:106",
+    "passCount": 1180,
+    "failCount": 1,
+    "failure": "four deferred single-non-root defect sites retain the HEAD count decisions",
+    "causeCommit": "6198ae14495285d15c4ec7369ef0b8af53a31869",
+    "classification": "other_session_stale_source_assertion",
+    "evidence": "6198 replaced state.repos.length > 1 decisions with isSingleRootRepository / inheritedCallSpace; architecture test blob remained d0b365c8e72b046ed5fee7b336515cd4933ecf41. Exact 2e job repeats the same assertion failure.",
+    "logSha256": "2919d8d54dcd82917591d9c1232162884caadc90c3ce663db6a9a36e6fbfb223"
+  },
+  "scope": "Metadata and functional CI failure attribution only. Static scans status retained without logs, findings or responsibility conclusion. Source code unchanged by this audit.",
+  "windowsRepairResult": {
+    "runId": 40059478522,
+    "headSha": "d5f08f9cd032567ddd07b7ac103bb52c947a69d3",
+    "status": "completed",
+    "conclusion": "success",
+    "successCount": 1,
+    "failed": [],
+    "pending": [],
+    "jobs": [
+      {
+        "id": 120769659743,
+        "name": "Windows platform surface",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "observedAt": "2026-10-24T03:54:18Z"
+  },
+  "windowsMonitorExit": {
+    "runId": 40059478522,
+    "elapsedSeconds": 604.4691427918151,
+    "lastObservedStatus": "completed",
+    "lastObservedConclusion": "success",
+    "monitorFinishedAt": "2026-10-24T03:54:18Z"
+  },
+  "sourceCiProgressSnapshot": {
+    "runId": 40055423143,
+    "headSha": "2e562fb54a6c5fcd396601aa7fc82bafd755fff1",
+    "status": "in_progress",
+    "conclusion": null,
+    "successCount": 40,
+    "failed": [
+      {
+        "id": 120757238248,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "failure"
+      },
+      {
+        "id": 120757238699,
+        "name": "Backend tests (ubuntu-latest shard 10/24)",
+        "conclusion": "failure"
+      }
+    ],
+    "pending": [
+      {
+        "id": 120763875105,
+        "name": "Playwright e2e (windows-latest shard 2/4)",
+        "status": "in_progress"
+      },
+      {
+        "id": 120763875122,
+        "name": "Playwright e2e (windows-latest shard 3/4)",
+        "status": "in_progress"
+      },
+      {
+        "id": 120763875136,
+        "name": "Playwright e2e (windows-latest shard 4/4)",
+        "status": "in_progress"
+      },
+      {
+        "id": 120767269254,
+        "name": "Playwright e2e (ubuntu-latest shard 1/3)",
+        "status": "in_progress"
+      },
+      {
+        "id": 120767269314,
+        "name": "Playwright e2e (ubuntu-latest shard 3/3)",
+        "status": "in_progress"
+      },
+      {
+        "id": 120767269367,
+        "name": "Playwright e2e (ubuntu-latest shard 2/3)",
+        "status": "in_progress"
+      }
+    ],
+    "observedAt": "2026-10-24T03:47:35Z"
+  },
+  "sourceCiMonitorExit": {
+    "runId": 40055423143,
+    "elapsedSeconds": 2423.5412867907435,
+    "lastObservedStatus": "completed",
+    "lastObservedConclusion": "failure",
+    "monitorFinishedAt": "2026-10-24T04:07:46Z"
+  },
+  "successorMainSnapshot": {
+    "conclusion": "failure",
+    "headSha": "52d642b102bb7cab4f8907aeb31a3139a5604c49",
+    "jobs": [
+      {
+        "databaseId": 120771099200,
+        "name": "Lint + Typecheck + Format + Shared + system mock tests",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099280,
+        "name": "Build production binary + e2e artifact (smoke) (ubuntu-latest)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099315,
+        "name": "Build production binary + e2e artifact (smoke) (windows-latest)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099329,
+        "name": "Markdown link check (design/)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099336,
+        "name": "Frontend tests (windows-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099359,
+        "name": "Backend tests (ubuntu-latest shard 4/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099363,
+        "name": "Backend tests (ubuntu-latest shard 3/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099371,
+        "name": "Backend tests (ubuntu-latest shard 18/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099372,
+        "name": "Perf microbenchmark gate",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099376,
+        "name": "Backend tests (ubuntu-latest shard 19/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099389,
+        "name": "Backend tests (ubuntu-latest shard 16/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099391,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "status": "completed",
+        "conclusion": "failure"
+      },
+      {
+        "databaseId": 120771099401,
+        "name": "Backend tests (ubuntu-latest shard 22/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099407,
+        "name": "Frontend tests (ubuntu-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099417,
+        "name": "Backend tests (ubuntu-latest shard 23/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099423,
+        "name": "Backend tests (ubuntu-latest shard 10/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099424,
+        "name": "Frontend tests (windows-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099426,
+        "name": "Backend tests (ubuntu-latest shard 2/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099430,
+        "name": "Backend tests (ubuntu-latest shard 9/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099436,
+        "name": "Backend tests (ubuntu-latest shard 20/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099453,
+        "name": "Backend tests (ubuntu-latest shard 12/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099455,
+        "name": "Backend tests (ubuntu-latest shard 13/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099463,
+        "name": "Backend tests (ubuntu-latest shard 11/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099475,
+        "name": "Backend tests (ubuntu-latest shard 24/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099482,
+        "name": "Frontend tests (ubuntu-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099486,
+        "name": "Frontend tests (ubuntu-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099488,
+        "name": "Backend tests (ubuntu-latest shard 14/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099508,
+        "name": "Backend tests (ubuntu-latest shard 7/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099517,
+        "name": "Frontend tests (windows-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099524,
+        "name": "Backend tests (ubuntu-latest shard 8/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099546,
+        "name": "Backend tests (ubuntu-latest shard 15/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099551,
+        "name": "Backend tests (ubuntu-latest shard 17/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099566,
+        "name": "Backend tests (ubuntu-latest shard 21/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099577,
+        "name": "Backend tests (ubuntu-latest shard 6/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099587,
+        "name": "Backend tests (real PostgreSQL)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099589,
+        "name": "Build production binary + e2e artifact (smoke) (macos-latest)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099599,
+        "name": "Backend tests (ubuntu-latest shard 5/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771099631,
+        "name": "Backend tests (ubuntu-latest shard 1/24)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771460728,
+        "name": "Playwright e2e (ubuntu-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771460742,
+        "name": "Playwright e2e (ubuntu-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771460790,
+        "name": "Playwright e2e (ubuntu-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771886325,
+        "name": "Playwright e2e (macos-latest shard 2/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771886338,
+        "name": "Playwright e2e (macos-latest shard 1/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771886395,
+        "name": "Playwright e2e (macos-latest shard 3/3)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771924200,
+        "name": "Playwright e2e (windows-latest shard 1/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771924211,
+        "name": "Playwright e2e (windows-latest shard 4/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771924241,
+        "name": "Playwright e2e (windows-latest shard 2/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120771924270,
+        "name": "Playwright e2e (windows-latest shard 3/4)",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "databaseId": 120776543745,
+        "name": "CI required",
+        "status": "completed",
+        "conclusion": "failure"
+      }
+    ],
+    "status": "completed",
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40059956104",
+    "runId": 40059956104,
+    "observedAt": "2026-10-24T04:40:48.634473+00:00"
+  },
+  "successorMainScope": "52d642b10 only updates the other-session checkpoint source guard. This run does not contain the uncommitted R23 repair or new care E2E."
+}

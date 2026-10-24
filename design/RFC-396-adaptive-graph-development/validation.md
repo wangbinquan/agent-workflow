@@ -1,8 +1,22 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-24 UTC：R23 修复与集中回归
+
+R23 修复已改为通过既有 stage 读取当前真实树，并在 finally 中清理；独立功能静态复核通过，Bun 1.4.3 的 SQLite 集中回归 3 pass / 0 fail、61 assertions（2.89s）。首次及修复发布后无差异保持 current，旧树、实际文件漂移、环境/读集变化和不可读取场景均保留失效断言。PostgreSQL、三平台 CI 与新准确 artifact 的 care 完整旅程仍待本轮候选发布后验证。 新真实 Git 用例直接使用生产 candidate adapter，execution bindings 明示为投影夹具；实际 profile 仍由 care E2E 验证。源码及两份回归均通过 Prettier/ESLint。日志 `/tmp/rfc396-r23-sqlite-regression.log`。
+
+统一 system-mock tool 新增 pipeline collect/trigger/rerun 分派；实际 HTTP/子进程回归 1 pass / 0 fail、27 assertions（393ms），日志 `/tmp/rfc396-pipeline-tool-cli-tests-explicit-path.log`。此前旧 tool 把 collect 参数误送 SCIP 的测试设施失败保留；后续准确 2e daemon + 新 fixture 的 care 运行已完成实际修复/profile/MR，随后命中 R23，不记为通过。
+
+后继 main `52d642b102bb7cab4f8907aeb31a3139a5604c49` 已由对应会话修正 checkpoint 源码守卫；[CI 40059956104](https://github.com/wangbinquan/agent-workflow/actions/runs/40059956104) 终态 **47 success / 2 failure**，只余 Static scans 与派生 CI required。它未包含本轮尚未发布的 R23 修复与新增 care 用例，不能代签新候选。
+
+## 2026-10-23 当前完成度复核
+
+最新 [逐项审计](./completion-audit-2026-10-23.md) 已将 AC01～AC26、R01～R22 的生产实现、实际运行与开放边界对齐。后继care直连验收另发现R23发布后证据误标stale的生产缺陷，修复与SQLite回归已完成，准确新artifact复验仍待完成；当前仍缺 graph@2 真实企业 MR/CI、新版托管执行/恢复；新增care直连补例正在验证。2e562fb54代码CI已终态46成功/3失败，修后Windows40059478522成功，失败归因见CI审计；RFC保持In Progress。下方较早的“待执行”“只剩CI”等为当时的历史状态，不覆盖这份当前裁决。
+
+R23改动前后端候选的真实 PostgreSQL 接受来自 CI40054322444 普通 Ubuntu 分片的具体成功行：MR bridge 24 SQLite+24 PostgreSQL、runtime-wiring 4+4 provider+5纯合同，及其他已列用例。独立 `Backend tests (real PostgreSQL)` job不包含RFC396，不能单凭该job成功认领本RFC双库通过；详见审计的准确job/范围表。
+
 ## 2026-10-23 图节点修复的真实浏览器与大图验收
 
-修复提交 `2e562fb54a6c5fcd396601aa7fc82bafd755fff1` 已推送。准确 [GitHub CI 40055423143](https://github.com/wangbinquan/agent-workflow/actions/runs/40055423143) 的 macOS 构建成功，artifact **12545362841** 的压缩包 digest 为 `sha256:9cd432a4fcc02f0873bc63d2fec32401e19110b10c4e1e65e8b00d8037373b16`，三份可执行文件均逐项校验。完整CI仍待终态，单个构建成功不等于整条通过。
+修复提交 `2e562fb54a6c5fcd396601aa7fc82bafd755fff1` 已推送。准确 [GitHub CI 40055423143](https://github.com/wangbinquan/agent-workflow/actions/runs/40055423143) 的 macOS 构建成功，artifact **12545362841** 的压缩包 digest 为 `sha256:9cd432a4fcc02f0873bc63d2fec32401e19110b10c4e1e65e8b00d8037373b16`，三份可执行文件均逐项校验。完整CI后续已终态46成功/3失败，详见本文顶部CI审计；单个构建成功不等于整条通过。
 
 新增四类 connected-diagram 浏览器回归实际 **1 passed / 0 failed / 0 skipped / 0 flaky，13.4s**，用例自身6.3s且没有重试。真实 Mermaid flow/state/sequence/data 均能通过鼠标、Enter、Space独立选中目标节点，语义列表同步，sequence上下镜像同步；边与生命线不获得节点按钮角色。原三条MR旅程未改。原始记录 `/tmp/rfc396-graph-node-connected.json`、日志 `/tmp/rfc396-graph-node-connected.log`，汇总身份、结果和限制见[运行验收记录](./graph-runtime-acceptance-2026-10-23.json)。
 
@@ -138,7 +152,7 @@ Windows 修复提交的主 CI 已终态 **47 success / 2 failure**，剩余为 S
 
 **2026-10-22 全面回顾后的当前裁决：需要修改后再验收。** 以下“功能验收完成”是前一轮范围的历史记录。本轮确认 R01～R10 功能/可用性缺口，以及 MR 提交和持续看护未接入；新增范围见 [review-and-mr-parity.md](./review-and-mr-parity.md)。原浏览器旅程含 API 建立工作和提交澄清，不能当成全程 UI 可用性证明。新的 MR 生命周期、修复和 UI 验收尚未完成。
 
-2026-10-22 当前功能验收已完成：三个真实模型旅程已交付（预约 24/0、通知 44/0、已有模块 13/0）；实际托管 Case 已 terminal / graph-development.delivered，独立测试 1/0、6 assertions，原始证据和产品入口均已读回。最新修复源码 `67795ed462` 的主 CI 39814553963 为 49/49 success；共享 main 后继整体 CI 尚有失败，RFC 保持 In Progress，功能验收与最终仓库 CI 分列。精确版本见 [真实模型汇总](./real-model-summary.json)、[托管完整回执](./hosted-completion-evidence.json) 和 [失败及恢复历史](./real-model-acceptance.md)。
+2026-10-22 graph@1 功能验收历史快照：三个真实模型旅程已交付（预约 24/0、通知 44/0、已有模块 13/0）；实际托管 Case 已 terminal / graph-development.delivered，独立测试 1/0、6 assertions，原始证据和产品入口均已读回。最新修复源码 `67795ed462` 的主 CI 39814553963 为 49/49 success；共享 main 后继整体 CI 尚有失败，RFC 保持 In Progress，功能验收与最终仓库 CI 分列。精确版本见 [真实模型汇总](./real-model-summary.json)、[托管完整回执](./hosted-completion-evidence.json) 和 [失败及恢复历史](./real-model-acceptance.md)。
 
 以下为 2026-10-21 首轮候选及后续修复的历史验证记录；最新状态见上方和真实验收文档。用户批准完整实现与远端交付；此记录分别说明已证实内容和尚未证实内容，不以单个通过结果宣称 RFC Done。
 
@@ -306,7 +320,7 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 
 真实审核的 322 KB 提示触发 OpenCode 单参数限制。大提示改走已有 SpawnPlan stdin，完整材料不截断，小提示 argv 与直接 buildCommand 的有界校验保持原语义。真实子进程检验 CJK、多行、末尾哨兵，业务与系统装配均检验 stdin 和续跑 session 标识；对应两文件集中验证 **21 pass / 0 fail / 61 assertions**，目标 lint/格式通过。这是传输和装配范围的证据，不替代真实模型审核成功或全仓 CI。
 
-## 2026-10-22 当前功能矩阵与剩余退出条件
+## 2026-10-22 graph@1 功能矩阵与当时退出条件（历史快照）
 
 | 验收点           | 当前证据与结果                                                                                                                                                                                                                |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -318,4 +332,4 @@ schema 报告与原路由覆盖扫描已经以 `baf4ac29317b67bc7ef9ebc0c32ffeb4
 | AC16             | 实际 Case 页面可找到交付 commit 与原始报告；任务工作区普通 API 可读取代码/测试/脚本，clamp.ts blob 与候选 trace 一致。已有配置发布/冲突/重放测试保留；本托管案例 publication=null，没有声称业务远端发布或部署。               |
 | AC17             | 三条实际 DeepSeek 完整旅程已交付，分别 24/0、44/0、13/0，原始失败及代理针对虚构案例作出的 provisional 判断保留。托管受控夹具不额外计入真实模型案例数量。                                                                      |
 
-当前剩余项是 T15/T16 的共享 main CI 与最终状态收尾。前继 42611df21 的 CI 39848361400 为 47 success / 2 failure，所有功能 job 成功，整体 required 失败；407fb491 的 CI 39858220290 于 22:02:18 UTC completed / failure，同为 47 success / 2 failure：静态检查 job 120101856514 与 CI required 120114469860，所有功能 job success；静态项仅读取状态元数据，未读取 findings 或日志。本次收尾提交仍须消费自身 exact-SHA CI。未因文档收尾重复本地全量门禁、重跑业务测试或改动其他会话代码。功能证据完整不代表共享 CI 总绿，因此此记录仍不将 RFC 标为 Done。
+在当时仅有 graph@1 内部候选交付的范围内，剩余项是 T15/T16 的共享 main CI 与状态收尾；此结论不覆盖后来新增的 graph@2 MR 合同和新版托管验收，当前退出条件见本文顶部审计。前继 42611df21 的 CI 39848361400 为 47 success / 2 failure，所有功能 job 成功，整体 required 失败；407fb491 的 CI 39858220290 于 22:02:18 UTC completed / failure，同为 47 success / 2 failure：静态检查 job 120101856514 与 CI required 120114469860，所有功能 job success；静态项仅读取状态元数据，未读取 findings 或日志。本次收尾提交仍须消费自身 exact-SHA CI。未因文档收尾重复本地全量门禁、重跑业务测试或改动其他会话代码。功能证据完整不代表共享 CI 总绿，因此此记录仍不将 RFC 标为 Done。

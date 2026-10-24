@@ -1,6 +1,6 @@
 # RFC-396 真实模型与托管验收
 
-状态：三个真实模型旅程与实际托管闭环均已完成；RFC 保持 In Progress，最后共享 main CI 与收尾单列。最新托管通过证据见本文末节和 [完整回执](./hosted-completion-evidence.json)，历史失败全部保留。
+范围：本文记录 graph@1 的三个真实模型核心旅程与旧托管内部候选交付，均已完成；不代表 graph@2 的真实企业 MR/CI 或新版托管已经验收。RFC 保持 In Progress，当前退出项见 [完成度审计](./completion-audit-2026-10-23.md)。旧托管证据见本文末节和 [完整回执](./hosted-completion-evidence.json)，历史失败全部保留。
 
 用户在本会话明确回复“1.这个不阻塞你 2.允许”：共享 schema 断言不阻止本任务继续，允许将虚构验收需求、夹具代码、生成的设计和执行上下文发送到已配置的 `opencode-go/deepseek-v4.1-flash`。此前暂停调用的许可条件已解除。
 
@@ -34,7 +34,7 @@
 
 ## 证据边界
 
-三个单机真实模型闭环、固定图组合对照与实际托管业务执行已收齐，详细版本与失败历史见后文；最后共享 main exact-SHA CI 与 RFC 收尾仍单列。模型调用累计 token 字段包含其会话记账，不能直接推算费用或独立输入规模。
+graph@1 的三个单机真实模型闭环、固定图组合对照与旧托管业务执行已收齐，详细版本与失败历史见后文；当时的 CI/收尾记录保留为历史，新 graph@2 真实企业 MR/CI 与新版托管尚待直接验收。模型调用累计 token 字段包含其会话记账，不能直接推算费用或独立输入规模。
 
 文档提交 `b45f3712740e6f70c45d88fe4912434dbb738749` 的 [CI 39732007816](https://github.com/wangbinquan/agent-workflow/actions/runs/39732007816) 终态为 47 success / 2 failure；失败根因仍是 [backend 12/24](https://github.com/wangbinquan/agent-workflow/actions/runs/39732007816/job/119668947797) 的 `Expected length: 217 / Received length: 222`，另一个失败是汇总门。用户已明确这不阻止继续验收；该事实不等同于整仓 CI 通过。
 

@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "2e562fb54a6c5fcd396601aa7fc82bafd755fff1",
+  "scope": "Read-only diagnosis of an actual controlled graph@2 care journey. Production daemon/runtime stub are exact GitHub artifacts; only pipeline test tool was built locally. No store mutation, service restart, or altered freshness assertion.",
+  "testCandidateSha256": "595c670f4f8c45cbbe6ff220002d132c97a07682ef0ff31604ffe3e2cf9af918",
+  "fixtureTool": {
+    "builder": "/tmp/aw-rfc370-toolchain-1.4.3/bun-darwin-aarch64/bun",
+    "builderVersion": "1.4.3",
+    "purpose": "Compile only standalone system-mock tool from primary checkout; no backend/frontend build.",
+    "binaryPath": "/tmp/rfc396-system-mock-tool-pipeline",
+    "binarySha256": "fdcd1fbdd6c1257c167c20a2b1c9e62338bb5c5b4086efc71e94acd098aba4c2",
+    "binaryBytes": 71853170,
+    "compileCommand": [
+      "/tmp/aw-rfc370-toolchain-1.4.3/bun-darwin-aarch64/bun",
+      "build",
+      "packages/system-mocks/src/tool.ts",
+      "--compile",
+      "--target=bun",
+      "--minify",
+      "--outfile=/tmp/rfc396-system-mock-tool-pipeline"
+    ]
+  },
+  "run": {
+    "startedAtUtc": "2026-10-24T04:23:25Z",
+    "finishedAtUtc": "2026-10-24T04:24:09Z",
+    "exitCode": 1,
+    "stats": {
+      "startTime": "2026-10-24T04:23:26.361Z",
+      "duration": 43446.869,
+      "expected": 0,
+      "skipped": 0,
+      "unexpected": 1,
+      "flaky": 0
+    },
+    "assertion": {
+      "expectedFreshness": "current",
+      "actualFreshness": "stale"
+    }
+  },
+  "caseId": "01M5P2CNNP73B6982E5WWRDW01",
+  "observedWorkspace": {
+    "state": "published",
+    "headSha": "0676d3eaf7986d39cbe927f597210ce686b26e2c",
+    "headTree": "209913ffdb8afed81be2eb6c93ab3430ea2667af",
+    "parentSha": "a985ee96c59922c542384b6ba3dbaa792f721687",
+    "baselineSha": "0676d3eaf7986d39cbe927f597210ce686b26e2c",
+    "remoteHeadSha": "0676d3eaf7986d39cbe927f597210ce686b26e2c",
+    "porcelainStatus": "",
+    "oldTree": "256ff8e6b56165e208023ed6750adeb9c112cf4f"
+  },
+  "executions": {
+    "oldTreeCount": 2,
+    "newTreeCount": 2,
+    "newExecutionRounds": [
+      "prepare-change",
+      "publish-mr"
+    ],
+    "newReceipts": [
+      {
+        "blobSha256": "0abfa42376c7ef2068610e1b0db0a1e483020ea628f0b3952cad9b02475b4871",
+        "candidate": {
+          "agentOutcomeRef": "01M5P2D2CENKH4RF9XBVAPXM82",
+          "baselineSnapshotRef": "git:a985ee96c59922c542384b6ba3dbaa792f721687",
+          "candidateRef": "bb3ee7cc5af343b69e1a115518f6258a7b9d4bd4ceec24926a9b70e4da513985",
+          "changed": {
+            "added": [
+              "care-proof.json"
+            ],
+            "deleted": [],
+            "modified": [
+              "graph-result.cjs"
+            ]
+          },
+          "excludePolicyDigest": "19a325e1e95e0529d9fc0ecb1a89be2ce6355a385ef1b99a598ac07bb771c412",
+          "repositoryBaseline": {
+            "commitSha": "a985ee96c59922c542384b6ba3dbaa792f721687",
+            "kind": "commit",
+            "treeOid": "256ff8e6b56165e208023ed6750adeb9c112cf4f"
+          },
+          "treeOid": "209913ffdb8afed81be2eb6c93ab3430ea2667af",
+          "uploadLineage": {
+            "finalDigests": [],
+            "planDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        "basisDigest": "6c55a3526cafacc88f96f6784e4e2af7acfda90aebc223e093d63baf4c30649f",
+        "profile": {
+          "digest": "9f7679cb5dcf35ec626304db182c1381b854d2131e659f83438135c9962aa6c5",
+          "id": "01M5P2CN7DGPX7P768K3P087FG",
+          "revision": 1
+        },
+        "environmentDigest": "f58cfe32cbba9f6365c5cd48330eeb86523b260e4bed3a380052d9d8781ce692",
+        "receiptOk": true
+      },
+      {
+        "blobSha256": "976f1db50bad0ce30a53b18a42d7ea320a591f31199f1dda9f7c8e077bd72e32",
+        "candidate": {
+          "agentOutcomeRef": "01M5P2D2CENKH4RF9XBVAPXM82",
+          "baselineSnapshotRef": "git:a985ee96c59922c542384b6ba3dbaa792f721687",
+          "candidateRef": "bb3ee7cc5af343b69e1a115518f6258a7b9d4bd4ceec24926a9b70e4da513985",
+          "changed": {
+            "added": [
+              "care-proof.json"
+            ],
+            "deleted": [],
+            "modified": [
+              "graph-result.cjs"
+            ]
+          },
+          "excludePolicyDigest": "19a325e1e95e0529d9fc0ecb1a89be2ce6355a385ef1b99a598ac07bb771c412",
+          "repositoryBaseline": {
+            "commitSha": "a985ee96c59922c542384b6ba3dbaa792f721687",
+            "kind": "commit",
+            "treeOid": "256ff8e6b56165e208023ed6750adeb9c112cf4f"
+          },
+          "treeOid": "209913ffdb8afed81be2eb6c93ab3430ea2667af",
+          "uploadLineage": {
+            "finalDigests": [],
+            "planDigest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          }
+        },
+        "basisDigest": "6c55a3526cafacc88f96f6784e4e2af7acfda90aebc223e093d63baf4c30649f",
+        "profile": {
+          "digest": "9f7679cb5dcf35ec626304db182c1381b854d2131e659f83438135c9962aa6c5",
+          "id": "01M5P2CN7DGPX7P768K3P087FG",
+          "revision": 1
+        },
+        "environmentDigest": "f58cfe32cbba9f6365c5cd48330eeb86523b260e4bed3a380052d9d8781ce692",
+        "receiptOk": true
+      }
+    ],
+    "programAndProfile": "Actual classify and repair Tasks plus both publication rounds completed; new profiles exited0 and logged pipelineRevision=repaired with sourceSha256=9e67a2669adfc8ccf4ab90770cca91ec9323a05b596cee2e46fc8b320ca4ffb4."
+  },
+  "cause": {
+    "responsibility": "RFC396 production current-evidence projection",
+    "path": [
+      "composeGraphDevelopment.currentEvidenceTarget reads care continuation after publication",
+      "candidates.derive requires a nonempty delta against the now-advanced baseline",
+      "actual clean workspace returns candidate-empty",
+      "currentEvidenceTarget maps every unsuccessful derive to candidateTreeOid=null",
+      "projectGraphEvidence compares valid execution tree against null and marks it stale"
+    ],
+    "sourceAnchorsAtSourceSha": [
+      "packages/backend/src/modules/development-automation/composition/graphDevelopment.ts:235-249",
+      "packages/backend/src/modules/source-control/application/changeCandidate.ts:309-314",
+      "packages/backend/src/modules/development-automation/domain/graph-development/evidence.ts:23-25"
+    ],
+    "inferredFreshnessReason": "different-candidate-content",
+    "reasonEvidenceBoundary": "The failed assertion directly observed stale. Node fetch response bodies were not stored in Playwright trace; the reason string and null target are deterministic deductions from exact source plus observed DB/Git state, not captured HTTP fields."
+  },
+  "requiredRepair": "Read actual current tree through existing stage/cleanup participant, even with no delta. Preserve unreadable/changed-tree/profile/environment/read-set behavior; do not alter derive contract or substitute stored evidence for the live tree.",
+  "rawEvidence": [
+    {
+      "path": "/tmp/rfc396-care-repair-pipeline-tool-repair.log",
+      "sha256": "46f4e860bcd273aae271acfd55b03a8855257fda99cfa3cdd5ff4b7419ffc884"
+    },
+    {
+      "path": "/tmp/rfc396-care-repair-pipeline-tool-repair.json",
+      "sha256": "ce11b26dff84170dc904f2553d534c417e906da2e40ce03ce73f54d3261eb7d3"
+    },
+    {
+      "path": "/tmp/rfc396-care-repair-pipeline-tool-repair-provenance.json",
+      "sha256": "ae54ddff68da40bcff9567094a7b685f84f379f9c8cb72ee79676021755851da"
+    }
+  ],
+  "repairCandidate": {
+    "observedAt": "2026-10-24T04:40:48.634473+00:00",
+    "baseSha": "52d642b102bb7cab4f8907aeb31a3139a5604c49",
+    "paths": {
+      "packages/backend/src/modules/development-automation/composition/graphDevelopment.ts": "b82dc880e67ede4a39b275963967312c0f7784099c0be0cb58a2452761b8cc21",
+      "packages/backend/tests/rfc396-current-evidence.test.ts": "7e1f22d79d662aed300ad11ee577588acd8c7f196b7deb15662abe9e578e2567",
+      "packages/backend/tests/rfc396-current-evidence-git.test.ts": "b1f7bd1d971b2397ebca9900e3d6d6615421503b1c8e6b7e57d4015ab0306aa9"
+    },
+    "implementation": "Current target stages the live business tree and always cleans a successful stage. derive still rejects empty new delivery deltas. No stored-evidence fallback.",
+    "staticReview": "Independent function-only review passed; Prettier and ESLint passed on all three files.",
+    "sqliteRegression": {
+      "passed": 3,
+      "failed": 0,
+      "assertions": 61,
+      "durationSeconds": 2.89,
+      "bunVersion": "1.4.3",
+      "command": "AW_TEST_PROVIDERS=sqlite bun test --isolate ./tests/rfc396-current-evidence.test.ts ./tests/rfc396-current-evidence-git.test.ts",
+      "cwd": "packages/backend",
+      "logSha256": "26d7b1f51b3896dba76df9e6e59960d98e368a4309768534e7d3677ce1c53b86",
+      "output": "bun test v1.4.3 (c6da4a4d3)\n\ntests/rfc396-current-evidence.test.ts:\n(pass) evidence uses the approved exact profile revision instead of silently switching to the newest release [8.46ms]\n(pass) RFC-396 current workspace evidence projection [sqlite] > a repair invalidates the retained green result before a new verification, and cannot be accepted as the old tree [507.88ms]\n\ntests/rfc396-current-evidence-git.test.ts:\n(pass) RFC-396 published evidence uses the actual Git tree [sqlite] > baseline advancement preserves only matching evidence and later file, environment and design drift invalidate it [2150.67ms]\n\n 3 pass\n 0 fail\n 61 expect() calls\nRan 3 tests across 2 files. [2.89s]\n"
+    },
+    "pending": [
+      "exact-SHA hosted PostgreSQL and platform CI",
+      "same direct care E2E using new exact-SHA artifact",
+      "real enterprise and hosted acceptance"
+    ]
+  }
+}

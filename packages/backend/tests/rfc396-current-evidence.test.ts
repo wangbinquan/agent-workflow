@@ -76,6 +76,10 @@ describeEachProvider('RFC-396 current workspace evidence projection', (harness) 
     const { basis } = await f.commands.basis('design-a', preview.basis.id)
     const tree = 'c'.repeat(40)
     let currentTree = tree
+    let staging: 'ready' | 'failed' | 'throws' = 'ready'
+    let environmentUnavailable = false
+    let stagedCount = 0,
+      cleanupCount = 0
     const calls: unknown[] = []
     // Unused external boundaries deliberately have no implementation: this
     // exercises the production composition/query path without running a Task.
@@ -91,13 +95,29 @@ describeEachProvider('RFC-396 current workspace evidence projection', (harness) 
       workspace: {} as Input['workspace'],
       content: {} as Input['content'],
       candidates: {
-        async derive(input: unknown) {
+        async stage(input: unknown) {
           calls.push(input)
-          return { ok: true, receipt: { treeOid: currentTree } }
+          if (staging === 'throws') throw new Error('candidate workspace temporarily unavailable')
+          if (staging === 'failed')
+            return {
+              ok: false,
+              code: 'candidate-workspace-failed',
+              detail: 'candidate workspace temporarily unavailable',
+            }
+          stagedCount++
+          return {
+            ok: true,
+            treeOid: currentTree,
+            ws: '/tmp/rfc396-current-evidence/staged',
+            async cleanup() {
+              cleanupCount++
+            },
+          }
         },
       } as Input['candidates'],
       verification: {
         async environment() {
+          if (environmentUnavailable) throw new Error('environment temporarily unavailable')
           return { digest: 'e'.repeat(64), description: 'evidence fixture' }
         },
         create() {
@@ -208,8 +228,31 @@ describeEachProvider('RFC-396 current workspace evidence projection', (harness) 
         ),
       ).rejects.toThrow('graph-acceptance-candidate-mismatch')
       expect(await f.store.record('design-a', 'acceptance:late-acceptance')).toBeNull()
+      expect(cleanupCount).toBe(stagedCount)
+      currentTree = tree
+      // Neither a typed staging failure nor an unreadable workspace may fall
+      // back to the retained passing record's tree.
+      for (const failure of ['failed', 'throws'] as const) {
+        staging = failure
+        const unavailable = await graph.evidence('design-a')
+        expect(unavailable.evidence[0]?.freshness).toBe('stale')
+        expect(unavailable.obligations[0]?.state).toBe('pending')
+        expect(unavailable.candidate).toBeNull()
+        expect(cleanupCount).toBe(stagedCount)
+      }
+      staging = 'ready'
+      environmentUnavailable = true
+      const unreadableEnvironment = await graph.evidence('design-a')
+      expect(unreadableEnvironment.evidence[0]?.freshness).toBe('stale')
+      expect(unreadableEnvironment.obligations[0]?.state).toBe('pending')
+      expect(unreadableEnvironment.candidate).toBeNull()
+      // The environment read occurs after staging and must not leak that stage.
+      expect(cleanupCount).toBe(stagedCount)
+      environmentUnavailable = false
+      expect((await graph.evidence('design-a')).obligations[0]?.state).toBe('passed')
       spies[2]!.mockRejectedValue(new Error('workspace temporarily unavailable'))
       expect((await graph.evidence('design-a')).obligations[0]?.state).toBe('pending')
+      expect(cleanupCount).toBe(stagedCount)
     } finally {
       spies.forEach((spy) => spy.mockRestore())
     }

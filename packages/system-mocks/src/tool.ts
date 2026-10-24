@@ -11,4 +11,10 @@ else if (
   command === '--observe-approval'
 ) {
   await import('./development/approval-adapter-cli')
+} else if (
+  command === '--collect-pipeline' ||
+  command === '--trigger-pipeline' ||
+  command === '--rerun-pipeline'
+) {
+  await import('./development/pipeline-adapter-cli')
 } else await import('./scip/cli')
