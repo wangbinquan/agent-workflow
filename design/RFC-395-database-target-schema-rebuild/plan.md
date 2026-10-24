@@ -604,6 +604,32 @@ V2 覆盖 migration §4 的全部规则与 222 张源表，规模大，拆为公
 - 澄清答案与草稿表加 `occurrence`；detached 挂载的 `base_branch` 可为 NULL 或等于 `base_commit`；`requested_source` 无损记录请求事实。三项见 design §6.1、§4 的更正。
 - 每个任务补一行 generation 0。FK 与行规则在 V3 装载时延后，激活前全量校验。测试用冻结的原始行写入器构造 epoch-1 数据，不用 A1 builder。
 
+#### V3 分解（2026-10-24）
+
+V3（迁移运行与切换）拆为一个合同包与三个并行包，文件互不相交；全部休眠，由 A 接线：
+
+| 包 | 内容 | 主要落点 |
+| --- | --- | --- |
+| V3-K 合同 | 切换状态机与 journal、plan / 激活 / 切换 / 撤回回执的 schema，全部端口，迁移元数据表声明（SQLite `aw_meta_*`、PostgreSQL `agent_workflow_meta`），平台机制类型，V3 测试 harness 与休眠守卫；以及 V2 的「操作者决定」入口（见下文用户决定第 1 条） | `modules/system-operations/{domain,application,infrastructure}/…epochSwitch`、`public/epochSwitch.ts`、`platform/persistence/migration/run/` |
+| V3-R 运行回执与目标库 | 目标库按头合同安装（转换路径不套种子）、装载、`ConversionSink` 与元数据存储、延后约束的收尾与 identity 高水位、校验、回执导出、`db migration trace` | `platform/persistence/migration/target/`、system-operations 的适配器 |
+| V3-F 冻结源、备份与内容 | 各类源的打开（含离线升级与旧 epoch 备份）、切换备份、冻结时的内容清单与 `ContentInventory`、PostgreSQL 目标 / 临时库预检 | `platform/persistence/migration/freeze/`、`platform/content/inventory/` |
+| V3-S 切换与入口 | 状态机运行器、计划与批准、静默与冻结、激活 / 撤回 / 完成、CLI、bootstrap 装配、托管 Job 入口、启动分类、旧 epoch 备份恢复 | `modules/system-operations/…/epochSwitch/`、`bootstrap/epochMigration*.ts`、`cli/epochMigration.ts` |
+
+顺序：V3-K → V3-R ∥ V3-F ∥ V3-S。单机切换的唯一提交点是原子替换 pointer v2；首次业务写入之前可按激活回执撤回，之后拒绝撤回（migration §7）。
+
+**用户决定（2026-10-24，均按推荐）**：
+
+1. 已退役、无法再推进的未完成旧代码工作：由操作者逐项显式确认后归档。确认绑定行摘要，记录确认人、时间与原因；确认归档进历史包，并列入计划与回执。未确认的仍阻塞，不属于静默删除。
+2. 托管（CrewStation）：本仓先实现迁移、验证与旧 epoch 恢复三个 Job 入口及其环境变量契约。平台侧（冻结、开空目标库、源库只读访问、展示计划供批准、验证 Job、切换与回退）另在 CrewStation 落地，真实托管迁移前两侧联调。
+3. 单机切换是离线 CLI 操作：`run` 用现有 stop 协议优雅停止 daemon（超时不强杀，按可重试失败处理），窗口内 API 与 webhook 不可达，不做维护页面。
+4. 其余按推荐默认：
+   - PostgreSQL 目标库由操作者预建空库，以环境变量名引用，不改 `config.json`；
+   - 用在线快照生成计划并批准一次，实际转换与计划有实质差异时才需重新批准；
+   - `run` 停在 activated，并打印撤回指引；
+   - 旧 epoch 备份仅离线恢复，恢复数据库与 `skills/`，`config.json` 需显式参数才恢复；
+   - 源库、备份与迁移元数据不自动删除，显式 compact 才清理；
+   - 切换备份是操作根下的目录，回退到 epoch 1 时使用保留的源库。
+
 #### 休眠包与共享账本
 
 休眠包（R1、R2、V1 及后续各包）不修改共享账本：`architecture/counts.json`、`architecture/guard-manifest.json`、provider 分叉、同文件孪生、T18 / T19d / T19f、RFC-376 基线，以及被审消费方清单。这些文件常被其他会话整文件提交，未提交的条目会指向不存在的文件。各包在报告中列出所需条目，由 T18 统一登记；休眠文件的「不可达」由 A 接线消解，不登记。
@@ -640,3 +666,5 @@ V2 覆盖 migration §4 的全部规则与 222 张源表，规模大，拆为公
     - writer drain 像 D3 一样复现启动时的 `activate()` 判定；
     - v0.19.2 技能文本去掉 BOM、却按原长度记 size 的已知缺陷按已知形状转换，不阻塞。
   - 待用户决定（V3 设计时提出）：没有接管途径、旧写者又已退役的未完成旧代码工作，按 design §9 会永久阻塞。拟在迁移运行中提供「操作者逐项显式确认」的输入，确认后归档并在回执中记录确认，不属于静默删除。
+- 2026-10-24：V2-core C 完成：两侧端到端集成用例覆盖 222 表、227 形状、按样本比例合成的 89 个在途任务、D4 阻塞矩阵、旧版本前缀经离线升级的整链、PostgreSQL 与逻辑工件源、丢失确认后的重跑。各包的 T18 账本条目已汇总为一份清单。V2 全部写完，用例待 T18 执行。
+- 2026-10-24：V3 分解完成；用户决定见上文「V3 分解」（含上一条待定事项：批准显式逐项确认）。V3-K 开发中。
