@@ -1,0 +1,312 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+  "scope": "Readiness/setup evidence only. No graph@2 real-model enterprise Case or MR has been created.",
+  "fixture": {
+    "observedAt": "2026-10-24T04:54:42.202743+00:00",
+    "projectId": 571,
+    "baseSha": "370e6f922a40d698e526696633c145879c6afb16",
+    "sha": "ca31e64357ff94497834367815ce69ecfa08f391",
+    "title": "test: prepare RFC396 graph MR and real CI repair acceptance",
+    "webUrl": "http://127.0.0.1:8929/crewstation/rfc396-hosted-fixture/-/commit/ca31e64357ff94497834367815ce69ecfa08f391",
+    "createdPaths": [".gitlab-ci.yml", "ci/check-contract.cjs", "RFC396-ACCEPTANCE.md"],
+    "ciLint": {
+      "valid": true,
+      "warnings": []
+    },
+    "scope": "Only existing owned fictional business project571; retain README and all prior content. Initial absent manifest is explicit fault injection."
+  },
+  "baselineCi": {
+    "observedAt": "2026-10-24T05:00:20.187969+00:00",
+    "projectId": 571,
+    "fixtureSha": "ca31e64357ff94497834367815ce69ecfa08f391",
+    "pipelines": [
+      {
+        "pipeline": {
+          "id": 285,
+          "sha": "ca31e64357ff94497834367815ce69ecfa08f391",
+          "ref": "main",
+          "status": "success",
+          "source": "push",
+          "web_url": "http://127.0.0.1:8929/crewstation/rfc396-hosted-fixture/-/pipelines/285"
+        },
+        "jobs": [
+          {
+            "id": 1155,
+            "name": "verify-business-and-package",
+            "status": "success",
+            "failure_reason": null,
+            "started_at": "2026-10-24T04:59:47.166Z",
+            "finished_at": "2026-10-24T04:59:49.410Z",
+            "runnerId": 2
+          }
+        ]
+      }
+    ]
+  },
+  "preparation": {
+    "observedAt": "2026-10-24T05:20:30.490895+00:00",
+    "headSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+    "prepareSha256": "95b150a3dbcca5e1fcf6cb8864bc8d6b428cc05ee7b79ea7cfea48edbee6d4c3",
+    "attempts": [
+      {
+        "phase": "initial-runtime-read",
+        "error": "runtime response envelope incorrectly treated as array",
+        "attribution": "temporary acceptance preparation script; corrected"
+      },
+      {
+        "phase": "initial-repository-import",
+        "batchId": "01M5P56KNFGCQE37HTMX6SYVJ7",
+        "error": "repo-clone-failed; Git password not provided by temporary preparation script",
+        "attribution": "temporary acceptance preparation script; corrected with explicit original-row retry support"
+      },
+      {
+        "phase": "corrected-preparation-with-explicit-retry",
+        "error": "GitLab GET /projects/571: HTTP 500",
+        "exitCode": 1,
+        "importRetrySent": false,
+        "caseCreated": false,
+        "attribution": "current API availability; no confirmed shared cause with hosted storage"
+      }
+    ],
+    "state": {
+      "codeHostConfigured": true,
+      "importBatchId": "01M5P56KNFGCQE37HTMX6SYVJ7",
+      "importRetryAttempt": null,
+      "repositoryId": null,
+      "employeeId": null,
+      "caseCreatedFileExists": false
+    }
+  },
+  "latestGitLabObservation": {
+    "observedAt": "2026-10-24T05:41:17.158316+00:00",
+    "ready": false,
+    "requests": [
+      {
+        "path": "/projects/571",
+        "status": 500
+      }
+    ],
+    "watchPid": 11136
+  },
+  "stoppedRuntime": {
+    "headSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+    "artifactSha256": "1e9d81a18faf566eef34a8f0eb8667735025f7f7327422630020b28fc083c565",
+    "model": "opencode-go/deepseek-v4.1-flash",
+    "home": "/tmp/rfc396-enterprise/home-SCaPdq",
+    "state": "stopped",
+    "startedAt": "2026-10-24T05:09:10.025Z",
+    "stoppedAt": "2026-10-24T05:21:29.451Z"
+  },
+  "stoppedRunner": {
+    "session": "4a7626e998684643a4ca1f379b8a75e0",
+    "status": "stopped",
+    "controllerPid": 8414,
+    "runnerPid": 8415,
+    "runnerId": 2,
+    "projectId": 571,
+    "startedAt": "2026-10-24T04:59:46.870990+00:00",
+    "maxSeconds": 3600,
+    "cleanupBoundSeconds": 20,
+    "logPath": "/private/tmp/rfc396-enterprise/runner/logs/runner-4a7626e998684643a4ca1f379b8a75e0.log",
+    "finishedAt": "2026-10-24T05:21:26.044979+00:00",
+    "reason": "stop-request",
+    "runnerExitCode": 0,
+    "elapsedSeconds": 1299.186
+  },
+  "hosted": {
+    "observationWindowUtc": ["2026-10-24T04:47:58Z", "2026-10-24T04:50:00Z"],
+    "scope": {
+      "projectId": "01a16258-52b4-7000-8510-afa1ee567504",
+      "serviceId": "01a16258-52b4-7001-a23f-ab6109ec10ce",
+      "taskId": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+      "namespace": "cs-rfc396-graph-acceptance"
+    },
+    "http": [
+      {
+        "name": "project",
+        "url": "http://console.cs.localhost/v1/projects/01a16258-52b4-7000-8510-afa1ee567504",
+        "status": 200,
+        "bodyBytes": 335
+      },
+      {
+        "name": "service",
+        "url": "http://console.cs.localhost/v1/services/01a16258-52b4-7001-a23f-ab6109ec10ce",
+        "status": 200,
+        "bodyBytes": 380
+      },
+      {
+        "name": "releases",
+        "url": "http://console.cs.localhost/v1/services/01a16258-52b4-7001-a23f-ab6109ec10ce/releases",
+        "status": 200,
+        "bodyBytes": 5989
+      },
+      {
+        "name": "task-parent",
+        "url": "http://console.cs.localhost/v1/admin/business-execution/tasks/01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+        "status": 200,
+        "bodyBytes": 600214
+      },
+      {
+        "name": "hosted-execution",
+        "url": "http://rfc396-graph-acceptance.cs.localhost/api/execution/status",
+        "status": 503,
+        "bodyBytes": 20
+      },
+      {
+        "name": "hosted-maintenance",
+        "url": "http://rfc396-graph-acceptance.cs.localhost/api/maintenance/status",
+        "status": 503,
+        "bodyBytes": 20
+      },
+      {
+        "name": "hosted-types",
+        "url": "http://rfc396-graph-acceptance.cs.localhost/api/digital-employees/types",
+        "status": 503,
+        "bodyBytes": 20
+      }
+    ],
+    "service": {
+      "readyReleaseId": "01a164f2-b7a0-7000-8caf-c3a9d1f2d8ec",
+      "gitlabCommitSha": "eea8eda466c0a7afa739153e74e6c926fe2690cb",
+      "sourceCommitFromReleaseMessage": "67795ed462db9b78cea82fad5ae14c9d09bbca91",
+      "releaseRecordStatus": "ready",
+      "image": "registry.crewstation-system.svc.cluster.local:5000/rfc396-graph-acceptance@sha256:48b6900402c2874e3c3efdbb5869557e7fe9582e39bf47eb74d2e3fa49ed0321",
+      "pod": "rfc396-graph-acceptance-green-7c579d49cb-9xwpv",
+      "podReady": false,
+      "restartCount": 128,
+      "containerState": {
+        "waiting": {
+          "message": "back-off 5m0s restarting failed container=rfc396-graph-acceptance-green pod=rfc396-graph-acceptance-green-7c579d49cb-9xwpv_cs-rfc396-graph-acceptance(3fefc1b3-10a2-40bd-9fd8-65df57ec548e)",
+          "reason": "CrashLoopBackOff"
+        }
+      },
+      "lastTermination": {
+        "terminated": {
+          "containerID": "containerd://c7b2ad0eb22d95b5e60dc7b9c8f95fc8f09979cd1998b89935444e80957bf54a",
+          "exitCode": 1,
+          "finishedAt": "2026-10-24T04:47:01Z",
+          "reason": "Error",
+          "startedAt": "2026-10-24T04:43:33Z"
+        }
+      },
+      "volumeMountCount": 0,
+      "readyEndpoints": 0
+    },
+    "taskParent": {
+      "id": "01a16306-bf25-7000-b9e2-0ed0ae73e2e9",
+      "state": "running",
+      "generation": 1,
+      "actualImage": "registry.crewstation-system.svc.cluster.local:5000/runtime/rfc396/graph-acceptance@sha256:619d990b9b04b18d47378f8ef048f5663cbd7ca17fe52c7b5b38563eef737d91",
+      "podReady": true,
+      "restartCount": 0,
+      "nonterminalSubtasks": [
+        {
+          "id": "01a1633d-271d-7000-91be-8d1d49c19491",
+          "state": "pending",
+          "createdAt": "2026-10-22T10:51:54.525Z"
+        },
+        {
+          "id": "01a16345-b9ed-7000-bad5-4391a33805f6",
+          "state": "pending",
+          "createdAt": "2026-10-22T11:01:16.397Z"
+        },
+        {
+          "id": "01a16394-38b9-7000-ba4d-828595e98514",
+          "state": "pending",
+          "createdAt": "2026-10-22T12:27:00.665Z"
+        },
+        {
+          "id": "01a16483-b978-7000-93d2-6500782bffc0",
+          "state": "pending",
+          "createdAt": "2026-10-22T16:48:36.728Z"
+        },
+        {
+          "id": "01a166fa-19ce-7000-b3b5-c2b2f3d3d0b0",
+          "state": "pending",
+          "createdAt": "2026-10-23T04:17:09.070Z"
+        },
+        {
+          "id": "01a16713-9848-7000-919b-1ac724118668",
+          "state": "pending",
+          "createdAt": "2026-10-23T04:44:59.848Z"
+        },
+        {
+          "id": "01a16726-1b3e-7000-834c-8b1296496a8b",
+          "state": "pending",
+          "createdAt": "2026-10-23T05:05:13.022Z"
+        }
+      ]
+    },
+    "storage": {
+      "claim": "task-01a16306bf257000b9e20ed0ae73e2e9-work",
+      "phase": "Bound",
+      "requestedCapacity": "2Gi",
+      "reportedCapacity": "2Gi",
+      "storageClassName": "standard",
+      "actualOwnedMountDf": "Filesystem     1024-blocks      Used Available Capacity Mounted on\noverlay          239128548 226952908         0     100% /\n/dev/vda1        239128548 226952908         0     100% /work\n/dev/vda1        239128548 226952908         0     100% /var/lib/crewstation/business-execution\n",
+      "availableKiB": 0,
+      "scopeOfMeasurement": "Only /, /work and /var/lib/crewstation/business-execution in the exact owned task-parent Pod. Shared backing-filesystem capacity is not PVC-exclusive usage.",
+      "ownedPvcEvents": []
+    },
+    "functionalLogEvidence": [
+      "2026-10-24T04:43:43.962102175Z [2026-10-24T04:43:43.961Z] INFO  [daemon] listening url=http://0.0.0.0:3000/ databaseProvider=postgresql",
+      "2026-10-24T04:44:10.692068756Z [2026-10-24T04:44:10.691Z] WARN  [daemon] lifecycle step id=workspace-maintenance-recovery phase=execution-recovery outcome=failed durationMs=20438 error=\"WorkspaceCommandStoppedError: workspace command exited: workspace helper could not record its outcome: ENOSPC: no space left on device, write\\nENOSPC: ENOSPC: no space left on device, write\\n\"",
+      "2026-10-24T04:47:01.188388460Z [2026-10-24T04:47:01.188Z] WARN  [crewstation-execution-authority] crewstation execution lease lost reason=platform-unreachable",
+      "2026-10-24T04:47:01.188731794Z [2026-10-24T04:47:01.188Z] INFO  [daemon] shutting down signal=execution-authority-standby databaseProvider=postgresql"
+    ],
+    "blockers": [
+      {
+        "code": "owned-mount-filesystem-full",
+        "evidence": "04:49:43 UTC df -Pk in the owned task-parent Pod reports Available 0 and Capacity 100% for /, /work and business-execution mount. The current service log also reports ENOSPC while recording workspace helper outcome.",
+        "effect": "No demonstrated headroom for build, image unpacking, task output or graph evidence; changing the declared 2Gi PVC capacity alone does not establish free bytes."
+      },
+      {
+        "code": "hosted-service-unavailable",
+        "evidence": "Authenticated hosted GETs returned 503; service Pod is not Ready with restartCount 128 and no ready endpoint. Last termination followed execution lease renewal failures and platform-unreachable lease loss.",
+        "effect": "Cannot currently read graph types/config or run the hosted acceptance. The control-plane 200 response is not application readiness."
+      },
+      {
+        "code": "service-and-task-runtime-old",
+        "evidence": "Service image still 48b69004 (release source 67795ed4); task parent generation 1 actual image still 619d990b. Neither is dfc098c33b3ff94300cf217d9a09298792617a8f.",
+        "effect": "Need exact-candidate service plus task runtime publication and actual parent image confirmation; a profile declaration alone cannot establish upgrade."
+      }
+    ]
+  },
+  "sourceReceipts": [
+    {
+      "path": "/tmp/rfc396-enterprise/fixture-publication.json",
+      "sha256": "53f4f92d92b81f7e4236546dbed33edd644539f71b0112fe959a90c94acaaa00"
+    },
+    {
+      "path": "/tmp/rfc396-enterprise/fixture-ci-status.json",
+      "sha256": "de2684261fd00f201635d8670d94439d5dff075d8f3dd777bfa08585ba059b62"
+    },
+    {
+      "path": "/tmp/rfc396-enterprise/prepare-execution-history.json",
+      "sha256": "2be1d45cb710d317e8e5e919957318e05f0112b49580e679258ac98ef2667c47"
+    },
+    {
+      "path": "/tmp/rfc396-enterprise/readiness-watch.json",
+      "sha256": "ac4004b79a7f2735ba5ebaa5315ff25a006d8c38869eb5263ecf66133d81aed6"
+    },
+    {
+      "path": "/tmp/rfc396-enterprise/runner/run-control.json",
+      "sha256": "7b94cf8f62e48bb0d1409d6c567b6ec078c6859d1401ddd439a31b12eefeb609"
+    },
+    {
+      "path": "/tmp/rfc396-hosted-r23-readiness.json",
+      "sha256": "6e56c29aaec4bdd1e83b2d4e7eaab00d74f462f3088aec06348e5aef678a0a88"
+    }
+  ],
+  "remaining": [
+    "Windows profile output/complete care acceptance",
+    "Real graph@2 model/native approval/MR/CI failure/repair/same MR/new head/terminal journey",
+    "Exact-candidate hosted service and actual task image, execution and default recovery"
+  ],
+  "limits": [
+    "Baseline success is not model/MR acceptance.",
+    "GitLab HTTP500 has not been proved to share the hosted storage root cause.",
+    "No service or task upgrade, environment cleanup, DB edits, or new business Case were performed."
+  ]
+}

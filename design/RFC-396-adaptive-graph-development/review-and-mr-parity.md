@@ -4,7 +4,9 @@
 
 ## 1. 当前结论与证据边界
 
-2026-10-23 接续的真实care补例发现R23：CI采集、分类、实际修复Task、重新执行profile和同MR新head均已发生，但新树的通过记录被当前投影误标过期。准确2e的实际DB/Git/原始回执与因果链见[诊断](./graph-care-projection-diagnostic-2026-10-23.json)。这是本RFC生产缺陷，不能放宽freshness断言。R23 修复已改为通过既有 stage 读取当前真实树，并在 finally 中清理；独立功能静态复核通过，Bun 1.4.3 的 SQLite 集中回归 3 pass / 0 fail、61 assertions（2.89s）。首次及修复发布后无差异保持 current，旧树、实际文件漂移、环境/读集变化和不可读取场景均保留失效断言。PostgreSQL、三平台 CI 与新准确 artifact 的 care 完整旅程仍待本轮候选发布后验证。
+2026-10-24 05:29 UTC：R23修复已随`dfc098c33`发布。本地3/0、61断言，准确CI的SQLite2/PostgreSQL2/纯合同1，以及同artifact的完整care旅程1/0均通过；新树current、旧树stale保持原断言，见[接受记录](./graph-care-repair-acceptance-2026-10-23.json)。原始2e错误因果仍保留于[诊断](./graph-care-projection-diagnostic-2026-10-23.json)。
+
+准确CI整体46成功/3失败：五个图E2E在Ubuntu/macOS各5个首轮通过，Windows新care却两次停在首次profile输出证明，尚未进入修复段；Booking重试通过。源码与日志目前指向Windows执行/输出差异，但还没有本次文件重定向的A/B实证，历史执行器代码也不是本会话引入，未代改。[CI记录](./r23-ci-acceptance-2026-10-23.json)保留事实及归因边界。真实GitLab完整MR/CI和新版托管接受仍开放，不能以原共享系统分段证明替代。
 
 本轮起点 `main@4aadd9169ff9429ad457793208373b2ca6bfa6cd`。`graph-development@1` 的 `deliver-result` 只形成内部候选提交、可选推送分支，随后 terminal / graph-development.delivered，既没有创建 MR，也没有进入看护。这不是原研发数字人的完整交付能力。此前三个真实模型案例、托管候选和 CI 通过证据仍有效，但其结论范围只到当时的内部候选交付；不得外推为 MR 生命周期通过。
 

@@ -1,0 +1,784 @@
+{
+  "schemaVersion": 1,
+  "rfc": "RFC-396",
+  "sourceSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+  "compiledAt": "2026-10-24T05:37:22.432467+00:00",
+  "scope": "Archive existing exact-SHA CI metadata and functional log evidence only. No new CI queries, downloads, workflow runs, tests, or source changes were performed for this record. Static scans logs/findings were not read.",
+  "sourceEvidence": [
+    {
+      "path": "/tmp/rfc396-r23-main-ci.json",
+      "sha256": "f5db7dc714fe4276e38b2c45047c9e522551d573fe520ffe51f827f0d2007122"
+    },
+    {
+      "path": "/tmp/rfc396-r23-aux-ci.json",
+      "sha256": "dbaf192469aa92a5bc89b99376ddfcec44808a11b84937dd4e51f1d496d50c20"
+    },
+    {
+      "path": "/tmp/rfc396-r23-ci-functional-logs/index.json",
+      "sha256": "0028309e3024da97f9ed29c3ca25fcce3a9dfdc4bb8ba5570dacbb473b16c834"
+    },
+    {
+      "path": "/tmp/rfc396-r23-ci-functional-logs/rfc396-e2e-index.json",
+      "sha256": "6e0ab38cd8fd88857dce96effad498d1e9cb3aa9bfe5c0fc81debc348de876fb"
+    },
+    {
+      "path": "/tmp/rfc396-r23-ci-functional-logs/rfc396-care-windows-trace-evidence.json",
+      "sha256": "212b131e7075a370b0260dc085f3417d5049dc8be5d0d8c3b850da7c82474052"
+    }
+  ],
+  "mainCi": {
+    "runId": 40063460648,
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648",
+    "headSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+    "observedAt": "2026-10-24T05:20:16Z",
+    "status": "completed",
+    "conclusion": "failure",
+    "counts": {
+      "success": 46,
+      "failure": 3,
+      "pending": 0,
+      "total": 49
+    },
+    "failedJobs": [
+      {
+        "id": 120781682811,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "failure",
+        "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120781682811",
+        "evidenceScope": "metadata only; no logs/findings or responsibility conclusion"
+      },
+      {
+        "id": 120784291238,
+        "name": "Playwright e2e (windows-latest shard 3/4)",
+        "conclusion": "failure",
+        "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120784291238",
+        "evidenceScope": "functional job log"
+      },
+      {
+        "id": 120787932491,
+        "name": "CI required",
+        "conclusion": "failure",
+        "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120787932491",
+        "evidenceScope": "derived required-check aggregate"
+      }
+    ],
+    "allFunctionalJobsPassed": false
+  },
+  "e2e": {
+    "summary": {
+      "targetTitles": 5,
+      "files": ["e2e/rfc396-graph-development.spec.ts", "e2e/rfc396-graph-care-repair.spec.ts"],
+      "ubuntu": {
+        "passed": 5,
+        "failed": 0,
+        "flaky": 0,
+        "jobId": 120782014121
+      },
+      "macos": {
+        "passed": 5,
+        "failed": 0,
+        "flaky": 0,
+        "jobId": 120782456912
+      },
+      "windows": {
+        "passed": 3,
+        "failed": 1,
+        "flaky": 1,
+        "jobId": 120784291238,
+        "finalStatus": "failure"
+      },
+      "completedE2eJobLogsRead": 10,
+      "durations": "Exact displayed Playwright values retained; minute values are rounded by the reporter, not exact seconds.",
+      "acceptanceBoundary": "All ten E2E job logs collected. RFC396 Windows care failed; booking was flaky. Main CI is not green, and these tests do not replace separate real GitLab571 acceptance.",
+      "allPlatforms": {
+        "passed": 13,
+        "failed": 1,
+        "flaky": 1,
+        "totalTargetResults": 15
+      }
+    },
+    "terminalWindowsJobObservedAt": "2026-10-24T05:21:09.616010+00:00",
+    "fixtureBoundary": "Production daemon, Git, Case, task execution and browser interactions run in these tests. Model, code host and pipeline are fixtures; this evidence does not replace enterprise GitLab/CI or real-model acceptance.",
+    "sourceJobs": [
+      {
+        "jobId": 120782014121,
+        "name": "Playwright e2e (ubuntu-latest shard 2/3)",
+        "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782014121",
+        "conclusion": "success",
+        "path": "/tmp/rfc396-r23-ci-functional-logs/120782014121.log",
+        "sha256": "bb26d6239e4b6ef98c9ce23a3693e6a2a2ee25ca5036d57cb250e8149e0556dc",
+        "summaryLines": [
+          {
+            "line": 637,
+            "text": "2026-10-24T05:03:21.1724620Z   9 skipped"
+          },
+          {
+            "line": 638,
+            "text": "2026-10-24T05:03:21.1725035Z   168 passed (9.0m)"
+          },
+          {
+            "line": 639,
+            "text": "2026-10-24T05:03:21.1746320Z ##[notice]  9 skipped"
+          },
+          {
+            "line": 640,
+            "text": "  168 passed (9.0m)"
+          }
+        ]
+      },
+      {
+        "jobId": 120782456912,
+        "name": "Playwright e2e (macos-latest shard 2/3)",
+        "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782456912",
+        "conclusion": "success",
+        "path": "/tmp/rfc396-r23-ci-functional-logs/120782456912.log",
+        "sha256": "06f80ca73fc2c14d08a4245596bf4906d84b36a76e0dc80bfcb137a81a367afb",
+        "summaryLines": [
+          {
+            "line": 470,
+            "text": "2026-10-24T05:06:53.2168210Z   9 skipped"
+          },
+          {
+            "line": 471,
+            "text": "2026-10-24T05:06:53.2169060Z   168 passed (11.8m)"
+          },
+          {
+            "line": 472,
+            "text": "2026-10-24T05:06:53.2486260Z ##[notice]  9 skipped"
+          },
+          {
+            "line": 473,
+            "text": "  168 passed (11.8m)"
+          }
+        ]
+      },
+      {
+        "jobId": 120784291238,
+        "name": "Playwright e2e (windows-latest shard 3/4)",
+        "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120784291238",
+        "conclusion": "failure",
+        "path": "/tmp/rfc396-r23-ci-functional-logs/120784291238.log",
+        "sha256": "1bf074d7a6c0b5214a5eef2197cbf2cfa097065a8e77e1592a5dceef47057b7f",
+        "summaryLines": [
+          {
+            "line": 659,
+            "text": "2026-10-24T05:15:32.6010232Z   1 failed"
+          },
+          {
+            "line": 661,
+            "text": "2026-10-24T05:15:32.6011711Z   3 flaky"
+          },
+          {
+            "line": 665,
+            "text": "2026-10-24T05:15:32.6015332Z   130 passed (17.5m)"
+          },
+          {
+            "line": 666,
+            "text": "2026-10-24T05:15:32.6025293Z ##[notice]  1 failed"
+          },
+          {
+            "line": 668,
+            "text": "  3 flaky"
+          },
+          {
+            "line": 672,
+            "text": "  130 passed (17.5m)"
+          }
+        ],
+        "failedSteps": [
+          {
+            "name": "Run e2e (shard 3/4)",
+            "status": "completed",
+            "conclusion": "failure",
+            "number": 11,
+            "started_at": "2026-10-24T04:57:56Z",
+            "completed_at": "2026-10-24T05:15:32Z"
+          }
+        ]
+      }
+    ],
+    "tests": [
+      {
+        "key": "booking",
+        "title": "RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge",
+        "observations": [
+          {
+            "jobId": 120782014121,
+            "jobName": "Playwright e2e (ubuntu-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782014121",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782014121.log",
+            "os": "ubuntu-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.2m",
+                "line": 629,
+                "rawLine": "2026-10-24T05:01:34.1813950Z   ✓  155 [chromium] › e2e/rfc396-graph-development.spec.ts:836:1 › RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge (1.2m)"
+              }
+            ]
+          },
+          {
+            "jobId": 120782456912,
+            "jobName": "Playwright e2e (macos-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782456912",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782456912.log",
+            "os": "macos-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.1m",
+                "line": 459,
+                "rawLine": "2026-10-24T05:04:01.8018330Z   ✓  156 [chromium] › e2e/rfc396-graph-development.spec.ts:836:1 › RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge (1.1m)"
+              }
+            ]
+          },
+          {
+            "jobId": 120784291238,
+            "jobName": "Playwright e2e (windows-latest shard 3/4)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120784291238",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120784291238.log",
+            "os": "windows-latest",
+            "result": "flaky",
+            "failedAttempts": 1,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "failed",
+                "attempt": 1,
+                "reportedDuration": "4.3m",
+                "line": 425,
+                "rawLine": "2026-10-24T05:07:05.2456418Z   x   58 [chromium] › e2e\\rfc396-graph-development.spec.ts:836:1 › RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge (4.3m)"
+              },
+              {
+                "result": "passed",
+                "attempt": 2,
+                "reportedDuration": "4.2m",
+                "line": 490,
+                "rawLine": "2026-10-24T05:11:49.0380231Z   ok  99 [chromium] › e2e\\rfc396-graph-development.spec.ts:836:1 › RFC-396 booking journey adapts graphs, publishes the accepted candidate and observes MR merge (retry #1) (4.2m)"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "notification",
+        "title": "RFC-396 notification journey adapts graphs and observes MR close without merging",
+        "observations": [
+          {
+            "jobId": 120782014121,
+            "jobName": "Playwright e2e (ubuntu-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782014121",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782014121.log",
+            "os": "ubuntu-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.4m",
+                "line": 633,
+                "rawLine": "2026-10-24T05:02:55.5497906Z   ✓  174 [chromium] › e2e/rfc396-graph-development.spec.ts:845:1 › RFC-396 notification journey adapts graphs and observes MR close without merging (1.4m)"
+              }
+            ]
+          },
+          {
+            "jobId": 120782456912,
+            "jobName": "Playwright e2e (macos-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782456912",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782456912.log",
+            "os": "macos-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.6m",
+                "line": 466,
+                "rawLine": "2026-10-24T05:05:39.4492640Z   ✓  171 [chromium] › e2e/rfc396-graph-development.spec.ts:845:1 › RFC-396 notification journey adapts graphs and observes MR close without merging (1.6m)"
+              }
+            ]
+          },
+          {
+            "jobId": 120784291238,
+            "jobName": "Playwright e2e (windows-latest shard 3/4)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120784291238",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120784291238.log",
+            "os": "windows-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.8m",
+                "line": 521,
+                "rawLine": "2026-10-24T05:13:36.1863685Z   ok 142 [chromium] › e2e\\rfc396-graph-development.spec.ts:845:1 › RFC-396 notification journey adapts graphs and observes MR close without merging (1.8m)"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "existing-module",
+        "title": "RFC-396 existing-module journey preserves the interface and adds exception rules",
+        "observations": [
+          {
+            "jobId": 120782014121,
+            "jobName": "Playwright e2e (ubuntu-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782014121",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782014121.log",
+            "os": "ubuntu-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "21.4s",
+                "line": 634,
+                "rawLine": "2026-10-24T05:03:16.9107770Z   ✓  176 [chromium] › e2e/rfc396-graph-development.spec.ts:855:1 › RFC-396 existing-module journey preserves the interface and adds exception rules (21.4s)"
+              }
+            ]
+          },
+          {
+            "jobId": 120782456912,
+            "jobName": "Playwright e2e (macos-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782456912",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782456912.log",
+            "os": "macos-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.1m",
+                "line": 467,
+                "rawLine": "2026-10-24T05:06:44.9531120Z   ✓  176 [chromium] › e2e/rfc396-graph-development.spec.ts:855:1 › RFC-396 existing-module journey preserves the interface and adds exception rules (1.1m)"
+              }
+            ]
+          },
+          {
+            "jobId": 120784291238,
+            "jobName": "Playwright e2e (windows-latest shard 3/4)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120784291238",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120784291238.log",
+            "os": "windows-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.8m",
+                "line": 522,
+                "rawLine": "2026-10-24T05:15:24.0958879Z   ok 143 [chromium] › e2e\\rfc396-graph-development.spec.ts:855:1 › RFC-396 existing-module journey preserves the interface and adds exception rules (1.8m)"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "connected-diagrams",
+        "title": "RFC-396 connected diagrams select only their semantic nodes by mouse and keyboard",
+        "observations": [
+          {
+            "jobId": 120782014121,
+            "jobName": "Playwright e2e (ubuntu-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782014121",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782014121.log",
+            "os": "ubuntu-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "3.9s",
+                "line": 635,
+                "rawLine": "2026-10-24T05:03:21.0867742Z   ✓  177 [chromium] › e2e/rfc396-graph-development.spec.ts:868:1 › RFC-396 connected diagrams select only their semantic nodes by mouse and keyboard (3.9s)"
+              }
+            ]
+          },
+          {
+            "jobId": 120782456912,
+            "jobName": "Playwright e2e (macos-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782456912",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782456912.log",
+            "os": "macos-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "7.0s",
+                "line": 468,
+                "rawLine": "2026-10-24T05:06:52.8302740Z   ✓  177 [chromium] › e2e/rfc396-graph-development.spec.ts:868:1 › RFC-396 connected diagrams select only their semantic nodes by mouse and keyboard (7.0s)"
+              }
+            ]
+          },
+          {
+            "jobId": 120784291238,
+            "jobName": "Playwright e2e (windows-latest shard 3/4)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120784291238",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120784291238.log",
+            "os": "windows-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "7.3s",
+                "line": 523,
+                "rawLine": "2026-10-24T05:15:32.1377645Z   ok 144 [chromium] › e2e\\rfc396-graph-development.spec.ts:868:1 › RFC-396 connected diagrams select only their semantic nodes by mouse and keyboard (7.3s)"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "care-repair",
+        "title": "RFC-396 graph care hydrates approved material, repairs a real Task and re-verifies the same MR",
+        "observations": [
+          {
+            "jobId": 120782014121,
+            "jobName": "Playwright e2e (ubuntu-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782014121",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782014121.log",
+            "os": "ubuntu-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.6m",
+                "line": 632,
+                "rawLine": "2026-10-24T05:01:49.7439762Z   ✓  153 [chromium] › e2e/rfc396-graph-care-repair.spec.ts:392:1 › RFC-396 graph care hydrates approved material, repairs a real Task and re-verifies the same MR (1.6m)"
+              }
+            ]
+          },
+          {
+            "jobId": 120782456912,
+            "jobName": "Playwright e2e (macos-latest shard 2/3)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120782456912",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120782456912.log",
+            "os": "macos-latest",
+            "result": "passed",
+            "failedAttempts": 0,
+            "passedAttempts": 1,
+            "attempts": [
+              {
+                "result": "passed",
+                "attempt": 1,
+                "reportedDuration": "1.9m",
+                "line": 465,
+                "rawLine": "2026-10-24T05:04:39.3894270Z   ✓  153 [chromium] › e2e/rfc396-graph-care-repair.spec.ts:392:1 › RFC-396 graph care hydrates approved material, repairs a real Task and re-verifies the same MR (1.9m)"
+              }
+            ]
+          },
+          {
+            "jobId": 120784291238,
+            "jobName": "Playwright e2e (windows-latest shard 3/4)",
+            "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120784291238",
+            "logPath": "/tmp/rfc396-r23-ci-functional-logs/120784291238.log",
+            "os": "windows-latest",
+            "result": "failed",
+            "failedAttempts": 2,
+            "passedAttempts": 0,
+            "attempts": [
+              {
+                "result": "failed",
+                "attempt": 1,
+                "reportedDuration": "1.6m",
+                "line": 365,
+                "rawLine": "2026-10-24T05:04:17.2804127Z   x   57 [chromium] › e2e\\rfc396-graph-care-repair.spec.ts:392:1 › RFC-396 graph care hydrates approved material, repairs a real Task and re-verifies the same MR (1.6m)"
+              },
+              {
+                "result": "failed",
+                "attempt": 2,
+                "reportedDuration": "1.2m",
+                "line": 384,
+                "rawLine": "2026-10-24T05:06:04.9824526Z   x   71 [chromium] › e2e\\rfc396-graph-care-repair.spec.ts:392:1 › RFC-396 graph care hydrates approved material, repairs a real Task and re-verifies the same MR (retry #1) (1.2m)"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "currentEvidenceAndCli": {
+    "counts": {
+      "sqlitePassed": 2,
+      "postgresqlPassed": 2,
+      "providerIndependentPassed": 1,
+      "cliPassed": 1,
+      "failed": 0
+    },
+    "countingBoundary": "The provider-independent profile-revision assertion is counted once. PostgreSQL counts come from actual [postgresql] pass lines in backend shards 12/24 and 13/24, not from the separate real-PostgreSQL job status. These six results are the relevant new tests, not full RFC-396 or repository suite totals.",
+    "results": [
+      {
+        "jobId": 120781682694,
+        "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120781682694",
+        "testFile": "packages/backend/tests/rfc396-current-evidence-git.test.ts",
+        "provider": "postgresql",
+        "result": "passed",
+        "logPath": "/tmp/rfc396-r23-ci-functional-logs/120781682694.log",
+        "logSha256": "6ee42d8f1158065fc423a75d9caf5a95c7fde67117999f651531e5b64c3ce66d",
+        "line": 2094,
+        "rawLine": "2026-10-24T04:50:10.3192098Z (pass) RFC-396 published evidence uses the actual Git tree [postgresql] > baseline advancement preserves only matching evidence and later file, environment and design drift invalidate it [597.19ms]"
+      },
+      {
+        "jobId": 120781682694,
+        "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120781682694",
+        "testFile": "packages/backend/tests/rfc396-current-evidence-git.test.ts",
+        "provider": "sqlite",
+        "result": "passed",
+        "logPath": "/tmp/rfc396-r23-ci-functional-logs/120781682694.log",
+        "logSha256": "6ee42d8f1158065fc423a75d9caf5a95c7fde67117999f651531e5b64c3ce66d",
+        "line": 2095,
+        "rawLine": "2026-10-24T04:50:10.6915452Z (pass) RFC-396 published evidence uses the actual Git tree [sqlite] > baseline advancement preserves only matching evidence and later file, environment and design drift invalidate it [303.40ms]"
+      },
+      {
+        "jobId": 120781682753,
+        "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120781682753",
+        "testFile": "packages/backend/tests/rfc396-current-evidence.test.ts",
+        "provider": "provider-independent",
+        "result": "passed",
+        "logPath": "/tmp/rfc396-r23-ci-functional-logs/120781682753.log",
+        "logSha256": "49f3e2c073ac4b676ca935f5a70c4c7b2e9ab9eb7a1ae0348738202c7ffcfa4f",
+        "line": 2482,
+        "rawLine": "2026-10-24T04:55:39.1810951Z (pass) evidence uses the approved exact profile revision instead of silently switching to the newest release [1.82ms]"
+      },
+      {
+        "jobId": 120781682753,
+        "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120781682753",
+        "testFile": "packages/backend/tests/rfc396-current-evidence.test.ts",
+        "provider": "sqlite",
+        "result": "passed",
+        "logPath": "/tmp/rfc396-r23-ci-functional-logs/120781682753.log",
+        "logSha256": "49f3e2c073ac4b676ca935f5a70c4c7b2e9ab9eb7a1ae0348738202c7ffcfa4f",
+        "line": 2483,
+        "rawLine": "2026-10-24T04:55:40.0210862Z (pass) RFC-396 current workspace evidence projection [sqlite] > a repair invalidates the retained green result before a new verification, and cannot be accepted as the old tree [839.95ms]"
+      },
+      {
+        "jobId": 120781682753,
+        "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120781682753",
+        "testFile": "packages/backend/tests/rfc396-current-evidence.test.ts",
+        "provider": "postgresql",
+        "result": "passed",
+        "logPath": "/tmp/rfc396-r23-ci-functional-logs/120781682753.log",
+        "logSha256": "49f3e2c073ac4b676ca935f5a70c4c7b2e9ab9eb7a1ae0348738202c7ffcfa4f",
+        "line": 2484,
+        "rawLine": "2026-10-24T04:55:44.1602598Z (pass) RFC-396 current workspace evidence projection [postgresql] > a repair invalidates the retained green result before a new verification, and cannot be accepted as the old tree [357.41ms]"
+      },
+      {
+        "jobId": 120781682590,
+        "jobUrl": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648/job/120781682590",
+        "testFile": "packages/system-mocks/tests/rfc396-pipeline-tool-cli.test.ts",
+        "provider": "cli",
+        "result": "passed",
+        "logPath": "/tmp/rfc396-r23-ci-functional-logs/120781682590.log",
+        "logSha256": "0133b806f06f0749d56af15bc2f9f3603155095543efef014bf60c12155c26e8",
+        "line": 805,
+        "rawLine": "2026-10-24T04:49:49.0780090Z @agent-workflow/system-mocks test: (pass) RFC-396 tool CLI collects real pipeline logs and preserves trigger/rerun receipts [64.86ms]"
+      }
+    ]
+  },
+  "functionalAttribution": {
+    "careFailure": {
+      "kind": "final-failure",
+      "test": "care-repair",
+      "owner": "RFC396 new acceptance fixture/verifier integration",
+      "confidence": "High that this RFC introduced the failing new acceptance case; underlying command/output root cause remains unproven from the retained CI evidence.",
+      "introducedBy": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+      "sourcePath": "e2e/rfc396-graph-care-repair.spec.ts",
+      "sourceBlob": "b73e61a59832673cae8b13aea3bf133557ebbab1",
+      "existedInParent": false,
+      "actualError": "profileProof() found no line beginning RFC396_PROFILE_PROOF; expect(line, output).toBeTruthy() received undefined at593, invoked at601 for the initial verification.",
+      "failureLines": [365, 384, 385, 414, 526, 564],
+      "failedAttempts": [
+        {
+          "attempt": 1,
+          "reportedDuration": "1.6m"
+        },
+        {
+          "attempt": 2,
+          "reportedDuration": "1.2m"
+        }
+      ],
+      "stageReached": "The fixture-backed MR had been created; the initial verification receipt/baseline/tree/profile assertions passed before proof extraction failed. This is not a real enterprise GitLab acceptance result.",
+      "stageNotReached": "Windows failed at the initial profileProof call at spec:601; CI failure injection starts at spec:610, so care classification, repair and re-verification were not reached in either attempt.",
+      "traceEvidence": "/tmp/rfc396-r23-ci-functional-logs/rfc396-care-windows-trace-evidence.json",
+      "artifactResponseCaptured": false,
+      "networkEventsInspected": 92,
+      "sourceFacts": [
+        "The new fixture writes a Windows verify.cmd that invokes the shared Node verify.cjs.",
+        "profileProof reads retained execution.json then concatenates files with logs/ prefixes.",
+        "The application verification artifact producer names logs using logs/<index>-output-tail.txt.",
+        "At spec367 Windows selects programRef repo:verify.cmd; spec372 explicitly requests stdout-tail16384 bytes. The missing proof is not caused by omitting an output selector in the profile definition."
+      ],
+      "notProven": [
+        "Whether verify.cmd actually ran the Node verifier on Windows",
+        "Whether a stdout reference/file was absent, empty or unavailable",
+        "No artifact file.path or execution/log response body was captured in this Playwright trace."
+      ],
+      "recommendationBoundary": "Preserve the proof assertion and investigate the actual Windows command execution/output evidence; no timeout or assertion relaxation proposed.",
+      "sourceLineEvidence": {
+        "windowsWrapper": [53, 55],
+        "profileProgramAndOutput": [360, 373],
+        "profileProof": [566, 605],
+        "ciFailureInjectionBegins": 610
+      },
+      "outputEvidence": "The composed logs/ output was empty in the assertion message; the available evidence does not distinguish absent artifact entries, absent/empty captured output, or a verifier command that did not emit the marker.",
+      "fixed": false,
+      "traceBoundary": {
+        "artifactId": 12549540247,
+        "outerZip": "/tmp/rfc396-r23-ci-functional-logs/artifact-12549540247.zip",
+        "traceMember": "test-results/rfc396-graph-care-repair-R-779fa-and-re-verifies-the-same-MR-chromium-retry1/trace.zip",
+        "networkEventCount": 92,
+        "matchingArtifactResponses": [],
+        "boundary": "Inspected only care trace network events for evidence/artifacts GET. Did not expose request headers, cookies or unrelated response bodies.",
+        "artifactResponseCaptured": false,
+        "nodeGlobalFetchCapturedByBrowserTrace": false,
+        "unavailableFields": [
+          "artifact file.path",
+          "execution step exitCode",
+          "execution step timedOut",
+          "execution step durationMs",
+          "execution step outputTailRef",
+          "retained log contents"
+        ]
+      }
+    },
+    "bookingFlaky": {
+      "kind": "flaky",
+      "test": "booking",
+      "owner": "Root cause attribution unresolved",
+      "confidence": "Exact failure mode established; source/latency cause not established.",
+      "actualError": "First attempt timed out after90000ms waiting for merged/terminal. Case stayed waiting, terminalKind null and MR status active; the retry passed.",
+      "failureLines": [490, 519],
+      "attempts": [
+        {
+          "result": "failed",
+          "duration": "4.3m",
+          "line": 425
+        },
+        {
+          "result": "passed",
+          "duration": "4.2m",
+          "line": 490
+        }
+      ],
+      "sourcePath": "e2e/rfc396-graph-development.spec.ts",
+      "sourceComparison": {
+        "parentBlob": "4b329d8691b3a24e04e69138254e7a79e8fe5a4c",
+        "candidateBlob": "4b329d8691b3a24e04e69138254e7a79e8fe5a4c",
+        "unchangedInDfc": true
+      },
+      "boundary": "Unchanged test source in dfc does not prove the production reconciliation timing is unrelated; no runtime root cause is asserted."
+    },
+    "otherWindowsFlaky": [
+      {
+        "kind": "other-flaky",
+        "test": "runtime-scenario-matrix claude-code cancel",
+        "owner": "Unknown; not assigned from filename",
+        "actualError": "Scenario trace did not reach one entry; retry passed.",
+        "sourceComparison": {
+          "parentBlob": "cd99816ecd773d0d92a92d7f76ef8e6d565e7165",
+          "candidateBlob": "cd99816ecd773d0d92a92d7f76ef8e6d565e7165",
+          "unchangedInDfc": true
+        },
+        "evidenceLines": [423, 439, 621, 638]
+      },
+      {
+        "kind": "other-flaky",
+        "test": "task-lifecycle-states done",
+        "owner": "Unknown; not assigned from filename",
+        "actualError": "waitForStatus(done-api) exceeded30000ms with last=running; retry passed.",
+        "sourceComparison": {
+          "parentBlob": "fb2387c6b7c296ec067a29442fd299b5a1211bc8",
+          "candidateBlob": "fb2387c6b7c296ec067a29442fd299b5a1211bc8",
+          "unchangedInDfc": true
+        },
+        "evidenceLines": [482, 484, 639, 651]
+      }
+    ],
+    "historicalCommandBoundary": {
+      "finding": "The reviewed production verificationCommandEffects.execute path uses detached:true with Bun.file output capture. Its detached behavior predates this new E2E (historical implementation since 6545db54d); RFC-396 changes in that path concern invokeBehavior/env.",
+      "causeProven": false,
+      "fixProven": false,
+      "boundary": "This history does not establish why the Windows proof was missing and does not prove that the new fixture or production path is correct. Direct .cmd invocation is not by itself evidence of an invalid fixture. No production repair or successful Windows care acceptance is claimed."
+    }
+  },
+  "auxiliaryWorkflows": [
+    {
+      "runId": 40063460591,
+      "headSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+      "workflow": "visual-regression-nightly",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "observedAt": "2026-10-24T05:20:16Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460591",
+      "evidenceScope": "existing terminal metadata; same exact source SHA"
+    },
+    {
+      "runId": 40063460546,
+      "headSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+      "workflow": "windows-platform",
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "observedAt": "2026-10-24T05:20:16Z",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/40063460546",
+      "evidenceScope": "existing terminal metadata; same exact source SHA"
+    }
+  ],
+  "scheduledWorkflowsSnapshot": {
+    "sourceFile": "design/RFC-396-adaptive-graph-development/ci-refresh-2026-10-23.json",
+    "sourceFileSha256": "caaedc8b75f06748177b052db726c170ba0b0a5a602f01cb79151a03070d53f2",
+    "observedAt": "2026-10-24T03:36:44.709607+00:00",
+    "workflowCount": 10,
+    "latestScheduleCounts": {
+      "success": 6,
+      "failure": 3,
+      "cancelled": 1
+    },
+    "latestAnyEventCountsAtThatTime": {
+      "success": 6,
+      "failure": 4
+    },
+    "refreshedForThisRecord": false,
+    "boundary": "Historical 2026-10-24 03:36 UTC snapshot only; not the current state of all scheduled workflows. Same-SHA push-triggered auxiliary successes do not replace or rewrite scheduled-run results."
+  },
+  "acceptanceBoundary": {
+    "overallCiGreen": false,
+    "windowsCareAccepted": false,
+    "unknownFlakyCausesRemain": true,
+    "enterpriseAcceptanceCovered": false,
+    "requiredNextEvidence": "Retain the proof and lifecycle assertions, obtain actual Windows verifier execution/artifact evidence, and assess the exact subsequent candidate. No assertion weakening, timeout expansion, or claimed repair is part of this record."
+  }
+}

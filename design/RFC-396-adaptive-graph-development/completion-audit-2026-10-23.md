@@ -1,8 +1,8 @@
 # RFC-396 当前完成度与退出条件（2026-10-23）
 
-生产候选为 `2e562fb54a6c5fcd396601aa7fc82bafd755fff1`，初始审计基于 `d5f08f9cd032567ddd07b7ac103bb52c947a69d3`；两者之间只有验收文档和记录变化。后继 main `52d642b10` 另修正 checkpoint 测试守卫，本轮 R23 修复与新用例尚待发布。日期为本地日期，执行记录中的时间使用 UTC。本轮逐项阅读 AC01～AC26、R01～R22、生产接线、测试断言和已经产生的实际运行日志，没有启动重复测试、构建或全量门禁。
+当前生产与用例候选为 `dfc098c33b3ff94300cf217d9a09298792617a8f`；2026-10-24 05:29 UTC 更新。原逐项审计、R01～R23及历史失败保留，已有候选内容不因共享HEAD变化重跑。R23修复已发布，准确artifact的care旅程、SQLite/PostgreSQL相关回归已通过。
 
-**裁决：后继care直连验收发现R23发布后证据投影缺陷，生产修复及SQLite回归已完成，新artifact验收仍待完成；RFC保持In Progress。** 当前代码CI终态已收齐（46成功/3失败，整体未绿）；新增care直连补例、graph@2真实企业MR/CI和新版托管执行/恢复验收仍分别开放。旧 graph@1 的内部候选交付不能替代新 graph@2 的 MR 验收。
+**裁决：RFC保持In Progress。** 准确主CI终态46成功/3失败；Windows新增care用例两次缺少首次profile日志证明，尚未进入CI修复段。Ubuntu/macOS各五个图用例首轮通过。完整graph@2真实GitLab MR/CI、新版托管执行及默认恢复仍无直接接受证据，不能由graph@1或受控外部系统代签。当前结构化证据见[care接受](./graph-care-repair-acceptance-2026-10-23.json)和[准确CI](./r23-ci-acceptance-2026-10-23.json)。
 
 ## 1. 逐项完成度
 
@@ -20,8 +20,8 @@
 | AC08 | 原生审核冻结依据、真实批准读回、拒绝/重审/响应丢失幂等、同 Case 新批准及交付重放。 | 已具备证据。变更依据必须重新批准，不复用旧绿灯发布。 |
 | AC09 | 三个真实模型生成代码/测试并消费同一 basis；trace、缺文件/缺 named test 拒绝；托管材料传输读回。 | 已具备证据。真实模型三案例属于 graph@1 内部交付。 |
 | AC10 | 结构、设计审核、执行、人工验收分别记录；有限行为检查保留深度/路径/时间/绑定限制。 | 已具备证据。不宣称范围外的全局正确性。 |
-| AC11 | 真正执行 profile、退出码、日志与 artifact；准确 tree/basis/profile/environment；失败/未执行/不可读取不误绿。 | 原范围有证据；R23修复及SQLite回归通过，准确新artifact复验仍开放。准确版本合同保持，不暗换在途 profile。 |
-| AC12 | 相关语义变化使证据失效、布局不撤销决定；当前 care tree 变化必须重验；人工验收冻结候选。 | 原范围有证据；R23修复及SQLite回归通过，准确新artifact复验仍开放。历史 passed 保留但不冒充 current。 |
+| AC11 | 真正执行 profile、退出码、日志与 artifact；准确 tree/basis/profile/environment；失败/未执行/不可读取不误绿。 | R23的准确artifact、SQLite/PostgreSQL回归已通过；Windows新增日志证明仍失败，不能外推全平台完成。准确版本合同保持，不暗换在途profile。 |
+| AC12 | 相关语义变化使证据失效、布局不撤销决定；当前 care tree 变化必须重验；人工验收冻结候选。 | R23的准确artifact及双provider回归已通过，新care实际断言新树current、旧树stale。Windows完整care尚未进入修复段，不冒充已接受。 |
 | AC13 | 图调用取消/中断、重试/回执重放；准确 artifact 实测关页面、SIGKILL daemon、同 home 无页面恢复同 MR。 | 单机和共享持久化范围已具备证据。新版托管默认恢复归 AC14，尚未直接验收。 |
 | AC14 | 普通 Ubuntu CI 分片实际运行 SQLite/PostgreSQL；旧托管 PostgreSQL/传输/审核/profile/内部交付有证据。 | **当前 graph@2 托管缺直接证据**。旧任务仍跑旧镜像，不能称当前版本两部署已全部完成。 |
 | AC15 | 桌面与 390/320px、实际文本/控件边界；四种有连线 SVG 的鼠标/Enter/Space；1000 元素、多视图、深依赖测量。 | 已具备证据。大于250元素总览分页；单机固定场景数据不是 p95、峰值内存、泄漏或一般 SLA。 |
@@ -59,16 +59,12 @@ R01～R22 的发现、修复和证据逐项保留在 [全面回顾与 MR 能力�
 
 ## 3. 仍需完成的退出条件
 
-外部环境等待期间，已安排一条新增受控 graph@2 修复旅程补齐图特有接缝：真实 care round 水合图材料→实际 Task 修复→beforePublish 执行自动 profile→同 MR 新 head。该用例已执行到实际修复Task/profile和同MR新head，并发现新树通过记录被标stale的R23生产缺陷。修复与SQLite回归已通过，新artifact复验仍开放；已有分段证明不改记为整条通过，也不复制共享CI/审批/协同状态矩阵。
+1. **Windows care及准确CI归因。** R23已随dfc发布，CI40063460648终态46 success / 3 failure。Windows新care两次停在初次profile证明，原始输出缺失原因尚须直接证据；新用例将保留Node fetch取得的完整artifact响应，因为浏览器trace没有该API回执。历史执行器固定detached行为来自6545db54/e676，execute不在本会话改动内；在未获明确范围授权前不代改。Booking及另两个flaky保留实际失败与重试，不凭文件未改排除生产关联。Static scans仅记失败元数据，汇总失败仍保留。其他定时workflow仍按[CI归因记录](./ci-audit-2026-10-23.md)的注明时间快照记账。
+2. **graph@2真实企业MR/CI。** 同一Case串起真实模型/原生设计批准、代码和独立profile、真实MR、真实CI失败日志、分类/修复、重新验证、同MR新head、准确head/target结果与外部终态。专用GitLab571 fixture及runner已真实完成baseline pipeline285/job1155；业务Case尚未创建。准备脚本两处错误已修，05:29 UTC项目接口500阻断接续；正式原行retry未执行。未配置的审批/协同lane仍只引用继承能力证据，不宣称整条直接接受。
+3. **新版托管执行与默认恢复。** 04:47～04:50 UTC实际应用503、挂载0可用空间，服务与任务仍是旧镜像。控制面可读不等于应用就绪，profile声明不等于任务升级。恢复后须核对服务与实际任务准确镜像、真实数据库/传输/运行位置、批准材料、MR身份与默认恢复。旧托管内部交付和单机SIGKILL恢复分别保留，不互相替代。
+4. **最终关闭记录与发布。** Windows证据、真实企业和托管结论齐备后再更新T20/T21及RFC状态；当前保持In Progress。已验证的代码和历史证据继续有效，当前取证与文档改动另行精确提交，不重建旧任务来抹去失败。
 
-1. **当前代码 CI 终态与责任结论。** 生产候选 [2e562fb54 / CI40055423143](https://github.com/wangbinquan/agent-workflow/actions/runs/40055423143) 已终态46成功/3失败；两项根失败及派生汇总保留，不能以artifact或相关功能成功代替整条CI。新增补例发布后仍须消费其准确CI。已确认的本任务 TypeScript fixture 字段冲突已由 `338babd1f08aa281c7d2a532431ca1dcc1fd2a6a` 修复，9a后继 Typecheck 实际成功。9a 的旧 `state.repos.length > 1` 源文本锁失败已按6198的准确差异归属其他会话，保留原断言和失败证据。最新Windows平台workflow的修复前运行40053745125也因本任务同一个fixture错误失败；包含修复的准确d5f08f9cd上Windows验证40059478522已于2026-10-24 03:54:18 UTC整条success，修复后Windows证据已收齐。Static scans只记状态，不宣称已排除责任；定时 CI 另见 [CI归因](./ci-audit-2026-10-23.md)。
-后继 main `52d642b102bb7cab4f8907aeb31a3139a5604c49` 已由对应会话修正 checkpoint 源码守卫；[CI 40059956104](https://github.com/wangbinquan/agent-workflow/actions/runs/40059956104) 终态 **47 success / 2 failure**，只余 Static scans 与派生 CI required。它未包含本轮尚未发布的 R23 修复与新增 care 用例，不能代签新候选。
-
-2. **graph@2 真实企业 MR/CI。** 用同一 Case 串起真实模型/原生设计批准→代码及独立验证→真实MR→CI失败日志→修复→图依据/profile重验→同MR新head→准确head/target结果→外部终态。实际配置的评审、审批和协同职责也须逐项记录；未配置的 lane 只能引用已有继承能力证明，不能声称整条直接通过。已有三条graph@1真实模型核心案例无需因此重复。
-3. **新版托管执行与默认恢复。** 明确服务和实际执行任务均升级到本候选；记录真实数据库/传输/运行位置、冻结批准材料、MR身份和默认恢复行为。旧托管交付与单机SIGKILL恢复分别保留，不能互相替代。
-4. **最终关闭记录。** 上述结论齐备后更新T20/T21与RFC状态；当前保留In Progress。此次已纠正文档中的graph@1历史范围，未将旧“只剩CI”继续当作当前结论。
-
-环境前提仍未恢复：已有 [只读环境记录](./hosted-readiness-2026-10-23.json) 确认节点可用空间0与服务ENOSPC，任务仍为旧镜像；2026-10-24 03:48:01 UTC 再次对现有console、托管AW、验收GitLab项目570/571执行有限GET，四者均HTTP500。该次结果在 `/tmp/rfc396-hosted-readiness-current-loop.json`。没有认定这些接口故障共享同一根因，没有部署新版本或触发真实MR/流水线。
+本轮GitLab专用runner与本机验收daemon已正常停止，保留原home、导入批次和失败回执；没有未说明的业务Case或MR。[环境与准备记录](./enterprise-readiness-2026-10-24.json)保留05:41 UTC GitLab500和较早的托管实际核验。待环境恢复后从原台账接续。没有执行共享环境清理、DB直写或旧托管任务强制推进。
 
 ## 4. 不应扩大的结论与重复工作
 

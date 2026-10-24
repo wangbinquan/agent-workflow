@@ -4,6 +4,16 @@
 
 用户在本会话明确回复“1.这个不阻塞你 2.允许”：共享 schema 断言不阻止本任务继续，允许将虚构验收需求、夹具代码、生成的设计和执行上下文发送到已配置的 `opencode-go/deepseek-v4.1-flash`。此前暂停调用的许可条件已解除。
 
+## 2026-10-24 05:29 UTC：graph@2 真实 GitLab 准备与托管边界
+
+准确 `dfc098c33` artifact 已在独立新 home 启动，真实runtime为OpenCode及上述DeepSeek模型。准备保留完整内建MR岗位的模型工具、分类/修复路由、协同绑定与lane顺序，仅为care-pipeline配置读取真实GitLab的adapter；尚未创建或执行新Case。
+
+专用项目571已发布明确的两阶段虚构验收fixture，main=`ca31e64357ff94497834367815ce69ecfa08f391`。业务为有限数值clamp及真实Node测试；首次MR有意缺少包manifest，使真实CI在业务测试通过后报错，之后由看护修复补齐manifest。此为预定集成故障注入，不称模型偶发缺陷。项目专用runner2真实执行baseline pipeline285/job1155成功；它只证明fixture/runner就绪，不证明模型或MR闭环。
+
+准备脚本首轮错误把runtime对象封装当数组；修后导入又因未提供Git凭据失败。两者均属本会话验收脚本，已完成修正，原批次与失败保留。修正后接续在项目GET处遇到HTTP500，05:29 UTC只读复核仍500，正式原行retry未执行；没有repository/profile/job/employee/Case创建结果可供认领。专用runner与本机daemon已正常停止、保留home，后续从原台账接续。
+
+托管04:47～04:50 UTC的实际核验为：控制面project/service/release/parent可读，应用503、服务CrashLoopBackOff且无ready endpoint；任务挂载`Available=0`，实际服务与任务镜像仍为旧版。托管升级和默认恢复验收继续开放，不以控制面200、旧profile声明或上述本机实例代替实际升级。[环境与准备记录](./enterprise-readiness-2026-10-24.json)保存实际回执和原始文件hash；05:41 UTC的有界观察仍为GitLab500。以下三案例保持原graph@1范围。
+
 ## 初始候选与环境（后续升级见下方时间记录）
 
 - 实现候选：`fe835ab435b86e814ce48aafe9197dd2e08a4181`；单机使用 [CI 39729036993](https://github.com/wangbinquan/agent-workflow/actions/runs/39729036993) 的 `agent-workflow-e2e-macos-latest` 编译产物，真实运行时为本机 OpenCode 与上述模型。

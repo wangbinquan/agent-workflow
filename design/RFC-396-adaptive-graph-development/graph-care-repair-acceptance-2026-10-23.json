@@ -1,0 +1,217 @@
+{
+  "schemaVersion": 1,
+  "sourceArtifact": {
+    "headSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+    "runId": 40063460648,
+    "artifactId": 12548004554,
+    "artifactName": "agent-workflow-e2e-macos-latest",
+    "artifactDigest": "sha256:e0bbd27bf1c2b9a869ab6c45b1b0c1dcbd18668d63f8d770a0256d420fa7203a",
+    "binaries": [
+      {
+        "file": "agent-workflow-e2e-macos-arm64",
+        "sha256": "1e9d81a18faf566eef34a8f0eb8667735025f7f7327422630020b28fc083c565"
+      },
+      {
+        "file": "stub-opencode-macos-arm64",
+        "sha256": "bb86312319d9e40b3660e938468b2006224aa159eff7a7ca97748b43bfbd4f66"
+      },
+      {
+        "file": "system-mock-tool-macos-arm64",
+        "sha256": "755b02f393b29afd0bd4d6850699c6dc15645e585fdad056a592cb8118faa38d"
+      }
+    ]
+  },
+  "stats": {
+    "startTime": "2026-10-24T04:52:33.748Z",
+    "duration": 93564.61200000001,
+    "expected": 1,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "test": {
+    "title": "RFC-396 graph care hydrates approved material, repairs a real Task and re-verifies the same MR",
+    "status": "passed",
+    "durationMs": 86090,
+    "retries": 0
+  },
+  "caseId": "01M5P41ZNVAQKSAXMWFJTF632C",
+  "designId": "design:01M5P41ZNVAQKSAXMWFJTF632C",
+  "basisDigest": "eec61c5cf0842e13a716c0b695c3669530db89680a2f77c3e1a2360942047116",
+  "reviewReceiptId": "01M5P428R6X9D9P3ZK4PZ0YC2E",
+  "repairTaskId": "01M5P42QSHF434WDV27QW095EP",
+  "repairRoundId": "01M5P42QSFW0GSX2DV4BCPQQ2S",
+  "repairRoundState": "completed",
+  "mr": {
+    "number": 2,
+    "sourceBranch": "agent-workflow/employee/01m5p41znvaqksaxmwfjtf632c",
+    "targetBranch": "main",
+    "originalHead": "f5faa3d16ce974245af8b2da09a84fdeafe660cf",
+    "repairedHead": "61f6d5626f62f98b091a768db5d41a8f1b1bf2f9"
+  },
+  "oldExecutionIds": [
+    "execution:01M5P42CFVER6NWB3C84183F93:d31057c5b71ef430",
+    "execution:mr:e1d121272d347b4d35ed1c8fadf61670340bad5bf13c055167241f824b5d314b:d31057c5b71ef430"
+  ],
+  "repairExecution": {
+    "evidence": {
+      "id": "execution:mr:6790ea751852a8a9a2231ae21533d8913cd4acee1279e1f773c343adbf27c8b7:d31057c5b71ef430",
+      "kind": "execution",
+      "basisDigest": "eec61c5cf0842e13a716c0b695c3669530db89680a2f77c3e1a2360942047116",
+      "obligationIds": ["acceptance"],
+      "readSet": [
+        {
+          "id": "acceptance",
+          "revision": 2,
+          "digest": "a5fb9a5c32a559dca6b42db2aec32b3e2f72d852d22f98839bd04af5a077f236"
+        },
+        {
+          "id": "dependencies:f33ae9c8770009d48d4ee906b6c090dd76d6b592",
+          "revision": 1,
+          "digest": "21da9570fae81e4b8a9bf83c2d5a31a40259210275e13f4e020129ccd8b52a53"
+        },
+        {
+          "id": "design:01M5P41ZNVAQKSAXMWFJTF632C:repository",
+          "revision": 1,
+          "digest": "2a5d33218055b9d4c761d1e70dd7410447c6a3733785ed66b33026d651b52f73"
+        },
+        {
+          "id": "design:01M5P41ZNVAQKSAXMWFJTF632C:scope",
+          "revision": 1,
+          "digest": "8dc8841a82683249f80a2c1f4278d2499c915725593f237c8933e4b1a3b2604b"
+        },
+        {
+          "id": "flow",
+          "revision": 1,
+          "digest": "5eb40595872c3089835cfca0d7b93953c594dd9e441c5c022b67480af10e6ff2"
+        },
+        {
+          "id": "main",
+          "revision": 1,
+          "digest": "118f20c686cb77ab98ae94be66ba4a3f95fb033a37c2975bd6f29da45955a831"
+        },
+        {
+          "id": "request-material",
+          "revision": 1,
+          "digest": "2a43547861292aa0487d76bbc3ca5fe258c9258e2f371ab896b2466e4c19d7d5"
+        },
+        {
+          "id": "requirement",
+          "revision": 1,
+          "digest": "4926e248c51778e7e843855c09a8b751fab36f8f65750320740da2171bdb4e09"
+        }
+      ],
+      "candidateTreeOid": "7232c52038b0e6393a776a9b132dd35c7e0a3447",
+      "commitSha": null,
+      "profileRef": {
+        "id": "01M5P41ZBJDEM9KXXNBAWV0P30",
+        "revision": 1,
+        "digest": "9f7679cb5dcf35ec626304db182c1381b854d2131e659f83438135c9962aa6c5"
+      },
+      "environmentDigest": "f58cfe32cbba9f6365c5cd48330eeb86523b260e4bed3a380052d9d8781ce692",
+      "executionRef": "mr:6790ea751852a8a9a2231ae21533d8913cd4acee1279e1f773c343adbf27c8b7:01M5P41ZBJDEM9KXXNBAWV0P30@1:a33fa26ac0d49a735a6e4d494e7237795b197c3e639ac33d56644ce9ca552138",
+      "artifactRef": "01M5P42TT83VNKMKATYM54A55T",
+      "artifactDigest": "e89af7f7f16c15e484cec931264dd0c9a3a363bfa463a95691ed973b066f12c7",
+      "ci": null,
+      "result": "passed",
+      "summary": "01M5P41ZBJDEM9KXXNBAWV0P30@1: 执行通过",
+      "limitations": [
+        "测试执行通过不代表已证明所有输入上的行为；环境快照不包含远端服务或未声明的外部依赖。"
+      ],
+      "recordedAt": 1792817588365
+    },
+    "freshness": "current",
+    "reasons": []
+  },
+  "profileProof": {
+    "pipelineRevision": "repaired",
+    "sourceSha256": "9e67a2669adfc8ccf4ab90770cca91ec9323a05b596cee2e46fc8b320ca4ffb4",
+    "testRef": "graph-result.test.cjs#graph-result-test"
+  },
+  "hydratedCareProof": {
+    "caseId": "01M5P41ZNVAQKSAXMWFJTF632C",
+    "basisId": "basis:1792817554684-qz3s7g:basis",
+    "basisDigest": "eec61c5cf0842e13a716c0b695c3669530db89680a2f77c3e1a2360942047116",
+    "reviewReceiptId": "01M5P428R6X9D9P3ZK4PZ0YC2E",
+    "materialPath": ".agent-workflow/inputs/requirements/01m5p41znvaqksaxmwfjtf632c/graph-design/faee93460d3c68caaa49bc01f2a0f15cc62704b5a4f8af2bfb382202237dd3fd/care.json",
+    "priorExecutionIds": [
+      "execution:01M5P42CFVER6NWB3C84183F93:d31057c5b71ef430",
+      "execution:mr:e1d121272d347b4d35ed1c8fadf61670340bad5bf13c055167241f824b5d314b:d31057c5b71ef430"
+    ],
+    "priorTrees": ["256ff8e6b56165e208023ed6750adeb9c112cf4f"],
+    "testRef": "graph-result.test.cjs#graph-result-test"
+  },
+  "logEvidence": {
+    "containsFailureMarker": true,
+    "sha256": "7a8adf4a1236b642069e20f2b2aa5992a9c16cc6e8f100ac5bb00ddfa8a2b4c1"
+  },
+  "assertedOutcomes": [
+    "native approval",
+    "actual classify and repair Tasks",
+    "same MR and source/target branches",
+    "same basis and retained review",
+    "fresh automatic profile before repaired publication",
+    "current new-tree evidence and stale old-tree evidence",
+    "new-head CI required before ready",
+    "external close observed and Case terminal",
+    "preseeded unrelated MR byte-equivalent preservation"
+  ],
+  "scope": "Exact published daemon, runtime stub and unified tool from one GitHub artifact. Model and external code-host/CI remain controlled; actual Git/Task/profile/UI paths execute. Not enterprise or hosted acceptance.",
+  "rawEvidence": [
+    {
+      "path": "/tmp/rfc396-r23-care-artifact.json",
+      "sha256": "4bb113c056caf8b15caaeb35133ae1078d3fb072ce04c46c6be4109d606e9813"
+    },
+    {
+      "path": "/tmp/rfc396-r23-care-artifact.log",
+      "sha256": "741e844fe5652abe966a21c17a9dea60017b2684a8149be646a4094c5fe9a09b"
+    },
+    {
+      "path": "/tmp/rfc396-r23-care-artifact-provenance.json",
+      "sha256": "9976834d11b4b06e420d7505f2879df4702a3ba286ed41bed2e517bc46ecb078"
+    },
+    {
+      "path": "/tmp/rfc396-r23-care-evidence.json",
+      "sha256": "808171e0cda05bda7f17a5a803bbf8d22cbe30364dc2e88745f8048d76e085a1"
+    }
+  ],
+  "hostedRegression": {
+    "sourceSha": "dfc098c33b3ff94300cf217d9a09298792617a8f",
+    "scope": "Only listed completed functional jobs and explicit test lines; main CI not yet terminal in this record.",
+    "jobs": [
+      {
+        "jobId": 120781682590,
+        "name": "Lint + Typecheck + Format + Shared + system mock tests",
+        "passLines": [
+          "2026-10-24T04:49:49.0780090Z @agent-workflow/system-mocks test: (pass) RFC-396 tool CLI collects real pipeline logs and preserves trigger/rerun receipts [64.86ms]"
+        ],
+        "logSha256": "0133b806f06f0749d56af15bc2f9f3603155095543efef014bf60c12155c26e8"
+      },
+      {
+        "jobId": 120781682694,
+        "name": "Backend tests (ubuntu-latest shard 12/24)",
+        "passLines": [
+          "2026-10-24T04:50:10.3192098Z (pass) RFC-396 published evidence uses the actual Git tree [postgresql] > baseline advancement preserves only matching evidence and later file, environment and design drift invalidate it [597.19ms]",
+          "2026-10-24T04:50:10.6915452Z (pass) RFC-396 published evidence uses the actual Git tree [sqlite] > baseline advancement preserves only matching evidence and later file, environment and design drift invalidate it [303.40ms]"
+        ],
+        "logSha256": "6ee42d8f1158065fc423a75d9caf5a95c7fde67117999f651531e5b64c3ce66d"
+      },
+      {
+        "jobId": 120781682753,
+        "name": "Backend tests (ubuntu-latest shard 13/24)",
+        "passLines": [
+          "2026-10-24T04:55:39.1810951Z (pass) evidence uses the approved exact profile revision instead of silently switching to the newest release [1.82ms]",
+          "2026-10-24T04:55:40.0210862Z (pass) RFC-396 current workspace evidence projection [sqlite] > a repair invalidates the retained green result before a new verification, and cannot be accepted as the old tree [839.95ms]",
+          "2026-10-24T04:55:44.1602598Z (pass) RFC-396 current workspace evidence projection [postgresql] > a repair invalidates the retained green result before a new verification, and cannot be accepted as the old tree [357.41ms]"
+        ],
+        "logSha256": "49f3e2c073ac4b676ca935f5a70c4c7b2e9ab9eb7a1ae0348738202c7ffcfa4f"
+      }
+    ],
+    "providerCounts": {
+      "sqlite": 2,
+      "postgresql": 2,
+      "pureProfileRevision": 1,
+      "pipelineCli": 1
+    }
+  }
+}

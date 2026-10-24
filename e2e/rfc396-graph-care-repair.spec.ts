@@ -10,6 +10,7 @@ import {
   type MockCodeHostProject,
 } from '@agent-workflow/system-mocks'
 import { defaultSystemMockToolPath, startDaemon, type DaemonHandle } from './harness'
+import { attachWindowsProfileDiagnostic } from './rfc396-windows-profile-diagnostic'
 import { clarifyAnswerBasis, clarifyQuestionSetKey } from '../packages/shared/src/clarifyMindmap'
 import type { ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
 import type {
@@ -567,6 +568,17 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
     const artifact = await api<{ files: { path: string; content: string }[] }>(
       `${base}/evidence/${encodeURIComponent(binding.id)}/artifacts`,
     )
+    // Node fetch is not captured in the browser trace. Retain the exact receipt
+    // and output files before assertions so platform failures remain diagnosable.
+    await test
+      .info()
+      .attach(
+        `graph-profile-${createHash('sha256').update(binding.id).digest('hex').slice(0, 12)}.json`,
+        {
+          body: Buffer.from(JSON.stringify({ binding, baselineSha, artifact }, null, 2)),
+          contentType: 'application/json',
+        },
+      )
     const retained = JSON.parse(
       artifact.files.find((file) => file.path === 'execution.json')!.content,
     ) as {
@@ -590,7 +602,18 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
       .map((file) => file.content)
       .join('\n')
     const line = output.split(/\r?\n/).find((value) => value.startsWith('RFC396_PROFILE_PROOF '))
-    expect(line, output).toBeTruthy()
+    if (!line && process.platform === 'win32' && test.info().retry === 0) {
+      // Keep the failed attempt's evidence; do not repeat this probe on retry.
+      // This extra time is only for diagnosis: the original assertion still fails.
+      test.setTimeout(test.info().timeout + 75_000)
+      await attachWindowsProfileDiagnostic(generatedFiles, (name, data) =>
+        test.info().attach(name, data),
+      )
+    }
+    expect(
+      line,
+      `Retained artifact paths: ${artifact.files.map((file) => file.path).join(', ')}\n${output}`,
+    ).toBeTruthy()
     return JSON.parse(line!.slice('RFC396_PROFILE_PROOF '.length)) as {
       pipelineRevision: string
       sourceSha256: string

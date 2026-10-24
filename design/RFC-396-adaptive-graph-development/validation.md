@@ -1,6 +1,14 @@
 # RFC-396 实现候选验收记录
 
-## 2026-10-24 UTC：R23 修复与集中回归
+## 2026-10-24 05:29 UTC：准确 dfc 接受与当前阻塞
+
+R23 修复及 care 新用例已以 `dfc098c33b3ff94300cf217d9a09298792617a8f` 发布。GitHub artifact12548004554 的单次本机完整 care 旅程为 **1 pass / 0 fail / 0 skipped / 0 flaky，93.6s**，无重试，三份二进制均来自准确 artifact。它证明原生批准、实际修复 Task、图材料水合、自动 profile、同 MR 新 head、修后 current evidence、旧树 stale 及外部关闭终态，见[机器记录](./graph-care-repair-acceptance-2026-10-23.json)。模型与外部代码平台/CI受控，未冒称真实企业连接。
+
+准确 [CI40063460648](https://github.com/wangbinquan/agent-workflow/actions/runs/40063460648) 终态 **46 success / 3 failure**；[结构化证据](./r23-ci-acceptance-2026-10-23.json)保留实际日志行。R23 回归为 SQLite2 / PostgreSQL2 / 纯合同1；system-mock CLI1。五个图用例在 Ubuntu、macOS 各5个首轮通过；Windows为3 pass / 1 flaky / 1 fail。新care在首次profile日志的 `RFC396_PROFILE_PROOF` 断言失败，两次都尚未进入CI注入和修复段；不能用POSIX通过代签Windows。Booking首轮终态等待超时、重试通过，归因尚未确定。其余两个根/派生失败为Static scans与CI required，未读取扫描日志。
+
+真实 GitLab571 的基线pipeline285/job1155已通过，完整graph@2 Case尚未创建。准备脚本的runtime响应封装和Git导入凭据错误已修；05:29 UTC项目GET为500，修后原行重试未发出。托管04:47～04:50 UTC读取到应用503、任务挂载0可用空间及旧实际镜像。两项环境边界、完整企业旅程和Windows输出证明仍开放，RFC保持In Progress。以下为保留的历史快照。
+
+## 2026-10-24 UTC：R23 发布前修复与集中回归
 
 R23 修复已改为通过既有 stage 读取当前真实树，并在 finally 中清理；独立功能静态复核通过，Bun 1.4.3 的 SQLite 集中回归 3 pass / 0 fail、61 assertions（2.89s）。首次及修复发布后无差异保持 current，旧树、实际文件漂移、环境/读集变化和不可读取场景均保留失效断言。PostgreSQL、三平台 CI 与新准确 artifact 的 care 完整旅程仍待本轮候选发布后验证。 新真实 Git 用例直接使用生产 candidate adapter，execution bindings 明示为投影夹具；实际 profile 仍由 care E2E 验证。源码及两份回归均通过 Prettier/ESLint。日志 `/tmp/rfc396-r23-sqlite-regression.log`。
 
