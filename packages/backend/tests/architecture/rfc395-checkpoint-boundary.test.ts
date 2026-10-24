@@ -101,15 +101,19 @@ test('negative controls catch epoch-1 columns and directory aliases', () => {
   expect(epochOneCheckpointReads('checkpoint.preSnapshot; checkpoint.mountPath')).toBe(false)
 })
 
-test('the four deferred single-non-root defect sites retain the HEAD count decisions', () => {
+// II-a kept these four sites on the HEAD repo-count decision (plan §6.11 item 6). They were fixed afterwards as a
+// separate bug fix (6198ae144, plan §6.6 Q5): the guard now locks the mount-layout decision instead.
+test('the four single-non-root defect sites decide by mount layout, not by repo count', () => {
   const mechanics = taskSource('composition/nodeMechanics.ts')
-  expect(mechanics.match(/state\.repos\.length > 1/g)).toHaveLength(4)
-  for (const [path, count] of [
+  expect(mechanics.match(/state\.repos\.length > 1/g)).toBeNull()
+  expect(mechanics).toContain('const singleRoot = isSingleRootRepository(parentMounts)')
+  expect(mechanics.match(/const space = inheritedCallSpace\(\{/g)).toHaveLength(2)
+  for (const [path, before] of [
     ['services/structuralDiff/callGraph/expandService.ts', 'workspace.repos.length > 1'],
     ['services/worktreeFileContent.ts', 'task.repos.length > 1'],
   ]) {
     const text = source(path!)
-    expect(text).toContain(count!)
-    expect(text).not.toContain('isSingleRootRepository')
+    expect(text).not.toContain(before!)
+    expect(text).toContain('if (!isSingleRootRepository(mounts)) {')
   }
 })
