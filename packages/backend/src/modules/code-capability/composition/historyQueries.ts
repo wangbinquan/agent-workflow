@@ -1,6 +1,7 @@
 // RFC-359 W12 — one composition for all code-history read surfaces. Both
 // database clients supply the same readers and application projections.
 
+import type { CapabilityAgentExistence } from '../application/ports/existingResources'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCodeMatrixQuery,
@@ -36,9 +37,12 @@ export interface CodeHistoryQueries {
   readonly templateUpstream: TemplateUpstreamOperations
 }
 
-export function composeCodeHistoryQueries(db: PersistenceDb): CodeHistoryQueries {
+export function composeCodeHistoryQueries(
+  db: PersistenceDb,
+  agents: CapabilityAgentExistence,
+): CodeHistoryQueries {
   return Object.freeze({
-    matrix: createCodeMatrixQuery(createCapabilityMatrixRead(db)),
+    matrix: createCodeMatrixQuery(createCapabilityMatrixRead(db, agents)),
     workItems: createCodeWorkItemProjectionQuery(createWorkItemProjectionRead(db)),
     attempts: createCodeRoundAttemptsQuery(createRoundAttemptsRead(db)),
     deliveries: createCodeDeliveryChainQuery(createDeliveryChainRead(db)),

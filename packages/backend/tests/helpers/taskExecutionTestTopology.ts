@@ -1,3 +1,4 @@
+import { o2Ports } from './o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
@@ -150,7 +151,9 @@ export function composeTaskExecutionTestRuntime(
   options: Readonly<{ codeHostConnections?: CodeHostConnectionsService }> = {},
 ) {
   const identity = createTaskExecutionTestIdentity(db)
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
@@ -168,7 +171,10 @@ export function composeTaskExecutionTestRuntime(
       identityAccess: identity.resources,
       observationInvocations: composeRunObservationCalls(db),
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
-      collaborationRuntime: createCollaborationRuntimeMechanics(db),
+      collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }),
       persistence,
       workgroupTurns: composeWorkgroupTurnsOperations(
         db,
@@ -286,7 +292,11 @@ export function runTaskWithRealTestTopology(
     options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(options.db)
   const observationInvocations =
     options.observationInvocations ?? composeRunObservationCalls(options.db)
-  const persistence = options.persistence ?? createTaskExecutionPersistence(options.db)
+  const persistence =
+    options.persistence ??
+    createTaskExecutionPersistence(options.db, {
+      recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
+    })
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
   const nodeRunPrompts = selectNodeRunPromptOperations(
@@ -340,7 +350,13 @@ export function runTaskWithRealTestTopology(
       memoryInjectionQueries,
       observationInvocations,
       collaborationRuntime: createCollaborationRuntimeMechanics(options.db, {
-        portArtifactReaderFor: () => portArtifacts,
+        taskLock: o2Ports(options.db).taskLock,
+        ...{
+          upstreamAgents: o2Ports(options.db).upstreamAgents,
+          ...{
+            portArtifactReaderFor: () => portArtifacts,
+          },
+        },
       }),
       persistence,
       workgroupTurns: composeWorkgroupTurnsOperations(
@@ -379,7 +395,13 @@ export function runTaskWithRealTestTopology(
       collaborationRuntime:
         options.collaborationRuntime ??
         createCollaborationRuntimeMechanics(options.db, {
-          portArtifactReaderFor: () => portArtifacts,
+          taskLock: o2Ports(options.db).taskLock,
+          ...{
+            upstreamAgents: o2Ports(options.db).upstreamAgents,
+            ...{
+              portArtifactReaderFor: () => portArtifacts,
+            },
+          },
         }),
       workgroupTurns:
         options.workgroupTurns ??
@@ -394,7 +416,9 @@ export function runTaskWithRealTestTopology(
         options.childLaunch ??
         createChildExecutionLaunchOperations({
           db: options.db,
-          persistence: createChildPersistence(options.db),
+          persistence: createChildPersistence(options.db, {
+            recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
+          }),
           coordinatorFactory: testDriveFactory(
             options.db,
             createDatabaseTaskDriverLifecyclePort({

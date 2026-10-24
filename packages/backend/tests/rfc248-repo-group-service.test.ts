@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-248 PR-2b —— 仓库组服务层（CRUD / 展平 / 两个引用守卫 / 删组归档记忆）。
 //
 // 布局算法本身在 shared 的纯函数里、由 `rfc248-repo-group-layout.test.ts` 锁；
@@ -111,7 +112,7 @@ function describeNativeRepoGroupCases(cases: () => void) {
   describeEachProvider('RFC-248 repo group service', (harness) => {
     beforeEach(async () => {
       db = harness.db
-      store = composeSqliteRepositoryWorkspaceStore(db)
+      store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
       appRepo = await makeRepo(db, 'app')
       sdkRepo = await makeRepo(db, 'sdk')
     })
@@ -451,7 +452,7 @@ describeEachProvider('RFC-248 repo group service', (harness) => {
   let appRepo: string
   beforeEach(async () => {
     db = harness.db
-    store = composeSqliteRepositoryWorkspaceStore(db)
+    store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     appRepo = await makeRepo(db, 'app')
     await makeRepo(db, 'sdk')
   })
@@ -632,7 +633,7 @@ describeEachProvider('RFC-248 repo group service', (harness) => {
   let appRepo: string
   beforeEach(async () => {
     db = harness.db
-    store = composeSqliteRepositoryWorkspaceStore(db)
+    store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     appRepo = await makeRepo(db, 'app')
     await makeRepo(db, 'sdk')
   })
@@ -970,7 +971,7 @@ describeEachProvider('RFC-248 repo group service', (harness) => {
   let appRepo: string
   beforeEach(async () => {
     db = harness.db
-    store = composeSqliteRepositoryWorkspaceStore(db)
+    store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     appRepo = await makeRepo(db, 'app')
     await makeRepo(db, 'sdk')
   })

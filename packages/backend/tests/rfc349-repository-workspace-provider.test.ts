@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -66,7 +67,10 @@ function postgresqlFixture(): {
     async close() {},
   }
   return {
-    store: new DrizzleRepositoryWorkspaceStore(createPostgresqlDatabaseClient(runtime)),
+    store: new DrizzleRepositoryWorkspaceStore(
+      createPostgresqlDatabaseClient(runtime),
+      composeSourceControlTaskPorts(createPostgresqlDatabaseClient(runtime)),
+    ),
     executions,
   }
 }
@@ -140,9 +144,13 @@ describe('RFC-349 repository workspace provider boundary', () => {
   // 是 `false`（drizzle 自己的空 `inArray` 也是这么发的）。
   test('the cached-repo facet predicate uses a boolean literal both dialects accept', async () => {
     const fixture = postgresqlFixture()
-    await fixture.store.listCachedRepoPage({ limit: 20 })
+    // RFC-395 O1: facets use the owner-provided reference set; its empty predicate
+    // now reaches SQL through the referenced page filter, before ORDER BY/LIMIT.
+    await fixture.store.listCachedRepoPage({ limit: 20, view: 'referenced' })
 
-    const facets = fixture.executions.find((query) => query.includes('scheduled_count'))
+    const facets = fixture.executions.find(
+      (query) => query.includes('ORDER BY') && query.includes('LIMIT'),
+    )
     expect(facets).toBeDefined()
     // The empty-set literal for "no scheduled task references this repo". RFC-349:
     // PostgreSQL types `0` as integer and rejects the whole statement the moment it
@@ -158,7 +166,7 @@ describe('RFC-349 repository workspace provider boundary', () => {
 describeEachProvider('RFC-349 repository workspace provider boundary', (harness) => {
   test('SQLite adapter preserves cache paging, due selection and group transactions', async () => {
     const db = harness.db
-    const store = new DrizzleRepositoryWorkspaceStore(db)
+    const store = new DrizzleRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     const inserted = await store.insertCachedRepo({
       id: 'repo-1',
       urlHash: 'hash-1',
@@ -269,7 +277,7 @@ describeEachProvider('RFC-349 repository workspace provider boundary', (harness)
 
   test('facets retain the short cache and expose explicit cross-store invalidation', async () => {
     const db = harness.db
-    const store = new DrizzleRepositoryWorkspaceStore(db)
+    const store = new DrizzleRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     const record = {
       id: 'repo-cache-1',
       urlHash: 'hash-cache-1',

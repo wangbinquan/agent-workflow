@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-319 B29 —— 融合的结果清单必须能穿过逐节点隔离边界。
 //
 // 2026-08-24 实测缺陷（`docs/audit-backlog.md` 有完整根因链）：merger 节点和其它
@@ -225,7 +226,12 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
     ).toContain(PLATFORM_FUSION_MANIFEST)
 
     expect(
-      await forcedPortPathsForTask(createTaskExecutionPersistence(h.db).artifactPaths, taskId!),
+      await forcedPortPathsForTask(
+        createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).artifactPaths,
+        taskId!,
+      ),
       '名册的消费端（createNodeIso / snapshotNodeIsoFinal 的 force-include 清单）' +
         '必须真的看到这条路径——只写进任务行而消费端读不到，等于没登记',
     ).toContain(PLATFORM_FUSION_MANIFEST)

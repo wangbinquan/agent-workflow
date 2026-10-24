@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 // RFC-217 / RFC-349 — SQLite unified clarify persistence (self + cross).
 //
 // Replaces services/clarify.ts (RFC-023 self-clarify) + services/crossClarify.ts
@@ -174,6 +175,7 @@ const frameIs = (db: object, containerRunId: string | null) => {
 // ---------------------------------------------------------------------------
 
 interface CreateRoundCommon {
+  taskLock: HumanGateTaskLockPort
   db: PersistenceDb
   taskId: string
   /** Preserve the running task's context across runtime callbacks. */
@@ -362,7 +364,10 @@ export async function createClarifyRound(
     }),
   )
   const prepared = await prepareClarifyGateOpen(
-    humanGateComposition.createCollaborationCommandContext({ db: args.db }),
+    humanGateComposition.createCollaborationCommandContext({
+      db: args.db,
+      taskLock: args.taskLock,
+    }),
     {
       taskId: args.taskId,
       kind: args.kind,

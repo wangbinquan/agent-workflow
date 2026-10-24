@@ -1,3 +1,7 @@
+import type {
+  TaskArchiveCollaborationSectionsPort,
+  TaskNodeRunClarifyNavPort,
+} from './required-ports'
 import type { TaskDriveCoordinatorFactory } from '../application/drive/taskDriveCoordinatorFactory'
 import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
 import type { TaskRecoveryProviderSelection } from './taskRecoverySelection'
@@ -153,6 +157,7 @@ export interface TaskExecutionProviderRouteContext {
  * appHome 之类）。合并之前这份清单两支各写一份、还不一样长。
  */
 type ProviderRouteOperationsAssembled =
+  | 'clarifyNav'
   | 'workspaceReads'
   | 'db'
   | 'persistence'
@@ -187,6 +192,8 @@ export interface TaskExecutionProviderRuntimeDependencies<
   readonly log: TaskExecutionRuntimeParticipantsInput['log']
   readonly coordinatorFactory: TaskDriveCoordinatorFactory
   readonly schedulerDriver?: SchedulerDriverPort
+  readonly archiveCollaboration: TaskArchiveCollaborationSectionsPort
+  readonly clarifyNav: TaskNodeRunClarifyNavPort
   readonly archive?: TaskArchiveContentBinding
   readonly recoverySelection?: TaskRecoveryProviderSelection
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
@@ -305,6 +312,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
   })
   const taskRoutes = createTaskRouteOperations({
     db,
+    clarifyNav: dependencies.clarifyNav,
     persistence,
     children: participants.children,
     activity: participants.activity,
@@ -382,7 +390,11 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,
-    archive: createDrizzleTaskArchiveMaintenanceCommand(db, dependencies.archive),
+    archive: createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      dependencies.archiveCollaboration,
+      dependencies.archive,
+    ),
     autoResume,
     repositoryPreparationRetry,
     lifecycleRepair,
@@ -423,7 +435,8 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
  */
 export function createTaskArchiveMaintenanceCommand(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   archive?: TaskArchiveContentBinding,
 ): TaskArchiveMaintenanceCommand {
-  return createDrizzleTaskArchiveMaintenanceCommand(db, archive)
+  return createDrizzleTaskArchiveMaintenanceCommand(db, collaboration, archive)
 }

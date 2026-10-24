@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-161 — locks taskNodeRunsProjection' per-clarify-run `clarifyNavKind` stamping, the
 // backend oracle the task-detail canvas uses to decide whether a clarify /
@@ -137,7 +138,7 @@ async function navKindOf(
       createdAt: Date.now(),
     })
   }
-  const { runs } = await taskNodeRunsProjection({ db }, taskId)
+  const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
   return runs.find((r) => r.id === runId)?.clarifyNavKind
 }
 
@@ -185,7 +186,7 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
   test('non-clarify run (agent, no round) → null', async () => {
     const taskId = await seedTask(db, 'running')
     await seedRun(db, taskId, { nodeId: 'agent', status: 'done' })
-    const { runs } = await taskNodeRunsProjection({ db }, taskId)
+    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(runs[0]?.clarifyNavKind).toBe(null)
   })
 
@@ -206,7 +207,7 @@ describeEachProvider('RFC-161 taskNodeRunsProjection clarifyNavKind stamping', (
       status: 'awaiting_human',
       createdAt: t0 + 5000,
     })
-    const { runs } = await taskNodeRunsProjection({ db }, taskId)
+    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(runs.find((r) => r.id === runId)?.clarifyNavKind).toBe('awaiting')
   })
 
@@ -258,7 +259,7 @@ describeEachProvider('RFC-161 stamp ↔ getClarifyRoundDetail (safety property)'
       status: 'answered',
       createdAt: Date.now(),
     })
-    const { runs } = await taskNodeRunsProjection({ db }, taskId)
+    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     const stamp = runs.find((r) => r.id === runId)?.clarifyNavKind
     expect(stamp).not.toBe(null)
     // The safety property: a non-null stamp implies the bare /clarify/{run} route resolves.

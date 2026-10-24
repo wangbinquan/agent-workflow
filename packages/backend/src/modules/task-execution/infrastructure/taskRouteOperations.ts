@@ -1,3 +1,4 @@
+import type { TaskNodeRunClarifyNavPort } from '../composition/required-ports'
 // RFC-359 AC-1（命名债收尾 §5hj）—— `/api/tasks` 这条经典路由面的**共用实现**。
 //
 // 它从 `postgresqlTaskRouteOperations.ts` 改名而来：文件里 22 个导出，**15 个被
@@ -204,6 +205,7 @@ const RETRYABLE_TASK_STATUSES = [
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
+  readonly clarifyNav: TaskNodeRunClarifyNavPort
   readonly archivedEvents?: TaskArchivedEventsReader
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly nodeRunPrompts?: NodeRunPromptOperations
@@ -901,14 +903,18 @@ function commitPush(raw: string | null) {
  * （变异实证：把 PG 侧 `reviewNavKind = 'awaiting'` 改成 `null`，当场红）。
  */
 export async function taskNodeRunsProjection(
-  dependencies: Readonly<{ db: PersistenceDb; nodeRunPrompts?: NodeRunPromptOperations }>,
+  dependencies: Readonly<{
+    db: PersistenceDb
+    nodeRunPrompts?: NodeRunPromptOperations
+    clarifyNav: TaskNodeRunClarifyNavPort
+  }>,
   taskId: string,
 ) {
   const nodeRunPrompts = selectNodeRunPromptOperations(dependencies.nodeRunPrompts)
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  const { nodeRuns, docVersions, clarifyRounds, nodeRunOutputs } = tablesOf(dependencies.db)
-  const [runRows, versions, rounds] = await Promise.all([
+  const { nodeRuns, docVersions, nodeRunOutputs } = tablesOf(dependencies.db)
+  const [runRows, versions, latestRoundByRun] = await Promise.all([
     dependencies.db
       .select()
       .from(nodeRuns)
@@ -930,27 +936,13 @@ export async function taskNodeRunsProjection(
       })
       .from(docVersions)
       .where(eq(docVersions.taskId, taskId)),
-    dependencies.db
-      .select({
-        intermediaryNodeRunId: clarifyRounds.intermediaryNodeRunId,
-        status: clarifyRounds.status,
-        createdAt: clarifyRounds.createdAt,
-      })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.taskId, taskId)),
+    dependencies.clarifyNav.latestRoundStatusByRun(taskId),
   ])
   const versionsByRun = new Map<string, typeof versions>()
   for (const version of versions) {
     const existing = versionsByRun.get(version.reviewNodeRunId)
     if (existing === undefined) versionsByRun.set(version.reviewNodeRunId, [version])
     else existing.push(version)
-  }
-  const latestRoundByRun = new Map<string, (typeof rounds)[number]>()
-  for (const round of rounds) {
-    const previous = latestRoundByRun.get(round.intermediaryNodeRunId)
-    if (previous === undefined || previous.createdAt < round.createdAt) {
-      latestRoundByRun.set(round.intermediaryNodeRunId, round)
-    }
   }
   const runs: NodeRun[] = await Promise.all(
     runRows.map(async (row) => {
@@ -968,7 +960,7 @@ export async function taskNodeRunsProjection(
           reviewNavKind = 'decided'
         }
       }
-      let clarifyNavKind = clarifyNavKindForRoundStatus(latestRoundByRun.get(row.id)?.status)
+      let clarifyNavKind = clarifyNavKindForRoundStatus(latestRoundByRun.get(row.id))
       if (
         clarifyNavKind === 'awaiting' &&
         (task.status === 'canceled' || task.status === 'failed')
@@ -2521,7 +2513,11 @@ export function createTaskRouteOperations(
         },
         input,
       ),
-    nodeRuns: (taskId) => taskNodeRunsProjection({ db: dependencies.db, nodeRunPrompts }, taskId),
+    nodeRuns: (taskId) =>
+      taskNodeRunsProjection(
+        { db: dependencies.db, nodeRunPrompts, clarifyNav: dependencies.clarifyNav },
+        taskId,
+      ),
     diff: (taskId) => taskDiffProjection({ db: dependencies.db, workspaceReads }, taskId),
     stdout: (taskId, nodeRunId) =>
       nodeRunStdoutProjection(

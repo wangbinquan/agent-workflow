@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { enforceLimits } from '../src/services/limits'
+import { enforceLimits } from './helpers/resourceLimits'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 interface Harness {

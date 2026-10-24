@@ -59,7 +59,6 @@ export const DAEMON_BOOT_STEPS = [
   { id: 'task-delete-recovery', phase: 'execution-recovery', failure: 'best-effort' },
   { id: 'archive-recovery', phase: 'execution-recovery', failure: 'best-effort' },
   { id: 'workspace-maintenance-recovery', phase: 'execution-recovery', failure: 'best-effort' },
-  { id: 'frame-backfill', phase: 'execution-recovery', failure: 'best-effort' },
   { id: 'fusion-decision-recovery', phase: 'execution-recovery', failure: 'best-effort' },
   { id: 'mr-terminal-reconcile', phase: 'execution-recovery', failure: 'fail-closed' },
   { id: 'webhook-delivery-recovery', phase: 'execution-recovery', failure: 'fail-closed' },

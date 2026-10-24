@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -115,10 +116,10 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     await seedBase(db)
     await addTask(db, { id: 'orphaned', status: 'interrupted', finishedAt: NOW - 300 * DAY })
 
-    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90 },
-      { ...dirs, now: NOW },
-    )
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived.map((tree) => tree.rootTaskId)).toEqual(['orphaned'])
     expect(await taskCount(db)).toBe(0)
     expect(readdirSync(dirs.archiveDir)).toEqual(['orphaned'])
@@ -130,10 +131,10 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     await seedBase(db)
     await addTask(db, { id: 'recent', status: 'interrupted', finishedAt: NOW - 10 * DAY })
 
-    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90 },
-      { ...dirs, now: NOW },
-    )
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived).toHaveLength(0)
     expect(await taskCount(db)).toBe(1)
     expect(readdirSync(dirs.archiveDir)).toEqual([])
@@ -168,10 +169,10 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
       parentTaskId: 'c-root',
     })
 
-    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90 },
-      { ...dirs, now: NOW },
-    )
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived.map((tree) => tree.rootTaskId)).toEqual(['c-root'])
     expect(await taskCount(db)).toBe(4)
   })
@@ -182,10 +183,10 @@ describeEachProvider('RFC-350 —— interrupted 树进入归档面', (harness) 
     await seedBase(db)
     await addTask(db, { id: 'orphaned', status: 'interrupted', finishedAt: NOW - 300 * DAY })
 
-    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: false, retentionDays: 90 },
-      { ...dirs, now: NOW },
-    )
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: false, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(result.archived).toHaveLength(0)
     expect(await taskCount(db)).toBe(1)
   })

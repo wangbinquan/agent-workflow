@@ -29,6 +29,10 @@ export interface TaskDispatchContext extends TaskGateDefinitionContext {
 }
 
 export interface TaskGateQueries {
+  visibleTaskIds(
+    subject: { readonly userId: string; readonly canReadAllTasks: boolean },
+    taskIds: readonly string[],
+  ): Promise<ReadonlySet<string>>
   listContexts(taskIds: readonly string[]): Promise<TaskGateContext[]>
   listDefinitionContexts(taskIds: readonly string[]): Promise<TaskGateDefinitionContext[]>
   listDispatchContexts(taskIds: readonly string[]): Promise<TaskDispatchContext[]>

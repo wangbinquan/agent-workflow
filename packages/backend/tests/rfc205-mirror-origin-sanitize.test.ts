@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-205 impl-gate P0-6 (Codex 2026-07-22) — the warm reuse path normalises the
 // mirror origin to the credential-free redacted URL via `git remote set-url`.
 // runGit does NOT reject on a nonzero git exit, so a FAILED set-url (read-only /
@@ -66,7 +67,10 @@ describeEachProvider(
         if (typeof process.getuid === 'function' && process.getuid() === 0) return // root ignores 0444
         const url = pathToFileURL(await seedRepo('src')).href
         const cold = await resolveCachedRepo(
-          { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
+          {
+            store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+            appHome,
+          },
           { url },
         )
         const mirror = cold.cached.localPath
@@ -79,7 +83,11 @@ describeEachProvider(
         chmodSync(join(mirror, '.git'), 0o555)
         try {
           const err = await resolveCachedRepo(
-            { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: true },
+            {
+              store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+              appHome,
+              fetchOnReuse: true,
+            },
             { url },
           ).catch((e: unknown) => e)
           expect((err as { code?: string }).code).toBe('repo-origin-not-sanitized')
@@ -92,11 +100,18 @@ describeEachProvider(
     test('a normal warm reuse (origin scrubbable) does NOT fail closed', async () => {
       const url = pathToFileURL(await seedRepo('ok')).href
       await resolveCachedRepo(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+        },
         { url },
       )
       const warm = await resolveCachedRepo(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: true },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+          fetchOnReuse: true,
+        },
         { url },
       )
       expect(warm.cached.localPath.length).toBeGreaterThan(0)

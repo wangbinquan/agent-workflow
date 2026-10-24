@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // Pure exposure executes the actual private Intent snapshot function body with
 // its real codec dependencies. This is not a PostgreSQL factory/DB execution.
 // Database cases below use the real dual-provider repository fixture.
@@ -376,7 +377,11 @@ describeEachProvider('RFC359 Workgroup member projection on stored rows', (harne
     await harness.db.insert(workgroupMembers).values(members())
     const { repository, projection } = createWorkgroupRepository(
       harness.db,
-      workgroupRepositoryDependencies({ db: harness.db, now: () => T0 + 50 }),
+      workgroupRepositoryDependencies({
+        taskReferences: composeSubjectTaskReferencePort,
+        db: harness.db,
+        now: () => T0 + 50,
+      }),
     )
     const before = await repository.get('w24-group')
     if (before === null) throw new Error('missing actual repository document')

@@ -15,7 +15,7 @@ import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET, parseBatchShardKey } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 import type {

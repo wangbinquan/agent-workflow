@@ -22,7 +22,10 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { RuntimeRegistryPersistence } from '../src/modules/runtime-management/application/ports/runtimeRegistry'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import { createAgent, updateAgent } from '../src/services/agent'
+import {
+  createAgent,
+  updateAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { createRuntime } from './helpers/runtimeRegistryApplication'

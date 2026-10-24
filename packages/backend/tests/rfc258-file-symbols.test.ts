@@ -19,12 +19,12 @@ import {
   getTaskFileSymbols as getTaskFileSymbolsWithPort,
   type FileSymbolsQuery,
 } from '../src/services/codeIntel/fileSymbols'
-import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const getTaskFileSymbols = (db: PersistenceDb, taskId: string, query: FileSymbolsQuery) =>
-  getTaskFileSymbolsWithPort(createCodeWorkspaceRead(db), taskId, query)
+  getTaskFileSymbolsWithPort(createTaskCodeWorkspaceQueries(db), taskId, query)
 
 const dirs: string[] = []
 afterAll(() => {

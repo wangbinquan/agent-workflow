@@ -7,8 +7,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb, type DbClient } from '../packages/backend/src/db/client'
 import type { PostgresqlDatabaseClient } from '../packages/backend/src/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlEventsArchiveStore } from '../packages/backend/src/platform/persistence/postgresqlEventsArchive'
-import { createEventsArchiveStore } from '../packages/backend/src/platform/persistence/eventsArchiveStore'
+import { createTaskNodeEventArchiveStore } from '../packages/backend/src/modules/task-execution/composition'
 import { archiveEventsWithStore } from '../packages/backend/src/services/eventsArchive'
 import { createProductionPerformanceApplication } from '../packages/backend/tests/helpers/productionPerformanceApplication'
 import { PERF_CORPUS_ENTRY } from './perf-corpus'
@@ -90,8 +89,7 @@ export async function measurePerformanceArchive(
   logDir: string,
 ) {
   const started = performance.now()
-  const store =
-    '$provider' in db ? createPostgresqlEventsArchiveStore(db) : createEventsArchiveStore(db)
+  const store = createTaskNodeEventArchiveStore(db)
   const result = await archiveEventsWithStore(
     store,
     {

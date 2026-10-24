@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W1-T2a（F-H2-1 之一）—— collaboration 的问题派发命令端口：一份实现，两个引擎。
 //
 // 此前只有 `createSqliteQuestionDispatchCommand`，且 PostgreSQL daemon 从未注入该端口，
@@ -15,7 +16,10 @@ import type { QuestionDispatchCommandPort } from '@/modules/collaboration/applic
 import type { TaskActorRole } from '@agent-workflow/shared'
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
-export function createQuestionDispatchCommand(db: PersistenceDb): QuestionDispatchCommandPort {
+export function createQuestionDispatchCommand(
+  db: PersistenceDb,
+  taskLock: HumanGateTaskLockPort,
+): QuestionDispatchCommandPort {
   return {
     async dispatch(command) {
       const { dispatchTaskQuestionsWithDecision } = await import('./taskQuestionDispatch')
@@ -35,6 +39,7 @@ export function createQuestionDispatchCommand(db: PersistenceDb): QuestionDispat
             ? {}
             : { idempotencyKey: command.idempotencyKey }),
         },
+        taskLock,
       )
       return {
         taskId: dispatched.taskId,
@@ -49,12 +54,14 @@ export function createQuestionDispatchCommand(db: PersistenceDb): QuestionDispat
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createQuestionDispatchCommandContext(input: {
+  readonly taskLock: HumanGateTaskLockPort
   readonly db: DbClient
   readonly actor: Actor
   readonly role: TaskActorRole
 }): CollaborationCommandContext<'questionDispatches'> {
   return createCollaborationCommandContext({
+    taskLock: input.taskLock,
     db: input.db,
-    questionDispatches: createQuestionDispatchCommand(input.db),
+    questionDispatches: createQuestionDispatchCommand(input.db, input.taskLock),
   })
 }

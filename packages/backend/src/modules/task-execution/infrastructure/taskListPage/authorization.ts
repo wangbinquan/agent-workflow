@@ -16,7 +16,7 @@ import {
   defaultTaskVisibilityRowRef,
   taskCollaboratorTaskIds,
   taskVisibilityCondition,
-} from '@/db/query'
+} from '../taskAuthorization'
 import type { TaskListPageDb } from './db'
 
 /** 谓词作用的那一行：可以是 `tasks` 本身，也可以是查询里的别名列。 */
@@ -50,7 +50,7 @@ export function defaultTaskListRowRef(db: object): TaskListRowRef {
 /**
  * 「这一行对该请求者可见吗」。全可见权限直接放行。
  *
- * RFC-359 W57：判据本身来自 `db/query.ts` 的**唯一一份**（此前这里是仓里六处逐字重复之一）。
+ * RFC-359 W57：判据本身来自 `taskAuthorization.ts` 的**唯一一份**（此前这里是仓里六处逐字重复之一）。
  * 这一层只做两件本页特有的事：把「无需收窄」的 `undefined` 渲染成 `1 = 1`（本页的调用方要的是
  * 恒真条件，不是可选值），以及保留本模块的 `ref` / `viewer` 命名。
  */

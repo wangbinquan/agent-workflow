@@ -11,7 +11,7 @@
 //   * 改名没搬 kind ⇒ 端口回落 DEFAULT_OUTPUT_KIND='string'，下游 review 节点
 //     突然说「这个端口不是 Markdown」（agent-ports.ts:379-410 的删除路径同理）；
 //   * 删端口没删 branchPorts ⇒ 后端 assertBranchPortsDeclared
-//     （packages/backend/src/services/agent.ts:973-985）直接拒收整个代理，用户
+//     （packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#assertBranchPortsDeclared）直接拒收整个代理，用户
 //     手里再没有任何界面能改掉那条看不见的残留；
 //   * required 的 true/false 存反 ⇒ 启动表单把用户没勾的端口全判成必填
 //     （agent-ports.ts:77-88 的注释记的就是这次事故）；
@@ -42,7 +42,7 @@
 //     packages/frontend/src/components/OutputsEditor.tsx:97-99, :158-190
 //   * 五个页签角标：packages/frontend/src/components/AgentForm.tsx:454-515
 //   * branchPorts 后端拒收未声明端口：
-//     packages/backend/src/services/agent.ts:973-985
+//     packages/backend/src/modules/resource-catalog/infrastructure/agentBranchPorts.ts#assertBranchPortsDeclared
 //   * 运行期未声明分支端口 ⇒ failureCode='branch-port-not-declared'：
 //     packages/backend/src/services/runner.ts:2163-2178
 //   * 详情页 clean-follow（AGENT-17 的前提）：

@@ -7,6 +7,7 @@ import { createCommittedHumanInputQueries } from '@/modules/collaboration/infras
 import { getReviewDetail } from '@/modules/collaboration/infrastructure/review'
 import type { ReviewActor } from '@/modules/collaboration/public/types'
 import { describeEachProvider } from './helpers/eachProvider'
+import { withO2Closure } from './helpers/o2Closure'
 import { seedReviewRound, REVIEW_OWNER, type ReviewRound } from './helpers/reviewDecisionFixture'
 
 const actor: ReviewActor = {
@@ -42,7 +43,7 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
         { workflowSnapshot: JSON.stringify(definition) },
       )
       const beforeRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, round.taskId))
-      const command = createReviewDecisionCommand({ db, appHome: round.appHome })
+      const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
       const request = {
         actor,
         authorRole: 'owner' as const,
@@ -94,7 +95,9 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
   }
   test('default review continues to rerun upstream on rejection', async () => {
     round = await seedReviewRound(harness.db)
-    await createReviewDecisionCommand({ db: harness.db, appHome: round.appHome }).submit({
+    await createReviewDecisionCommand(
+      withO2Closure({ db: harness.db, appHome: round.appHome }),
+    ).submit({
       actor,
       authorRole: 'owner',
       nodeRunId: round.reviewRunId,

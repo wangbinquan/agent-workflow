@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -110,11 +111,13 @@ describeEachProvider('RFC-370 selected repository preparation effects', (harness
           return effects
         },
       }
-      const composition = composeRepositoryPreparation({
-        db: harness.db,
-        appHome: 'installation:selected',
-        preparationEffects: factory,
-      })
+      const composition = composeRepositoryPreparation(
+        withSourceControlTaskPorts({
+          db: harness.db,
+          appHome: 'installation:selected',
+          preparationEffects: factory,
+        }),
+      )
       const before = await f.journal.operation(f.operation)
       let settled = false
       const pending = composition.effect(f.request).then((binding) => {
@@ -156,15 +159,17 @@ describeEachProvider('RFC-370 selected repository preparation effects', (harness
     const f = await fixture()
     const before = await f.journal.operation(f.operation)
     const failure = new Error('selected workspace mechanism unavailable')
-    const composition = composeRepositoryPreparation({
-      db: harness.db,
-      appHome: 'installation:selected',
-      preparationEffects: {
-        async create() {
-          throw failure
+    const composition = composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        appHome: 'installation:selected',
+        preparationEffects: {
+          async create() {
+            throw failure
+          },
         },
-      },
-    })
+      }),
+    )
     await expect(composition.effect(f.request)).rejects.toBe(failure)
     expect(await f.journal.operation(f.operation)).toEqual(before)
   })

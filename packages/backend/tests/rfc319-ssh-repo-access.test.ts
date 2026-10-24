@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-319 REPO-42 —— SSH 协议的仓库接入：真的用 ssh 传输 clone 一次。
 //
 // 为什么这条测试存在：`ssh://` 与 scp 式 URL 是 `parseGitUrl` 的一等形态
@@ -115,7 +116,11 @@ describeEachProvider('RFC-319 REPO-42 —— ssh 传输的仓库接入', (harnes
     const url = `ssh://git@${FIXTURE_HOST}${bare}`
 
     const r = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        fetchOnReuse: false,
+      },
       { url },
     )
 
@@ -145,7 +150,11 @@ describeEachProvider('RFC-319 REPO-42 —— ssh 传输的仓库接入', (harnes
     process.env.GIT_SSH_COMMAND = `${stub.path} -i ${keyPath}`
 
     const r = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        fetchOnReuse: false,
+      },
       { url: `ssh://git@${FIXTURE_HOST}${bare}` },
     )
     expect(r.cold).toBe(true)
@@ -170,11 +179,19 @@ describeEachProvider('RFC-319 REPO-42 —— ssh 传输的仓库接入', (harnes
     const scp = `git@${FIXTURE_HOST}:${bare.replace(/^\//, '')}`
 
     const a = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        fetchOnReuse: false,
+      },
       { url: uri },
     )
     const b = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        fetchOnReuse: false,
+      },
       { url: scp },
     )
 

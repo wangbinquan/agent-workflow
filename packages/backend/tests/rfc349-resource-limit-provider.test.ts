@@ -6,8 +6,8 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { composeResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
-import type { ResourceLimitOperations } from '@/modules/system-operations/public/operations'
+import { composeResourceLimitOperations } from '@/bootstrap/resourceLimits'
+import type { ResourceLimitOperations } from '@/services/limits'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -115,8 +115,8 @@ describe('RFC-349 resource-limit provider seam', () => {
             },
           ]
         },
-        async listCallRows() {
-          return [{ childTaskId: 'child', wrapperProgressJson: '{"callHumanWaitMs":1000}' }]
+        async callHumanWaits() {
+          return [{ childTaskId: 'child', accumulatedMs: 1000, openSince: null }]
         },
         async listTaskStatuses() {
           return ['done']
@@ -140,7 +140,9 @@ describe('RFC-349 resource-limit provider seam', () => {
     })
     expect(cancellations).toEqual(['task-policy'])
     expect(audits).toEqual(['task-time-limit-exceeded'])
-    await expect(readTaskResourceUsage(operations, 'task-policy', 20_000)).resolves.toEqual({
+    await expect(
+      readTaskResourceUsage(operations.persistence, 'task-policy', 20_000),
+    ).resolves.toEqual({
       effectiveRunningMs: 9_000,
       totalTokens: 7,
     })
@@ -186,9 +188,7 @@ describe('RFC-349 resource-limit provider seam', () => {
   test('service and the shared adapter prohibit direct DB facade casts and SQLite fallback', () => {
     const service = source('src/services/limits.ts')
     // RFC-359 W7：两个 provider 共用同一份实现，所以这里读的就是那一份中立文件。
-    const adapter = source(
-      'src/modules/system-operations/infrastructure/resourceLimitPersistence.ts',
-    )
+    const adapter = source('src/modules/task-execution/infrastructure/taskResourceLimitFacts.ts')
     for (const forbidden of ["from '@/db/", "from 'drizzle-orm'", '.select(', '.update(']) {
       expect(service).not.toContain(forbidden)
     }

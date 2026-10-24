@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   patchNodeRunFixture,
@@ -121,25 +122,27 @@ async function seed(
     status: 'done',
     iteration: 0,
   })
-  const round = await createClarifyRound({
-    db: h.db,
-    taskId,
-    askingNodeId: 'asking',
-    askingNodeRunId,
-    intermediaryNodeId: 'gate',
-    kind: 'self',
-    askingShardKey: null,
-    iteration: 0,
-    questions: [
-      ClarifyQuestionSchema.parse({
-        id: 'a',
-        title: 'Question a',
-        kind: 'single',
-        options: ['A', 'B'],
-        mindmap: { categoryPath: ['Scope'] },
-      }),
-    ],
-  })
+  const round = await createClarifyRound(
+    withO2Closure({
+      db: h.db,
+      taskId,
+      askingNodeId: 'asking',
+      askingNodeRunId,
+      intermediaryNodeId: 'gate',
+      kind: 'self',
+      askingShardKey: null,
+      iteration: 0,
+      questions: [
+        ClarifyQuestionSchema.parse({
+          id: 'a',
+          title: 'Question a',
+          kind: 'single',
+          options: ['A', 'B'],
+          mindmap: { categoryPath: ['Scope'] },
+        }),
+      ],
+    }),
+  )
   const read = async () => {
     return (
       await h.db

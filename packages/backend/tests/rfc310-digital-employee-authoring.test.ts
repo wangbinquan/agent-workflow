@@ -41,7 +41,7 @@ import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
 } from '@/services/digitalEmployeeAgentTemplates'
-import { listAgents } from '@/services/agent'
+import { listAgents } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'
 import {
   designEmployeeTypePackage,

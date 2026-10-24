@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-058 PR-A baseline (T4): byte-level lock of RFC-056 patch chain 2026-05-22
 // through 2026-05-25 invariants. These tests are intentionally focused on the
 // direct outcomes of each patch (cascade BFS minted, cci computation, cci
@@ -171,17 +172,19 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
         retryIndex: 0,
         iteration: 0,
       })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_q1',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cc1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: 'nr_q1',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        }),
+      )
       // RFC-162: the designer rerun comes from reassigning the answered round to the graph
       // designer node + dispatching that designer entry (the legacy scope/direct trigger is gone).
       await autoDispatchClarifyRound({
@@ -222,17 +225,19 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
       // — cci on the cross-clarify node_run is the session iteration. So this
       // test pivots to: session iteration is per (cc, loopIter), not inheriting
       // from the questioner's cci.
-      const { round: session } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_q3',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
+      const { round: session } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cc1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: 'nr_q3',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        }),
+      )
       expect(session.iteration).toBe(0)
       // RFC-074 PR-C: the cross-clarify node_run no longer carries a cci counter;
       // assert the row exists and is parked for human input.
@@ -266,17 +271,19 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_q1',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cc1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: 'nr_q1',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -315,17 +322,19 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_q1',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cc1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: 'nr_q1',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -372,17 +381,19 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_q1',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cc1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: 'nr_q1',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

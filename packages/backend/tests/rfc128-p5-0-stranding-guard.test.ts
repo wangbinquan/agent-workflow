@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-132 PR-B UPDATE: the P5-0 stranding guard is REMOVED (universal deferred model). A
 // self/questioner FULL seal no longer strands — every task has the park + control-channel dispatch
 // release path — so this file now locks that a full seal SUCCEEDS (parks + dispatch mints the
@@ -149,17 +150,19 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'designer',
-    askingNodeRunId: sourceRunId,
-    askingShardKey: null,
-    intermediaryNodeId: 'clarify1',
-    iteration: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
+      questions,
+    }),
+  )
   return { taskId, originNodeRunId: clarifyNodeRunId }
 }
 
@@ -180,17 +183,19 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'cross1',
-    askingNodeId: 'questioner',
-    askingNodeRunId: questionerRunId,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: questionerRunId,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions,
+    }),
+  )
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 

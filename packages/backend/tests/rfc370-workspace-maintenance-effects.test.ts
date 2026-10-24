@@ -1,3 +1,5 @@
+import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-370: selected workspace maintenance reads may be remote and asynchronous.
 // Use real provider stores/claims with explicit effect fakes; local fallback must
 // not run and durable cleanup completion must follow acknowledged effects.
@@ -8,7 +10,7 @@ import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspaceMaintenanceFilesystem } from '@/modules/source-control/application/ports/workspaceMaintenance'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
-import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
+import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -41,18 +43,20 @@ function selectedEffects(
   }
 }
 function command(db: PersistenceDb, filesystem: WorkspaceMaintenanceFilesystem) {
-  return composeWorkspaceMaintenanceCommand({
-    db,
-    appHome: '/selected-adapter-only',
-    terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
-    isMaterializingTask() {
-      throw new Error('local materialization query must not run')
-    },
-    invalidateWorkspacePath() {
-      throw new Error('local invalidation must not run')
-    },
-    filesystem,
-  })
+  return composeWorkspaceMaintenanceCommand(
+    withWorkspaceMaintenancePorts({
+      db,
+      appHome: '/selected-adapter-only',
+      terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
+      isMaterializingTask() {
+        throw new Error('local materialization query must not run')
+      },
+      invalidateWorkspacePath() {
+        throw new Error('local invalidation must not run')
+      },
+      filesystem,
+    }),
+  )
 }
 async function terminalTask(db: PersistenceDb) {
   const workflowId = ulid(),
@@ -345,7 +349,9 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
       try {
         await existenceEntered.pending
         expect(
-          await new DrizzleWorkspaceMaintenanceStore(harness.db).claimWorkspace(taskId, 10001),
+          await new PortWorkspaceMaintenanceStore(
+            composeSourceControlTaskPorts(harness.db),
+          ).claimWorkspace(taskId, 10001),
         ).toBe(true)
         finalizationResult = command(harness.db, effects)
           .finalizeClaimedWorkspace(taskId, 10001)

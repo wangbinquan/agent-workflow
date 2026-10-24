@@ -25,9 +25,9 @@ import {
   type StructuralScope,
 } from '@agent-workflow/shared'
 import type {
-  CodeWorkspaceRead,
+  TaskCodeWorkspaceQueries,
   CodeWorkspaceTask,
-} from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+} from '@/modules/task-execution/public/types'
 import {
   composeLocalCodeReviewArtifacts,
   type CodeReviewArtifactStore,
@@ -60,7 +60,7 @@ export interface DeepOpts {
 
 /** RFC-370 §10 V16 — what the code-review reads run against. */
 export interface CodeReviewReads {
-  readonly workspace: CodeWorkspaceRead
+  readonly workspace: TaskCodeWorkspaceQueries
   /** The selected revision content; the native worktrees of this host when absent. */
   readonly content?: RepositoryRevisionContentFactory
   /** The selected artifact store; the appHome files when absent. */
@@ -68,10 +68,10 @@ export interface CodeReviewReads {
 }
 
 /** The bare workspace port keeps the standalone selections (direct callers, tests). */
-export type CodeReviewReadInput = CodeWorkspaceRead | CodeReviewReads
+export type CodeReviewReadInput = TaskCodeWorkspaceQueries | CodeReviewReads
 
 export interface ResolvedCodeReviewReads {
-  readonly workspace: CodeWorkspaceRead
+  readonly workspace: TaskCodeWorkspaceQueries
   readonly content: RepositoryRevisionContentFactory
   readonly artifacts: CodeReviewArtifactStore
 }

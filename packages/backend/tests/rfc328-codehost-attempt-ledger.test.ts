@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-328 code-host effect contract: every real mutation send owns one durable
 // attempt, existing transport retries remain live, and earlier ambiguity is
 // retained unless a later applied response resolves the logical operation.
@@ -104,7 +105,9 @@ async function fixture(
     resourceKeys: [`code-host:${provider}:${taskId}`],
   } as const
   const observer = createCodeHostEffectAttemptObserver({
-    persistence: createTaskExecutionPersistence(db).effects,
+    persistence: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).effects,
     context,
     action,
     nodeRunId,
@@ -489,7 +492,9 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
       status: 'running',
     })
     const nextObserver = createCodeHostEffectAttemptObserver({
-      persistence: createTaskExecutionPersistence(h.db).effects,
+      persistence: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).effects,
       context: createTaskExecutionContext({
         db: h.db,
         intentId: manualIntentId,

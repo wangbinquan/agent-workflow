@@ -3,7 +3,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import { taskVisibilitySubjectOf, visibleTaskIdsFor } from '@/db/query'
+import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
@@ -38,9 +38,12 @@ export function createReviewTaskAccessPort(db: PersistenceDb): ReviewTaskAccessP
       }
     },
     async visibleTaskIds(actor: ReviewActor, taskIds: readonly string[]) {
-      // RFC-359 W57：判据 + 分块都走 `db/query.ts` 的唯一一份。此前这一段与
+      // RFC-395 II-b：判据 + 分块都走 task-execution 的唯一一份。此前这一段与
       // `collaborationTaskAccess.ts` 里的**逐字相同**，且两份各自把分块大小硬写成 500。
-      return await visibleTaskIdsFor(db, taskVisibilitySubjectOf(actor), taskIds)
+      return await createTaskGateQueries(db).visibleTaskIds(
+        { userId: actor.user.id, canReadAllTasks: actor.permissions.has('tasks:read:all') },
+        taskIds,
+      )
     },
   }
 }

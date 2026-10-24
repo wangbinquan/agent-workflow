@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-131 验收 #4 组合 e2e — deferred self-clarify → done+output → review REJECT → 新 rerun，
 // 经 runTask 端到端驱动。锁「reject 重做的 prompt 组合行为」两半都成立：
 //   (a) RFC-119 prior-output：reject 重做带上上次产物（V1 doc）。
@@ -32,7 +33,7 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
@@ -288,14 +289,16 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
   expect(reviewRun).toBeDefined()
 
   // ---- REJECT (用户拍板「消费掉」重做) → supersedes P's done+output run + mints reject rerun ----
-  const res = await submitReviewDecision({
-    db: h.db,
-    appHome: h.appHome,
-    nodeRunId: reviewRun!.id,
-    decision: 'rejected',
-    rejectReason: REJECT_REASON,
-    expectedReviewIteration: reviewRun!.reviewIteration,
-  })
+  const res = await submitReviewDecision(
+    withO2Closure({
+      db: h.db,
+      appHome: h.appHome,
+      nodeRunId: reviewRun!.id,
+      decision: 'rejected',
+      rejectReason: REJECT_REASON,
+      expectedReviewIteration: reviewRun!.reviewIteration,
+    }),
+  )
   expect(res.resumeRequired).toBe(true)
 
   // ---- runTask#3: P reject rerun re-produces doc V2 ----

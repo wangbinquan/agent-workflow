@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-204 — the P0-a red anchor plus the reuse contract that replaces it.
 //
@@ -54,7 +55,9 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
     const db = createInMemoryDb(MIGRATIONS)
     seedCredentialedRepo(db, ulid())
 
-    const items = await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))
+    const items = await listCachedRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+    )
     expect(items).toHaveLength(1)
 
     // The whole serialized payload — not just the field we remembered to check.
@@ -80,7 +83,9 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
     const row = queryRows(db.select().from(cachedRepos))[0]
     expect(row?.urlRedacted).toBeNull()
 
-    const items = await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))
+    const items = await listCachedRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+    )
     expect(JSON.stringify(items)).not.toContain(TOKEN)
     expect(items[0]?.urlRedacted).toBe('<url unavailable>')
   })
@@ -101,7 +106,11 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
     })
 
     expect(
-      JSON.stringify(await listCachedRepos(composeSqliteRepositoryWorkspaceStore(db))),
+      JSON.stringify(
+        await listCachedRepos(
+          composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        ),
+      ),
     ).not.toContain(TOKEN)
   })
 })

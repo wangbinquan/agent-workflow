@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W1-T7（P0-1 / P0-2）—— 两道 owner 围栏在两个引擎上同一规则。
 //
 // dual-provider-parity-audit-2026-09-04：
@@ -94,7 +95,9 @@ async function seedClaimedTask(db: PersistenceDb) {
     retryIndex: 0,
     iteration: 0,
   })
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
     persistence,

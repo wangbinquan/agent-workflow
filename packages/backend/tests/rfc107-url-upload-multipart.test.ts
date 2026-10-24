@@ -54,7 +54,7 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import {

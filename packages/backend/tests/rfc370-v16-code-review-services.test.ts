@@ -15,9 +15,9 @@ import { Hono } from 'hono'
 import { mountTaskRoutes } from '@/routes/tasks'
 import { computeSummary, type ChangeNarrative, type StructuralDiff } from '@agent-workflow/shared'
 import type {
-  CodeWorkspaceRead,
+  TaskCodeWorkspaceQueries,
   CodeWorkspaceTask,
-} from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+} from '@/modules/task-execution/public/types'
 import type {
   CodeReviewArtifactStore,
   StructuralDiffArtifactKey,
@@ -36,7 +36,7 @@ import { getChangeNarrativeStatus } from '@/services/changeNarrative'
 const TASK = '01V16CODEREVIEWSERVICES000'
 const REF = `cs-workspace:${TASK}/worktrees/${TASK}`
 
-function workspace(task: Partial<CodeWorkspaceTask> = {}): CodeWorkspaceRead {
+function workspace(task: Partial<CodeWorkspaceTask> = {}): TaskCodeWorkspaceQueries {
   const row: CodeWorkspaceTask = {
     id: TASK,
     status: 'running',
@@ -238,8 +238,8 @@ describe('RFC-370 §10 V16 structural diff through the selected content', () => 
 
 describe('RFC-370 §10 V16 file content, call targets and narrative through the selections', () => {
   const store = {
-    findWorktreeTask: async (id: string) =>
-      id === TASK ? { id, worktreePath: REF, baseCommit: 'base', repos: [] } : null,
+    find: async (id: string) =>
+      id === TASK ? { taskId: id, worktreePath: REF, baseCommit: 'base', repos: [] } : null,
   } as unknown as Parameters<typeof getTaskFileContent>[0]
 
   test('both file-content sides map the tagged reads onto the view answers', async () => {

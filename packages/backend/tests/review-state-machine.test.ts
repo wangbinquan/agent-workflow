@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Locks in RFC-005 PR-B T6 + T7 + T11 review state machine.
 //
@@ -23,7 +24,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
   addReviewComment,
@@ -309,13 +310,15 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   })
 
   test('approve flips the review run to done + clears the pending inbox', async () => {
-    const result = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.resumeRequired).toBe(true)
     expect(result.taskId).toBe(h.taskId)
 
@@ -343,14 +346,16 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   // was complete. RFC-005 design.md §2.2 + workflow.validator.ts declare
   // these ports exist; this test locks in that we actually produce rows.
   test('approve writes approved_doc + approval_meta into node_run_outputs', async () => {
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-      author: 'tester',
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'tester',
+      }),
+    )
 
     const outRows = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewNodeRunId })
     const byPort = new Map(outRows.map((r) => [r.portName, r.content]))
@@ -391,14 +396,16 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       .set({ sourceFilePath: pendingPath })
       .where(eq(docVersions.reviewNodeRunId, h.reviewNodeRunId))
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-      author: 'tester',
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        author: 'tester',
+      }),
+    )
 
     const outRows = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewNodeRunId })
     const byPort = new Map(outRows.map((r) => [r.portName, r.content]))
@@ -426,14 +433,16 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       commentText: 'narrow direction',
     })
 
-    const result = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'rejected',
-      rejectReason: 'wrong direction',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'rejected',
+        rejectReason: 'wrong direction',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.resumeRequired).toBe(true)
     expect(result.reviewIteration).toBe(1)
 
@@ -483,14 +492,16 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   })
 
   test('reject + scheduler re-run produces a new doc_version v2 with reviewIteration=1', async () => {
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'rejected',
-      rejectReason: 'wrong direction',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'rejected',
+        rejectReason: 'wrong direction',
+        expectedReviewIteration: 0,
+      }),
+    )
 
     // Re-enter the scheduler synchronously (mirrors what resumeTask would do).
     // RFC-097: runTask's entry CAS only claims pending tasks — reset first.
@@ -537,13 +548,15 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       },
       commentText: 'include pending_payment',
     })
-    const result = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.resumeRequired).toBe(true)
     expect(result.reviewIteration).toBe(1)
 
@@ -566,13 +579,15 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   test('optimistic-lock guard: stale reviewIteration → conflict', async () => {
     let err: Error | null = null
     try {
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewNodeRunId,
-        decision: 'approved',
-        expectedReviewIteration: 999,
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewNodeRunId,
+          decision: 'approved',
+          expectedReviewIteration: 999,
+        }),
+      )
     } catch (e) {
       err = e as Error
     }
@@ -582,26 +597,30 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
 
   test('repeating the same decision replays the committed operation', async () => {
     // Approve first.
-    const first = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    const first = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     await wakeHumanGateContinuation(first.taskId, first.continuationRef, {
       db: h.db,
       appHome: h.appHome,
       schedulerDriver: { async drive() {} },
       awaitScheduler: true,
     })
-    const replay = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    const replay = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(replay.continuationRef).toBe(first.continuationRef)
     expect(replay.receipt.replayed).toBe(true)
   })

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 /** RFC-362 test composition only. Maps are process-local characterization state,
  * never a durable seal/journal implementation or a production admission writer. */
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
@@ -93,7 +94,7 @@ export function repositoryLaunchContracts(input: {
       }
       const identity = await ensureCachedRepoIdentity(
         {
-          store: composeRepositoryWorkspaceStore(input.db),
+          store: composeRepositoryWorkspaceStore(input.db, composeSourceControlTaskPorts(input.db)),
           appHome: input.appHome,
         },
         { url: source.url },

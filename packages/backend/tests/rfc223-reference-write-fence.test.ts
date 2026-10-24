@@ -30,7 +30,11 @@ import { stringify } from 'yaml'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createAgent, getAgentById, updateAgent } from '../src/services/agent'
+import {
+  createAgent,
+  getAgentById,
+  updateAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
 import { importWorkflowYaml } from '../src/services/workflow.yaml'
 import {

@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-359 AC1: keep both established Workgroup entry points and their original
 // row/snapshot/hash behavior while sharing the six pure codec algorithms.
 // The database cases run on real provider fixtures; the old synchronous writer
@@ -118,7 +119,14 @@ const OLD_GOLDENS = {
 }
 
 function repositoryFor(db: PersistenceDb) {
-  return createWorkgroupRepository(db, workgroupRepositoryDependencies({ db, now: () => T0 + 50 }))
+  return createWorkgroupRepository(
+    db,
+    workgroupRepositoryDependencies({
+      taskReferences: composeSubjectTaskReferencePort,
+      db,
+      now: () => T0 + 50,
+    }),
+  )
 }
 
 async function seed(db: PersistenceDb, mode: WorkgroupRow['mode'] = 'leader_worker') {

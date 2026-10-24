@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2a —— 五对只差客户端类型 / 同步异步形态的适配器合成一份实现，两个引擎各跑一遍：
 // 节点激活快照读取、任务工件路径查询、动态工作流状态持久化、RFC-354 frame 回填存储、
 // 人工门 continuation 的 effect 检视（ready / 无 claimed intent 两条路径）。
@@ -6,12 +7,10 @@ import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queri
 import {
   type TaskFixtureSpec,
   agentFixture,
-  clarifyRoundFixture,
   nodeRunFixture,
   nodeRunOutputFixture,
   taskFixture,
   workflowFixture,
-  readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -24,10 +23,8 @@ import { ulid } from 'ulid'
 import { PLATFORM_INPUTS_DIR } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { OwnershipToken } from '@/modules/task-execution/domain/ownership'
-import { FRAME_BACKFILL_MARKER_KEY } from '@/modules/task-execution/application/frameBackfillJob'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { DrizzleDynamicWorkflowPersistence } from '@/modules/task-execution/infrastructure/dynamicWorkflowPersistence'
-import { createFrameBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/frameBackfillStore'
 import { DrizzleGateContinuationEffectPersistence } from '@/modules/task-execution/infrastructure/gateContinuationEffectPersistence'
 import { DrizzleNodeActivationSnapshotReader } from '@/modules/task-execution/infrastructure/nodeActivationSnapshotReader'
 import { DrizzleTaskArtifactPathQueries } from '@/modules/task-execution/infrastructure/taskArtifactPathQueries'
@@ -179,63 +176,13 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 动态工作流状态持久化
   })
 })
 
-describeEachProvider('RFC-359 W4-B1 批 2a —— frame 回填存储', (harness) => {
-  test('标记读写、任务枚举、run 帧回填（原子）与 clarify 轮次对齐', async () => {
-    const db = harness.db
-    const store = createFrameBackfillStore(db)
-    expect(await store.readMarker()).toBeNull()
-    await store.writeMarker('v1')
-    await store.writeMarker('v2')
-    expect(await store.readMarker()).toBe('v2')
-    const { maintenanceState } = tablesOf(db)
-    expect(
-      (
-        await db
-          .select()
-          .from(maintenanceState)
-          .where(eq(maintenanceState.key, FRAME_BACKFILL_MARKER_KEY))
-      ).length,
-    ).toBe(1)
-
-    const taskId = await seedTask(db)
-    const container = ulid()
-    const inner = ulid()
-    await nodeRunFixture(db, [
-      { id: container, taskId, nodeId: 'loop', status: 'running', retryIndex: 0, iteration: 0 },
-      { id: inner, taskId, nodeId: 'inner', status: 'done', retryIndex: 0, iteration: 0 },
-    ])
-    expect(await store.listTaskIds()).toContain(taskId)
-    const loaded = await store.loadTask(taskId)
-    expect(loaded?.runs.map((run) => run.id).sort()).toEqual([container, inner].sort())
-    expect(await store.loadTask('missing')).toBeNull()
-
-    await store.applyRunFrames([{ id: inner, containerRunId: container, scopePath: 'loop/0' }])
-    const framed = (await readNodeRunFixtures(db, { id: inner }))[0]
-    expect(framed).toMatchObject({ containerRunId: container, scopePath: 'loop/0' })
-
-    // clarify 轮次：中介 run 已有帧、轮次还没有 ⇒ 对齐；已对齐的不再计数。
-    await clarifyRoundFixture(db, {
-      id: ulid(),
-      taskId,
-      kind: 'self',
-      askingNodeId: 'inner',
-      askingNodeRunId: inner,
-      intermediaryNodeId: 'clarify',
-      intermediaryNodeRunId: inner,
-      status: 'answered',
-      questions: '[]',
-      createdAt: 1,
-    })
-    expect(await store.alignClarifyRounds(taskId)).toBe(1)
-    expect(await store.alignClarifyRounds(taskId)).toBe(0)
-  })
-})
-
 describeEachProvider('RFC-359 W4-B1 批 2a —— 人工门 continuation 的 effect 检视', (harness) => {
   test('非 gate-continuation 的 claimed intent ⇒ ready；intent 缺席 / 未 claimed ⇒ task-execution-stale-owner', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     const gate = new DrizzleGateContinuationEffectPersistence(db, persistence.effects)
     const intentId = `intent_${ulid()}`
     const { taskExecutionIntents } = tablesOf(db)
@@ -270,7 +217,6 @@ test('源码锁：五份实现里不再出现 provider 名，孪生已删除', (
     'nodeActivationSnapshotReader.ts',
     'taskArtifactPathQueries.ts',
     'dynamicWorkflowPersistence.ts',
-    'legacyMigration/frameBackfillStore.ts',
   ]) {
     const source = readFileSync(resolve(root, file), 'utf8')
     expect(source).toContain("from '@/platform/persistence/persistenceDb'")
@@ -281,7 +227,6 @@ test('源码锁：五份实现里不再出现 provider 名，孪生已删除', (
     'NodeActivationSnapshotReader',
     'TaskArtifactPathQueries',
     'DynamicWorkflowPersistence',
-    'FrameBackfillStore',
   ]) {
     expect(() => readFileSync(resolve(root, `sqlite${stem}.ts`))).toThrow()
     expect(() => readFileSync(resolve(root, `postgresql${stem}.ts`))).toThrow()

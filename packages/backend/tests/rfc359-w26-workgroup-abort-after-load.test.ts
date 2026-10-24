@@ -6,7 +6,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { createAgent } from '@/services/agent'
+import { createAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { createLogger } from '@/util/log'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'

@@ -6,15 +6,12 @@ const sourceRoot = resolve(import.meta.dir, '../src')
 const source = (relative: string): string => readFileSync(resolve(sourceRoot, relative), 'utf8')
 
 describe('RFC-345 provider-neutral classic compatibility cutover', () => {
-  test('Agent compatibility facade delegates SQLite mechanics to owner infrastructure', () => {
-    const facade = source('services/agent.ts')
+  test('Agent compatibility facade is retired and mechanics stay in owner infrastructure', () => {
+    expect(existsSync(resolve(sourceRoot, 'services/agent.ts'))).toBe(false)
     const implementation = source('modules/resource-catalog/infrastructure/legacy/agent.ts')
     // RFC-359 W4-D14：Agent 仓库只有一份中立实现（agentRepository.ts），不再经 legacy/agent 包装。
     const repository = source('modules/resource-catalog/infrastructure/agentRepository.ts')
 
-    expect(facade).toContain('RFC-345 compatibility facade')
-    expect(facade).toContain('@/modules/resource-catalog/infrastructure/legacy/agent')
-    expect(facade).not.toMatch(/@\/db|drizzle-orm|dbTxSync|DbClient|DbTxSync/)
     expect(implementation).toContain("from '@/platform/persistence/sessionTables'")
     expect(repository).not.toContain("from './legacy/agent'")
     expect(repository).not.toContain("from '@/services/agent'")

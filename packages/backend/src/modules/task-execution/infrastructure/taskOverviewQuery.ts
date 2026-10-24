@@ -5,12 +5,12 @@ import { queryRows } from '@/platform/persistence/queryHelpers'
 import { and, count, eq, gte, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 
 import type { OverviewTasks } from '@agent-workflow/shared'
-import { taskVisibilityCondition } from '@/db/query'
+import { taskVisibilityCondition } from './taskAuthorization'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskOverviewQuery } from '../public/queries'
 
 function createCountTemplates(db: PersistenceDb, canReadAll: boolean) {
-  // RFC-359 W57：判据走 `db/query.ts` 的唯一一份。这里的请求者 id 是**预编译占位符**
+  // RFC-359 W57：判据走 `taskAuthorization.ts` 的唯一一份。这里的请求者 id 是**预编译占位符**
   // （模板只编译一次，每次调用换绑定值），共享片段的 subject 因此接受 `Placeholder`——
   // 不放宽那一处，首页计数就只能自己再抄一份判据，而它正是「概览与列表同口径」那条
   // oracle（RFC-190）守的东西。

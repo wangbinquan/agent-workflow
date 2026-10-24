@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLogger } from '@/util/log'
@@ -101,7 +102,9 @@ async function seedOwnedProcessEffect(
 ) {
   const taskId = `t7b_${ulid()}`
   await seedTask(db, taskId)
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
     persistence,

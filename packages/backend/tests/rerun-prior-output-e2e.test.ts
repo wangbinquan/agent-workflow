@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-119 END-TO-END verification — prior-output injection in a REAL task.
 //
@@ -49,7 +50,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
   addReviewComment,
@@ -270,13 +271,15 @@ describe('RFC-119 e2e — review-iterate rerun gets the prior output in its prom
       commentText: COMMENT,
     })
 
-    const result = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.resumeRequired).toBe(true)
 
     const { nodeRuns } = tablesOf(h.db)

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-287 G5 / T14 实现门 —— `file://` 的三条绕过通道。
 //
 // G5 的意图是「本机路径不得伪装成远端仓库被平台跑起来」。第一版只在两处落了判据
@@ -85,7 +86,10 @@ describeEachProvider(
           {} as never,
           {
             db,
-            repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(db),
+            repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(
+              db,
+              composeSourceControlTaskPorts(db),
+            ),
             appHome: '/tmp/aw-t14-g5',
           } as never,
         )
@@ -151,11 +155,14 @@ describeEachProvider('RFC-287 G5 绕过③ — 后台保鲜对 url_redacted=NULL
       { id: 'unknown', urlRedacted: null },
       { id: 'blank', urlRedacted: '   ' },
     ])
-    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      now: Date.now(),
-      intervalMs: 1,
-      onlyRecentDays: 3650,
-    })
+    const due = await selectDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        now: Date.now(),
+        intervalMs: 1,
+        onlyRecentDays: 3650,
+      },
+    )
     expect(due.map((r) => r.id)).toEqual(['ok'])
   })
 })

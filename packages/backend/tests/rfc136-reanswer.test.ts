@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-136 — 待指派问题重答（用户 2026-07-02 拍板：仅待指派 / 面板纳入已答题 / 直接覆盖）。
 //
 // 锁 sealRoundQuestions 的逐题三分类语义（design §2.1）：
@@ -137,17 +138,19 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'designer',
-    askingNodeRunId: sourceRunId,
-    askingShardKey: null,
-    intermediaryNodeId: 'clarify1',
-    iteration: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
+      questions,
+    }),
+  )
   return { taskId, originNodeRunId: clarifyNodeRunId }
 }
 
@@ -168,17 +171,19 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'cross1',
-    askingNodeId: 'questioner',
-    askingNodeRunId: questionerRunId,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: questionerRunId,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions,
+    }),
+  )
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 

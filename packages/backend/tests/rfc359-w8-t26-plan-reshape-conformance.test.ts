@@ -1,3 +1,5 @@
+import { createTaskRepositoryUsageQueries } from '@/modules/task-execution/infrastructure/taskRepositoryUsage'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W8-T26 —— 「聚合 CASE 里的相关子查询」两处改写的**结果等价**锁。
 //
 // # 为什么这条测试存在
@@ -338,34 +340,31 @@ function legacyRepoFacets(db: object, scheduled: SQL): SQL {
   `
 }
 
-/**
- * 同一格，改写后的形状：`exists` 回到 WHERE 里，`referenced` 拆成三格**互斥**计数
- * （E / ¬E∧L / ¬E∧¬L∧S），相加即原来那个 OR 的并集势。
- *
- * 互斥性是这里的第二个等价支点（第一个是 LEFT JOIN 的去重）：任何一格漏掉自己的
- * `not …` 前缀，同一个仓库就会被数两次——`repo-many` 既有 task_repos 引用又有遗留直挂
- * 时正好命中这个坑，语料里 `k-legacy` / `k-ref-*` 就是为它铺的。
- */
-function reshapedRepoFacets(db: object, scheduled: SQL): SQL {
-  const { taskRepos, cachedRepos, tasks } = tablesOf(db)
-  const explicit = sql`exists (
-    select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id}
-  )`
-  const legacy = sql`exists (
-    select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
-      and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
-  )`
-  return sql`
-    SELECT
-      (SELECT count(*) FROM ${cachedRepos}) AS all_count,
-      (SELECT count(*) FROM ${cachedRepos} WHERE ${explicit})
-        + (SELECT count(*) FROM ${cachedRepos} WHERE not ${explicit} and ${legacy})
-        + (SELECT count(*) FROM ${cachedRepos}
-             WHERE ${scheduled} and not ${explicit} and not ${legacy}) AS referenced_count,
-      (SELECT count(*) FROM ${cachedRepos}
-         WHERE ${cachedRepos.hasSubmodules} = ${true}
-           and ${cachedRepos.lastSubmoduleSyncOk} = ${false}) AS attention_count
-  `
+/** RFC-395 II-b O1: real owner probes followed by source-control set intersections. */
+async function reshapedRepoFacets(
+  db: PersistenceDb,
+  scheduled: SQL,
+): Promise<Record<string, number>> {
+  const { cachedRepos } = tablesOf(db)
+  const rows = await rawRows<{ id: string; scheduled: boolean; attention: boolean }>(
+    db,
+    sql`
+    SELECT ${cachedRepos.id} AS id, ${scheduled} AS scheduled,
+      (${cachedRepos.hasSubmodules} = ${true} AND ${cachedRepos.lastSubmoduleSyncOk} = ${false}) AS attention
+    FROM ${cachedRepos}
+  `,
+    { scheduled: 'bool', attention: 'bool' },
+  )
+  const usage = await createTaskRepositoryUsageQueries(db).referencedAmong(
+    rows.map((row) => row.id),
+  )
+  return {
+    all_count: rows.length,
+    referenced_count: rows.filter(
+      (row) => usage.mounted.has(row.id) || usage.requestedOnly.has(row.id) || row.scheduled,
+    ).length,
+    attention_count: rows.filter((row) => row.attention).length,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -416,11 +415,11 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
       ['定时集合命中两个仓库（其中一个同时是 explicit）', ONE_SCHEDULE(db)],
     ] as const) {
       const legacy = numbers(await rawRows(db, legacyRepoFacets(db, scheduled)))
-      const reshaped = numbers(await rawRows(db, reshapedRepoFacets(db, scheduled)))
+      const reshaped = await reshapedRepoFacets(db, scheduled)
       expect(
         reshaped,
-        `${label}时互斥三格与原来的 OR 分叉了。最可能的原因：\n` +
-          '① 某一格漏了 `not …` 前缀 ⇒ repo-many（既是 explicit、又是遗留直挂、还在定时集合里）\n' +
+        `${label}时引用集合与原来的 OR 分叉了。最可能的原因：\n` +
+          '① 集合没有按仓库 ID 去重 ⇒ repo-many（既是 explicit、又是遗留直挂、还在定时集合里）\n' +
           '   被数了两次甚至三次；\n' +
           '② 遗留直挂的 `NOT EXISTS (task_repos …)` 判据变了 ⇒ k-shadowed 那行 cached_repo_id\n' +
           '   为 NULL 的 task_repos 不再遮蔽它。',
@@ -431,12 +430,12 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
     //               repo-legacy（遗留直挂）}；repo-shadowed 被 task_repos 行遮蔽、
     // repo-orphan 无人引用、repo-ghost 根本不在 cached_repos 里。
     // attention = {repo-many, repo-scheduled}（has_submodules 且 sync_ok = false）。
-    expect(numbers(await rawRows(db, reshapedRepoFacets(db, NO_SCHEDULE)))).toEqual({
+    expect(await reshapedRepoFacets(db, NO_SCHEDULE)).toEqual({
       all_count: REPO_SEEDS.length,
       referenced_count: 2,
       attention_count: 2,
     })
-    expect(numbers(await rawRows(db, reshapedRepoFacets(db, ONE_SCHEDULE(db))))).toEqual({
+    expect(await reshapedRepoFacets(db, ONE_SCHEDULE(db))).toEqual({
       all_count: REPO_SEEDS.length,
       referenced_count: 3,
       attention_count: 2,
@@ -449,7 +448,7 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
     await seedRepos(db)
 
     const legacy = numbers(await rawRows(db, legacyRepoFacets(db, NO_SCHEDULE)))
-    const reshaped = numbers(await rawRows(db, reshapedRepoFacets(db, NO_SCHEDULE)))
+    const reshaped = await reshapedRepoFacets(db, NO_SCHEDULE)
     expect(reshaped, 'all_count 那格若跟着谓词走，空引用集会把分母清零').toEqual(legacy)
     expect(reshaped).toEqual({
       all_count: REPO_SEEDS.length,
@@ -475,7 +474,7 @@ describeEachProvider('RFC-359 W8-T26 —— 计划改写的结果等价', (harne
     })
 
     invalidateRepositoryWorkspaceFacetCaches()
-    const store = new DrizzleRepositoryWorkspaceStore(db)
+    const store = new DrizzleRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     store.invalidateCachedRepoFacets()
     const repoPage = await store.listCachedRepoPage({ limit: 20 })
     expect(repoPage.facets).toEqual({

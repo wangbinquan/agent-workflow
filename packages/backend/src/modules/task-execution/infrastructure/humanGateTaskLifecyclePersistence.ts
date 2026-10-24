@@ -1,3 +1,4 @@
+import { createHumanGatePersistenceParticipantInTx } from './humanGatePersistenceParticipant'
 // RFC-359 W4-D25 —— human-gate 停靠原子：一份实现，两个引擎共用。
 //
 // 合一前 `sqliteHumanGateTaskLifecyclePersistence.ts` 与 `postgresqlHumanGateTaskLifecyclePersistence.ts`
@@ -41,7 +42,7 @@ import type { DrizzleTaskRuntimeLifecyclePersistence } from './taskRuntimeLifecy
 
 class ManualQuestionPending extends Error {}
 
-const journal = new DatabaseHumanGateOperationJournal()
+const journal = new DatabaseHumanGateOperationJournal(createHumanGatePersistenceParticipantInTx)
 
 /** 「有 token 就按 owner 围栏，没有就按无主围栏」——与合一前两侧同一条判据，只是挪进了同一笔事务。 */
 async function fence(

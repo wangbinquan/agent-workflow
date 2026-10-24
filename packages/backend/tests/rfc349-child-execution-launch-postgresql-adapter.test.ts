@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-349 — a node-launched child already owns an inherited workspace. This
 // locks the PostgreSQL-native mint (task/repo/membership/intent/event in one
 // SERIALIZABLE transaction) and the commit-before-drive boundary without
@@ -178,7 +179,9 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
       },
       nudge() {},
     })
-    const persistence = createTaskExecutionPersistence(fixture.db)
+    const persistence = createTaskExecutionPersistence(fixture.db, {
+      recoveryHumanGates: o2Ports(fixture.db).collaborationReads.recovery,
+    })
     const executionModule = createProviderTaskExecutionModule({
       daemonGeneration: 'daemon-child-test',
       persistence,

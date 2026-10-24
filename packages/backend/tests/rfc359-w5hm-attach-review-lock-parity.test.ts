@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 AC-1（plan §5hm）—— attach 与评审变更必须在**两个引擎上**走同一个临界区。
 //
 // 为什么这条测试存在：`withTaskReviewMutationLock` 是按 task 排队的进程内 FIFO，
@@ -68,7 +69,9 @@ describeEachProvider('RFC-359 AC-1 —— attach 与评审变更共用一个临�
   test('评审变更持锁期间，attach 必须排队等它，不得插进去', async () => {
     const db = harness.db
     const taskId = await seedTerminalTask(db)
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     // RFC-359 AC-1（plan §5hm）：**两个引擎装同一个端口实现**，差别只剩认领方式——
     // PG 绑实例模块的 `claimPersisted`，SQLite 绑进程级单例的 `claim({ db, intentId })`。
     const lifecycle: TaskDriverLifecyclePort =

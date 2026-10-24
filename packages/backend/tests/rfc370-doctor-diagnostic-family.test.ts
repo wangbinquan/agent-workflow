@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { composeDoctorApplication } from '@/modules/system-operations/composition/doctorDiagnostics'
-import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
+import { createLocalDoctorDiagnosticsFactory } from '@/bootstrap/doctorDiagnostics'
 import type {
   DoctorDiagnosticsFamily,
   DoctorDiagnosticsFactory,

@@ -1,7 +1,8 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2g —— lifecycle 内核四对合一，两个引擎各跑一遍：任务运行时状态迁移（CAS + revision +
 // 复活门 + owner 围栏）、node run 生命周期（mint / transition / set / 事务内参与者）、执行 intent 准入
 // （提交 / continuation / 待处理 gate successor）、intent 终态化（按 epoch 过滤 + replay 授权释放）。
-// 此前 SQLite 侧四个薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 等同步内核，PG 侧各自整份实现。
+// 此前 SQLite 侧四个薄壳套 `modules/task-execution/infrastructure/taskLifecycle.ts` 等同步内核，PG 侧各自整份实现。
 
 import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
@@ -116,7 +117,9 @@ async function seedClaimedOwner(
   const context = createTaskExecutionContext({
     intentId: `intent_${ulid()}`,
     token,
-    persistence: createTaskExecutionPersistence(db),
+    persistence: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }),
   })
   return { token, context }
 }

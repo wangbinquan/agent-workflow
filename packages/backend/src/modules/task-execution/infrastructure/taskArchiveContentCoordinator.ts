@@ -1,3 +1,4 @@
+import type { TaskArchiveCollaborationSectionsPort } from '../composition/required-ports'
 // RFC-359 W8-A —— 终态任务树归档出库（RFC-311 T19）：**一份实现，两个 provider 共用**。
 //
 // 合一前是一对：SQLite 侧 `sqliteTaskArchiveMaintenanceCommand.ts`（66 行薄壳，逐方法转发给
@@ -187,6 +188,7 @@ async function writeJsonl(
  */
 async function loadArchiveRows(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   taskIds: readonly string[],
 ): Promise<Readonly<Record<string, readonly unknown[]>>> {
   const byTask = <T>(load: (ids: string[]) => Promise<T[]>) => chunkedAll(taskIds, load)
@@ -301,10 +303,7 @@ async function loadArchiveRows(
         .from(taskNodeClarifyDirectives)
         .where(inArray(taskNodeClarifyDirectives.taskId, ids))
     }),
-    clarify_rounds: await byTask(async (ids) => {
-      const { clarifyRounds } = tablesOf(db)
-      return await db.select().from(clarifyRounds).where(inArray(clarifyRounds.taskId, ids))
-    }),
+    clarify_rounds: (await collaboration.load(taskIds)).clarify_rounds ?? [],
     collaboration_gate_operations: operationRows,
     collaboration_gate_artifacts: await chunkedAll(operationIds, async (ids) => {
       const { collaborationGateArtifacts } = tablesOf(db)
@@ -489,6 +488,7 @@ async function finalizeDatabase(
  */
 async function archiveClaimed(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   maintenance: TerminalMaintenanceStore,
   rootTaskId: string,
   taskIds: readonly string[],
@@ -506,7 +506,7 @@ async function archiveClaimed(
   await content.remove(content.resolve(tmpDir, 'manifest.json'))
   await content.createDirectory(content.resolve(tmpDir, 'db'))
 
-  const rows = await loadArchiveRows(db, taskIds)
+  const rows = await loadArchiveRows(db, collaboration, taskIds)
   const counts: Record<string, number> = {}
   for (const [name, tableRows] of Object.entries(rows)) {
     counts[name] = await writeJsonl(
@@ -600,6 +600,7 @@ async function archiveClaimed(
  */
 async function archiveTree(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   maintenance: TerminalMaintenanceStore,
   rootTaskId: string,
   options: ArchiveOptions,
@@ -620,7 +621,16 @@ async function archiveTree(
     }),
     now: options.now,
   })
-  return await archiveClaimed(db, maintenance, rootTaskId, taskIds, claim, options, content)
+  return await archiveClaimed(
+    db,
+    collaboration,
+    maintenance,
+    rootTaskId,
+    taskIds,
+    claim,
+    options,
+    content,
+  )
 }
 
 interface ArchiveCleanupPlanV2 {
@@ -653,6 +663,7 @@ function parseArchiveCleanupPlan(value: string): ArchiveCleanupPlanV2 | null {
  */
 async function recoverClaimedArchives(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   maintenance: TerminalMaintenanceStore,
   options: TaskArchiveMaintenanceOptions,
   content: TaskArchiveContentPort,
@@ -702,7 +713,16 @@ async function recoverClaimedArchives(
     }
     if (state === 'claimed' && !(await content.exists(finalDir))) {
       if (!rootExists) continue
-      await archiveClaimed(db, maintenance, item.rootTaskId, members, claim, claimOptions, content)
+      await archiveClaimed(
+        db,
+        collaboration,
+        maintenance,
+        item.rootTaskId,
+        members,
+        claim,
+        claimOptions,
+        content,
+      )
       promoted.push(item.rootTaskId)
       continue
     }
@@ -771,6 +791,7 @@ async function writeArchiveAudit(
 
 async function archiveCandidates(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   maintenance: TerminalMaintenanceStore,
   candidates: readonly TreeCandidate[],
   options: ArchiveOptions,
@@ -780,7 +801,9 @@ async function archiveCandidates(
   let skipped = 0
   for (const candidate of candidates) {
     try {
-      archived.push(await archiveTree(db, maintenance, candidate.rootTaskId, options, content))
+      archived.push(
+        await archiveTree(db, collaboration, maintenance, candidate.rootTaskId, options, content),
+      )
     } catch (error) {
       // 落盘失败（磁盘满 / 权限）⇒ 库内不删，留待下一轮；不阻塞其它树。
       skipped += 1
@@ -796,6 +819,7 @@ async function archiveCandidates(
 /** 终态任务树归档出库：一份实现，SQLite / PostgreSQL 共用。 */
 export function createTaskArchiveContentCoordinator(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   content: TaskArchiveContentPort,
 ): TaskArchiveMaintenanceCommand {
   const maintenance: TerminalMaintenanceStore = new DrizzleTerminalMaintenancePersistence(db)
@@ -808,7 +832,7 @@ export function createTaskArchiveContentCoordinator(
       if (!config.enabled || config.retentionDays <= 0) return { archived: [], skipped: 0 }
       const now = options.now ?? Date.now()
       const effective = { ...options, now, source: 'sweep' as const }
-      await recoverClaimedArchives(db, maintenance, effective, content)
+      await recoverClaimedArchives(db, collaboration, maintenance, effective, content)
       const candidates = await findArchivableTrees(
         db,
         now - config.retentionDays * 86_400_000,
@@ -816,6 +840,7 @@ export function createTaskArchiveContentCoordinator(
       )
       const { archived, skipped } = await archiveCandidates(
         db,
+        collaboration,
         maintenance,
         candidates,
         effective,
@@ -863,7 +888,7 @@ export function createTaskArchiveContentCoordinator(
     ): Promise<TaskArchiveSweepReceipt> {
       const now = input.now ?? options.now ?? Date.now()
       const effective = { ...options, now, source: 'manual' as const }
-      await recoverClaimedArchives(db, maintenance, effective, content)
+      await recoverClaimedArchives(db, collaboration, maintenance, effective, content)
       const candidates = await findArchivableTrees(
         db,
         now - input.retentionDays * 86_400_000,
@@ -871,6 +896,7 @@ export function createTaskArchiveContentCoordinator(
       )
       const { archived, skipped } = await archiveCandidates(
         db,
+        collaboration,
         maintenance,
         candidates,
         effective,
@@ -888,7 +914,7 @@ export function createTaskArchiveContentCoordinator(
     },
     /** boot 时续做崩溃留下的 archive / retention 认领，再按同一份规则收尾 `.tmp-*` 残留。 */
     async recover(options: TaskArchiveMaintenanceOptions): Promise<TaskArchiveRecoveryReceipt> {
-      const claims = await recoverClaimedArchives(db, maintenance, options, content)
+      const claims = await recoverClaimedArchives(db, collaboration, maintenance, options, content)
       const swept = await sweepArchiveTempDirectories({
         content,
         archiveRoot: options.archiveDir,

@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-359 AC-1（plan §5hi）—— 测试侧的「宿主任务启动内核」装配，和生产同形。
 //
@@ -68,10 +69,12 @@ export function createTestHostTaskLaunchKernel(input: {
         db: input.db,
         appHome: input.appHome,
         sourceContexts: createIdentityAccessRuntime({ db: input.db }).taskPreparationContext,
-        repositoryPreparation: composeRepositoryPreparation({
-          db: input.db,
-          appHome: input.appHome,
-        }),
+        repositoryPreparation: composeRepositoryPreparation(
+          withSourceControlTaskPorts({
+            db: input.db,
+            appHome: input.appHome,
+          }),
+        ),
       }),
   })
 }

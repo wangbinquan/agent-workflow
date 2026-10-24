@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import {
   type TaskFixtureSpec,
   patchTaskFixture,
@@ -8,7 +9,7 @@ import {
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
-import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
+import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import {
   workspaceMaintenanceForTest,
@@ -258,7 +259,7 @@ describeEachProvider('RFC-165 工作区墓碑 + 复活闸（双引擎）', (harn
         repoPath: dir,
       })
       let injected = false
-      const store = new DrizzleWorkspaceMaintenanceStore(h.db)
+      const store = new PortWorkspaceMaintenanceStore(composeSourceControlTaskPorts(h.db))
       const scan = store.listGcCandidates.bind(store)
       store.listGcCandidates = async () => {
         const candidates = await scan()

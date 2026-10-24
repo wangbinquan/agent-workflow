@@ -1,3 +1,8 @@
+import {
+  withSourceControlTaskPorts,
+  withWorkspaceMaintenancePorts,
+} from './helpers/sourceControlTaskPorts'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-387: both providers exercise session continuation semantics, with the former wiring retained as controls.
 import {
   patchTaskFixture,
@@ -34,7 +39,7 @@ import { createRepositoryPreparationRetryCommand } from '@/modules/task-executio
 import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
-import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
+import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { ownershipTokenKey } from '@/modules/task-execution/domain/ownership'
 import { layoutBuiltinWorkflowSnapshotJson } from '@/services/task'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
@@ -323,7 +328,9 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
       const seeded = await retrySeed(harness, appHome)
       const entered = Promise.withResolvers<void>(),
         release = Promise.withResolvers<void>()
-      const binding = composeRepositoryPreparation({ db: harness.db, appHome })
+      const binding = composeRepositoryPreparation(
+        withSourceControlTaskPorts({ db: harness.db, appHome }),
+      )
       let preparations = 0
       const prepare = async () => {
         preparations++
@@ -702,34 +709,36 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
         fixture = taskBundleInput(harness, appHome)
       let fail = true,
         removes = 0
-      const store = new DrizzleWorkspaceMaintenanceStore(harness.db)
+      const store = new PortWorkspaceMaintenanceStore(composeSourceControlTaskPorts(harness.db))
       const bundle = composeDaemonTaskExecutionModules({
         ...fixture.input,
         finalizeWorkspace: (id) => maintenance.finalizeClaimedWorkspace(id),
       })
-      const maintenance = composeWorkspaceMaintenanceCommand({
-        db: harness.db,
-        appHome,
-        terminalMaintenance: bundle.persistence.terminalMaintenance,
-        isMaterializingTask: () => false,
-        invalidateWorkspacePath: () => {},
-        filesystem: {
-          exists: async () => true,
+      const maintenance = composeWorkspaceMaintenanceCommand(
+        withWorkspaceMaintenancePorts({
+          db: harness.db,
+          appHome,
+          terminalMaintenance: bundle.persistence.terminalMaintenance,
           isMaterializingTask: () => false,
-          removeWorkspace: async () => {
-            removes++
-            if (fail) throw new Error('cleanup unavailable')
-            return true
+          invalidateWorkspacePath: () => {},
+          filesystem: {
+            exists: async () => true,
+            isMaterializingTask: () => false,
+            removeWorkspace: async () => {
+              removes++
+              if (fail) throw new Error('cleanup unavailable')
+              return true
+            },
+            removeIsoContainer: async () => false,
+            isMerged: async () => false,
+            listScratchDirectories: async () => [],
+            listWorktreeLeaves: async () => [],
+            listIsoTaskIds: async () => [],
+            removeAgedPath: async () => false,
+            runPartialCloneGc: async () => ({ scanned: 0, removed: 0 }),
           },
-          removeIsoContainer: async () => false,
-          isMerged: async () => false,
-          listScratchDirectories: async () => [],
-          listWorktreeLeaves: async () => [],
-          listIsoTaskIds: async () => [],
-          removeAgedPath: async () => false,
-          runPartialCloneGc: async () => ({ scanned: 0, removed: 0 }),
-        },
-      })
+        }),
+      )
       const seeded = await seedBundleTask(harness, appHome)
       const finish = async () => {
         await patchTaskFixture(

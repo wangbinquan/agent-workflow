@@ -1,3 +1,5 @@
+import { withO2Closure, o2Ports } from './o2Closure'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { memorySystemAgentBindingForTest } from './memoryDistill'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
@@ -42,7 +44,7 @@ import {
   composeWorkgroupTaskRoomActiveUsers,
 } from '@/modules/resource-catalog/composition/workgroupTaskRoom'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { createHealthDatabaseReadModel } from '@/modules/system-operations/composition'
+import { createTaskStatusCounts } from '@/modules/task-execution/composition'
 import { composeTaskCatalog } from '@/modules/task-catalog/composition'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/composition/taskCatalogSources'
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
@@ -90,7 +92,7 @@ export async function createProductionPerformanceApplication(
     tokenCallAudit: createTokenCallAudit(db),
     sourceWriteWindow,
   }
-  const repositoryStore = composeRepositoryWorkspaceStore(db)
+  const repositoryStore = composeRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
   const overview = createProductionOverviewQuery(db, identityAccess)
   const executionContracts = composeExecutionContract({
     registrations: developmentExecutionContractRegistrations,
@@ -140,18 +142,24 @@ export async function createProductionPerformanceApplication(
       createFileReviewArtifactContent(appHome),
     ),
   })
-  const collaborationContext = createCollaborationCommandContext({
-    db,
-    appHome,
-    taskExecutionReadModels: createTaskExecutionReadModels(db),
-    reviewDecisions: createReviewDecisionCommand({ db, appHome }),
-    questionDispatches: createQuestionDispatchCommand(db),
-    clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
-  })
+  const collaborationContext = createCollaborationCommandContext(
+    withO2Closure({
+      db,
+      appHome,
+      taskExecutionReadModels: createTaskExecutionReadModels(db),
+      reviewDecisions: createReviewDecisionCommand(withO2Closure({ db, appHome })),
+      questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock),
+      clarifyDecisions: createClarifyDecisionCommand(
+        db,
+        memoryOperations.distillCommands,
+        o2Ports(db).taskLock,
+      ),
+    }),
+  )
   const collaboration =
     session.engine.isolation === 'exclusive'
-      ? composeCollaborationRouteOperations({ db, context: collaborationContext })
-      : composeCollaborationRouteOperations({ db, context: collaborationContext })
+      ? composeCollaborationRouteOperations(withO2Closure({ db, context: collaborationContext }))
+      : composeCollaborationRouteOperations(withO2Closure({ db, context: collaborationContext }))
   const workgroupTaskRoom = composeWorkgroupTaskRoom({
     db,
     taskParticipantFactory: composeWorkgroupTaskRoomTaskParticipantFactory({
@@ -171,7 +179,7 @@ export async function createProductionPerformanceApplication(
     systemUserId: '__system__',
     broadcast: unusedRuntimeCapability,
   })
-  const healthDatabase = createHealthDatabaseReadModel(db)
+  const healthDatabase = createTaskStatusCounts(db)
   const webhookIngressPersistence = composeWebhookIngressPersistenceFor(db)
   return createHttpRequestApp({
     authentication: composeLocalHttpAuthentication({

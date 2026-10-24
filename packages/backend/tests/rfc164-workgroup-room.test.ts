@@ -42,7 +42,7 @@ import {
   loadWorkgroupTaskState,
 } from '../src/services/workgroup/state'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'
 import { resolveMentions } from '../src/routes/workgroupTasks'
 import { createLogger } from '../src/util/log'

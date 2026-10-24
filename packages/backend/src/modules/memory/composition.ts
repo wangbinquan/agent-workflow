@@ -178,3 +178,5 @@ export {
 }
 
 export { schemaContribution } from './composition/schema'
+
+export { createDistillEventRetentionPhase } from './infrastructure/retentionPhase'

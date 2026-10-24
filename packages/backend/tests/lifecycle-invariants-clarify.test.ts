@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-053 PR-D — invariant C1 (clarify_session ↔ clarify node_run).
 //
 // Closed clarify_session (status ∈ {answered, canceled}) ⟹ its
@@ -118,7 +119,9 @@ describeEachProvider(
       const run = await insertClarifyRun(h.db, h.taskId, 'done')
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
@@ -129,7 +132,9 @@ describeEachProvider(
       const run = await insertClarifyRun(h.db, h.taskId, 'running')
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(0)
@@ -143,7 +148,9 @@ describeEachProvider(
         status: 'awaiting_human',
       })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       // C1 only fires on closed sessions; an open one is fine.
@@ -158,7 +165,9 @@ describeEachProvider(
         status: 'answered',
       })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       const c1 = result.openAlerts.filter((a) => a.rule === 'C1')
@@ -179,7 +188,9 @@ describeEachProvider(
         status: 'canceled',
       })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'C1')).toHaveLength(1)
@@ -190,13 +201,17 @@ describeEachProvider(
       const run = await insertClarifyRun(h.db, h.taskId, 'awaiting_human')
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const r1 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(r1.newAlerts).toBe(1)
       await patchNodeRunFixture(h.db, { id: run }, { status: 'done', finishedAt: Date.now() })
       const r2 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(r2.resolvedAlerts).toBe(1)

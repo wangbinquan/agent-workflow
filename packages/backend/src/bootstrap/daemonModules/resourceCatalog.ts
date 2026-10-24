@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 import type { AclResourceType, UpdateResourceAclBody } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -68,6 +69,7 @@ export function composeDaemonResourceCatalogModules(input: {
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
   const classicCatalogs = composeClassicCatalogs({
+    taskReferences: composeSubjectTaskReferencePort,
     db,
     ...selectSkillContentDependencies(input.skillContent, input.skillContentRoot),
     runtimeProfiles: input.runtimeProfiles,
@@ -113,7 +115,11 @@ export function composeDaemonResourceCatalogModules(input: {
     installer: input.pluginInstaller,
   })
   const workflowCatalog = classicCatalogs.workflow
-  const workgroupCatalog = composeWorkgroupCatalog({ db, resourceCatalog })
+  const workgroupCatalog = composeWorkgroupCatalog({
+    db,
+    resourceCatalog,
+    taskReferences: composeSubjectTaskReferencePort,
+  })
   const capabilityTemplateAccess: Parameters<
     typeof composeCapabilityTemplateOperations
   >[0]['access'] = {

@@ -1,3 +1,7 @@
+import {
+  withRepositorySnapshotPorts,
+  withSourceControlTaskPorts,
+} from './helpers/sourceControlTaskPorts'
 import { readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -51,14 +55,16 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
     ) {
       return harness.session.transaction(async (transaction) => {
         let active = true
-        const owner = createRepositoryLaunchSnapshotInTx({
-          transaction,
-          authority,
-          now: 2,
-          assertLive: () => {
-            if (!active) throw new Error('snapshot-scope-ended')
-          },
-        })
+        const owner = createRepositoryLaunchSnapshotInTx(
+          withRepositorySnapshotPorts({
+            transaction,
+            authority,
+            now: 2,
+            assertLive: () => {
+              if (!active) throw new Error('snapshot-scope-ended')
+            },
+          }),
+        )
         try {
           return await body(owner, transaction)
         } finally {
@@ -221,12 +227,20 @@ describeEachProvider('RFC-363 durable source facts', (harness) => {
       url: 'https://example.test/sealed.git',
       requestedRef: 'release',
     }
-    const reference = await createPublicRepositorySourceSeal(input).seal(context, source)
-    expect(await createPublicRepositorySourceSeal(input).seal(replayContext, source)).toBe(
-      reference,
-    )
+    const reference = await createPublicRepositorySourceSeal(
+      withSourceControlTaskPorts(input),
+    ).seal(context, source)
+    expect(
+      await createPublicRepositorySourceSeal(withSourceControlTaskPorts(input)).seal(
+        replayContext,
+        source,
+      ),
+    ).toBe(reference)
     await expect(
-      createPublicRepositorySourceSeal(input).seal(context, { ...source, requestedRef: 'changed' }),
+      createPublicRepositorySourceSeal(withSourceControlTaskPorts(input)).seal(context, {
+        ...source,
+        requestedRef: 'changed',
+      }),
     ).rejects.toMatchObject({ code: 'repository-source-request-mismatch' })
     const frozen = await f.scope((owner) =>
       owner.participant.resolveAuthorized(f.identity.authority, {

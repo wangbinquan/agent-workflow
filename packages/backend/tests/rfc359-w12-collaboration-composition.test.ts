@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 import {
   clarifyRoundFixture,
   nodeRunFixture,
@@ -83,17 +84,23 @@ function operations(harness: ProviderHarness): CollaborationRouteOperations {
       createFileReviewArtifactContent(APP_HOME),
     ),
   })
-  const context = createCollaborationCommandContext({
-    db,
-    appHome: APP_HOME,
-    taskExecutionReadModels: createTaskExecutionReadModels(db),
-    reviewDecisions: createReviewDecisionCommand({ db, appHome: APP_HOME }),
-    questionDispatches: createQuestionDispatchCommand(db),
-    clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
-  })
+  const context = createCollaborationCommandContext(
+    withO2Closure({
+      db,
+      appHome: APP_HOME,
+      taskExecutionReadModels: createTaskExecutionReadModels(db),
+      reviewDecisions: createReviewDecisionCommand(withO2Closure({ db, appHome: APP_HOME })),
+      questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock),
+      clarifyDecisions: createClarifyDecisionCommand(
+        db,
+        memoryOperations.distillCommands,
+        o2Ports(db).taskLock,
+      ),
+    }),
+  )
   return harness.capabilities.isolation === 'exclusive'
-    ? composeCollaborationRouteOperations({ db, context })
-    : composeCollaborationRouteOperations({ db, context })
+    ? composeCollaborationRouteOperations(withO2Closure({ db, context }))
+    : composeCollaborationRouteOperations(withO2Closure({ db, context }))
 }
 
 function reviewDefinition(): WorkflowDefinition {

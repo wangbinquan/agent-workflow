@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-359 AC1: preserve real Workgroup create/copy/save and package writes
 // while sharing their member, leader and content-field constructors.
 
@@ -188,6 +189,7 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
       ...createWorkgroupRepository(
         harness.db,
         workgroupRepositoryDependencies({
+          taskReferences: composeSubjectTaskReferencePort,
           db: harness.db,
           id: () => `row-member-${++ids}`,
           now: () => T0 + 100 + ++clocks,

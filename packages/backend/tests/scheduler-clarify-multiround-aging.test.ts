@@ -26,7 +26,7 @@ import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,

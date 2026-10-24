@@ -54,7 +54,7 @@ import {
   getChangeNarrativeStatus,
   resetChangeNarrativeStateForTests,
 } from '../src/services/changeNarrative'
-import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { requireTaskMember } from '../src/services/taskCollab'
 import { resolveInternalAgentRuntime } from './helpers/runtimeRegistryApplication'
 import {
@@ -64,7 +64,7 @@ import {
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 
 const buildNarrativeInput = (db: PersistenceDb, task: Task) =>
-  buildNarrativeInputWithPort(createCodeWorkspaceRead(db), task)
+  buildNarrativeInputWithPort(createTaskCodeWorkspaceQueries(db), task)
 
 let home: string
 beforeAll(() => {
@@ -285,7 +285,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
   function deps(db: PersistenceDb, runFn: ChangeNarrativeDeps['runFn']): ChangeNarrativeDeps {
     const runtimes = runtimeRegistryPersistence(db)
     const base: ChangeNarrativeDeps = {
-      workspace: createCodeWorkspaceRead(db),
+      workspace: createTaskCodeWorkspaceQueries(db),
       async requireMember(actor, taskId) {
         const { tasks } = tablesOf(db)
         const rows = await db

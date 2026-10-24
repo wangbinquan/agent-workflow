@@ -99,6 +99,49 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     ],
   },
   {
+    what: 'RFC-395 II-b O3: memory retention phase remains shared by both engines',
+    fn: 'createDistillEventRetentionPhase',
+    definedIn: `${B}modules/memory/infrastructure/retentionPhase.ts`,
+    consumers: [`${B}modules/memory/composition.ts`, `${B}bootstrap/retentionSweepPhases.ts`],
+    forkedFrom: [
+      `${B}platform/persistence/sqlite/systemMaintenanceRetention.ts`,
+      `${B}platform/persistence/postgresqlMaintenanceRetention.ts`,
+    ],
+  },
+  {
+    what: 'RFC-395 II-b O3: intent retention phase remains shared by both engines',
+    fn: 'createIntentTurnEventRetentionPhase',
+    definedIn: `${B}modules/intent/infrastructure/retentionPhase.ts`,
+    consumers: [`${B}modules/intent/composition.ts`, `${B}bootstrap/retentionSweepPhases.ts`],
+    forkedFrom: [
+      `${B}platform/persistence/sqlite/systemMaintenanceRetention.ts`,
+      `${B}platform/persistence/postgresqlMaintenanceRetention.ts`,
+    ],
+  },
+  {
+    what: 'RFC-395 II-b O3: resource-catalog retention phase remains shared by both engines',
+    fn: 'createMcpRuntimeTestEventRetentionPhase',
+    definedIn: `${B}modules/resource-catalog/infrastructure/retentionPhase.ts`,
+    consumers: [
+      `${B}modules/resource-catalog/composition.ts`,
+      `${B}bootstrap/retentionSweepPhases.ts`,
+    ],
+    forkedFrom: [
+      `${B}platform/persistence/sqlite/systemMaintenanceRetention.ts`,
+      `${B}platform/persistence/postgresqlMaintenanceRetention.ts`,
+    ],
+  },
+  {
+    what: 'RFC-395 II-b O3: integration retention phase remains shared by both engines',
+    fn: 'createWebhookFireRetentionPhase',
+    definedIn: `${B}modules/integration/infrastructure/retentionPhase.ts`,
+    consumers: [`${B}modules/integration/composition.ts`, `${B}bootstrap/retentionSweepPhases.ts`],
+    forkedFrom: [
+      `${B}platform/persistence/sqlite/systemMaintenanceRetention.ts`,
+      `${B}platform/persistence/postgresqlMaintenanceRetention.ts`,
+    ],
+  },
+  {
     what: '/api/overview 的系统总览查询装配',
     fn: 'composeSystemOverviewQuery',
     definedIn: `${B}modules/system-operations/application/overview.ts`,

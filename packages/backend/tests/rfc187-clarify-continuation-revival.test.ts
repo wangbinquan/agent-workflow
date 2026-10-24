@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-187 T13 (Codex design-gate P1-7① + impl-gate P1) — the answer-handoff crash wedge.
 //
 // A human answers a leader clarify: the answer + a PENDING clarify-answer continuation row
@@ -122,7 +123,9 @@ describeEachProvider('RFC-187 T13 — auto-resume sweeps the answer-handoff wedg
   const sweep = async (db: PersistenceDb) => {
     const resumed: string[] = []
     const res = await autoResumeInterruptedTasks({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       breaker: { maxPerWindow: 3, windowMs: 3_600_000 },
       resume: (id) => {
         resumed.push(id)

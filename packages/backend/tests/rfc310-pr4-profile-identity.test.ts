@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'

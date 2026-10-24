@@ -1,3 +1,4 @@
+import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-310 design §22.5 requires this branch as independent executable evidence:
 // implementation must never start before review approval, iterate reruns only
@@ -24,7 +25,7 @@ import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
-import { getAgentById } from '@/services/agent'
+import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   developmentEmployeeRuntimeCodec,
   developmentExecutionContractRegistrations,
@@ -304,7 +305,9 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           appHome,
           gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
           coordinatorDeps: startDeps,
-          persistence: createTaskExecutionPersistence(db),
+          persistence: createTaskExecutionPersistence(db, {
+            recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+          }),
           completionMode: 'await-settle',
         }),
         agents: { get: async (id) => getAgentById(db, id) },
@@ -402,14 +405,16 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         },
         commentText: 'Add the exact focused verification step.',
       })
-      const rejected = await submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: reviewRun.id,
-        decision: 'rejected',
-        rejectReason: 'The plan must include the exact focused verification step.',
-        expectedReviewIteration: 0,
-      })
+      const rejected = await submitReviewDecision(
+        withO2Closure({
+          db,
+          appHome,
+          nodeRunId: reviewRun.id,
+          decision: 'rejected',
+          rejectReason: 'The plan must include the exact focused verification step.',
+          expectedReviewIteration: 0,
+        }),
+      )
       await wakeHumanGateContinuation(rejected.taskId, rejected.continuationRef, startDeps)
 
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
@@ -457,13 +462,15 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         },
         commentText: 'Keep the focused check and make the sequence explicit.',
       })
-      const iterated = await submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: reviewRun.id,
-        decision: 'iterated',
-        expectedReviewIteration: 1,
-      })
+      const iterated = await submitReviewDecision(
+        withO2Closure({
+          db,
+          appHome,
+          nodeRunId: reviewRun.id,
+          decision: 'iterated',
+          expectedReviewIteration: 1,
+        }),
+      )
       await wakeHumanGateContinuation(iterated.taskId, iterated.continuationRef, startDeps)
 
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
@@ -496,13 +503,15 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         status: 'awaiting_review',
         reviewIteration: 2,
       })
-      const approved = await submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: reviewRun.id,
-        decision: 'approved',
-        expectedReviewIteration: 2,
-      })
+      const approved = await submitReviewDecision(
+        withO2Closure({
+          db,
+          appHome,
+          nodeRunId: reviewRun.id,
+          decision: 'approved',
+          expectedReviewIteration: 2,
+        }),
+      )
       await wakeHumanGateContinuation(approved.taskId, approved.continuationRef, startDeps)
 
       expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({

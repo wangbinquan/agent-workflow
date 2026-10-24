@@ -1,3 +1,4 @@
+import { o2Ports } from './o2Closure'
 // RFC-359 AC-1（第 11 刀）—— `cancel` 的**唯一**测试装配点。
 //
 // 为什么存在：`cancel` 曾经有两份实现（`services/task.ts` 的 `cancelTask` 与
@@ -39,7 +40,9 @@ export async function cancelViaEngine(
   await cancelTaskProjection(
     {
       db,
-      persistence: createTaskExecutionPersistence(db),
+      persistence: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
       // ⚠️ 交的是**任务驱动**注册表（停机票据），不是 `platform/runtime-registry` 的运行时档案表。
       stop: taskExecutionModule.runtimeRegistry,
       log,

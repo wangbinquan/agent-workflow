@@ -21,7 +21,9 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { DrizzleResourceLimitPersistence } from '@/modules/system-operations/infrastructure/resourceLimitPersistence'
+import { createTaskResourceLimitFacts } from '@/modules/task-execution/composition'
+import { createResourceLimitAudit } from '@/modules/system-operations/composition'
+import { readStoredNodeRunRows } from './helpers/model/storedRows'
 import { __resetRecoveryCountersForTest, recoveryCountersSnapshot } from '@/services/recovery'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -109,7 +111,10 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
   })
 
   test('① listRunningTasks 只取 running 行，五个投影列原样交回（含 NULL 上限）', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(harness.db)
+    const persistence = {
+      ...createTaskResourceLimitFacts(harness.db),
+      ...createResourceLimitAudit(harness.db),
+    }
     const running = await seedTask(harness.db, {
       status: 'running',
       maxDurationMs: 5_000,
@@ -141,8 +146,11 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
     })
   })
 
-  test('② listCallRows 只取本任务里带 child_task_id 的行，wrapper 进度原样透传', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(harness.db)
+  test('② callHumanWaits 只取本任务里带 child_task_id 的行，wrapper 进度按原语义解码、持久字节保持', async () => {
+    const persistence = {
+      ...createTaskResourceLimitFacts(harness.db),
+      ...createResourceLimitAudit(harness.db),
+    }
     const taskId = await seedTask(harness.db)
     const otherId = await seedTask(harness.db)
     const childId = await seedTask(harness.db)
@@ -156,20 +164,28 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
     // 别的任务的 call 行不能串进来。
     await seedRun(harness.db, { taskId: otherId, childTaskId: childId })
 
-    expect(await persistence.listCallRows(taskId)).toEqual([
-      { childTaskId: childId, wrapperProgressJson: '{"callHumanWaitMs":1000}' },
+    expect(await persistence.callHumanWaits(taskId)).toEqual([
+      { childTaskId: childId, accumulatedMs: 1000, openSince: null },
     ])
+    expect(
+      (await readStoredNodeRunRows(harness.db)).find(
+        (row) => row.taskId === taskId && row.childTaskId === childId,
+      )?.wrapperProgressJson,
+    ).toBe('{"callHumanWaitMs":1000}')
     // wrapper_progress_json 允许为空：调用方自己兜 NULL，不是这里过滤。
     const bare = await seedTask(harness.db)
     await seedRun(harness.db, { taskId: bare, childTaskId: childId })
-    expect(await persistence.listCallRows(bare)).toEqual([
-      { childTaskId: childId, wrapperProgressJson: null },
+    expect(await persistence.callHumanWaits(bare)).toEqual([
+      { childTaskId: childId, accumulatedMs: 0, openSince: null },
     ])
-    expect(await persistence.listCallRows(`task-missing-${ulid()}`)).toEqual([])
+    expect(await persistence.callHumanWaits(`task-missing-${ulid()}`)).toEqual([])
   })
 
   test('③ listTaskStatuses：空入参短路成 []，多 id 取回状态，缺失 id 只是不出现', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(harness.db)
+    const persistence = {
+      ...createTaskResourceLimitFacts(harness.db),
+      ...createResourceLimitAudit(harness.db),
+    }
     const done = await seedTask(harness.db, { status: 'done' })
     const running = await seedTask(harness.db, { status: 'running' })
 
@@ -184,7 +200,10 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
   })
 
   test('④ sumTaskTokens：跨引擎的聚合解码——空集 0、NULL 跳过、只算本任务', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(harness.db)
+    const persistence = {
+      ...createTaskResourceLimitFacts(harness.db),
+      ...createResourceLimitAudit(harness.db),
+    }
     const taskId = await seedTask(harness.db)
     const otherId = await seedTask(harness.db)
 
@@ -205,7 +224,10 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
   })
 
   test('⑤ readTaskClock：取到 running 时钟两列；任务不存在回 null 而不是抛', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(harness.db)
+    const persistence = {
+      ...createTaskResourceLimitFacts(harness.db),
+      ...createResourceLimitAudit(harness.db),
+    }
     const ticking = await seedTask(harness.db, { runningMs: 4_500, runningSince: 60_000 })
     const parked = await seedTask(harness.db, { runningMs: 900, runningSince: null })
 
@@ -218,7 +240,10 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
   })
 
   test('⑥ writeLimitReason 只覆盖已 canceled 的行，不翻状态；running 行完全不动', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(harness.db)
+    const persistence = {
+      ...createTaskResourceLimitFacts(harness.db),
+      ...createResourceLimitAudit(harness.db),
+    }
     const canceled = await seedTask(harness.db, {
       status: 'canceled',
       errorSummary: 'canceled-by-user',
@@ -277,7 +302,10 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
   })
 
   test('⑦ recordLimitCancellation 追加一条 limit-cancel 审计行，并计数', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(harness.db)
+    const persistence = {
+      ...createTaskResourceLimitFacts(harness.db),
+      ...createResourceLimitAudit(harness.db),
+    }
     const taskId = await seedTask(harness.db, { status: 'canceled' })
 
     await persistence.recordLimitCancellation({
@@ -317,7 +345,7 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
   })
 
   test('⑧ 审计写失败只降级告警：不抛给调用方，计数照旧', async () => {
-    const persistence = new DrizzleResourceLimitPersistence(withFailingInsert(harness.db))
+    const persistence = createResourceLimitAudit(withFailingInsert(harness.db))
     const taskId = await seedTask(harness.db, { status: 'canceled' })
 
     await expect(

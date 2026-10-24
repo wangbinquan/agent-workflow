@@ -21,7 +21,7 @@ import { ulid } from 'ulid'
 import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
 import type { Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { getAgentById } from '../src/services/agent'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { applyIntentChangeset, type ApplyIntentDeps } from '../src/modules/intent/composition/apply'
 import {
   buildIntentDumpForTest as buildIntentDump,

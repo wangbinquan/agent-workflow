@@ -1,3 +1,5 @@
+import { withO2Closure } from './helpers/o2Closure'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-333 TaskParkTx — sibling human gates of one scheduler wave all park.
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -189,7 +191,7 @@ async function prepareSiblingGate(
   revision: number,
 ) {
   const result = await new ClarifyGateOpenPreparation(
-    new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
+    new DatabaseHumanGateOperationPersistence(databaseSessionFor(db), composeHumanGateTaskLockPort),
     new DatabaseClarifyQuestionSnapshotReader(db),
   ).prepare({
     taskId,
@@ -246,18 +248,20 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
     const { executionContext } = await seedOwnedSiblingAskers(db, taskId)
 
     const ask = (side: 'a' | 'b') =>
-      createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        executionContext,
-        askingNodeId: `designer_${side}`,
-        askingNodeRunId: `${taskId}-designer-${side}`,
-        askingShardKey: null,
-        intermediaryNodeId: `clarify_${side}`,
-        iteration: 0,
-        questions: [question(`q-${side}`)],
-      })
+      createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          executionContext,
+          askingNodeId: `designer_${side}`,
+          askingNodeRunId: `${taskId}-designer-${side}`,
+          askingShardKey: null,
+          intermediaryNodeId: `clarify_${side}`,
+          iteration: 0,
+          questions: [question(`q-${side}`)],
+        }),
+      )
     // Both asks start before either parks — exactly what the scheduler does when
     // two in-flight siblings settle in the same tick.
     const opened = await Promise.all([ask('a'), ask('b')])

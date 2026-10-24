@@ -70,7 +70,7 @@ import {
   createPortableBackupApplicationAssets,
   reconstructWorktrees,
 } from '@/platform/persistence/portableApplicationAssets'
-import { createHealthDatabaseReadModel } from '@/modules/system-operations/infrastructure/healthReadModel'
+import { createTaskStatusCounts } from '@/modules/task-execution/composition'
 import { extractTarGz } from '@/util/archive'
 import { DomainError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -143,7 +143,7 @@ describeEachProvider('RFC-359 W9 System Operations application-asset reads', (ha
   test('① countRunningTasks 只数 running，且两个引擎都交回 number（PG 的 count 回字符串）', async () => {
     const db = harness.db
     const root = tempRoot('health')
-    const health = createHealthDatabaseReadModel(db)
+    const health = createTaskStatusCounts(db)
 
     expect(await health.countRunningTasks()).toBe(0)
 

@@ -53,7 +53,7 @@ import {
   composeDigitalEmployeeExecutionCore,
   inspectDigitalEmployeeHumanReviewSnapshot,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
-import { createAgent, updateAgent } from '@/services/agent'
+import { createAgent, updateAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const roots: string[] = []

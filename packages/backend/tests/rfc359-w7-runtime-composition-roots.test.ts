@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W7 —— digital-employee / resource-catalog 维护面 / task-execution 动作执行器的 provider
 // 组合根：**真的构造 + 真的驱动**（口径同本批另外三个文件）。
 //
@@ -193,7 +194,9 @@ describeEachProvider('RFC-359 W7 —— 资源包 apply 维护面组合根', (ha
 describeEachProvider('RFC-359 W7 —— 数字员工动作执行器组合根', (harness) => {
   test('agent / script 两个执行器：缺 executionRef 是 not-found，终态任务读出 exited 快照', async () => {
     const actor = await seedActor(harness.db)
-    const persistence = createTaskExecutionPersistence(asSqlite(harness.db))
+    const persistence = createTaskExecutionPersistence(asSqlite(harness.db), {
+      recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,
+    })
     // 启动内核在本用例里永远不会被调用（只驱动读路径）；调用它是缺陷，所以直接抛。
     const launch = {
       launch: () => {

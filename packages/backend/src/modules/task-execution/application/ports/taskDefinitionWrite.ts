@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@agent-workflow/shared'
-import type { TerminalWorkspacePruneDecision } from '@/platform/persistence/terminalWorkspacePrune'
+import type { TerminalWorkspacePruneDecision } from '../../domain/terminalWorkspacePrune'
 
 /** Compatibility companion for the existing lifecycle admission path. */
 export interface TaskLifecycleWriteExtra {

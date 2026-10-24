@@ -41,20 +41,20 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
       'listRepoPaths 的递归 CTE 里 min(repo_path) 是 text 列的字典序最小值，不是数值聚合——' +
       '产出的 p 就是 repo_path 字符串，两个 provider 同形，无需解码',
   },
-  'platform/persistence/eventsArchiveStore.ts': {
+  'modules/task-execution/infrastructure/taskNodeEventArchiveStore.ts': {
     value: '调用点用 numberValue() 解码；投影类型也刻意写成 sql<unknown> 提醒这一点',
     avg:
       'averageRecentPayloadBytes 的 AVG(LENGTH(payload))：行类型写成 `{ avg: unknown }`，' +
       '返回前走 numberValue(value) 解码，null 原样透传。与上面 value 同一形态。',
   },
   // RFC-359 W7：两份 provider 实现合一后按领域命名，仍按类型可达性落进 PG 语料。
-  'modules/system-operations/infrastructure/resourceLimitPersistence.ts': {
+  'modules/task-execution/infrastructure/taskResourceLimitFacts.ts': {
     total: 'decodeResourceLimitTokenTotal() 显式接受 string / bigint / number 三种形态',
   },
-  'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': {
-    all_count:
-      'repositoryWorkspaceSqlStore.cachedRepoFacets 的调用点对 all/referenced/attention ' +
-      '三个字段都套了 Number()（`unused` 也是由解码后的两个数相减）',
+  'modules/task-execution/infrastructure/taskRepositoryUsage.ts': {
+    cached_repo_id:
+      'The first alias is text; countTaskReferences passes { count: int } to the read codec, ' +
+      'then normalizes the aggregate with Number(row.count).',
   },
   // RFC-395 I-b: raw execution is now in the neutral provider surface; retain its existing decoders.
   'modules/intent/infrastructure/intentSqlPersistence.ts': {
@@ -64,8 +64,6 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
   'modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts': {
     count:
       'executor.all passes { count: int } to rawRows; returned counts additionally pass Number().',
-    cached_repo_id:
-      'The first alias is text; the count projection in the same query has { count: int }.',
     scope_id:
       'The first alias is text; the memory count projection has { count: int } in executor.all.',
   },

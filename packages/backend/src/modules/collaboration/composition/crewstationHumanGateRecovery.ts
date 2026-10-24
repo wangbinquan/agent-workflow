@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from './required-ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -8,22 +9,26 @@ import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGa
 /** Runs with the existing continuation owner. No second scheduler or local
  * artifact store is created; every journal mutation checks the current lease. */
 export function composeCrewStationHumanGateRecovery(input: {
+  readonly taskLock: HumanGateTaskLockPort
   readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly artifacts: HumanGateArtifactStore
   readonly now?: () => number
 }) {
   const session = databaseSessionFor(input.db)
-  const operations = new DatabaseHumanGateOperationPersistence({
-    ...session,
-    transaction: (body) => {
-      const lease = input.fence.current()
-      return session.transaction(async (tx) => {
-        await input.fence.assertHeld(tx, lease)
-        return body(tx)
-      })
+  const operations = new DatabaseHumanGateOperationPersistence(
+    {
+      ...session,
+      transaction: (body) => {
+        const lease = input.fence.current()
+        return session.transaction(async (tx) => {
+          await input.fence.assertHeld(tx, lease)
+          return body(tx)
+        })
+      },
     },
-  })
+    input.taskLock,
+  )
   return new HumanGateOperationRecovery({
     operations,
     artifacts: input.artifacts,

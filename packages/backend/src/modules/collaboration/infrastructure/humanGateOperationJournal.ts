@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 —— human-gate 操作日志（collaboration_gate_operations / _artifacts）的**唯一**事务内实现。
 //
 // 以前 SQLite 侧是 `sqliteHumanGateOperationStore.ts`（同步、接 dbTxSync 事务；过渡期保留给尚未
@@ -361,11 +362,13 @@ async function firstArtifactNotIn(
 }
 
 export class DatabaseHumanGateOperationJournal implements HumanGateOperationJournal {
+  // RFC-294 S5 后改用 task-execution offered participant createHumanGatePersistenceParticipantInTx(tx).lockTask。
+  constructor(private readonly taskLock: HumanGateTaskLockPort) {}
+
   async beginTx(input: BeginHumanGateOperationJournalInput): Promise<BegunHumanGateOperation> {
     assertRequest(input)
     const { tx } = input
-    const { tasks } = tablesOf(input.tx)
-    await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, input.request.taskId)
+    await this.taskLock(tx).lockTask(input.request.taskId)
     const requestHash = canonicalHumanGateRequestHash(input.request)
     const replay = await existingIdempotency(tx, input, requestHash)
     if (replay !== null) return replay

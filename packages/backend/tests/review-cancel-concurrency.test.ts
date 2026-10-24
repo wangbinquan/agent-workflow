@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   nodeRunOutputFixture,
@@ -295,15 +296,17 @@ function decide(
   decision: ReviewDecisionKind,
   db: PersistenceDb = h.db,
 ): ReturnType<typeof submitReviewDecision> {
-  return submitReviewDecision({
-    db,
-    appHome: h.appHome,
-    nodeRunId: h.reviewRunId,
-    decision,
-    expectedReviewIteration: 0,
-    author: 'reviewer',
-    ...(decision === 'rejected' ? { rejectReason: 'not acceptable' } : {}),
-  })
+  return submitReviewDecision(
+    withO2Closure({
+      db,
+      appHome: h.appHome,
+      nodeRunId: h.reviewRunId,
+      decision,
+      expectedReviewIteration: 0,
+      author: 'reviewer',
+      ...(decision === 'rejected' ? { rejectReason: 'not acceptable' } : {}),
+    }),
+  )
 }
 
 // RFC-395 II-a A7: upstreamPortArchiveJson now reads the exact five-field output port projection.
@@ -598,15 +601,17 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
         h.taskId,
         () => cancelViaEngine(h.db, h.taskId),
         () =>
-          dispatchReviewNode({
-            db: h.db,
-            taskId: h.taskId,
-            appHome: h.appHome,
-            definition: h.definition,
-            node: h.definition.nodes.find((node) => node.id === 'review')!,
-            iteration: 0,
-            scopeRoot: h.worktreePath,
-          }),
+          dispatchReviewNode(
+            withO2Closure({
+              db: h.db,
+              taskId: h.taskId,
+              appHome: h.appHome,
+              definition: h.definition,
+              node: h.definition.nodes.find((node) => node.id === 'review')!,
+              iteration: 0,
+              scopeRoot: h.worktreePath,
+            }),
+          ),
       )
       expect(cancelResult.status).toBe('fulfilled')
       expect(dispatchResult).toMatchObject({
@@ -859,23 +864,25 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
 
     let dispatchTouchedDb = false
     let schedulerClaimed = false
-    const dispatch = dispatchReviewNode({
-      db: observeDbSelect(h.db, async () => {
-        dispatchTouchedDb = true
-        if (!schedulerClaimed) {
-          schedulerClaimed = true
-          // dispatchReviewNode normally runs after the scheduler has claimed
-          // pending → running. This direct service fixture models that entry.
-          await patchTaskFixture(h.db, { id: h.taskId }, { status: 'running' })
-        }
+    const dispatch = dispatchReviewNode(
+      withO2Closure({
+        db: observeDbSelect(h.db, async () => {
+          dispatchTouchedDb = true
+          if (!schedulerClaimed) {
+            schedulerClaimed = true
+            // dispatchReviewNode normally runs after the scheduler has claimed
+            // pending → running. This direct service fixture models that entry.
+            await patchTaskFixture(h.db, { id: h.taskId }, { status: 'running' })
+          }
+        }),
+        taskId: h.taskId,
+        appHome: h.appHome,
+        definition: h.definition,
+        node: h.definition.nodes.find((node) => node.id === 'review')!,
+        iteration: 0,
+        scopeRoot: h.worktreePath,
       }),
-      taskId: h.taskId,
-      appHome: h.appHome,
-      definition: h.definition,
-      node: h.definition.nodes.find((node) => node.id === 'review')!,
-      iteration: 0,
-      scopeRoot: h.worktreePath,
-    })
+    )
     // The decision already owns the task mutation section. Dispatch must not
     // even begin its DB read phase until that complete decision fact set lands.
     expect(dispatchTouchedDb).toBe(false)

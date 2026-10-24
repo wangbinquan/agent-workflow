@@ -1,3 +1,5 @@
+import { o2Ports } from './o2Closure'
+import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动留下的准备日志由同一生产 repositoryPreparation 装配继续重试。
 // RFC-359 AC-1（第 9 刀）—— `retry` 的**唯一**测试装配点。
 //
@@ -92,7 +94,9 @@ async function driveInBackground(
   deps: TaskContinuationDependencies,
   now?: () => number,
 ): Promise<void> {
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const moved = await persistence.runtimeLifecycle.trySet({
     taskId,
     to: 'pending',
@@ -131,7 +135,9 @@ export function createRetryEngine(
   options: RetryEngineOptions = {},
 ): RetryEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-retry-engine-'))
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const resumedTaskIds: string[] = []
   return {
     appHome,
@@ -163,12 +169,14 @@ export function createRetryEngine(
                     ...options.resumeWith,
                     repositoryPreparation:
                       options.resumeWith.repositoryPreparation ??
-                      composeRepositoryPreparation({
-                        db,
-                        appHome: options.resumeWith.appHome ?? appHome,
-                        secretBox: options.resumeWith.secretBox,
-                        cloneTimeoutMs: options.resumeWith.cloneTimeoutMs,
-                      }),
+                      composeRepositoryPreparation(
+                        withSourceControlTaskPorts({
+                          db,
+                          appHome: options.resumeWith.appHome ?? appHome,
+                          secretBox: options.resumeWith.secretBox,
+                          cloneTimeoutMs: options.resumeWith.cloneTimeoutMs,
+                        }),
+                      ),
                   },
                 )
               }

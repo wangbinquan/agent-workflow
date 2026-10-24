@@ -1,3 +1,6 @@
+import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：版本 / 删除拒绝改接生产 participant；工作区补偿改接生产 materializer，提交后删除走真实内核。
 
 // RFC-199 B3/T6.5 regression locks.
@@ -41,7 +44,6 @@ import {
 } from '@/modules/source-control/infrastructure/local/fileFusionWorkspaceEffects'
 import {
   createWorkflow,
-  deleteWorkflow,
   getWorkflow,
   updateWorkflow,
   workflowDraftSnapshotOf,
@@ -108,7 +110,9 @@ function launch(harness: Harness, request: StartTask) {
   })
 }
 function prepare(harness: Harness, task: StartTask) {
-  return composeRepositoryPreparation({ db: harness.db, appHome: harness.appHome }).legacy.prepare({
+  return composeRepositoryPreparation(
+    withSourceControlTaskPorts({ db: harness.db, appHome: harness.appHome }),
+  ).legacy.prepare({
     task,
     taskId: ulid(),
     gitCommitIdentity: null,
@@ -120,7 +124,10 @@ function prepareLocal(harness: Harness, workingBranch?: string) {
     { workingBranch },
     {
       appHome: harness.appHome,
-      repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(harness.db),
+      repositoryWorkspace: composeSqliteRepositoryWorkspaceStore(
+        harness.db,
+        composeSourceControlTaskPorts(harness.db),
+      ),
       internalSource: { kind: 'local-path', repoPath: harness.sourcePaths[0]!, baseBranch: 'main' },
       loadFrozenSpaceLayout: (id) => loadFrozenSpaceLayout(harness.db, id),
     },
@@ -232,7 +239,10 @@ describe('RFC-199 production materialization cleanup', () => {
   test('delete-first after multi-repo materialization unregisters every worktree and removes container', async () => {
     harness = await buildHarness(2)
     const workflow = await seedWorkflow(harness.db, 'multi-delete-race')
-    const store = composeSqliteRepositoryWorkspaceStore(harness.db)
+    const store = composeSqliteRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     const group = await createRepoGroup(
       { store, cache: { store, appHome: harness.appHome } },
       {
@@ -539,9 +549,15 @@ describe('RFC-199 production materialization cleanup', () => {
     // 物化失败必须把**已经建好的**第一个成员的工作树 / 分支 / 容器目录全回收。
     const group = await createRepoGroup(
       {
-        store: composeSqliteRepositoryWorkspaceStore(harness.db),
+        store: composeSqliteRepositoryWorkspaceStore(
+          harness.db,
+          composeSourceControlTaskPorts(harness.db),
+        ),
         cache: {
-          store: composeSqliteRepositoryWorkspaceStore(harness.db),
+          store: composeSqliteRepositoryWorkspaceStore(
+            harness.db,
+            composeSourceControlTaskPorts(harness.db),
+          ),
           appHome: harness.appHome,
         },
       },

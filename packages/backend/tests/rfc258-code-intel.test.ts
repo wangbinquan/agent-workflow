@@ -30,7 +30,7 @@ import {
   type CodeIntelDeps,
   type CodeIntelQuery,
 } from '../src/services/codeIntel/codeIntel'
-import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import type { IndexerProbe } from '../src/services/structuralDiff/deep/indexers'
 
 const getCodeIntel = (
@@ -38,7 +38,7 @@ const getCodeIntel = (
   taskId: string,
   query: CodeIntelQuery,
   deps?: CodeIntelDeps,
-) => getCodeIntelWithPort(createCodeWorkspaceRead(db), taskId, query, deps)
+) => getCodeIntelWithPort(createTaskCodeWorkspaceQueries(db), taskId, query, deps)
 
 const dirs: string[] = []
 afterAll(() => {

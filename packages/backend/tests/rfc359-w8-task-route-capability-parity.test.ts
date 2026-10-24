@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— `TaskRouteOperations` 两对适配器上**PostgreSQL 侧更弱**的能力缺口。
 //
 // W7 的对拍（`rfc359-w7-task-route-conformance.test.ts`）只驱动到各方法的**前置门**为止，
@@ -226,39 +227,44 @@ function resourceAuthorityFor(db: PersistenceDb): () => never {
  */
 function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOperations {
   const db = harness.db
-  return createTaskRouteOperations({
-    db,
-    collaboration: {} as never,
-    owners: composeOwnerIdentityQueries(db),
-    // RFC-359 AC-1（第 5 刀）：本对拍不驱动活跃度，给一个恒空的参与者。
-    activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
-    validateHostWorkflow: async () => ({ ok: true, issues: [] }),
-    resourceAuthorityFor: resourceAuthorityFor(db),
-    // RFC-359 AC-1（plan §5hn 批次二 ④）：本对拍不驱动工作流 JSON 启动。
-    launches: { launch: async () => ({}) } as never,
-    persistence: createTaskExecutionPersistence(db),
-    children: {
-      async resume(input: { taskId: string }) {
-        calls.resumed.push(input.taskId)
+  return createTaskRouteOperations(
+    withO2Closure({
+      clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
+      db,
+      collaboration: {} as never,
+      owners: composeOwnerIdentityQueries(db),
+      // RFC-359 AC-1（第 5 刀）：本对拍不驱动活跃度，给一个恒空的参与者。
+      activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
+      validateHostWorkflow: async () => ({ ok: true, issues: [] }),
+      resourceAuthorityFor: resourceAuthorityFor(db),
+      // RFC-359 AC-1（plan §5hn 批次二 ④）：本对拍不驱动工作流 JSON 启动。
+      launches: { launch: async () => ({}) } as never,
+      persistence: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
+      children: {
+        async resume(input: { taskId: string }) {
+          calls.resumed.push(input.taskId)
+        },
+        async cancel(input: { taskId: string }) {
+          calls.canceled.push(input.taskId)
+        },
       },
-      async cancel(input: { taskId: string }) {
-        calls.canceled.push(input.taskId)
+      topology: {} as never,
+      resumeRuntimeFor: () => ({}) as never,
+      repositoryPreparationRetry: {
+        async retry() {
+          throw new Error('rfc359-w8 不驱动 repository preparation retry')
+        },
       },
-    },
-    topology: {} as never,
-    resumeRuntimeFor: () => ({}) as never,
-    repositoryPreparationRetry: {
-      async retry() {
-        throw new Error('rfc359-w8 不驱动 repository preparation retry')
+      repair: {
+        collaborationRuntime: {} as never,
+        clarify: {} as never,
+        review: {} as never,
       },
-    },
-    repair: {
-      collaborationRuntime: {} as never,
-      clarify: {} as never,
-      review: {} as never,
-    },
-    appHome: APP_HOME,
-  })
+      appHome: APP_HOME,
+    }),
+  )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

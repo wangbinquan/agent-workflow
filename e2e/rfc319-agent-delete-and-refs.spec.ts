@@ -77,12 +77,12 @@
 //   packages/backend/src/routes/agents.ts:109-115              GET /api/agents：先剥 builtin，再按 ACL 过滤
 //   packages/backend/src/routes/agents.ts:305-330              DELETE 顺序：404 → builtin → 授权 → confirm → fence → 业务闸
 //   packages/backend/src/services/deleteConfirm.ts:44-66       delete-confirm-required / -mismatch（精确比较，不 trim）
-//   packages/backend/src/services/agent.ts:665-670             agent-launching
-//   packages/backend/src/services/agent.ts:685-697             agent-in-use（工作流定义引用）
-//   packages/backend/src/services/agent.ts:714-723             agent-dependency-still-referenced
-//   packages/backend/src/services/agent.ts:734-749             agent-tasks-active（只拦非终态）
-//   packages/backend/src/services/agent.ts:762-774             agent-scheduled-referenced
-//   packages/backend/src/services/agent.ts:919-936             workflowsUsingAgentIn（按 node.agentId 判定）
+//   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-launching
+//   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-in-use（工作流定义引用）
+//   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-dependency-still-referenced
+//   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-tasks-active（只拦非终态）
+//   packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced             agent-scheduled-referenced
+//   packages/backend/src/modules/resource-catalog/infrastructure/referenceLookup.ts#createWorkflowAgentReferenceLookup（按 node.agentId 判定）
 //   packages/backend/src/services/scheduledTaskRefs.ts:12-27   引用判定**不看** enabled
 //   packages/backend/src/services/resourceAcl.ts:359-370       discloseRefsSync：{visible[], hiddenCount}
 //   packages/backend/src/services/resourceAcl.ts:388-398       discloseScheduleRefs
@@ -1120,7 +1120,7 @@ test('AGENT-11 删除还有非终态单代理任务的代理：409 agent-tasks-a
   }
 
   // 负向对照：任务落终态后同一笔删除必须放行——终态任务的快照已冻结，
-  // 继续拦着就是把代理永久锁死（services/agent.ts:724-726 的注释即此意）。
+  // 继续拦着就是把代理永久锁死（modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#assertNotReferenced 的注释即此意）。
   await json(owner.token, `/api/tasks/${task.id}/cancel`, { method: 'POST' }, 'cancel live task')
   rmSync(holdFile, { force: true })
   await expect

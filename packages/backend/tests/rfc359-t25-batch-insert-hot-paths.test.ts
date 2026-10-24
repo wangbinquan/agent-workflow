@@ -1,3 +1,4 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-359 W6-T25 收尾 —— 剩下的逐行 INSERT 热路径改按批，判据是**语句数**。
 //
 // 前一批（`rfc359-t25-batch-insert.test.ts`）钉住了设施本身（`insertInBatches` / `lastPerKey` /
@@ -137,7 +138,7 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
 // A1 / A2 —— review-open 的 doc_versions 与 collaboration_gate_artifacts
 // ─────────────────────────────────────────────────────────────────────────────
 
-const journal = new DatabaseHumanGateOperationJournal()
+const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
 
 function reviewDocuments(
   taskId: string,

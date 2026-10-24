@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // LOCKS: RFC-056 patch 2026-06-22 — the cross-clarify designer rerun must NOT
 // roll the worktree back to pre_snapshot.
 //
@@ -209,17 +210,19 @@ describe('RFC-056 patch 2026-06-22: cross-clarify designer rerun does not roll b
 
       // Seed an awaiting cross round, answer it, then reassign to the designer + dispatch — the
       // designer rerun comes out of the unified dispatch (RFC-162: via reassign, not scope).
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_questioner_done',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1')],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: 'nr_questioner_done',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1')],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

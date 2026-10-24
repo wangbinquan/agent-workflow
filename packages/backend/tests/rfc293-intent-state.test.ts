@@ -9,7 +9,7 @@ import { ulid } from 'ulid'
 import { CreateAgentSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { resumeQueuedIntentWorkingSetsForTest as resumeQueuedIntentWorkingSets } from './helpers/intentResourceCatalogBinding'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   reserveExactIntentRetry,
   reserveIntentCurrentAction,

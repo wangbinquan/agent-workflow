@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   patchNodeRunFixture,
@@ -1554,10 +1555,10 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       }
       for (const dir of Object.values(dirs)) mkdirSync(dir, { recursive: true })
       try {
-        const sweep = await createDrizzleTaskArchiveMaintenanceCommand(database).runSweep(
-          { enabled: true, retentionDays: 1 },
-          { ...dirs, now: Date.now() },
-        )
+        const sweep = await createDrizzleTaskArchiveMaintenanceCommand(
+          database,
+          o2Ports(database).collaborationReads.archive,
+        ).runSweep({ enabled: true, retentionDays: 1 }, { ...dirs, now: Date.now() })
         expect(sweep.archived).toHaveLength(1)
         const archived = sweep.archived[0]!
         expect(archived.rootTaskId).toBe('task-archive-ledger')

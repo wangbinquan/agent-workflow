@@ -11,7 +11,6 @@ import { first } from '@/platform/persistence/queryHelpers'
 import type {
   CopyWorkgroupRequest,
   CreateWorkgroup,
-  DeleteWorkgroup,
   SaveWorkgroupReceipt,
   UpdateWorkgroup,
   Workgroup,
@@ -21,18 +20,16 @@ import type {
   WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import {
-  TERMINAL_TASK_STATUSES,
   CopyWorkgroupRequestSchema,
-  DeleteWorkgroupSchema,
   resolveWorkgroupOutputContract,
   serializeWorkgroupEditableSnapshotV1,
   UpdateWorkgroupSchema,
   WorkgroupNameSchema,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, notInArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
-import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
+
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import {
   ConflictError,
@@ -41,23 +38,14 @@ import {
   ValidationError,
   staleConflictError,
 } from '@/util/errors'
-import {
-  WORKGROUPS_CHANNEL,
-  workgroupsBroadcaster,
-  type WorkgroupDeletedAudienceContext,
-} from '@/ws/broadcaster'
+import { WORKGROUPS_CHANNEL, workgroupsBroadcaster } from '@/ws/broadcaster'
 import {
   assertInitialResourceOwner,
   initialPrivateResourceAcl,
 } from '@/modules/resource-catalog/application/resourceDefaults'
 import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 import { resolveResourceAccessFor } from '@/modules/resource-catalog/composition/resourceAcl'
-import {
-  canEditAccess,
-  canGovernAccess,
-  canViewAccess,
-  discloseScheduleRefs,
-} from '@/modules/resource-catalog/domain/resourceAccess'
+import { canEditAccess, canViewAccess } from '@/modules/resource-catalog/domain/resourceAccess'
 import {
   resolveResourceAccessForTx,
   canViewResourceForTx,
@@ -67,7 +55,6 @@ import { nextResourceCopyName } from '@/services/resourceCopyName'
 import {
   assertNoMissingRefs,
   assertRefsUsableForTx,
-  listResourceGrantUserIdsForTx,
   resolveRefsUsableById,
 } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
@@ -571,93 +558,6 @@ export async function saveWorkgroup(
   return result.receipt
 }
 
-export async function deleteWorkgroup(
-  db: PersistenceDb,
-  id: string,
-  input: DeleteWorkgroup,
-  principal: WorkgroupWritePrincipal,
-): Promise<void> {
-  const parsed = DeleteWorkgroupSchema.safeParse(input)
-  if (!parsed.success) {
-    throw new ValidationError('workgroup-invalid', 'invalid workgroup delete payload', {
-      issues: parsed.error.issues,
-    })
-  }
-  // RFC-359 W9：删除面从 bun:sqlite 独有的同步 `dbTxSync` 迁到中立事务原语，两个引擎共用一条。
-  // 能迁是因为删除面的 in-tx 门（`assertPrincipalCanGovernInTx` / `assertNoScheduledReferencesInTx`）
-  // 的**唯一**调用方就是这一笔，跟着改成异步零级联；create / copy / save 三笔仍钉着——它们体内的
-  // `commitWorkgroupCreateInTx` / `commitWorkgroupSaveInTx` 与 `insertWorkgroupInTx` /
-  // `insertWorkgroupMembersInTx` / `prepareAgentMembersInTx` / `assertHumanMembersActiveInTx`
-  // 都被 aggregateAdapters 的 `(tx: DbTxSync, …) => …` 参与者契约共用。
-  const deleted = await databaseSessionFor(db).transaction<{
-    deletedVersion: number
-    audience: WorkgroupDeletedAudienceContext
-  }>(async (tx) => {
-    const { workgroups, workgroupMembers, tasks } = tablesOf(tx)
-    const [currentRow] = await tx.select().from(workgroups).where(eq(workgroups.id, id)).limit(1)
-    if (currentRow === undefined) throwWorkgroupNotFound(id)
-    await assertPrincipalCanGovernForTx(tx, principal, currentRow)
-    if (currentRow.version !== parsed.data.expectedVersion) {
-      const members = await tx
-        .select()
-        .from(workgroupMembers)
-        .where(eq(workgroupMembers.workgroupId, id))
-      throw staleConflictError(
-        'workgroup',
-        `workgroup '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
-        { current: workgroupRevisionOf(rowToWorkgroup(currentRow, members)) },
-      )
-    }
-    await assertNoScheduledReferencesForTx(tx, principal, currentRow)
-    // RFC-285 B2（D5/E3，能力收缩——Q2 现网检查已记 T5 实施记录）：删除中档
-    // 统一——workgroup 从「可删留孤儿」收紧为拒**非终态**任务引用
-    // （tasks.workgroupId 软链查询；终态引用不阻删，与 workflow/agent 同档）。
-    // 披露沿 workflow.ts 的 task-ACL 论证：只给聚合 count。
-    // 只用行数，不用 SQL 的 `count(*)`：**PG 的 `count` 回字符串**，`> 0` 在两个引擎上不同义。
-    const nonTerminalRefs = (
-      await tx
-        .select({ id: tasks.id })
-        .from(tasks)
-        .where(
-          and(eq(tasks.workgroupId, id), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
-        )
-    ).length
-    if (nonTerminalRefs > 0) {
-      throw new ConflictError(
-        'workgroup-in-use',
-        `workgroup '${id}' has ${nonTerminalRefs} non-terminal task(s) referencing it; finish or cancel them first`,
-        { referenceCount: nonTerminalRefs },
-      )
-    }
-    // RFC-284 T10（§2.3）：grant 全清单查询收编 resourceAcl 单点。
-    const audience: WorkgroupDeletedAudienceContext = {
-      kind: 'workgroup.deleted-audience',
-      workgroupId: id,
-      visibility: currentRow.visibility,
-      ownerUserId: currentRow.ownerUserId,
-      grantedUserIds: new Set(await listResourceGrantUserIdsForTx(tx, 'workgroup', id)),
-    }
-    const [deleted] = await tx
-      .delete(workgroups)
-      .where(and(eq(workgroups.id, id), eq(workgroups.version, parsed.data.expectedVersion)))
-      .returning({ id: workgroups.id })
-    if (deleted === undefined) {
-      throw staleConflictError('workgroup', `workgroup '${id}' changed; reload`)
-    }
-    return { deletedVersion: currentRow.version, audience }
-  })
-  workgroupsBroadcaster.broadcast(
-    WORKGROUPS_CHANNEL,
-    {
-      type: 'workgroup.deleted',
-      workgroupId: id,
-      clientMutationId: parsed.data.clientMutationId,
-      deletedVersion: deleted.deletedVersion,
-    },
-    deleted.audience,
-  )
-}
-
 /**
  * Fenced rename endpoint adapter. It delegates to saveWorkgroup, so it cannot
  * race the autosave writer and never resolves identity through the old name.
@@ -809,23 +709,6 @@ async function assertPrincipalCanEditInTx(
   return access
 }
 
-/** RFC-324 —— 删除面的 in-tx 门：治理写，编辑授权不覆盖。 */
-async function assertPrincipalCanGovernForTx(
-  tx: PersistenceTx,
-  principal: WorkgroupWritePrincipal,
-  row: WorkgroupRow,
-): Promise<void> {
-  if (principal.kind === 'system') return
-  const access = await resolveResourceAccessForTx(tx, principal.actor, 'workgroup', row)
-  if (!canViewAccess(access)) throwWorkgroupNotFound(row.id)
-  if (!canGovernAccess(access)) {
-    throw new ForbiddenError(
-      'resource-govern-owner-only',
-      'deleting, renaming, transferring or re-granting a workgroup is reserved for its owner',
-    )
-  }
-}
-
 function workgroupReadOnlyError(): ForbiddenError {
   return new ForbiddenError(
     'resource-read-only',
@@ -860,43 +743,6 @@ async function assertNameChangeAllowedInTx(
       `workgroup '${nextName}' already exists; pick a different name`,
     )
   }
-}
-
-async function assertNoScheduledReferencesForTx(
-  tx: PersistenceTx,
-  principal: WorkgroupWritePrincipal,
-  target: { id: string; name: string },
-): Promise<void> {
-  const { scheduledTasks } = tablesOf(tx)
-  const rows = await tx
-    .select({
-      id: scheduledTasks.id,
-      name: scheduledTasks.name,
-      launchKind: scheduledTasks.launchKind,
-      launchPayload: scheduledTasks.launchPayload,
-      ownerUserId: scheduledTasks.ownerUserId,
-    })
-    .from(scheduledTasks)
-  // RFC-284 T9（§2.2）：内联副本收编 scheduledTasks.scheduledRowsReferencing。
-  const refs = scheduledRowsReferencing(rows, {
-    launchKind: 'workgroup',
-    payloadKey: 'workgroupId',
-    id: target.id,
-  })
-  if (refs.length === 0) return
-  const details =
-    principal.kind === 'actor'
-      ? discloseScheduleRefs(principal.actor, refs)
-      : {
-          scheduledCount: refs.length,
-          visibleScheduled: refs.map((row) => ({ id: row.id, name: row.name })),
-          hiddenCount: 0,
-        }
-  throw new ConflictError(
-    'workgroup-scheduled-referenced',
-    `workgroup '${target.name}' is the target of ${refs.length} scheduled task(s); delete or repoint them first`,
-    details,
-  )
 }
 
 async function prepareAgentMembers(

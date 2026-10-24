@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-078 — locks the taskNodeRunsProjection serialization of a review node's
 // content-anchored display timing (reviewRoundStartedAt / reviewDecidedAt) and
@@ -134,7 +135,7 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
       decision: 'pending',
     })
 
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     const rev = res.runs.find((r) => r.id === revId)!
     const agent = res.runs.find((r) => r.id === 'AGENT0')!
 
@@ -172,7 +173,7 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
       decidedAt: 9600,
     })
 
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     const rev = res.runs.find((r) => r.id === revId)!
     expect(rev.reviewRoundStartedAt).toBe(9000)
     expect(rev.reviewDecidedAt).toBe(9600)
@@ -183,7 +184,7 @@ describeEachProvider('RFC-078 — taskNodeRunsProjection surfaces review round t
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, { id: 'A', nodeId: 'a', startedAt: 1000 })
     await seedRun(db, taskId, { id: 'B', nodeId: 'b', startedAt: 2000 })
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(res.runs.every((r) => (r.reviewRoundStartedAt ?? null) === null)).toBe(true)
     expect(res.runs.map((r) => r.id)).toEqual(['A', 'B'])
   })

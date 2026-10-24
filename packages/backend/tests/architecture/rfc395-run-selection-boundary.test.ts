@@ -49,7 +49,8 @@ const initialExceptions = new Set<string>([
   '60832c33c7975e63a9577ae87e210ccc4fadad1a007df43d259b0d91387cd9bb',
   'f5f84d7395607ab7c93a448c0cfe2e6a418aedaba8a0ebc1aa1149f39a88a589',
   'c86c83957d2fda3563f6ee8f07374a7aa0f8c329d5039ccf1386e715ee6dddc6',
-  '473e339d045d09681c9dcd894e1a333d71a6fd57afdc232144304174706224e9',
+  // RFC-395 II-b O3: unchanged timeline statement moved into Task; replace, do not grow the exception.
+  '29eb898f100b67a03ef22ea44a0574c1afc71602bac4e2171773a52ff8620dc7',
 ])
 
 function member(node: ts.Node): string | undefined {

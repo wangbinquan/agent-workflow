@@ -1,3 +1,5 @@
+import { composeCrossContextClosure } from '../crossContextClosure'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 // RFC-382: one passive task-execution graph and one live configuration source per session.
 import { type Actor } from '@/auth/actor'
@@ -142,25 +144,34 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     observation,
     memory,
   } = input
+  const closure = composeCrossContextClosure(db)
   const log = createLogger('task')
   const resourceSnapshots = composeTaskExecutionResourceBinding(taskExecutionResourceDependencies)
   const resources = createTaskExecutionResourceBinding(db, resourceSnapshots)
   const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: closure.collaborationReads.recovery,
     workspacePresence: observation.workspacePresence,
   })
   const collaboration: CollaborationRouteContext = createCollaborationCommandContext({
     db,
+    taskLock: closure.taskLock,
     appHome,
     taskExecutionReadModels: persistence.reads,
     reviewArtifacts: selection.reviewArtifacts,
     reviewDecisions: createReviewDecisionCommand({
+      taskLock: closure.taskLock,
+      upstreamAgents: closure.upstreamAgents,
       db,
       appHome,
       reviewArtifacts: selection.reviewArtifacts,
       rollbackSnapshots: selection.reviewRollbackSnapshots,
     }),
-    questionDispatches: createQuestionDispatchCommand(db),
-    clarifyDecisions: createClarifyDecisionCommand(db, memory.memoryOperations.distillCommands),
+    questionDispatches: createQuestionDispatchCommand(db, closure.taskLock),
+    clarifyDecisions: createClarifyDecisionCommand(
+      db,
+      memory.memoryOperations.distillCommands,
+      closure.taskLock,
+    ),
   })
   const validationContext = composeDynamicWorkflowValidationContext(db)
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
@@ -194,6 +205,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     })
   }
   const repositoryPreparation = composeRepositoryPreparation({
+    taskPorts: composeSourceControlTaskPorts(db),
     db,
     appHome,
     secretBox,
@@ -237,6 +249,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   const coordinator = coordinatorFactory.session
   const provider = composeTaskExecutionProviderRuntime({
     db,
+    archiveCollaboration: closure.collaborationReads.archive,
+    clarifyNav: closure.collaborationReads.clarifyNav,
     persistence,
     execution: input.adapters.execution(persistence),
     log,
@@ -259,6 +273,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       nodeRunRuntime: composeNodeRunRuntimePersistence(db, composeRuntimeSelectionParticipantInTx),
       taskDagCollaboration: createTaskDagCollaborationOperations(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        taskLock: closure.taskLock,
+        upstreamAgents: closure.upstreamAgents,
         reviewArtifacts: selection.reviewArtifacts,
         portArtifactReaderFor: () => selection.portArtifacts,
       }),

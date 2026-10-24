@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Regression for "markdown 提了检视意见以后，检视意见没有进入迭代提示词"
 // (review comments left on a markdown doc never made it into the iterate
@@ -34,7 +35,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
   addReviewComment,
@@ -253,13 +254,15 @@ describe('RFC-005 review iterate — comments reach the upstream re-run prompt',
       commentText: COMMENT,
     })
 
-    const result = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.resumeRequired).toBe(true)
 
     // Re-enter the scheduler synchronously (mirrors what resumeTask kicks

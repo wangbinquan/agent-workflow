@@ -495,9 +495,6 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     ])
     expect(containing('createExecutionScopeIndex(')).toEqual([
-      // RFC-354 T4: the one-shot frame backfill re-derives each stored
-      // snapshot's scope tree to plan container rows for pre-frame runs.
-      'packages/backend/src/modules/task-execution/application/frameBackfillJob.ts',
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
       'packages/backend/src/modules/task-execution/domain/executionScope.ts',
     ])

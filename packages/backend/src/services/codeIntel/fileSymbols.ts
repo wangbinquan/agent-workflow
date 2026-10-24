@@ -14,7 +14,7 @@ import {
   type SymbolNode,
 } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import type { CodeWorkspaceTask } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+import type { CodeWorkspaceTask } from '@/modules/task-execution/public/types'
 import { canonicalRepoKeys } from '@/services/repoLabels'
 import { FILE_CONTENT_MAX_BYTES } from '@/services/worktreeFileContent'
 import { codeReviewReads, type CodeReviewReadInput } from '@/services/structuralDiff/service'

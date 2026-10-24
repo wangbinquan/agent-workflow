@@ -1,3 +1,6 @@
+import { o2Ports } from './helpers/o2Closure'
+import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
+import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
 // Standalone defect fix approved 2026-10-21, following 9956ce39d:
 // repoCount=1 does not mean the task root is a Git worktree. A lone member
 // mounted at svc must use its persisted repository path/key for diff, code
@@ -29,9 +32,8 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { computeSummary, repoKeyWire, type StructuralDiff } from '@agent-workflow/shared'
 
-import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/public/participants'
-import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/application/worktreeResumePreflight'
@@ -165,8 +167,8 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
       })
       expect((await readTaskFixtures(harness.db, { id: legacyId }))[0]!.repos).toEqual([])
       change(task)
-      const store = composeRepositoryWorkspaceStore(harness.db)
-      expect((await store.findWorktreeTask(legacyId))!.repos).toEqual([])
+      const store = createTaskWorktreeLocator(harness.db)
+      expect((await store.find(legacyId))!.repos).toEqual([])
       for (const side of ['base', 'worktree'] as const) {
         for (const repo of [undefined, 'ignored-for-root']) {
           expect(
@@ -226,8 +228,8 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         inputs: '{}',
         startedAt: 1,
       })
-      const store = composeRepositoryWorkspaceStore(harness.db)
-      expect((await store.findWorktreeTask(deferredId))!.repos).toEqual([])
+      const store = createTaskWorktreeLocator(harness.db)
+      expect((await store.find(deferredId))!.repos).toEqual([])
       const path = `not-materialized-${deferredId}.ts`
       expect(await getTaskFileContent(store, deferredId, { path, side: 'worktree' })).toEqual({
         exists: false,
@@ -253,7 +255,11 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           status: 'running',
         })
         const handle = await createIsoUnderLock({
-          binding: { persistence: createTaskExecutionPersistence(harness.db) },
+          binding: {
+            persistence: createTaskExecutionPersistence(harness.db, {
+              recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+            }),
+          },
           writeSem: new Semaphore(1),
           appHome,
           taskId: task.id,
@@ -299,7 +305,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           // Single non-root member, site 4: read the member path and its own baseline.
           const { task } = await fixture(shape)
           change(task)
-          const store = composeRepositoryWorkspaceStore(harness.db)
+          const store = createTaskWorktreeLocator(harness.db)
           for (const mount of shape.mounts) {
             const answer = await getTaskFileContent(store, task.id, {
               path: 'src/a.ts',
@@ -326,7 +332,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           async () => {
             // Single non-root member, site 4: omission must reject just as for multiple members.
             const { task } = await fixture(shape)
-            const store = composeRepositoryWorkspaceStore(harness.db)
+            const store = createTaskWorktreeLocator(harness.db)
             for (const repo of [undefined, '']) {
               await expect(
                 getTaskFileContent(store, task.id, { path: 'src/a.ts', side, repo }),
@@ -394,7 +400,11 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         }
         if ('subdir' in shape || 'directories' in shape)
           expect(task.worktreePath).toContain(join('worktrees', 'group'))
-        const binding = { persistence: createTaskExecutionPersistence(harness.db) }
+        const binding = {
+          persistence: createTaskExecutionPersistence(harness.db, {
+            recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+          }),
+        }
         const runId = ulid()
         await nodeRunFixture(harness.db, {
           id: runId,
@@ -479,7 +489,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           })
           change(task)
           const diff = await getTaskStructuralDiff(
-            createCodeWorkspaceRead(harness.db),
+            createTaskCodeWorkspaceQueries(harness.db),
             task.id,
             scope,
             runId,
@@ -512,7 +522,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         })
         change(task)
         const read = getTaskStructuralDiff(
-          createCodeWorkspaceRead(harness.db),
+          createTaskCodeWorkspaceQueries(harness.db),
           task.id,
           'wrapper',
           runId,
@@ -536,7 +546,10 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           { taskId: task.id, scope: 'task', generation: '1' },
           storedDiff(task.id),
         )
-        const narrative = await buildNarrativeInput(createCodeWorkspaceRead(harness.db), task)
+        const narrative = await buildNarrativeInput(
+          createTaskCodeWorkspaceQueries(harness.db),
+          task,
+        )
         const files = narrative.groups.flatMap((g) => g.files)
         expect(files.filter((f) => f.filePath === 'notes.md')).toHaveLength(shape.mounts.length)
         expect(
@@ -555,7 +568,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           `${shape.name}: ${side} ${operation} resolves the selected member`,
           async () => {
             const { task } = await fixture(shape)
-            const reads = createCodeWorkspaceRead(harness.db)
+            const reads = createTaskCodeWorkspaceQueries(harness.db)
             for (const mount of shape.mounts) {
               const repo = mount === '' ? '.' : mount
               if (operation === 'symbols') {
@@ -705,7 +718,9 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         await settle(task.id, 'interrupted')
         const dependencies = {
           db: harness.db,
-          persistence: createTaskExecutionPersistence(harness.db),
+          persistence: createTaskExecutionPersistence(harness.db, {
+            recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+          }),
           log,
           workspacePresence: { exists: async (path: string) => existsSync(path) },
           activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -737,13 +752,15 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           const ref = `refs/agent-workflow/snapshots/${task.id}/test`
           for (const repo of task.repos)
             await workspaceGit(repo.repoPath, ['update-ref', ref, repo.baseCommit!])
-          const command = composeWorkspaceMaintenanceCommand({
-            db: harness.db,
-            appHome,
-            terminalMaintenance: new DrizzleTerminalMaintenancePersistence(harness.db),
-            isMaterializingTask: () => false,
-            invalidateWorkspacePath: () => {},
-          })
+          const command = composeWorkspaceMaintenanceCommand(
+            withWorkspaceMaintenancePorts({
+              db: harness.db,
+              appHome,
+              terminalMaintenance: new DrizzleTerminalMaintenancePersistence(harness.db),
+              isMaterializingTask: () => false,
+              invalidateWorkspacePath: () => {},
+            }),
+          )
           expect(
             await command.runGcPhase({
               phase: 'worktree',

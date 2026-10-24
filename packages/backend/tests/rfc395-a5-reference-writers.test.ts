@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-395 II-a A5: exercise each real writer with the same ordered/duplicate
 // references; package alone deduplicates ID lists. Fixtures use A1 builders.
 import { beforeEach, expect, test } from 'bun:test'
@@ -157,6 +158,7 @@ describeEachProvider('RFC-395 II-a A5 writer bytes', (harness) => {
           id: () => id,
           now: () => 1,
           semantics: createAgentPersistenceSemantics({
+            taskReferences: composeSubjectTaskReferencePort,
             db: harness.db,
             authorization: catalog.authorization,
             resourceInventory: composeDatabaseAgentResourceInventorySource({

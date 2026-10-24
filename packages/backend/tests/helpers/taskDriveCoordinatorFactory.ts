@@ -1,3 +1,4 @@
+import { o2Ports } from './o2Closure'
 // RFC-386: direct engine fixtures compose the same drive factory as the daemon.
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -29,7 +30,9 @@ export function testDriveFactory(
     engine: () => {
       throw new Error('direct fixture must select its scheduler in the drive profile')
     },
-    failures: createTaskExecutionPersistence(db),
+    failures: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }),
     log: createLogger('rfc386-test'),
   })
 }

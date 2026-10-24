@@ -1,3 +1,4 @@
+import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/composition'
 // RFC-349 — provider-aware doctor checks PostgreSQL-owned operational rows and
 // never opens or describes the retained SQLite generation as live state.
 
@@ -41,8 +42,10 @@ function runtimeFor(
 
 describe('RFC-349 PostgreSQL doctor projections', () => {
   test('lifecycle health projects PostgreSQL counts through the existing wording', async () => {
+    const statements: string[] = []
     const runtime = runtimeFor((sql) => {
-      expect(sql).toContain('agent_workflow.tasks')
+      statements.push(sql)
+      expect(sql).toMatch(/agent_workflow\.(?:tasks|lifecycle_alerts)/)
       expect(sql).not.toMatch(/PRAGMA|sqlite/i)
       return [
         {
@@ -55,7 +58,12 @@ describe('RFC-349 PostgreSQL doctor projections', () => {
         },
       ]
     })
-    const result = await checkPostgresqlLifecycleHealth(runtime)
+    const result = await checkPostgresqlLifecycleHealth(runtime, composeSystemOperationsTaskPorts())
+    expect(statements).toHaveLength(2)
+    expect(statements[0]).toContain('FROM agent_workflow.tasks')
+    expect(statements[1]).toBe(
+      'SELECT count(*) AS open_alerts FROM agent_workflow.lifecycle_alerts WHERE resolved_at IS NULL',
+    )
     expect(result).toMatchObject({ name: 'lifecycle', ok: true })
     expect(result.message).toContain('3 interrupted')
     expect(result.message).toContain('5 open alerts')

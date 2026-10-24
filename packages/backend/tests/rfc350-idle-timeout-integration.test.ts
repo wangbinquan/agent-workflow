@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   readTaskFixtures,
@@ -243,19 +244,19 @@ describeEachProvider('RFC-350 端到端', (provider) => {
     // 保留期内不动。
     expect(
       (
-        await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-          { enabled: true, retentionDays: 90 },
-          { ...dirs, now: finishedAt + 10 * DAY },
-        )
+        await createDrizzleTaskArchiveMaintenanceCommand(
+          db,
+          o2Ports(db).collaborationReads.archive,
+        ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: finishedAt + 10 * DAY })
       ).archived,
     ).toHaveLength(0)
     expect(await taskCount()).toBe(1)
 
     // 跨过保留期 ⇒ 出库并从库里删除。
-    const archived = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90 },
-      { ...dirs, now: finishedAt + 91 * DAY },
-    )
+    const archived = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: finishedAt + 91 * DAY })
     expect(archived.archived.map((tree) => tree.rootTaskId)).toEqual(['root'])
     expect(await taskCount()).toBe(0)
     expect(readdirSync(dirs.archiveDir)).toEqual(['root'])
@@ -267,10 +268,10 @@ describeEachProvider('RFC-350 端到端', (provider) => {
     await runTaskIdleTimeoutSweep(operations(), IDLE_CONFIG, { now: NOW })
 
     const dirs = tmpDirs()
-    const archived = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: false, retentionDays: 90 },
-      { ...dirs, now: NOW + 999 * DAY },
-    )
+    const archived = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: false, retentionDays: 90 }, { ...dirs, now: NOW + 999 * DAY })
     expect(archived.archived).toHaveLength(0)
     expect(await taskCount()).toBe(1)
     expect((await statusOf('root'))?.status).toBe('canceled')

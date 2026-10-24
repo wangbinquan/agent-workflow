@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-024 T3 — locks the cold-clone / warm-hit / fetch-on-reuse /
 // concurrent-same-URL behavior of services/gitRepoCache.ts. Uses a real
 // local bare repo as the "remote" so the suite exercises git itself.
@@ -107,7 +108,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
 
   beforeEach(async () => {
     db = createInMemoryDb(MIGRATIONS)
-    store = composeSqliteRepositoryWorkspaceStore(db)
+    store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     appHome = mkdtempSync(join(tmpdir(), 'aw-grc-home-'))
     const r = await buildFixtureRemote()
     remoteDir = r.dir
@@ -201,7 +202,7 @@ describeEachProvider('gitRepoCache (RFC-024 T3)', (harness) => {
 
     beforeEach(async () => {
       db = harness.db
-      store = composeSqliteRepositoryWorkspaceStore(db)
+      store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
       appHome = mkdtempSync(join(tmpdir(), 'aw-grc-home-'))
       const r = await buildFixtureRemote()
       remoteDir = r.dir
@@ -401,7 +402,7 @@ describeEachProvider('gitRepoCache RFC-068 fast-forward', (harness) => {
 
     beforeEach(async () => {
       db = harness.db
-      store = composeSqliteRepositoryWorkspaceStore(db)
+      store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
       appHome = mkdtempSync(join(tmpdir(), 'aw-grc-068-home-'))
       const r = await buildFixtureRemote()
       remoteDir = r.dir

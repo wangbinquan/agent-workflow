@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-359 W1-T2b（F-H2-1 之二）—— 快速澄清决定命令在两个引擎上各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 F-H2-1：PostgreSQL daemon 从未注入 `clarifyDecisions`，
@@ -107,10 +108,12 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
     const enqueuer = recordingEnqueuer()
-    const context = createCollaborationCommandContext({
-      db,
-      clarifyDecisions: createClarifyDecisionCommand(db, enqueuer),
-    })
+    const context = createCollaborationCommandContext(
+      withO2Closure({
+        db,
+        clarifyDecisions: createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock),
+      }),
+    )
     const result = await submitClarifyDecision(context, {
       actor,
       actorRole: 'owner',
@@ -169,7 +172,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
     const enqueuer = recordingEnqueuer()
-    const command = createClarifyDecisionCommand(db, enqueuer)
+    const command = createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock)
     const submit = (idempotencyKey: string) =>
       command.submit({
         actor,
@@ -200,7 +203,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const enqueuer = recordingEnqueuer()
     let error: unknown
     try {
-      await createClarifyDecisionCommand(db, enqueuer).submit({
+      await createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock).submit({
         actor,
         actorRole: 'owner',
         nodeRunId: round.origin,
@@ -225,7 +228,11 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const db = harness.db
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
-    const result = await createClarifyDecisionCommand(db, recordingEnqueuer()).submit({
+    const result = await createClarifyDecisionCommand(
+      db,
+      recordingEnqueuer(),
+      o2Ports(db).taskLock,
+    ).submit({
       actor,
       actorRole: 'owner',
       nodeRunId: round.origin,

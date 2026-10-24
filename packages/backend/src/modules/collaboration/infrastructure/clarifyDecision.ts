@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-333 / RFC-349 / RFC-359 — collaboration clarify decision transaction participant.
 //
 // RFC-359 W1-T2b：一份实现，两个引擎。此前只有 SQLite 的 dbTxSync 版本（journal 用
@@ -215,6 +216,7 @@ export async function replayCommittedClarifyDecision(input: {
 }
 
 export async function prepareClarifyDecision(input: {
+  taskLock: HumanGateTaskLockPort
   db: PersistenceDb
   taskId: string
   originNodeRunId: string
@@ -280,7 +282,7 @@ export async function prepareClarifyDecision(input: {
           `clarify round ${input.originNodeRunId} changed before decision commit`,
         )
       }
-      const operations = new DatabaseHumanGateOperationJournal()
+      const operations = new DatabaseHumanGateOperationJournal(input.taskLock)
       const currentGateRevision = await ensureLegacyClarifyGateRevisionTx({
         tx: sealed.tx,
         operations,

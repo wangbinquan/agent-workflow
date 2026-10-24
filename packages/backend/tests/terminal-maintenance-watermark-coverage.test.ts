@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // Locks in two workspace-GC defects found while chasing a PostgreSQL daemon that
 // warned "workspace prune failed (durable claim kept for recovery)" once per GC
 // tick for ~30 terminal tasks, whose worktrees were therefore never reclaimed.
@@ -30,7 +31,7 @@ import { join, resolve } from 'node:path'
 
 import { createWorkspaceMaintenanceCommand } from '@/modules/source-control/application/workspaceMaintenance'
 import { createNodeWorkspaceMaintenanceFilesystem } from '@/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem'
-import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
+import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
 import { DrizzleTaskOwnershipPersistence } from '@/modules/task-execution/infrastructure/taskOwnershipPersistence'
 import { operationFamilyKey, requestHash } from '@/modules/task-execution/domain/executionEffect'
@@ -256,7 +257,7 @@ describeEachProvider('终态维护保留水位覆盖（双引擎）', (harness) 
         )
 
         const command = createWorkspaceMaintenanceCommand({
-          store: new DrizzleWorkspaceMaintenanceStore(database),
+          store: new PortWorkspaceMaintenanceStore(composeSourceControlTaskPorts(database)),
           terminalMaintenance: new DrizzleTerminalMaintenancePersistence(database),
           filesystem: createNodeWorkspaceMaintenanceFilesystem({
             appHome,

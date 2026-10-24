@@ -7,6 +7,7 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray } from 'drizzle-orm'
 
+import type { CapabilityAgentExistence } from '../application/ports/existingResources'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CapabilityMatrixReadPort,
@@ -31,11 +32,14 @@ function parseStringMap(raw: string): Readonly<Record<string, unknown>> {
   }
 }
 
-export function createCapabilityMatrixRead(db: PersistenceDb): CapabilityMatrixReadPort {
+export function createCapabilityMatrixRead(
+  db: PersistenceDb,
+  agents: CapabilityAgentExistence,
+): CapabilityMatrixReadPort {
   const endpointReader = createRepoEndpointRead(db)
   return {
     async loadForRepo(repoId) {
-      const { repoCapabilityConfig, capabilityTemplates, webhookTriggers, agents } = tablesOf(db)
+      const { repoCapabilityConfig, capabilityTemplates, webhookTriggers } = tablesOf(db)
       const cells = await db
         .select({
           repoId: repoCapabilityConfig.repoId,
@@ -97,16 +101,7 @@ export function createCapabilityMatrixRead(db: PersistenceDb): CapabilityMatrixR
         }
       }
       const existingAgentIds =
-        agentIds.size === 0
-          ? new Set<string>()
-          : new Set(
-              (
-                await db
-                  .select({ id: agents.id })
-                  .from(agents)
-                  .where(inArray(agents.id, [...agentIds]))
-              ).map((agent) => agent.id),
-            )
+        agentIds.size === 0 ? new Set<string>() : new Set(await agents.existingIds([...agentIds]))
 
       return cells.map((cell): CapabilityMatrixReadRow => {
         const hasBinding = cell.templateId !== null && cell.templateId !== ''

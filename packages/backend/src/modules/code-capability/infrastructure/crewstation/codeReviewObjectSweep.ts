@@ -1,9 +1,7 @@
 // RFC-370 §10 V16 — the code-review owner's hosted object sweep. Task deletion
 // removes task rows by cascade without visiting each object owner; once a
 // task is gone, every `code-review` publication of its scope is released.
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { inArray } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { CodeReviewTaskExistence } from '../../application/ports/existingResources'
 import {
   HOSTED_CODE_REVIEW_OWNER,
   type HostedCodeReviewPublications,
@@ -18,7 +16,7 @@ export interface HostedCodeReviewObjectSweep {
 }
 
 export function createHostedCodeReviewObjectSweep(input: {
-  readonly db: PersistenceDb
+  readonly tasks: CodeReviewTaskExistence
   readonly publications: Pick<HostedCodeReviewPublications, 'scopes' | 'release'>
   readonly graceMs?: number
   readonly pageSize?: number
@@ -36,15 +34,7 @@ export function createHostedCodeReviewObjectSweep(input: {
           limit: pageSize,
         })
         if (scopes.length === 0) break
-        const { tasks } = tablesOf(input.db)
-        const live = new Set(
-          (
-            await input.db
-              .select({ id: tasks.id })
-              .from(tasks)
-              .where(inArray(tasks.id, [...scopes]))
-          ).map((row) => row.id),
-        )
+        const live = new Set(await input.tasks.existingTaskIds(scopes))
         for (const scope of scopes)
           if (!live.has(scope))
             released += await input.publications.release({ owner: HOSTED_CODE_REVIEW_OWNER, scope })

@@ -1,3 +1,5 @@
+import { withO2Closure } from './helpers/o2Closure'
+import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 // RFC-202 — lifecycle exits & terminal sweep locks (T2/T3/T5/T6).
 //
 // WHY THIS FILE EXISTS: the 2026-07-16 UX audit found dead tasks' clarify /
@@ -36,7 +38,7 @@ import {
   countPendingReviews,
 } from '@/modules/collaboration/infrastructure/review'
 import { listClarifyRoundSummaries } from '../src/services/clarifyRounds'
-import { deleteWorkflow, scheduledRowsReferencingWorkflow } from '../src/services/workflow'
+import { scheduledRowsReferencingWorkflow } from '../src/services/workflow'
 import { ConflictError } from '../src/util/errors'
 import { buildActor } from '../src/auth/actor'
 
@@ -314,13 +316,15 @@ describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) =
     })
 
     await expect(
-      submitReviewDecision({
-        db,
-        appHome: '/tmp',
-        nodeRunId: run,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-      }),
+      submitReviewDecision(
+        withO2Closure({
+          db,
+          appHome: '/tmp',
+          nodeRunId: run,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+        }),
+      ),
     ).rejects.toMatchObject({ code: 'task-terminal' })
   })
 })

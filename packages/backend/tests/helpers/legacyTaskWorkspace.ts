@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Test-only binding to the real SC mechanisms; no production service facade.
 import type { StartTask } from '@agent-workflow/shared'
@@ -13,7 +14,10 @@ import {
   type ResolvedRepoSource,
 } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 function repositoryWorkspaceFor(deps: Pick<TestTaskLaunchOptions, 'db' | 'repositoryWorkspace'>) {
-  return deps.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(deps.db)
+  return (
+    deps.repositoryWorkspace ??
+    composeSqliteRepositoryWorkspaceStore(deps.db, composeSourceControlTaskPorts(deps.db))
+  )
 }
 
 export async function resolveRepoSourceSingle(

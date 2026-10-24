@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-053 — coexistence + isolation tests across the two writers
 // (lifecycle invariants in PR-D + stuck-task detector in PR-E).
 //
@@ -137,7 +138,9 @@ describeEachProvider(
 
       // Run only invariants. R1 should be inserted; S1 must NOT be resolved.
       await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(env.db, {
+          recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: t1.taskId },
         now: () => T0 + MIN_MS,
       })
@@ -168,7 +171,9 @@ describeEachProvider(
       })
 
       await runStuckTaskDetector({
-        operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(env.db, {
+          recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         now: () => T0,
       })
 
@@ -278,7 +283,9 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
     })
 
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => T0 + MIN_MS,
     })
 
@@ -348,7 +355,9 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
       decidedAt: T0,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => T0 + MIN_MS,
     })
     expect(r.scanned).toBe(0)
@@ -363,7 +372,9 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
       startedAt: T0 - 30 * MIN_MS,
     })
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => T0,
     })
     expect(r.scanned).toBe(0)
@@ -380,7 +391,9 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     cleanup = env.cleanup
     await seedTask(env.db, 'done', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => T0,
     })
     expect(r.scanned).toBe(0)
@@ -391,7 +404,9 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     cleanup = env.cleanup
     await seedTask(env.db, 'canceled', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => T0,
     })
     expect(r.scanned).toBe(0)

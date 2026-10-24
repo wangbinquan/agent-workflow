@@ -10,3 +10,5 @@ export {
   intentTurns,
   intentWorkingSetChanges,
 } from './infrastructure/persistence/schema'
+
+export { createIntentTurnEventRetentionPhase } from './infrastructure/retentionPhase'

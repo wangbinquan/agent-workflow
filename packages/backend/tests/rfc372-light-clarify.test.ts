@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   patchWorkflowFixture,
@@ -178,9 +179,11 @@ async function seed(
     questions,
   }
   const round = await createClarifyRound(
-    kind === 'self'
-      ? { ...common, kind, askingShardKey: null, iteration: 0 }
-      : { ...common, kind, targetConsumerNodeId: 'designer', loopIter: 0 },
+    withO2Closure(
+      kind === 'self'
+        ? { ...common, kind, askingShardKey: null, iteration: 0 }
+        : { ...common, kind, targetConsumerNodeId: 'designer', loopIter: 0 },
+    ),
   )
   const read = async () => {
     return (

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // Locks the boot/periodic lifecycle-scan log tiering introduced when a real
 // daemon boot logged `ERROR [lifecycle.invariants] lifecycle invariants
 // violated open=59 errorCount=59` — 50 of those 59 were permanent, benign
@@ -298,13 +299,17 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
   // promotes to error — the state that made the real daemon log ERROR.
   async function detectThenPromote(db: PersistenceDb, taskId: string): Promise<void> {
     await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => 0,
     })
     captured = '' // ignore the first (warning) scan; assert on the promoting scan only
     await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => GRACE_MS + 1,
     })
@@ -341,20 +346,26 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     const taskId = await seedOffendingTask(db, 'awaiting_human')
     // Scan 1: detect (newAlerts=1 → stateChanged=true → logs)
     await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => 0,
     })
     // Scan 2: promote (promotedAlerts=1 → stateChanged=true → logs ERROR)
     await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => GRACE_MS + 1,
     })
     captured = ''
     // Scan 3: nothing changed (newAlerts=0, promotedAlerts=0, resolvedAlerts=0)
     await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => GRACE_MS + 2,
     })

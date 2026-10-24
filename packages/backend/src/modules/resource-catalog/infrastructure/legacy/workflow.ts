@@ -15,7 +15,6 @@ import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persis
 import type {
   CopyWorkflowRequest,
   CreateWorkflow,
-  DeleteWorkflow,
   ResourceAccess,
   ResourceVisibility,
   SaveWorkflowReceipt,
@@ -24,14 +23,11 @@ import type {
   WorkflowDetail,
   WorkflowDefinition,
   WorkflowDraftSnapshot,
-  WorkflowRevision,
   WorkflowSnapshotHash,
 } from '@agent-workflow/shared'
 import {
   privilegedNodeLensFor,
-  TERMINAL_TASK_STATUSES,
   CopyWorkflowRequestSchema,
-  DeleteWorkflowSchema,
   serializeWorkflowDefinitionStorageV1,
   serializeWorkflowEditableSnapshotV1,
   normalizeResourceDisplayName,
@@ -42,7 +38,7 @@ import {
   UpdateWorkflowSchema,
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
-import { and, eq, notInArray } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { assertScriptAuthorAllowed, type ScriptAuthorPrincipal } from '@/services/scriptAuthorGate'
 import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
@@ -50,18 +46,8 @@ import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 
 import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-  staleConflictError,
-} from '@/util/errors'
-import {
-  WORKFLOWS_CHANNEL,
-  workflowsBroadcaster,
-  type WorkflowDeletedAudienceContext,
-} from '@/ws/broadcaster'
+import { ForbiddenError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import {
   assertNoMissingRefs,
   assertRefsUsableForTx,
@@ -69,7 +55,6 @@ import {
   extractWorkflowAgentRefs,
   extractWorkflowWorkflowRefs,
   extractWorkflowWorkgroupRefs,
-  listResourceGrantUserIdsForTx,
   resolveRefsUsableById,
   resolveRefsUsableByName,
 } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
@@ -80,11 +65,7 @@ import {
 } from '@/modules/resource-catalog/application/resourceDefaults'
 import { assertNameUnchangedForEditor } from '@/modules/resource-catalog/application/resourceAccess'
 import { resolveResourceAccessFor } from '@/modules/resource-catalog/composition/resourceAcl'
-import {
-  canEditAccess,
-  canGovernAccess,
-  canViewAccess,
-} from '@/modules/resource-catalog/domain/resourceAccess'
+import { canEditAccess, canViewAccess } from '@/modules/resource-catalog/domain/resourceAccess'
 import {
   canViewResourceForTx,
   resolveResourceAccessForTx,
@@ -701,144 +682,6 @@ export async function updateWorkflow(
   return txResult.receipt
 }
 
-export async function deleteWorkflow(
-  db: PersistenceDb,
-  id: string,
-  input: DeleteWorkflow,
-  principal: WorkflowWritePrincipal,
-): Promise<void> {
-  const parsed = DeleteWorkflowSchema.safeParse(input)
-  if (!parsed.success) {
-    throw new ValidationError('workflow-invalid', 'invalid workflow delete payload', {
-      issues: parsed.error.issues,
-    })
-  }
-  // RFC-359 W9：删除面从 bun:sqlite 独有的同步 `dbTxSync` 迁到中立事务原语，两个引擎共用一条。
-  // 能迁是因为**删除面的 in-tx 门与保存面是分开的两份**（RFC-324 的核心区分）：
-  // `assertPrincipalCanGovernInTx` / `countNonTerminalReferencingTasksInTx` 的唯一调用方就是
-  // 这一笔，跟着改成异步零级联；保存面的 `commitWorkflowSaveInTx` / `insertWorkflowInTx` /
-  // `assertRefsUsableInTx` 仍被 aggregateAdapters 的 `(tx: DbTxSync, …) => void` 参与者契约钉着，
-  // 那三个站点这一刀不动。
-  const deleted = await databaseSessionFor(db).transaction<{
-    deletedVersion: number
-    audience: WorkflowDeletedAudienceContext
-  }>(async (tx) => {
-    const { workflows, scheduledTasks } = tablesOf(tx)
-    const [currentRow] = await tx
-      .select()
-      .from(workflows)
-      .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
-      .limit(1)
-    if (currentRow === undefined) throwWorkflowNotFound(id)
-    await assertPrincipalCanGovernForTx(tx, principal, currentRow)
-
-    if (currentRow.version !== parsed.data.expectedVersion) {
-      // RFC-359 T6：定义损坏的行在版本冲突时也只报 409——revision 详情算得出就带上，算不出不让
-      // stale 分支自己 422（与 PostgreSQL 仓库的 staleRow 同规则）。
-      let current: WorkflowRevision | undefined
-      try {
-        current = workflowRevisionOf(rowToWorkflow(currentRow))
-      } catch {
-        current = undefined
-      }
-      throw staleConflictError(
-        'workflow',
-        `workflow '${id}' is at version ${currentRow.version}, expected ${parsed.data.expectedVersion}`,
-        current === undefined ? undefined : { current },
-      )
-    }
-
-    // RFC-285 B2（D5/E2）：删除中档统一——只拒**非终态**引用（running /
-    // pending / awaiting_* / interrupted）；仅被历史（终态）任务引用的
-    // workflow 允许删除，终态任务详情容忍悬空引用（tasks.workflow_id 已随
-    // 0151 迁移软链化，与 workgroupId/agent 同型）。The check and DELETE
-    // share one transaction, so a task insert that wins first is observed.
-    const referenceCount = await countNonTerminalReferencingTasksForTx(tx, id)
-    if (referenceCount > 0) {
-      throw new ConflictError(
-        'workflow-in-use',
-        `workflow '${id}' has ${referenceCount} non-terminal task(s) referencing it; finish or cancel them first`,
-        // Task ids/statuses are task-ACL protected. A public workflow's owner
-        // may not be a member of tasks launched by other users, so disclose
-        // only the aggregate needed to explain why deletion is blocked.
-        { referenceCount },
-      )
-    }
-
-    // RFC-202 T5: refuse while any scheduled task still launches this
-    // workflow — symmetric with deleteAgent's 'agent-scheduled-referenced'
-    // guard. Without it the orphaned enabled schedule fires workflow-not-found
-    // silently on every tick (no task row, no visible trace) until the
-    // consecutive-failure auto-disable kicks in ~10 fires later (audit P1
-    // F-12). Same transaction as the DELETE, so a schedule insert that wins
-    // first is always observed.
-    const schedRows = await tx
-      .select({
-        id: scheduledTasks.id,
-        name: scheduledTasks.name,
-        launchKind: scheduledTasks.launchKind,
-        launchPayload: scheduledTasks.launchPayload,
-        ownerUserId: scheduledTasks.ownerUserId,
-      })
-      .from(scheduledTasks)
-    const referencing = scheduledRowsReferencingWorkflow(schedRows, id)
-    if (referencing.length > 0) {
-      // Schedules are member-private (owner + `tasks:read:all`). Details
-      // disclose names only for schedules the principal may see; the rest is
-      // an aggregate count — same 404-shape hiding discipline the routes use
-      // (Codex design-gate P1: do not leak private schedule names/existence).
-      const canSeeAll =
-        principal.kind === 'system' || principal.actor.permissions.has('tasks:read:all' as never)
-      const visible = referencing.filter(
-        (r) =>
-          canSeeAll || (principal.kind === 'actor' && r.ownerUserId === principal.actor.user.id),
-      )
-      throw new ConflictError(
-        'workflow-scheduled-referenced',
-        `workflow '${id}' is the launch target of ${referencing.length} scheduled task(s); delete or repoint them first`,
-        {
-          scheduledCount: referencing.length,
-          visibleScheduled: visible.map((r) => ({ id: r.id, name: r.name })),
-          hiddenCount: referencing.length - visible.length,
-        },
-      )
-    }
-
-    // The row cannot be re-read after DELETE. Capture its complete non-admin
-    // visibility audience in this same transaction, then carry it beside (not
-    // inside) the WS frame after commit. This closes the cold-cache delivery
-    // gap without exposing ACL data on the shared client wire.
-    // RFC-284 T10（§2.3）：grant 全清单查询收编 resourceAcl 单点。
-    const audience: WorkflowDeletedAudienceContext = {
-      kind: 'workflow.deleted-audience',
-      workflowId: id,
-      visibility: currentRow.visibility,
-      ownerUserId: currentRow.ownerUserId,
-      grantedUserIds: new Set(await listResourceGrantUserIdsForTx(tx, 'workflow', id)),
-    }
-
-    const [deletedRow] = await tx
-      .delete(workflows)
-      .where(and(eq(workflows.id, id), eq(workflows.version, parsed.data.expectedVersion)))
-      .returning({ id: workflows.id, version: workflows.version })
-    if (deletedRow === undefined) {
-      throw staleConflictError('workflow', `workflow '${id}' changed; reload`)
-    }
-    return { deletedVersion: deletedRow.version, audience }
-  })
-
-  workflowsBroadcaster.broadcast(
-    WORKFLOWS_CHANNEL,
-    {
-      type: 'workflow.deleted',
-      workflowId: id,
-      clientMutationId: parsed.data.clientMutationId,
-      deletedVersion: deleted.deletedVersion,
-    },
-    deleted.audience,
-  )
-}
-
 /**
  * RFC-202 T5 — pure core of the scheduled-task reference check (mirrors
  * `scheduledRowsReferencingAgent` in agent.ts). launchKind='workflow' rows
@@ -931,25 +774,6 @@ export function broadcastWorkflowCreated(created: WorkflowDetail): void {
   })
 }
 
-/**
- * RFC-285 B2：删除门只数**非终态**引用（终态集合单源 shared/lifecycle.ts）。
- * 终态引用不再阻删——展示层按悬空软链容忍（E2）。
- */
-async function countNonTerminalReferencingTasksForTx(
-  tx: PersistenceTx,
-  workflowId: string,
-): Promise<number> {
-  const { tasks } = tablesOf(tx)
-  const rows = await tx
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(
-      and(eq(tasks.workflowId, workflowId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
-    )
-  // 只用行数，不用 SQL 的 `count(*)`：**PG 的 `count` 回字符串**，`> 0` 在两个引擎上不同义。
-  return rows.length
-}
-
 export function rowToWorkflowDetail(row: WorkflowRow): WorkflowDetail {
   return workflowToDetail(rowToWorkflow(row))
 }
@@ -1007,32 +831,6 @@ async function assertPrincipalCanEditInTx(
   assertNotBuiltin('workflow', row)
   if (!canEditAccess(access)) throw workflowReadOnlyError()
   return access
-}
-
-/**
- * RFC-324 —— 删除面的 in-tx 门：治理写。
- *
- * 与保存面分开是本 RFC 的核心区分：可编辑授权覆盖内容，不覆盖「让这份工作流不再
- * 存在」。路由层已经判过一次（routes/workflows.ts），这里是事务内的权威复检。
- */
-async function assertPrincipalCanGovernForTx(
-  tx: PersistenceTx,
-  principal: WorkflowWritePrincipal,
-  row: WorkflowRow,
-): Promise<void> {
-  if (principal.kind === 'system') {
-    assertNotBuiltin('workflow', row)
-    return
-  }
-  const access = await resolveResourceAccessForTx(tx, principal.actor, 'workflow', row)
-  if (!canViewAccess(access)) throwWorkflowNotFound(row.id)
-  assertNotBuiltin('workflow', row)
-  if (!canGovernAccess(access)) {
-    throw new ForbiddenError(
-      'resource-govern-owner-only',
-      'deleting, renaming, transferring or re-granting a workflow is reserved for its owner',
-    )
-  }
 }
 
 function workflowReadOnlyError(): ForbiddenError {

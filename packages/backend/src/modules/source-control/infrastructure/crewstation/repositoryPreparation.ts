@@ -1,3 +1,4 @@
+import type { RepositoryWorkspaceTaskPorts } from '../../composition/required-ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SecretBox } from '@/auth/secretBox'
 import { unsealRepoUrl } from '@/services/repoCredentials'
@@ -53,6 +54,7 @@ interface HostedGroupPreparationPlan {
 type HostedPreparationPlan = HostedSinglePreparationPlan | HostedGroupPreparationPlan
 
 export function createHostedRepositoryPreparation(input: {
+  readonly taskPorts: RepositoryWorkspaceTaskPorts
   readonly db: PersistenceDb
   readonly secretBox: SecretBox
   readonly helper: WorkspaceHelper
@@ -61,7 +63,7 @@ export function createHostedRepositoryPreparation(input: {
     operationId: string,
   ) => Promise<{ value: MaterializedSpace } | null>
 }): RepositoryPreparationEffectFactory {
-  const store = composeRepositoryWorkspaceStore(input.db)
+  const store = composeRepositoryWorkspaceStore(input.db, input.taskPorts)
   return {
     create(request) {
       const call = <T>(stage: string, operation: string, value: unknown) =>

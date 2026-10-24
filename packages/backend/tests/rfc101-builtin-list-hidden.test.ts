@@ -32,7 +32,7 @@ import { SYSTEM_USER_ID } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSqliteFusionPersistence } from '../src/modules/knowledge-evolution/composition/fusion'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { listAgents } from '../src/services/agent'
+import { listAgents } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_NAME,

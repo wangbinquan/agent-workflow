@@ -4,14 +4,13 @@
   "scope": "Remaining task-execution-external direct access; raw SQL included. This inventory is not a selection exception allow-list.",
   "sites": [
     {
-      "path": "packages/backend/src/modules/code-capability/infrastructure/codeWorkspaceRead.ts",
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries.ts",
       "symbol": "findNodeRun / listNodeRuns",
       "purpose": "workspace checkpoint facts and API timeline",
       "a7": {
-        "status": "ledger",
-        "entry": "nodeRuns|code-capability/infrastructure/codeWorkspaceRead.ts",
-        "ledger": "rfc395-module-table-ownership-debt.json",
-        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+        "status": "closed",
+        "via": "task-execution/composition.ts#createTaskCodeWorkspaceQueries",
+        "why": "RFC-395 II-b O3: bootstrap injects the Task owner implementation."
       }
     },
     {
@@ -37,45 +36,39 @@
       "symbol": "event replay",
       "purpose": "node_runs association JOIN",
       "a7": {
-        "status": "ledger",
-        "entry": "nodeRuns|runtime-management/infrastructure/realtimeStore.ts",
-        "ledger": "rfc395-module-table-ownership-debt.json",
-        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+        "status": "closed",
+        "via": "runtime-management/composition/required-ports.ts#RealtimeTaskFactsPort",
+        "why": "RFC-395 II-b O2: the event replay join is implemented inside task-execution."
       }
     },
     {
-      "path": "packages/backend/src/modules/system-operations/infrastructure/resourceLimitPersistence.ts",
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskResourceLimitFacts.ts",
       "symbol": "resource usage",
       "purpose": "resource-limit facts",
       "a7": {
-        "status": "ledger",
-        "entry": "nodeRuns|system-operations/infrastructure/resourceLimitPersistence.ts",
-        "ledger": "rfc395-module-table-ownership-debt.json",
-        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+        "status": "closed",
+        "via": "task-execution/composition.ts#createTaskResourceLimitFacts",
+        "why": "RFC-395 II-b O3: bootstrap injects the Task owner implementation."
       }
     },
     {
-      "path": "packages/backend/src/platform/persistence/eventsArchiveStore.ts",
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskNodeEventArchiveStore.ts",
       "symbol": "archive event rows",
       "purpose": "run/task association",
       "a7": {
-        "status": "ledger",
-        "entry": "nodeRuns|platform/persistence/eventsArchiveStore.ts",
-        "ledger": "rfc395-horizontal-table-ownership-debt.json",
-        "why": "归档仅面向 Task 事件，联查 run 归属；两个平台 provider wrapper 仍导入该文件，直接移入 owner 会新增 platform → modules 边。",
-        "removeWhen": "RFC-395 T11 eventsArchiveStore 边界任务：bootstrap 注入 Task 事件归档 store 后删除平台 adapter。 必须在 RFC-395 II-b B2 替换该表 adapter 前完成。"
+        "status": "closed",
+        "via": "task-execution/composition.ts#createTaskNodeEventArchiveStore",
+        "why": "RFC-395 II-b O3: bootstrap injects the Task owner implementation."
       }
     },
     {
-      "path": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts",
       "symbol": "legacy lifecycle",
       "purpose": "existing run facts and writes",
       "a7": {
-        "status": "ledger",
-        "entry": "nodeRuns|platform/persistence/sqlite/taskLifecycle.ts",
-        "ledger": "rfc395-horizontal-table-ownership-debt.json",
-        "why": "遗留生命周期 writer 被 services/lifecycle 与平台 prune 策略类型引用；整体迁移需同时拆开这些合同，不能新增 platform → modules 边。",
-        "removeWhen": "RFC-395 II-b B2：Task 生命周期 adapter 换到目标表时收回 task-execution，并先解除平台策略对该 writer 的引用。"
+        "status": "closed",
+        "via": "task-execution/public/operations.ts",
+        "why": "RFC-395 II-b O1: lifecycle writer and prune policy moved into their owner."
       }
     },
     {
@@ -89,14 +82,13 @@
       }
     },
     {
-      "path": "packages/backend/src/modules/source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
+      "path": "packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceMaintenanceStore.ts",
       "symbol": "hasLiveOrRevivableChild",
       "purpose": "raw SELECT child_task_id FROM node_runs; child task status existence, no run selection",
       "a7": {
-        "status": "ledger",
-        "entry": "nodeRuns|source-control/infrastructure/workspaceMaintenanceSqlStore.ts",
-        "ledger": "rfc395-module-table-ownership-debt.json",
-        "why": "No offered edge to task-execution; no new off-DAG import is authorized."
+        "status": "closed",
+        "via": "source-control/composition/required-ports.ts#WorkspaceGcTaskPort",
+        "why": "RFC-395 II-b O1: task facts and prune CAS moved into their owner."
       }
     },
     {

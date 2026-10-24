@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370 hosted acceptance (2026-10-18) — a review gate opens under the
 // driving owner's execution context on both providers.
 //
@@ -133,7 +134,9 @@ async function seedClaimedReviewTask(db: PersistenceDb) {
     content: 'The report uses **red**.',
     kind: 'markdown',
   })
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
     persistence,
@@ -162,7 +165,10 @@ describeEachProvider(
   (harness) => {
     test('the owner context passed by the scheduler parks the gate without an ambient context', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
-      const mechanics = createCollaborationRuntimeMechanics(harness.db)
+      const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        taskLock: o2Ports(harness.db).taskLock,
+        ...{ upstreamAgents: o2Ports(harness.db).upstreamAgents },
+      })
       await expect(
         mechanics.dispatchReviewNode({
           ...request(seeded.taskId),
@@ -190,7 +196,10 @@ describeEachProvider(
     test('the ambient provider context of the drive alone still parks the gate', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
       expect(seeded.context.legacyConnection).toBeUndefined()
-      const mechanics = createCollaborationRuntimeMechanics(harness.db)
+      const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        taskLock: o2Ports(harness.db).taskLock,
+        ...{ upstreamAgents: o2Ports(harness.db).upstreamAgents },
+      })
       await expect(
         runWithTaskExecutionContext(seeded.context, () =>
           mechanics.dispatchReviewNode(request(seeded.taskId)),
@@ -214,7 +223,10 @@ describeEachProvider(
 
     test('without any context the claimed owner still refuses the ownerless write', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
-      const mechanics = createCollaborationRuntimeMechanics(harness.db)
+      const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        taskLock: o2Ports(harness.db).taskLock,
+        ...{ upstreamAgents: o2Ports(harness.db).upstreamAgents },
+      })
       await expect(mechanics.dispatchReviewNode(request(seeded.taskId))).rejects.toThrow(
         'ownerless task mutation refused durable owner',
       )

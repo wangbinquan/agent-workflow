@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1b — multi-row dispatch consistency.
 //
 // When a (task, nodeId, iteration) has more than one top-level node_run row
@@ -210,15 +211,17 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
 
       const { nodeRuns } = tablesOf(h.db)
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       expect(res.kind).toBe('awaiting_review')
       const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewId)))[0]!
       expect(after.status).toBe('awaiting_review')
@@ -235,15 +238,17 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
 
       const { nodeRuns } = tablesOf(h.db)
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       expect(res.kind).toBe('ok')
       const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, doneId)))[0]!
       expect(after.status).toBe('done') // not touched
@@ -271,15 +276,17 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       // But dispatchReviewNode's RFC-052 "ANY top-level row done → short-circuit" rule
       // overrides freshness. Done row is preserved; placeholder is left alone too.
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       expect(res.kind).toBe('ok')
 
       const doneAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, doneId)))[0]!
@@ -310,15 +317,17 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
 
       const { nodeRuns } = tablesOf(h.db)
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       expect(res.kind).toBe('awaiting_review')
 
       // Canceled row stays canceled (no done row exists in this shape, so the
@@ -356,15 +365,17 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       // simply linger pending — scheduler treats this node as done via the
       // any-done short-circuit.
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       expect(res.kind).toBe('ok')
 
       const staleAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, staleId)))[0]!
@@ -403,15 +414,17 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
 
       const { nodeRuns } = tablesOf(h.db)
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       expect(res.kind).toBe('awaiting_review')
       const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, p2)))[0]!
       expect(after.status).toBe('awaiting_review')
@@ -521,15 +534,17 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
 
       const { docVersions, nodeRuns } = tablesOf(h.db)
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       expect(res.kind).toBe('ok')
 
       // No new doc_version minted (the RFC-052 guard).

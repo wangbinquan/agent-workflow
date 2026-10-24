@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   readTaskFixtures,
@@ -187,18 +188,18 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
 
     expect(
       (
-        await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-          { enabled: false, retentionDays: 90 },
-          { ...dirs, now: NOW },
-        )
+        await createDrizzleTaskArchiveMaintenanceCommand(
+          db,
+          o2Ports(db).collaborationReads.archive,
+        ).runSweep({ enabled: false, retentionDays: 90 }, { ...dirs, now: NOW })
       ).archived,
     ).toHaveLength(0)
     expect(
       (
-        await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-          { enabled: true, retentionDays: 0 },
-          { ...dirs, now: NOW },
-        )
+        await createDrizzleTaskArchiveMaintenanceCommand(
+          db,
+          o2Ports(db).collaborationReads.archive,
+        ).runSweep({ enabled: true, retentionDays: 0 }, { ...dirs, now: NOW })
       ).archived,
     ).toHaveLength(0)
     expect(await taskCount(db)).toBe(1)
@@ -228,7 +229,10 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     // ③ 干净的可归档树。
     await addTask(db, { id: 'r3', status: 'failed', finishedAt: NOW - 300 * DAY })
 
-    const trees = await createDrizzleTaskArchiveMaintenanceCommand(db).preview({
+    const trees = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).preview({
       retentionDays: 90,
       maxTrees: 10,
       now: NOW,
@@ -267,10 +271,10 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     }
 
     // Exercise the active provider-neutral pipeline, not the retired service implementation.
-    const archived = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90 },
-      { ...dirs, now: NOW },
-    )
+    const archived = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(archived.archived).toHaveLength(1)
     const result = archived.archived[0]!
 
@@ -361,7 +365,10 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
 
     // RFC-359 W3-T15-B：`.tmp-*` 收尾在模块的 SQLite 适配器里（与 PostgreSQL 共用一份规则），
     // legacy 的 recoverInterruptedArchives 只续做 RFC-328 认领并交出 claimedRoots。
-    const recovered = await createDrizzleTaskArchiveMaintenanceCommand(db).recover(dirs)
+    const recovered = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).recover(dirs)
     expect(recovered.promoted).toEqual(['gone'])
     expect(recovered.discarded).toEqual(['still-here'])
     expect(existsSync(join(dirs.archiveDir, 'gone', 'manifest.json'))).toBe(true)
@@ -378,10 +385,10 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     for (let i = 0; i < 3; i += 1) {
       await addTask(db, { id: `t${i}`, status: 'done', finishedAt: NOW - 300 * DAY })
     }
-    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90, maxTreesPerSweep: 2 },
-      { ...dirs, now: NOW },
-    )
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90, maxTreesPerSweep: 2 }, { ...dirs, now: NOW })
     expect(result.archived).toHaveLength(2)
     expect(result.skipped).toBe(0)
     // 有界:剩下的那棵留给下一拍。
@@ -549,17 +556,17 @@ describeEachProvider('ordinary sweep audit persistence', (harness) => {
     await seedBase(db)
     // 还在保留期内 ⇒ 这一拍什么都没归档 ⇒ 不该留下噪音审计行。
     await addTask(db, { id: 'fresh', status: 'done', finishedAt: NOW - 1 * DAY })
-    await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90 },
-      { ...dirs, now: NOW },
-    )
+    await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(await auditRows(db)).toHaveLength(0)
 
     await addTask(db, { id: 'old', status: 'done', finishedAt: NOW - 300 * DAY })
-    await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
-      { enabled: true, retentionDays: 90 },
-      { ...dirs, now: NOW },
-    )
+    await createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+    ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     const audit = await auditRows(db)
     expect(audit).toHaveLength(1)
     expect(audit[0]!.source).toBe('sweep')

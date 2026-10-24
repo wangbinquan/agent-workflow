@@ -1,3 +1,4 @@
+import { composeRetentionSweepPhases } from '@/bootstrap/retentionSweepPhases'
 // RFC-311 PR-3 — retention sweeper for the unbounded ledger tables (proposal
 // C6). The audit found the three node_run_events-shaped event streams plus
 // webhook_trigger_fires / user_access_audit / mcp_probes had NO cleanup at all;
@@ -79,7 +80,7 @@ describe('RFC-311 — retention sweep', () => {
     const db = createInMemoryDb(MIGRATIONS)
     await seedAudit(db, NOW - 100 * DAY)
     const swept = await runRetentionSweep(
-      db,
+      composeRetentionSweepPhases(db),
       { ...OFF, eventStreamRetentionDays: 30, webhookTriggerFiresRetentionDays: 90 },
       NOW,
     )
@@ -141,7 +142,11 @@ describeEachProvider('RFC-311 — retention sweep', (harness) => {
       .insert(memoryDistillEvents)
       .values([event(NOW - 40 * DAY), event(NOW - 35 * DAY), event(NOW - 2 * DAY)])
 
-    const swept = await runRetentionSweep(db, { ...OFF, eventStreamRetentionDays: 30 }, NOW)
+    const swept = await runRetentionSweep(
+      composeRetentionSweepPhases(db),
+      { ...OFF, eventStreamRetentionDays: 30 },
+      NOW,
+    )
     expect(swept.distillEvents).toBe(2)
     expect(await rowsIn(db, memoryDistillEvents)).toBe(1)
   })
@@ -197,7 +202,7 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
     await seedUser(db, 'u1')
     await seedFires(db, [200, 120, 91, 89, 1])
     const result = await runRetentionSweep(
-      db,
+      composeRetentionSweepPhases(db),
       { ...OFF, webhookTriggerFiresRetentionDays: 90 },
       NOW,
     )
@@ -250,7 +255,7 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
       .where(eq(webhookTriggerFires.id, 'fire-1'))
 
     const result = await runRetentionSweep(
-      db,
+      composeRetentionSweepPhases(db),
       { ...OFF, webhookTriggerFiresRetentionDays: 90 },
       NOW,
     )
@@ -263,7 +268,7 @@ describeEachProvider('RFC-311 C6 — webhook_trigger_fires retention', (harness)
     const db = harness.db
     await seedUser(db, 'u1')
     await seedFires(db, [500, 400])
-    const result = await runRetentionSweep(db, OFF, NOW)
+    const result = await runRetentionSweep(composeRetentionSweepPhases(db), OFF, NOW)
     expect(result.webhookTriggerFires).toBe(0)
     expect(await fireCount(db)).toBe(2)
   })
@@ -303,16 +308,28 @@ describeEachProvider('RFC-311 C6 — the other two event streams share the windo
       return r[0]?.n ?? 0
     }
     expect(await counted()).toBe(5)
-    expect((await runRetentionSweep(db, OFF, NOW)).intentTurnEvents).toBe(0)
+    expect(
+      (await runRetentionSweep(composeRetentionSweepPhases(db), OFF, NOW)).intentTurnEvents,
+    ).toBe(0)
     expect(await counted()).toBe(5)
     // 会话仍 active ⇒ 即便超期也一条不删(否则 UI 会「N events」而面板空白)。
     expect(
-      (await runRetentionSweep(db, { ...OFF, eventStreamRetentionDays: 30 }, NOW)).intentTurnEvents,
+      (
+        await runRetentionSweep(
+          composeRetentionSweepPhases(db),
+          { ...OFF, eventStreamRetentionDays: 30 },
+          NOW,
+        )
+      ).intentTurnEvents,
     ).toBe(0)
     expect(await counted()).toBe(5)
 
     await db.update(intentSessions).set({ status: 'archived' }).where(eq(intentSessions.id, 's1'))
-    const result = await runRetentionSweep(db, { ...OFF, eventStreamRetentionDays: 30 }, NOW)
+    const result = await runRetentionSweep(
+      composeRetentionSweepPhases(db),
+      { ...OFF, eventStreamRetentionDays: 30 },
+      NOW,
+    )
     expect(result.intentTurnEvents).toBe(3)
     expect(await counted()).toBe(2)
   })
@@ -323,24 +340,31 @@ describe('RFC-311 C6 — the other two event streams share the window', () => {
   // 远多于上面两张),这里用源码守卫锁住「第三条腿仍然接着」；RFC-338 后每条腿
   // 必须是一个 predicate-rechecking bounded DELETE，不能退回全阶段同步循环。
   test('all three event streams stay wired into the same window (source lock)', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'platform',
-        'persistence',
-        'sqlite',
-        'systemMaintenanceRetention.ts',
-      ),
+    const src = [
+      'platform/persistence/sqlite/systemMaintenanceRetention.ts',
+      'modules/memory/infrastructure/retentionPhase.ts',
+      'modules/intent/infrastructure/retentionPhase.ts',
+      'modules/resource-catalog/infrastructure/retentionPhase.ts',
+    ]
+      .map((path) => readFileSync(resolve(import.meta.dir, '../src', path), 'utf8'))
+      .join('\n')
+    const binding = readFileSync(
+      resolve(import.meta.dir, '../src/bootstrap/retentionSweepPhases.ts'),
       'utf8',
     )
+    for (const factory of [
+      'createDistillEventRetentionPhase',
+      'createIntentTurnEventRetentionPhase',
+      'createMcpRuntimeTestEventRetentionPhase',
+    ]) {
+      expect(binding).toContain(`${factory}(db)`)
+    }
     // RFC-359 W6-T25 起三条腿的 DELETE 由能力矩阵的 `deleteByCandidates` 渲染（PG 是
     // `DELETE … USING candidates`，SQLite 是 `DELETE … WHERE id IN (…)`），本文件只出候选集。
     // 锚点随之从 `DELETE FROM <表名>` 改成「这条腿的候选集把这张表交给了那个渲染器」——
     // 判的仍然是同一件事：三条事件流都还挂在同一个窗口上。
     for (const table of ['memoryDistillEvents', 'intentTurnEvents', 'mcpRuntimeTestEvents']) {
-      expect(src).toContain(`engine.deleteByCandidates(\n          ${table},`)
+      expect(src).toMatch(new RegExp(`engine\\.deleteByCandidates\\(\\s*${table},`))
       expect(src).toContain(`FROM \${${table}}`)
     }
     expect(src).toContain('export async function runRetentionSweepSlice(')

@@ -166,7 +166,8 @@ describe('RFC-317 T49 —— allowTerminal 站点账本（只减不增）', () =
     // `no-direct-node-run-status-write` 在全仓只有一处命中：那句声称它存在的注释本身。
     // 审内核是否密封的人第一眼读到的就是它，会据此认定存在 lint 级、不可绕过的守卫。
     const lifecycle = units.find(
-      (unit) => unit.path === 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
+      (unit) =>
+        unit.path === 'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
     )
     expect(lifecycle).toBeDefined()
     expect(

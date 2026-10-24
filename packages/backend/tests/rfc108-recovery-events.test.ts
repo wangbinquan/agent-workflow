@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T3 (AR-11) — recovery_events audit + counters.
 //
 // 为什么这条测试存在：恢复动作此前全是 log.warn——daemon 每次重启静默回收 50 个孤儿
@@ -53,7 +54,9 @@ describeEachProvider('RFC-108 T3 — recordRecoveryEvent + counters', (harness) 
   test('records a durable row, bumps the counter, lists newest-first', async () => {
     const db = harness.db
     const taskId = await seedRunningTask(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     await recordRecoveryEvent(operations, {
       taskId,
       kind: 'auto-resume',
@@ -77,7 +80,9 @@ describeEachProvider('RFC-108 T3 — actors record recovery_events', (harness) =
   test('reapOrphanRuns records a boot-reap event for each flipped task', async () => {
     const db = harness.db
     const taskId = await seedRunningTask(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     await reapOrphanRuns(operations)
     const rows = await listRecoveryEventsForTask(operations, taskId)
     expect(rows.some((r) => r.kind === 'boot-reap')).toBe(true)

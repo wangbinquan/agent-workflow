@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370: selected scopes must reach real Task receipts, wrappers and replay.
 // The logical transport has no files; runtime execution is outside this A4 fixture.
 import {
@@ -101,7 +102,9 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
       branch: `agent-workflow/${taskId}`,
     })),
   })
-  const original = createTaskExecutionPersistence(db)
+  const original = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: 'scope-' + ulid(),
     persistence: original,

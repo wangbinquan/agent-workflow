@@ -1,3 +1,5 @@
+import { o2Ports } from './helpers/o2Closure'
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-a A3：双 provider 固定 G3–G7/G9/G12 的旧决定，尤其是 frame-less 与 framed 不同的历史。
 import { expect, test } from 'bun:test'
 import {
@@ -16,10 +18,9 @@ import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { DrizzleSchedulerCompletionPersistence } from '@/modules/task-execution/infrastructure/schedulerCompletionPersistence'
-import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { freshestPriorRunWithOutput } from '@/modules/task-execution/composition/nodeMechanics'
-import { planFrameBackfill } from '@/modules/task-execution/domain/legacyMigration/frameBackfill'
 import { pickFreshestReviewRun } from '@/modules/collaboration/infrastructure/review'
 import { findSelfGateRunForShard } from '@/modules/collaboration/infrastructure/clarify/service'
 import { isTargetNodeConsumed } from '@/modules/collaboration/infrastructure/clarify/rerunLedger'
@@ -428,7 +429,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
     )
   })
 
-  test('G7 SQL timeline retains NULLS FIRST while review display uses NULL=0; G9 backfill stays in migration code', async () => {
+  test('G7 SQL timeline retains NULLS FIRST while review display uses NULL=0', async () => {
     const { db } = harness
     const { taskId, id, add } = await seed(db, 'display')
     await add('wrapper', 'wrapper', { startedAt: 5, rerunCause: 'wrapper-init' })
@@ -436,9 +437,9 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
     await add('null-start', 'agent', { startedAt: null })
     await add('legacy-null-seq', 'agent', { startedAt: null })
     await patchLegacyRunSelectionFixture(db, id('legacy-null-seq'), { seq: null })
-    const facts = await createNodeRunQueries(db).list({ taskId })
     const payload = await taskNodeRunsProjection(
-      {
+      withO2Closure({
+        clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
         db,
         nodeRunPrompts: {
           async read() {
@@ -448,24 +449,18 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
             throw new Error('unexpected prompt write')
           },
         },
-      },
+      }),
       taskId,
     )
-    expect((await createCodeWorkspaceRead(db).listNodeRuns(taskId)).map((run) => run.id)).toEqual([
-      id('legacy-null-seq'),
-      id('null-start'),
-      id('body'),
-      id('wrapper'),
-    ])
+    expect(
+      (await createTaskCodeWorkspaceQueries(db).listNodeRuns(taskId)).map((run) => run.id),
+    ).toEqual([id('legacy-null-seq'), id('null-start'), id('body'), id('wrapper')])
     expect(payload.runs.map((run) => run.id)).toEqual([
       id('body'),
       id('legacy-null-seq'),
       id('null-start'),
       id('wrapper'),
     ])
-    expect(
-      planFrameBackfill({ parentOf: new Map([['body', 'wrapper']]), rows: facts }).updates,
-    ).toEqual([{ id: id('body'), containerRunId: id('wrapper'), scopePath: 'wrapper:0' }])
   })
 
   test('G12 self gate reuse follows clarify_rounds.createdAt, not NodeRun seq', async () => {

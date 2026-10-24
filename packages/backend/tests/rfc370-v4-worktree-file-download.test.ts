@@ -44,9 +44,11 @@ function appWith(
   })
   app.onError(errorHandler)
   mountWorktreeFilesRoutes(app, {
-    store: {
-      findWorktreeTask: async (id: string) =>
-        id === TASK ? ({ id, worktreePath: WORKTREE, ownerUserId: 'viewer' } as never) : null,
+    locator: {
+      find: async (id: string) =>
+        id === TASK
+          ? ({ taskId: id, worktreePath: WORKTREE, ownerUserId: 'viewer' } as never)
+          : null,
     } as never,
     canViewTask: async () => true,
     content,

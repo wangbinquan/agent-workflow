@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：测试复用生产工作区维护装配，保留每个实例的 in-flight 状态。
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
@@ -20,7 +21,7 @@ export function workspaceMaintenanceForTest(db: PersistenceDb, appHome = Paths.r
   let command = byHome.get(appHome)
   if (command === undefined) {
     command = composeWorkspaceMaintenanceCommand({
-      db,
+      ...composeSourceControlTaskPorts(db),
       appHome,
       terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
       isMaterializingTask: (taskId) => materializingSpaces.has(taskId),

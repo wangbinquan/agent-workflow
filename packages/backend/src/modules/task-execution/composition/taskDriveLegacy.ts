@@ -46,3 +46,5 @@ export {
 export { createRoomContinuation } from '../application/drive/roomContinuation'
 export { createRepositoryPreparationRetryCommand } from '../infrastructure/repositoryPreparationRetryCommand'
 export { createTaskExecutionPersistence } from './taskExecutionPersistence'
+
+export { composeSourceControlTaskPorts } from '../composition'

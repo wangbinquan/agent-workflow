@@ -8,7 +8,7 @@ import {
   transactionStep,
   type TransactionProgramStep,
 } from '@/platform/persistence/transactionProgram'
-import type { TerminalWorkspacePruneDecision } from '@/services/lifecycle'
+import type { TerminalWorkspacePruneDecision } from '../domain/terminalWorkspacePrune'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import type {
   TaskCommittedEventIdentity,

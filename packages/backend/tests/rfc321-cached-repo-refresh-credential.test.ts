@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // Regression for the real GitLab CE private-repo refresh failure found during
 // the RFC-310 digital-employee cross-repository E2E (2026-08-25).
 //
@@ -288,7 +289,11 @@ async function authenticatedFixture(__db: PersistenceDb) {
   const db = __db
   const cached = await diagnostics.stage('resolve-cached-repo', () =>
     resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        secretBox: box,
+      },
       { url },
     ),
   )
@@ -336,7 +341,11 @@ describeEachProvider('private cached-repo refresh credential lease', (harness) =
 
     const refreshed = await diagnostics.stage('manual-refresh', () =>
       refreshCachedRepo(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+          secretBox: box,
+        },
         cached.cached.id,
       ),
     )
@@ -356,7 +365,7 @@ describeEachProvider('private cached-repo refresh credential lease', (harness) =
     const now = Date.now()
     const result = await diagnostics.stage('background-refresh', () =>
       refreshDueRepos(
-        composeSqliteRepositoryWorkspaceStore(db),
+        composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
         { submoduleAutoRefresh: { enabled: true, intervalMs: 1, onlyRecentDays: 30 } },
         { appHome, secretBox: box, now: () => now },
       ),

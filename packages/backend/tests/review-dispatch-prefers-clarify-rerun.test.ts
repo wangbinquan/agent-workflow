@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // Regression: when an upstream agent has multiple done node_runs at the same
 // iteration — a stale (clarifyIteration=0, retryIndex=N>0) row finished before
 // a clarify session opened, plus a fresh (clarifyIteration=1, retryIndex=0)
@@ -146,15 +147,17 @@ describeEachProvider(
       })
 
       const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
-      const result = await dispatchReviewNode({
-        db,
-        taskId: task.id,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId: task.id,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
 
       // Must NOT be `review-source-port-missing` — that'd mean it read the
       // stale row (which has no docpath output).

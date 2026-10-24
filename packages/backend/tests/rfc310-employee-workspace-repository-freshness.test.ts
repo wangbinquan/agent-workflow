@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // Regression for the real GitLab Issue intake observed on 2026-08-25: a new
 // Digital Employee Case must refresh its cached repository before freezing the
 // Case baseline. Once frozen, later retries must keep that exact baseline.
@@ -113,7 +114,10 @@ describeEachProvider('RFC-310 Digital Employee workspace repository freshness', 
     const initialSha = commitAndPush(source, 'version 1\n', 'initial')
 
     const db = harness.db
-    const repositoryStore = composeSqliteRepositoryWorkspaceStore(db)
+    const repositoryStore = composeSqliteRepositoryWorkspaceStore(
+      db,
+      composeSourceControlTaskPorts(db),
+    )
     const remoteUrl = `file://${remote}`
     const cached = await resolveCachedRepo({ store: repositoryStore, appHome }, { url: remoteUrl })
     expect(git(cached.cached.localPath, 'rev-parse', 'HEAD')).toBe(initialSha)

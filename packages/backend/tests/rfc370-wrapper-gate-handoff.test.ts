@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // A human-gate successor must cross every nested wrapper without publishing
 // completion, promoting empty outputs, or leaving admitted sibling work behind.
 import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
@@ -550,7 +551,11 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
     })
     const state = {
       taskId,
-      opts: { persistence: createTaskExecutionPersistence(harness.db) },
+      opts: {
+        persistence: createTaskExecutionPersistence(harness.db, {
+          recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+        }),
+      },
     } as unknown as TaskMechanicsState
     const value = createWrapperRunLedger(state)
     await value.settle(

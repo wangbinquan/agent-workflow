@@ -1,3 +1,4 @@
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-304 T58 — the metrics a team decides with, and the number they don't get.
 //
 // This projection deliberately does NOT produce an adoption rate. The whole
@@ -247,7 +248,7 @@ describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    mountCodeRoutes(app, composeCodeHistoryQueries(db))
+    mountCodeRoutes(app, composeCodeHistoryQueries(db, createAgentExecutionQueries(db)))
     return app
   }
 

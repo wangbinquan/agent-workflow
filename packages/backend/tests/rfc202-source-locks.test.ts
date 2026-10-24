@@ -108,7 +108,9 @@ describe('RFC-202 source locks', () => {
     expect(start).toContain('closeTerminalGates(taskId, status)')
     expect(consumers).toContain("id: 'task-terminal-gate-close'")
     expect(start).not.toContain('registerTerminalTaskHook')
-    const lifecycle = read('packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts')
+    const lifecycle = read(
+      'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
+    )
     expect(lifecycle).not.toContain('registerTerminalTaskHook')
     expect(lifecycle).not.toContain("from '@/services/terminalSweep'")
     expect(lifecycle).not.toContain("from '@/modules/collaboration/infrastructure/review'")

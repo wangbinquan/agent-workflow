@@ -1,3 +1,4 @@
+import type { TaskArchiveCollaborationSectionsPort } from './required-ports'
 // RFC-370: select archive content at composition; both providers share the original coordinator.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'
@@ -32,6 +33,7 @@ export interface TaskArchiveContentBinding {
 
 export function createDrizzleTaskArchiveMaintenanceCommand(
   db: PersistenceDb,
+  collaboration: TaskArchiveCollaborationSectionsPort,
   input: {
     readonly content?: TaskArchiveContentPort
     readonly locations?: TaskArchiveContentBinding['locations']
@@ -39,6 +41,7 @@ export function createDrizzleTaskArchiveMaintenanceCommand(
 ): TaskArchiveMaintenanceCommand {
   const command = createTaskArchiveContentCoordinator(
     db,
+    collaboration,
     input.content ?? createFileTaskArchiveContent(),
   )
   if (input.locations === undefined) return command

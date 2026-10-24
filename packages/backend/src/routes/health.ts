@@ -3,7 +3,7 @@
 
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
-import type { HealthDatabaseReadModel } from '@/modules/system-operations/public/queries'
+import type { TaskStatusCountQueries } from '@/modules/task-execution/public/types'
 import { recoveryCountersSnapshot } from '@/services/recovery'
 
 export interface HealthRouteDependencies {
@@ -29,7 +29,7 @@ export function mountHealthRoutes(
   app: Hono,
   deps: HealthRouteDependencies,
   identityAccess: IdentityAccessHealthDiagnostics,
-  database: HealthDatabaseReadModel,
+  database: TaskStatusCountQueries,
 ): void {
   registerRoute(
     app,

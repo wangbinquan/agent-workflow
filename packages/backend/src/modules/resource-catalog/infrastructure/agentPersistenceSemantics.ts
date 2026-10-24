@@ -1,3 +1,4 @@
+import type { SubjectTaskReferencePort } from '../composition/required-ports'
 import {
   createAgentDependencyReferenceLookup,
   createWorkflowAgentReferenceLookup,
@@ -7,12 +8,11 @@ import { createAgentDependencyReadPort } from './agentDependencyRead'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   agentReferenceIds,
-  TERMINAL_TASK_STATUSES,
   type Agent,
   type AgentSkillRef,
   type AclResourceType,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, notInArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
 import {
   reconcileCreatedAgentExecutionContractPorts,
@@ -296,6 +296,7 @@ async function assertNotReferenced(
   transaction: ResourceCatalogTransaction,
   authority: AgentOperationContext,
   current: Agent,
+  taskReferences: SubjectTaskReferencePort,
 ): Promise<void> {
   // RFC-175 §2e：单代理启动正握着这个 id 时先拒。启动按**名字**从冻结快照里解析代理，
   // 删掉再同名重建会让任务跑上另一个代理（ABA）。同进程内存预订，与删除同一笔事务里查。
@@ -305,7 +306,7 @@ async function assertNotReferenced(
       `agent '${current.name}' has a task launch in progress; retry after it completes`,
     )
   }
-  const { tasks, scheduledTasks } = tablesOf(transaction)
+  const { scheduledTasks } = tablesOf(transaction)
   // RFC-285 B2 档位：agent 对**任务**引用零检查即是统一中档（任务快照冻结定义），这里
   // 的 agent-in-use 挡的是 **workflow 定义**引用——活的编辑面，删了就当场悬空。
   const referencingWorkflows = await createWorkflowAgentReferenceLookup(transaction).find(
@@ -340,21 +341,16 @@ async function assertNotReferenced(
   // 限制（其 retry/resume 之后以 agent-not-found 收场）。RFC-223 PR-3a R3-3：按启动时冻结的
   // 规范 `source_agent_id` 匹配，不按名字——否则 PR-8 放开全局同名后，**别人**的同名任务会
   // 挡住这次删除。0091 之前的 legacy 任务 source_agent_id 为 NULL、本身已不可 resume，不拦。
-  const liveTasks = await transaction
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(
-      and(
-        eq(tasks.sourceAgentId, current.id),
-        notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-      ),
-    )
+  const liveTasks = await taskReferences(transaction).nonTerminalTaskIds({
+    kind: 'agent',
+    sourceId: current.id,
+  })
   if (liveTasks.length > 0) {
     throw new ConflictError(
       'agent-tasks-active',
       `agent '${current.name}' has ${liveTasks.length} non-terminal single-agent task(s); cancel or wait before deleting`,
       // 裸 id 数组、未经可见性过滤：按 ACL 铁律展示层只渲染计数，不点名（ErrorDetails.tsx）。
-      { taskIds: liveTasks.map((row) => row.id) },
+      { taskIds: liveTasks },
     )
   }
   const scheduledRows = await transaction
@@ -391,6 +387,7 @@ export function createAgentPersistenceSemantics(input: {
   readonly authorization: ResourceAuthorizationApplication
   readonly resourceInventory: AgentResourceInventorySource
   readonly runtimeProfiles: AgentRuntimeProfileLookup
+  readonly taskReferences: SubjectTaskReferencePort
 }): AgentPersistenceSemantics {
   const labels = async (
     authority: AgentOperationContext,
@@ -486,7 +483,7 @@ export function createAgentPersistenceSemantics(input: {
       await assertSkillReferencesUsable({ transaction, authority, candidate, previous: current })
     },
     async assertDeleteInTransaction(transaction, authority, current) {
-      await assertNotReferenced(transaction, authority, current)
+      await assertNotReferenced(transaction, authority, current, input.taskReferences)
     },
     referenceLabels: labels,
   })

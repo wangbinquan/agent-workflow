@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8-A —— `TaskArchiveMaintenanceCommand` 的**双引擎对拍**。
 //
 // 这一对合一前是：SQLite 侧 66 行薄壳转发给 `services/taskArchive.ts`（1018 行），
@@ -181,7 +182,11 @@ function jsonlLines(dir: string, table: string): readonly string[] {
 describeEachProvider(
   'RFC-359 W8-A task archive maintenance command',
   (harness: ProviderHarness) => {
-    const command = () => createTaskArchiveMaintenanceCommand(harness.db)
+    const command = () =>
+      createTaskArchiveMaintenanceCommand(
+        harness.db,
+        o2Ports(harness.db).collaborationReads.archive,
+      )
 
     test('disabled config and zero retention touch nothing', async () => {
       const dirs = tmpDirs()

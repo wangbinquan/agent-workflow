@@ -1,3 +1,4 @@
+import { deleteAgent } from './helpers/resourceCatalogDeletion'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 (PR-2) — workflow / workgroup / scheduled agent+workgroup references
 // carried from NAMES to canonical IDS. Runtime-side locks (the migration itself
@@ -27,7 +28,11 @@ import {
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { eq } from 'drizzle-orm'
-import { createAgent, deleteAgent, getAgentById, renameAgent } from '../src/services/agent'
+import {
+  createAgent,
+  getAgentById,
+  renameAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'

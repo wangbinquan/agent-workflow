@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-359 AC1: the legacy and neutral Workflow entry points share three
 // definition-boundary algorithms; closure traversal and save CAS stay intact.
 // These real-database cases first passed against the original implementations.
@@ -166,6 +167,7 @@ function repository(db: PersistenceDb, events: string[], clock: () => number) {
     id: () => W1,
     now: clock,
     semantics: createWorkflowPersistenceSemantics({
+      taskReferences: composeSubjectTaskReferencePort,
       authorization: composeResourceCatalogFor({ db }).authorization,
       events: {
         created: (row) => {

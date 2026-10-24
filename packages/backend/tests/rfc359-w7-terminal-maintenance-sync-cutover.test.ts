@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // LOCKS: RFC-359 W7 —— 终态维护的三条消费路径迁离 `dbTxSync` 之后的行为（两个引擎各跑一遍）。
 //
@@ -283,7 +284,10 @@ describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (har
     const childId = await seedTask(db, workflowId, { parentTaskId: rootId })
     const archiveDir = makeScratchDir('archive')
 
-    const sweep = await createDrizzleTaskArchiveMaintenanceCommand(legacy(db)).runManual(
+    const sweep = await createDrizzleTaskArchiveMaintenanceCommand(
+      legacy(db),
+      o2Ports(legacy(db)).collaborationReads.archive,
+    ).runManual(
       { retentionDays: 1, maxTrees: 1, actorUserId: null },
       {
         archiveDir,
@@ -337,7 +341,10 @@ describeEachProvider('RFC-359 W7 —— 任务归档出库迁离 dbTxSync', (har
     const ioComplete = await store(db).transition({ claim, to: 'io-complete', now: NOW + 1 })
     expect(ioComplete.revision).toBe(2)
 
-    const recovered = await createDrizzleTaskArchiveMaintenanceCommand(legacy(db)).recover({
+    const recovered = await createDrizzleTaskArchiveMaintenanceCommand(
+      legacy(db),
+      o2Ports(legacy(db)).collaborationReads.archive,
+    ).recover({
       archiveDir,
       now: NOW + 2,
       runsDir: join(archiveDir, 'runs'),

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-033-T2: retry semantics for batch import rows.
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
 // 本文件既有用例统一以 u_batch_owner 发起；门矩阵见 ws-repo-imports 套件。
@@ -81,7 +82,7 @@ async function waitForBatchCompleted(batchId: string, timeoutMs = 2000): Promise
 
 function deps(db: PersistenceDb, resolver: Resolver): RepoBatchImportDeps {
   return {
-    store: composeSqliteRepositoryWorkspaceStore(db),
+    store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
     resolveCachedRepo: resolver,
     emit: () => {},
   }
@@ -215,7 +216,7 @@ describeEachProvider('retryBatchRow (RFC-033-T2)', (harness) => {
     const db = harness.db
     const events: string[] = []
     const myDeps: RepoBatchImportDeps = {
-      store: composeSqliteRepositoryWorkspaceStore(db),
+      store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       resolveCachedRepo: happyResolver(),
       emit: (_b, msg) => {
         if (msg.type === 'batch.completed') events.push('completed')

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // LOCKS: RFC-165 T4 — file:// cache-key canonicalization v2 + verified lazy
 // re-key (design §9.2 F19-r4, §11.14).
 //
@@ -108,7 +109,11 @@ describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', 
     // First resolve creates the row under the NEW hash; downgrade it to the
     // legacy hash to simulate a pre-165 cache.
     const first = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        secretBox,
+      },
       { url },
     )
     const parsed = parseGitUrl(url)!
@@ -123,7 +128,11 @@ describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', 
 
     const mirrorsBefore = readdirSync(join(appHome, 'repos')).length
     const second = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        secretBox,
+      },
       { url },
     )
     // Same mirror adopted (no second clone), row re-keyed to the new hash.
@@ -149,7 +158,11 @@ describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', 
 
     // Cache the SUFFIXED repo, then downgrade its row to the shared legacy key.
     const firstSuffixed = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        secretBox,
+      },
       { url: urlSuffixed },
     )
     const newSuffixedHash = gitUrlCacheKeyWith(parsedSuffixed, sha1).hash
@@ -162,7 +175,11 @@ describeEachProvider('RFC-165 T4 — file cache key v2 + verified lazy re-key', 
     // Resolving the PLAIN repo finds the legacy row, VERIFIES, rejects it
     // (different repo!) and cold-clones its own mirror.
     const plainResolved = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        secretBox,
+      },
       { url: urlPlain },
     )
     expect(plainResolved.cold).toBe(true)

@@ -68,7 +68,7 @@ export interface CachedRepositoryPageRecords {
 
 export interface RepositoryCredentialTaskRepoRecord {
   readonly taskId: string
-  readonly repoIndex: number
+  readonly ordinal: number
   readonly repoUrl: string | null
   readonly cachedRepoId: string | null
   readonly submoduleInitError: string | null
@@ -101,7 +101,7 @@ export interface RepositoryCredentialSealingMutation {
   }[]
   readonly taskRepoUpdates: readonly {
     readonly taskId: string
-    readonly repoIndex: number
+    readonly ordinal: number
     readonly patch: Partial<
       Pick<RepositoryCredentialTaskRepoRecord, 'cachedRepoId' | 'repoUrl' | 'submoduleInitError'>
     >
@@ -161,21 +161,6 @@ export type RepositoryGroupDeleteResult =
       readonly disabledSchedules: number
     }
   | { readonly status: 'graph-stale' }
-
-export interface WorktreeTaskRepositoryRecord {
-  readonly repoIndex: number
-  readonly worktreePath: string
-  readonly baseCommit: string | null
-  readonly mountPath: string
-}
-
-export interface WorktreeTaskRecord {
-  readonly id: string
-  readonly ownerUserId: string | null
-  readonly worktreePath: string
-  readonly baseCommit: string | null
-  readonly repos: readonly WorktreeTaskRepositoryRecord[]
-}
 
 /**
  * Provider-neutral persistence boundary for cached repositories, repository
@@ -242,6 +227,4 @@ export interface RepositoryWorkspaceStore {
       readonly version: number
     }[]
   }): Promise<RepositoryGroupDeleteResult>
-
-  findWorktreeTask(id: string): Promise<WorktreeTaskRecord | null>
 }

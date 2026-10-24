@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-120 / RFC-349 — SQLite task-question persistence implementation.
 //
 // Collection (reconcile) + handler-run resolution + list are all LAZY / read-time:
@@ -1331,6 +1332,7 @@ export async function createManualTaskQuestion(
   taskId: string,
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,
+  taskLock: HumanGateTaskLockPort,
 ): Promise<{ id: string }> {
   // RFC-120 §15 — task status (re-gate). RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有
   // 任务都是 deferred-dispatch，manual 恒可创建（旧 deferred-only 门移除）。
@@ -1403,7 +1405,7 @@ export async function createManualTaskQuestion(
     )
   }
   const created = await createManualQuestionOpen(
-    humanGateComposition.createCollaborationCommandContext({ db }),
+    humanGateComposition.createCollaborationCommandContext({ db, taskLock }),
     {
       taskId,
       title,

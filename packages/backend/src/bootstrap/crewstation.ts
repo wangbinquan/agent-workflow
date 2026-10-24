@@ -1,3 +1,5 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { createCrewStationMcpDiagnostics } from '@/modules/resource-catalog/composition/crewstationMcpDiagnostics'
 import { createLogger } from '@/util/log'
 import { composeCrewStationRecovery } from '@/modules/task-execution/composition/crewstationRecovery'
@@ -130,6 +132,7 @@ export async function composeCrewStationProfile(
   let releaseId: string | null =
     initialCapabilities.releaseId === 'unavailable' ? null : initialCapabilities.releaseId
   const workspace = composeCrewStationWorkspaceOwner({
+    taskPorts: composeSourceControlTaskPorts(db),
     db,
     api,
     fence,
@@ -243,6 +246,7 @@ export async function composeCrewStationProfile(
       runtimeInventoryContent: composeStreamTaskRuntimeInventoryContent(),
       humanGateArtifactRecovery: composeCrewStationHumanGateRecovery({
         db,
+        taskLock: composeHumanGateTaskLockPort,
         fence,
         artifacts: reviewArtifacts.store,
       }),

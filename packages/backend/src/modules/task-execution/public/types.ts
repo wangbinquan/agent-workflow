@@ -376,3 +376,12 @@ export type {
   NodeRunCheckpointView,
   NodeRunInputView,
 } from '../domain/nodeRunSnapshot'
+
+export type {
+  TaskCodeWorkspaceQueries,
+  CodeWorkspaceTask,
+  CodeWorkspaceRepository,
+  CodeNodeRunSnapshot,
+} from '../application/ports/taskCodeWorkspaceQueries'
+export type { TaskResourceLimitFacts } from '../application/ports/taskResourceLimitFacts'
+export type { TaskStatusCountQueries } from '../application/ports/taskStatusCounts'

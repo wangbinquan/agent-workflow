@@ -150,6 +150,11 @@ flowchart LR
   INTEG --> RC
   INTEG -. "implements RepositoryProviderEndpointDiscoveryPort" .-> SC
   INTEG -. "implements GlobalRepositoryTransportProjectionPort" .-> SC
+  TE -. "implements DoctorTaskLifecyclePort" .-> SO["system-operations"]
+  TE -. "implements WorkspaceGcTaskPort" .-> SC
+  TE -. "implements TaskWorkspacePruneParticipant" .-> SC
+  TE -. "implements CachedRepositoryTaskUsagePort" .-> SC
+  TE -. "implements TaskRepositorySourceSealingPort" .-> SC
   KE["knowledge-evolution"] --> MEM
   KE --> RC
   KE --> TE
@@ -170,6 +175,14 @@ flowchart LR
   INTEG --> EC
   INTEG --> DA
   COL -. "implements HumanGatePreparationPort/HumanGateOpenParticipantInTx" .-> TE
+  TE -. "implements RealtimeTaskFactsPort" .-> RM
+  RC -. "implements RealtimeResourceAclPort" .-> RM
+  TE -. "implements SubjectTaskReferencePort" .-> RC
+  RC -. "implements ReviewUpstreamAgentPort" .-> COL
+  TE -. "implements HumanGateTaskLockPort" .-> COL
+  COL -. "implements TaskArchiveCollaborationSectionsPort" .-> TE
+  COL -. "implements TaskRecoveryHumanGateFactsPort" .-> TE
+  COL -. "implements TaskNodeRunClarifyNavPort" .-> TE
   MEM -. "implements TaskMemoryInjectionPort" .-> TE
   INTEG -. "implements CodeHostExecutionPort" .-> TE
   TE -. "implements AgentActionExecutionPort" .-> DA

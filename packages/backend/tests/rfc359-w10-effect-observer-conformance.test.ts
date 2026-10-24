@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W10 —— 三个**效应观察者**（local / process / code-host）的双引擎对拍。
 //
 // # 这份文件为什么存在
@@ -131,7 +132,9 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
     continuationSlotKey: `${taskId}:root`,
     lineageSlotPathJson: slotPathJson,
   })
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
     persistence,

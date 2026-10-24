@@ -16,13 +16,8 @@
 
 // System Operations SQLite adapter for the shared retention-sweep application contract.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawRows } from '@/platform/persistence/queryHelpers'
-import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { sql, type SQL } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { RetentionSweepPhase } from '@/platform/background/retentionSweepPhase'
 import { BOUNDED_DELETE_MAX_ROWS } from '@/platform/persistence/capabilities'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('maintenance-retention')
@@ -134,87 +129,12 @@ function advanceRetentionPhase(cursor: RetentionSweepCursorV1): RetentionSweepCu
   return { ...cursor, phase: phases[Math.min(phases.length - 1, index + 1)]! }
 }
 
-// RFC-359 W6-T25 —— 四条清扫语句的**候选集**。谓词与 LIMIT 在这里；「候选集怎么变成一条 DELETE」
-// 是方言，归能力矩阵的 `deleteByCandidates`（PG 渲染 `DELETE … USING candidates`，SQLite 渲染
-// `DELETE … WHERE id IN (…)`）。合一前这里裸写的是 `rowid IN (…)`——三张事件表的 `id` 就是
-// `INTEGER PRIMARY KEY AUTOINCREMENT`（rowid 别名）、`webhook_trigger_fires` 的 `id` 是 ULID 主键，
-// 按主键删与按 rowid 删选中的是同一批行。
-
-function distillCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
-  const { memoryDistillEvents, memoryDistillJobs } = tablesOf(db)
-  return sql`
-    SELECT ${memoryDistillEvents.id} AS id
-    FROM ${memoryDistillEvents}
-    WHERE ${memoryDistillEvents.ts} < ${cutoff}
-      AND EXISTS (
-        SELECT 1 FROM ${memoryDistillJobs}
-        WHERE ${memoryDistillJobs.id} = ${memoryDistillEvents.distillJobId}
-          AND ${memoryDistillJobs.status} IN ('done', 'failed', 'canceled')
-      )
-    ORDER BY ${memoryDistillEvents.id}
-    LIMIT ${batchSize}
-  `
-}
-
-function intentCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
-  const { intentTurnEvents, intentTurns, intentSessions } = tablesOf(db)
-  return sql`
-    SELECT ${intentTurnEvents.id} AS id
-    FROM ${intentTurnEvents}
-    WHERE ${intentTurnEvents.ts} < ${cutoff}
-      AND EXISTS (
-        SELECT 1
-        FROM ${intentTurns}
-        JOIN ${intentSessions} ON ${intentSessions.id} = ${intentTurns.sessionId}
-        WHERE ${intentTurns.id} = ${intentTurnEvents.turnId}
-          AND ${intentSessions.status} = 'archived'
-      )
-    ORDER BY ${intentTurnEvents.id}
-    LIMIT ${batchSize}
-  `
-}
-
-function mcpRuntimeCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
-  const { mcpRuntimeTestEvents, mcpRuntimeTestSessions } = tablesOf(db)
-  return sql`
-    SELECT ${mcpRuntimeTestEvents.id} AS id
-    FROM ${mcpRuntimeTestEvents}
-    WHERE ${mcpRuntimeTestEvents.ts} < ${cutoff}
-      AND EXISTS (
-        SELECT 1 FROM ${mcpRuntimeTestSessions}
-        WHERE ${mcpRuntimeTestSessions.id} = ${mcpRuntimeTestEvents.testSessionId}
-          AND ${mcpRuntimeTestSessions.status} = 'ended'
-      )
-    ORDER BY ${mcpRuntimeTestEvents.id}
-    LIMIT ${batchSize}
-  `
-}
-
-function webhookFireCandidates(db: object, cutoff: number | null, batchSize: number): SQL {
-  const { webhookTriggerFires, tasks } = tablesOf(db)
-  return sql`
-    SELECT ${webhookTriggerFires.id} AS id
-    FROM ${webhookTriggerFires}
-    WHERE ${webhookTriggerFires.firedAt} < ${cutoff}
-      AND NOT EXISTS (
-        SELECT 1 FROM ${tasks}
-        WHERE ${tasks.id} = ${webhookTriggerFires.taskId}
-          AND ${tasks.status} NOT IN (${sql.join(
-            TERMINAL_TASK_STATUSES.map((value) => sql`${value}`),
-            sql`, `,
-          )})
-      )
-    ORDER BY ${webhookTriggerFires.id}
-    LIMIT ${batchSize}
-  `
-}
-
 /**
  * One predicate-rechecking DELETE statement. This is the Worker-facing owner
  * contract; it cannot keep SQLite's writer lock across phases or batches.
  */
 export async function runRetentionSweepSlice(
-  db: PersistenceDb,
+  phases: readonly RetentionSweepPhase[],
   config: RetentionConfig,
   cursorValue: unknown,
   now: number = Date.now(),
@@ -227,70 +147,27 @@ export async function runRetentionSweepSlice(
   const counters = zeroRetentionResult()
   if (cursor.phase === 'done') return { done: true, cursor, counters }
 
-  const engine = databaseSessionFor(db).engine
-  let deleted: Array<{ id: string }>
-  const { memoryDistillEvents, intentTurnEvents, mcpRuntimeTestEvents, webhookTriggerFires } =
-    tablesOf(db)
-  switch (cursor.phase) {
-    case 'distill-events':
-      deleted = await rawRows(
-        db,
-        engine.deleteByCandidates(
-          memoryDistillEvents,
-          memoryDistillEvents.id,
-          distillCandidates(db, cursor.eventCutoff, batchSize),
-        ),
-      )
-      counters.distillEvents = deleted.length
-      break
-    case 'intent-turn-events':
-      deleted = await rawRows(
-        db,
-        engine.deleteByCandidates(
-          intentTurnEvents,
-          intentTurnEvents.id,
-          intentCandidates(db, cursor.eventCutoff, batchSize),
-        ),
-      )
-      counters.intentTurnEvents = deleted.length
-      break
-    case 'mcp-runtime-test-events':
-      deleted = await rawRows(
-        db,
-        engine.deleteByCandidates(
-          mcpRuntimeTestEvents,
-          mcpRuntimeTestEvents.id,
-          mcpRuntimeCandidates(db, cursor.eventCutoff, batchSize),
-        ),
-      )
-      counters.mcpRuntimeTestEvents = deleted.length
-      break
-    case 'webhook-trigger-fires':
-      deleted = await rawRows(
-        db,
-        engine.deleteByCandidates(
-          webhookTriggerFires,
-          webhookTriggerFires.id,
-          webhookFireCandidates(db, cursor.webhookCutoff, batchSize),
-        ),
-      )
-      counters.webhookTriggerFires = deleted.length
-      break
-  }
-  const next = deleted.length < batchSize ? advanceRetentionPhase(cursor) : cursor
+  const phase = phases.find((phase) => phase.name === cursor.phase)
+  if (phase === undefined) throw new Error(`maintenance-retention-phase-missing:${cursor.phase}`)
+  const deleted = await phase.deleteBatch(
+    cursor.phase === 'webhook-trigger-fires' ? cursor.webhookCutoff : cursor.eventCutoff,
+    batchSize,
+  )
+  counters[phase.counter] = deleted
+  const next = deleted < batchSize ? advanceRetentionPhase(cursor) : cursor
   return { done: next.phase === 'done', cursor: next, counters }
 }
 
 /** One hourly retention pass. Every stage is independent and fail-soft. */
 export async function runRetentionSweep(
-  db: PersistenceDb,
+  phases: readonly RetentionSweepPhase[],
   config: RetentionConfig,
   now: number = Date.now(),
 ): Promise<RetentionSweepResult> {
   const result = zeroRetentionResult()
   let cursor: RetentionSweepCursorV1 | null = null
   for (;;) {
-    const slice = await runRetentionSweepSlice(db, config, cursor, now)
+    const slice = await runRetentionSweepSlice(phases, config, cursor, now)
     for (const key of Object.keys(result) as Array<keyof RetentionSweepResult>) {
       result[key] += slice.counters[key]
     }

@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-370: selected upload ACKs must precede the real journal receipt and Task admission in both providers.
 import { readTaskFixtures, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
@@ -207,7 +208,9 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
         db: harness.db,
         appHome: home,
         sourceContexts: identityAccess.taskPreparationContext,
-        repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: home }),
+        repositoryPreparation: composeRepositoryPreparation(
+          withSourceControlTaskPorts({ db: harness.db, appHome: home }),
+        ),
       })
       const content = Object.freeze(
           new MemoryWorkspaceUploadContent((method) => {

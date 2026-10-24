@@ -86,13 +86,18 @@ test('both provider aggregates use the selected binding with their original data
     expect(archive).toHaveLength(1)
     expect(archive[0]!.arguments.map((item) => compact(item, provider))).toEqual([
       'db',
+      'dependencies.archiveCollaboration',
       'dependencies.archive',
     ])
   }
   const helper = declaration(provider, 'createTaskArchiveMaintenanceCommand')
   const archive = calls(helper, provider, 'createDrizzleTaskArchiveMaintenanceCommand')
   expect(archive).toHaveLength(1)
-  expect(archive[0]!.arguments.map((item) => compact(item, provider))).toEqual(['db', 'archive'])
+  expect(archive[0]!.arguments.map((item) => compact(item, provider))).toEqual([
+    'db',
+    'collaboration',
+    'archive',
+  ])
 })
 
 test('PostgreSQL boot and HTTP retain the same selected command', () => {

@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-098 B3（audit S-3 + RFC-092 已知限制解除）端到端验收 — 修复后正确语义锁定。
 //
 // 三个场景（修复前全部 RED）：
@@ -291,13 +292,15 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
     expect(rev).toBeDefined()
 
     // approve（不铸任何 pending 行——done∧fresh 的 review 行本身就是复活证据）。
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev!.reviewIteration,
+      }),
+    )
 
     // 单次 resume（reenterScheduler + runTask = resumeTask 的测试替身）。
     // 修复前这一遍恒弹回 awaiting_review（wrapperHasFreshInnerWork 只认
@@ -372,13 +375,15 @@ describe('RFC-098 B3 — approve-inside-wrapper 复活（S-3 端到端）', () =
     const rev = (await nodeRows(h.db, taskId, 'rev')).find((r) => r.status === 'awaiting_review')
     expect(rev).toBeDefined()
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev!.reviewIteration,
+      }),
+    )
 
     await reenterScheduler(h.db, taskId)
     await runTask({

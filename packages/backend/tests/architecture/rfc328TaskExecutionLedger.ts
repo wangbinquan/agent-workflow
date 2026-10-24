@@ -294,12 +294,6 @@ export function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'ExclusiveDaemonLockProof+VerifiedTakeoverOrOutcomeProof',
     }
   }
-  // RFC-354 T4 — the one-shot frame backfill rewrites `container_run_id` /
-  // `scope_path` of rows minted before frames existed. It runs at daemon boot
-  // under the single-instance lock BEFORE the scheduler / auto-resume starts
-  // (or from `doctor --backfill-containers`, which refuses while a daemon is
-  // up), touches only rows whose frame is still unset, and is gated by the
-  // `maintenance_state` completion marker — no task is claimed or driven.
   // RFC-374: the resumable sequence catch-up is boot recovery, before any execution.
   if (
     /modules\/task-execution\/infrastructure\/legacyMigration\/nodeRunSeqBackfillStore\.ts#backfillTask$/.test(
@@ -313,16 +307,7 @@ export function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'ExclusiveDaemonLockProof(boot-before-scheduler)',
     }
   }
-  if (
-    /modules\/task-execution\/infrastructure\/legacyMigration\/frameBackfillStore\.ts/.test(value)
-  ) {
-    return {
-      authorityKind: 'recovery-proof',
-      controlSubtype: null,
-      revisionPredicate: 'boot-once-maintenance-marker-and-unset-frame-only',
-      requiredBrandedProof: 'ExclusiveDaemonLockProof(boot-before-scheduler)',
-    }
-  }
+
   if (
     /modules\/task-execution\/application\/applySourceTerminationEffect\.ts|services\/task\.ts#cancelTask|services\/terminalSweep\.ts/.test(
       value,
@@ -474,7 +459,7 @@ export function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'AuthorizedWorkgroupTaskRoomCommand',
     }
   }
-  if (/modules\/source-control\/infrastructure\/repositoryWorkspaceStore/.test(value)) {
+  if (/modules\/task-execution\/infrastructure\/taskRepositoryUsage/.test(value)) {
     return {
       authorityKind: 'control-revision',
       controlSubtype: 'continuation-admission',
@@ -486,9 +471,7 @@ export function classifyTaskExecutionAuthority(input: {
     // RFC-359 W7：两份 provider 实现已合一为中立的 `resourceLimitPersistence.ts`（首字母小写、
     // 无 provider 前缀）。旧前缀保留在这里没有代价，但**中立名必须认**——不认就会让合一后的
     // 写点变成 unknown writer，普查当场失败（本刀实撞）。
-    /modules\/system-operations\/infrastructure\/(?:(?:postgresql|sqlite)ResourceLimitPersistence|resourceLimitPersistence)/.test(
-      value,
-    )
+    /modules\/task-execution\/infrastructure\/taskResourceLimitFacts/.test(value)
   ) {
     return {
       authorityKind: 'control-revision',
@@ -510,7 +493,7 @@ export function classifyTaskExecutionAuthority(input: {
     }
   }
   if (
-    /platform\/persistence\/(?:eventsArchiveStore|postgresqlEventsArchive|sqlite\/(?:systemEventsArchive|taskLifecycleRepair\/))/.test(
+    /(?:modules\/task-execution\/infrastructure\/taskNodeEventArchiveStore|platform\/persistence\/sqlite\/(?:systemEventsArchive|taskLifecycleRepair\/))/.test(
       value,
     )
   ) {
@@ -521,7 +504,7 @@ export function classifyTaskExecutionAuthority(input: {
       requiredBrandedProof: 'TerminalMaintenanceClaim+MaintenanceExecutionFence',
     }
   }
-  if (/platform\/persistence\/sqlite\/taskLifecycle\.ts/.test(value)) {
+  if (/modules\/task-execution\/infrastructure\/taskLifecycle\.ts/.test(value)) {
     return {
       authorityKind: 'control-revision',
       controlSubtype: 'terminal-control',

@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-127 T5 / RFC-131 T4 «借壳» (borrow-the-shell) — RETIRED by RFC-162.
 //
 // This file WAS the positive lock for the RFC-127「借壳」→ RFC-131 T4「去借壳」dispatch path (reassign
@@ -150,17 +151,19 @@ async function seedTask(
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: CC,
-    askingNodeId: QUESTIONER,
-    askingNodeRunId: questionerRunId,
-    targetConsumerNodeId: DESIGNER,
-    loopIter: 0,
-    questions: [mkQ('q1', 'designer-scoped?')],
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: CC,
+      askingNodeId: QUESTIONER,
+      askingNodeRunId: questionerRunId,
+      targetConsumerNodeId: DESIGNER,
+      loopIter: 0,
+      questions: [mkQ('q1', 'designer-scoped?')],
+    }),
+  )
   return { taskId, crossClarifyNodeRunId }
 }
 

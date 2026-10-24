@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-a A2: replay after the NULL scalar node-tree case now crosses list ports.
 // Standalone defect fix approved 2026-10-21: a single non-root group member
 // has repoCount=1 but checkpoints are keyed by its mount (e.g. svc), not ''.
@@ -92,7 +93,11 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
       mounts,
       cleanup,
     })
-    const binding: IsolatedAgentRunBinding = { persistence: createTaskExecutionPersistence(db) }
+    const binding: IsolatedAgentRunBinding = {
+      persistence: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
+    }
     const writeSem = new Semaphore(1)
     const state = {
       taskId: task.id,

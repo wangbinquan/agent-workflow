@@ -16,7 +16,8 @@ import { join, resolve } from 'node:path'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
+import { archiveEvents } from './helpers/taskEventArchive'
+import { readArchivedEvents } from '../src/services/eventsArchive'
 import { readMaintenanceNumber } from '@/platform/persistence/maintenanceState'
 import { asc, count, max } from 'drizzle-orm'
 
@@ -98,10 +99,11 @@ async function eventCount(db: Db): Promise<number> {
 }
 
 function readArchiveImplementation(): string {
-  return ['sqlite/systemEventsArchive.ts', 'eventsArchiveStore.ts']
-    .map((path) =>
-      readFileSync(resolve(import.meta.dir, '../src/platform/persistence', path), 'utf8'),
-    )
+  return [
+    'platform/persistence/sqlite/systemEventsArchive.ts',
+    'modules/task-execution/infrastructure/taskNodeEventArchiveStore.ts',
+  ]
+    .map((path) => readFileSync(resolve(import.meta.dir, '../src', path), 'utf8'))
     .join('\n')
 }
 

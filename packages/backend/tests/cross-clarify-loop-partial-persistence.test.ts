@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-D C5 — wrapper-loop partial persistence 守门.
 //
 // Inside a wrapper-loop, RFC-056 has TWO semantically-different rules that
@@ -188,17 +189,19 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const a = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qIter0,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const a = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qIter0,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -216,17 +219,19 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const iter0Session = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qIter0,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const iter0Session = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qIter0,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     // Iter 0 user submitted continue — designer reran already in iter 0.
     await autoDispatchClarifyRound({
       db,
@@ -257,17 +262,19 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const a = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qIter0,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const a = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qIter0,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -315,17 +322,19 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId, 0)
     const qIter0 = await seedQRun(db, taskId, 'questioner', 0)
-    const a = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qIter0,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const a = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qIter0,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

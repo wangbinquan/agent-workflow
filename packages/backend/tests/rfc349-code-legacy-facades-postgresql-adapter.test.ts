@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CapabilityTemplateRecord } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityParamRead } from '@/modules/code-capability/infrastructure/capabilityParamRead'
 import { createCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/capabilityTemplatePersistence'
-import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -83,7 +83,7 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
       [[''], ['packages/api']],
     ])
     const params = createCapabilityParamRead(fake.db)
-    const workspace = createCodeWorkspaceRead(fake.db)
+    const workspace = createTaskCodeWorkspaceQueries(fake.db)
 
     await expect(params.find({ repoId: 'repo-1', capability: 'mr-review' })).resolves.toEqual({
       paramSchemaJson: '[{"name":"limit","kind":"number"}]',

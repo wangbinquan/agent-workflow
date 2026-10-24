@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Locks in RFC-011 backend semantics: review reject / iterate must not
 // reset the latest upstream node_run in place. Instead it marks the old
@@ -22,7 +23,7 @@ import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
 import { submitReviewDecision } from '@/modules/collaboration/infrastructure/review'
 import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
@@ -258,9 +259,14 @@ async function fetchDesignerTopRuns(h: Harness) {
 
 async function submitAndSettleReviewDecision(
   h: Harness,
-  input: Omit<Parameters<typeof submitReviewDecision>[0], 'db' | 'appHome'>,
+  input: Omit<
+    Parameters<typeof submitReviewDecision>[0],
+    'db' | 'appHome' | 'taskLock' | 'upstreamAgents'
+  >,
 ): Promise<Awaited<ReturnType<typeof submitReviewDecision>>> {
-  const result = await submitReviewDecision({ ...input, db: h.db, appHome: h.appHome })
+  const result = await submitReviewDecision(
+    withO2Closure({ ...input, db: h.db, appHome: h.appHome }),
+  )
   await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
     db: h.db,
     appHome: h.appHome,

@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from './required-ports'
 import { requireCommittedReviewArtifactReader } from './commandContext'
 import { createClarifyFollowupOperations } from '../application/clarifyFollowup'
 import { clarifyFollowupActivity } from '../infrastructure/clarifyFollowupActivity'
@@ -62,6 +63,7 @@ function bindCollaborationRouteContext(
 // RFC-359 W7：路由持久化面已合一（`infrastructure/collaborationRouteOperations.ts`），两个
 // 装配入口只是名字不同的同一条线；名字暂留，等 bootstrap 侧的 provider 命名一并收敛。
 export function composeCollaborationRouteOperations(input: {
+  readonly taskLock: HumanGateTaskLockPort
   readonly db: PersistenceDb
   readonly context: CollaborationRouteContext
   readonly followupGenerator?: ClarifyFollowupGenerator
@@ -69,6 +71,7 @@ export function composeCollaborationRouteOperations(input: {
   const events = createCollaborationClarifyDraftEventPublisher()
   const persistence = createCollaborationRouteOperations({
     db: input.db,
+    taskLock: input.taskLock,
     clarifyDraftEvents: events,
     // Resolved at read time: the committed review content belongs to the
     // composed command context, which a route surface may be built before.

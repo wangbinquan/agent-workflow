@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-370: the real repository refresh loop waits for its selected live query.
 // Initial reads, tick reads and hot reconfiguration share the stop/drain boundary.
 import { expect, spyOn, test } from 'bun:test'
@@ -20,7 +21,10 @@ function deferred<T>() {
 
 describeEachProvider('RFC-370 selected repository refresh settings', (harness) => {
   test('a rejected hot read cannot finish drain before an admitted tick settles', async () => {
-    const store = composeSqliteRepositoryWorkspaceStore(harness.db)
+    const store = composeSqliteRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     const select = spyOn(store, 'listDueCachedRepos')
     const timeout = spyOn(globalThis, 'setTimeout')
     const tickEntered = deferred<void>()
@@ -80,7 +84,10 @@ describeEachProvider('RFC-370 selected repository refresh settings', (harness) =
   })
 
   test('startup waits before arming and a stopped pending tick drains without refreshing', async () => {
-    const store = composeSqliteRepositoryWorkspaceStore(harness.db)
+    const store = composeSqliteRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     const select = spyOn(store, 'listDueCachedRepos')
     const timeout = spyOn(globalThis, 'setTimeout')
     let entered = deferred<void>()
@@ -141,7 +148,10 @@ describeEachProvider('RFC-370 selected repository refresh settings', (harness) =
   })
 
   test('a newer hot configuration wins and stop prevents a late read from rearming', async () => {
-    const store = composeSqliteRepositoryWorkspaceStore(harness.db)
+    const store = composeSqliteRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     const timeout = spyOn(globalThis, 'setTimeout')
     let selected: RefreshConfig | Promise<RefreshConfig> = {
       submoduleAutoRefresh: { enabled: false },
@@ -186,7 +196,10 @@ describeEachProvider('RFC-370 selected repository refresh settings', (harness) =
   })
 
   test('selected startup and hot read failure propagate without arming a replacement', async () => {
-    const store = composeSqliteRepositoryWorkspaceStore(harness.db)
+    const store = composeSqliteRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     const timeout = spyOn(globalThis, 'setTimeout')
     const failure = new Error('selected refresh configuration unavailable')
     let reject = true

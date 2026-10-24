@@ -1,3 +1,4 @@
+import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-092 §5-8 — S-1 端到端验收（review iterate 形态，修复后正确语义锁定）。
 //
 // 锁定 design/RFC-092-scheduler-p0-stopgap/design.md §1.2 的 pending 锚点行
@@ -306,16 +307,21 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     })
 
     const launchIntentId = ulid()
-    await submitTaskContinuation(createTaskExecutionPersistence(h.db).intents, {
-      taskId,
-      intentId: launchIntentId,
-      kind: 'launch',
-      source: 'internal',
-      actorUserId: null,
-      payload: {},
-      now: Date.now(),
-      advanceOperationGeneration: false,
-    })
+    await submitTaskContinuation(
+      createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).intents,
+      {
+        taskId,
+        intentId: launchIntentId,
+        kind: 'launch',
+        source: 'internal',
+        actorUserId: null,
+        payload: {},
+        now: Date.now(),
+        advanceOperationGeneration: false,
+      },
+    )
     const schedulerDriver = createTaskExecutionTestTopology({
       db: h.db,
       driver: 'real',
@@ -366,13 +372,15 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
         },
         commentText: ITERATE_COMMENT,
       })
-      const iterateDecision = await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: revRunId,
-        decision: 'iterated',
-        expectedReviewIteration: 0,
-      })
+      const iterateDecision = await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: revRunId,
+          decision: 'iterated',
+          expectedReviewIteration: 0,
+        }),
+      )
       continuationPromise = wakeHumanGateContinuation(
         iterateDecision.taskId,
         iterateDecision.continuationRef,
@@ -455,13 +463,15 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     expect(readFileSync(join(h.appHome, v2.bodyPath), 'utf-8')).toContain('AUTHOR_V2')
 
     // 全链路推进收尾：approve v2 + 精确 continuation 唤醒 → 任务 done。
-    const approval = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: revRunId,
-      decision: 'approved',
-      expectedReviewIteration: 1,
-    })
+    const approval = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: revRunId,
+        decision: 'approved',
+        expectedReviewIteration: 1,
+      }),
+    )
     await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
       db: h.db,
       appHome: h.appHome,

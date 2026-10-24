@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-133 (design/RFC-133-dispatch-queued-run-obligation) — GATE integration for the queued
 // 「run 义务」contract. Locks the live QMGP5 deadlock repro (task 01KWFZRQFPZFQQEM8JTCHQMGP5,
 // 2026-07-02) red→green plus the guards that must NOT regress:
@@ -388,17 +389,19 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
       await seedTask(db, taskId)
       // QMGP5-style: the asking run is DONE (it finished by asking); no other ASKER runs.
       const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: ASKER,
-        askingNodeRunId: askRun,
-        askingShardKey: null,
-        intermediaryNodeId: CL,
-        iteration: 0,
-        questions: [mkQ('q1')],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: ASKER,
+          askingNodeRunId: askRun,
+          askingShardKey: null,
+          intermediaryNodeId: CL,
+          iteration: 0,
+          questions: [mkQ('q1')],
+        }),
+      )
       // Another round's SELF entry on home ASKER: dispatched but never bound (queued).
       const otherOrigin = await seedRun(db, taskId, CL, { status: 'done' })
       await insertEntry(db, taskId, {
@@ -429,17 +432,19 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const askRun = await seedRun(db, taskId, ASKER, { status: 'done' })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: ASKER,
-        askingNodeRunId: askRun,
-        askingShardKey: null,
-        intermediaryNodeId: CL,
-        iteration: 0,
-        questions: [mkQ('q1')],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: ASKER,
+          askingNodeRunId: askRun,
+          askingShardKey: null,
+          intermediaryNodeId: CL,
+          iteration: 0,
+          questions: [mkQ('q1')],
+        }),
+      )
       const ccOrigin = await seedRun(db, taskId, CC, { status: 'done' })
       await insertEntry(db, taskId, {
         originNodeRunId: ccOrigin,
@@ -471,17 +476,19 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
       // designer (feedback consumer) has a prior done draft; questioner home DOWN asked and is done.
       await seedRun(db, taskId, ASKER, { status: 'done', hasOutput: true })
       const qRun = await seedRun(db, taskId, DOWN, { status: 'done' })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: CC,
-        askingNodeId: DOWN,
-        askingNodeRunId: qRun,
-        targetConsumerNodeId: ASKER,
-        loopIter: 0,
-        questions: [mkQ('q1')],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: CC,
+          askingNodeId: DOWN,
+          askingNodeRunId: qRun,
+          targetConsumerNodeId: ASKER,
+          loopIter: 0,
+          questions: [mkQ('q1')],
+        }),
+      )
       // Another round's QUESTIONER entry on home DOWN: dispatched, queued.
       const otherOrigin = await seedRun(db, taskId, CC, { status: 'done' })
       await insertEntry(db, taskId, {

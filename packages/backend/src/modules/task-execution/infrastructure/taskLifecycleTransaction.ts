@@ -49,7 +49,7 @@ export type TaskExecutionTransaction = PersistenceTx
  *
  * **形参已放宽到中立句柄**（RFC-359 plan §5gz）。§5gw 当时刻意没放，理由是「现在没有调用方需要」；
  * 启动面合一开工后**有了**——SQLite 侧要把自己的库传进同一台启动内核，这条
- * `@/db/query` 的跨 context import 于是是被需求逼出来的，不再是预支。
+ * `@/platform/persistence/persistenceDb` 的中立句柄类型由此成为实际依赖。
  */
 export async function withSerializableTaskExecution<T>(
   db: PersistenceDb,

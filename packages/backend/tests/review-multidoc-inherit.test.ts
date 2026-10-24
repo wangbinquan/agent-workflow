@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-129 — multi-document review cross-round selection inheritance (integration).
 //
 // WHY THIS FILE EXISTS (regression intent, proposal AC-1..AC-12):
@@ -214,15 +215,17 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
         reason: 'review-multidoc-inherit-test-scheduler-claim',
       })
     }
-    const r = await dispatchReviewNode({
-      db,
-      taskId: ctx.taskId,
-      scopeRoot: ctx.task.worktreePath,
-      appHome,
-      definition: ctx.definition,
-      node: ctx.reviewNode,
-      iteration,
-    })
+    const r = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId: ctx.taskId,
+        scopeRoot: ctx.task.worktreePath,
+        appHome,
+        definition: ctx.definition,
+        node: ctx.reviewNode,
+        iteration,
+      }),
+    )
     if (r.kind !== 'awaiting_review') throw new Error(`dispatch → ${JSON.stringify(r)}`)
     expect(r.kind).toBe('awaiting_review')
   }
@@ -252,13 +255,15 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       selection: 'not_accepted',
     })
 
-    await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: runId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: runId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     // Simulate the scheduler running the re-minted upstream with new content.
     await completeSrc(ctx.taskId, await freshPendingSrc(ctx.taskId), PATHS, round1Body)
     await dispatch(ctx)
@@ -296,14 +301,16 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       selection: 'accepted',
     })
 
-    await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: runId,
-      decision: 'rejected',
-      rejectReason: 'redo',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: runId,
+        decision: 'rejected',
+        rejectReason: 'redo',
+        expectedReviewIteration: 0,
+      }),
+    )
     await completeSrc(ctx.taskId, await freshPendingSrc(ctx.taskId), PATHS, round1Body)
     await dispatch(ctx)
 
@@ -326,13 +333,15 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
       docVersionId: r0[0]!.id,
       selection: 'accepted',
     })
-    await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: runId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: runId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     await completeSrc(ctx.taskId, await freshPendingSrc(ctx.taskId), PATHS, round1Body)
     await dispatch(ctx)
 
@@ -361,13 +370,15 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     expect(r0[0]!.itemIndex).toBeNull()
     expect(r0[0]!.selectionStale).toBeNull()
 
-    await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: r0[0]!.reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: r0[0]!.reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     await completeSrc(ctx.taskId, await freshPendingSrc(ctx.taskId), ['cases/a.md'], round1Body)
     await dispatch(ctx)
     const all = await docsFor(ctx.taskId)

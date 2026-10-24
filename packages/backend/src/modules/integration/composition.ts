@@ -63,3 +63,5 @@ export function createCodeHostWebhookDeliveryConsumerWithPersistence(
 }
 
 export { schemaContribution } from './composition/schema'
+
+export { createWebhookFireRetentionPhase } from './infrastructure/retentionPhase'

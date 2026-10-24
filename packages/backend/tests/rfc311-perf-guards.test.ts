@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-311 —— 数据库性能的**结构性**防护网。**RFC-359 W6-T27 起两个引擎各跑一遍。**
 //
 // 背景：生产 2.2GB 库上「所有操作都慢」的六路审计里，真正咬人的不是某条慢 SQL，
@@ -73,14 +74,14 @@ import ts from 'typescript'
 
 import { OverviewResponseSchema } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { eq } from '../src/db/query'
+import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   listMissionSummariesPage,
   listMissionTerminalOutcomeGroups,
 } from '../src/modules/development-automation/infrastructure/missionReadModels'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
-import { archiveEvents } from '../src/services/eventsArchive'
+import { archiveEvents } from './helpers/taskEventArchive'
 import { listCachedReposPage } from '../src/services/gitRepoCache'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import {
@@ -252,6 +253,8 @@ interface GuardedPath {
    * - `detail`：详情读面，按定义要读重列，豁免第五条。
    */
   readonly kind?: 'list' | 'sweep' | 'detail'
+  // RFC-395 II-b O1: the approved two-step query enumerates repo IDs, never Task rows.
+  readonly repositoryReferenceCensus?: true
   /**
    * 仅 sweep 可用：**每行允许发多少条语句**的上界。写在这里等于公开承认「这条路径
    * 还是 O(行数) 条语句」，并把它钉成只许降不许升的棘轮——比让它豁免诚实，也比假装
@@ -299,8 +302,15 @@ const GUARDED: GuardedPath[] = [
   },
   {
     name: '/api/cached-repos — keyset 首页',
+    repositoryReferenceCensus: true,
     run: (db) =>
-      listCachedReposPage(composeSqliteRepositoryWorkspaceStore(db as never), { limit: 20 }),
+      listCachedReposPage(
+        composeSqliteRepositoryWorkspaceStore(
+          db as never,
+          composeSourceControlTaskPorts(db as never),
+        ),
+        { limit: 20 },
+      ),
   },
   {
     name: '/api/code/missions — keyset 首页',
@@ -412,6 +422,42 @@ async function capture(
   return recording.statements
 }
 
+/** RFC-395 II-b O1: assert the exact approved census cost before comparing bounded page rows. */
+function repositoryReferenceCensusRows(
+  statements: readonly RecordedStatement[],
+  expectedCandidates: number,
+): number {
+  const registry = statements.filter((statement) =>
+    /^\s*SELECT (?:(?:"[^"]+"\.)?"cached_repos"\.)"id" AS id FROM (?:(?:"[^"]+"\.)?"cached_repos")\s*$/i.test(
+      statement.sql,
+    ),
+  )
+  expect(registry).toHaveLength(1)
+  expect(registry[0]!.params).toBe(0)
+  expect(registry[0]!.rows).toBe(expectedCandidates)
+  const probes = statements.filter(
+    (statement) =>
+      /^\s*WITH candidates\(id\) AS \(VALUES/i.test(statement.sql) &&
+      /AS requested_only/i.test(statement.sql),
+  )
+  expect(probes).toHaveLength(Math.ceil(expectedCandidates / 500))
+  for (const probe of probes) {
+    expect(probe.params).toBeGreaterThan(0)
+    expect(probe.params).toBeLessThanOrEqual(500)
+    expect(probe.rows).toBe(probe.params)
+    expect(probe.sql).not.toContain('cached_repos')
+    expect(probe.sql.match(/limit 1/gi)).toHaveLength(2)
+  }
+  const candidates = probes.flatMap((probe) => probe.values)
+  expect([...candidates].sort()).toEqual(
+    Array.from(
+      { length: expectedCandidates },
+      (_, index) => `repo${String(index).padStart(4, '0')}`,
+    ),
+  )
+  return registry[0]!.rows + probes.reduce((sum, probe) => sum + probe.rows, 0)
+}
+
 /**
  * 计划审计（不变量②：不许扫大表、不许临时排序）——**只在 SQLite 上有意义**。
  *
@@ -427,7 +473,13 @@ async function assertPlans(
 ): Promise<void> {
   const offenders: string[] = []
   // 读写都审：归档器那次死循环就在 DELETE 上。
-  for (const stmt of statements.filter((s) => /^\s*(select|delete|update)/i.test(s.sql))) {
+  // Preserve HEAD's audited statements and include the O1 candidate probes. Other
+  // WITH pipelines (including the unchanged catalog CTE) have their own plan contracts.
+  for (const stmt of statements.filter(
+    (s) =>
+      /^\s*(select|delete|update)/i.test(s.sql) ||
+      /^\s*WITH candidates\(id\) AS \(VALUES/i.test(s.sql),
+  )) {
     const plan = await harness.explain(stmt)
     if (plan.length === 0) continue // EXPLAIN 解释不了的（CTE 里的临时构造等）跳过
     for (const table of UNBOUNDED_TABLES) {
@@ -567,16 +619,22 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
       //     信号，与①正交（①数**发了几条**，④数**搬回来多少行**）。
       //     sweep 豁免——它的职责就是遍历全表，见 GuardedPath.kind 的注释。
       const rowsOf = (s: readonly RecordedStatement[]): number => s.reduce((n, x) => n + x.rows, 0)
+      const smallCensus = path.repositoryReferenceCensus
+        ? repositoryReferenceCensusRows(small, SMALL)
+        : 0
+      const largeCensus = path.repositoryReferenceCensus
+        ? repositoryReferenceCensusRows(large, LARGE)
+        : 0
       if ((path.kind ?? 'list') !== 'sweep')
         expect(
-          rowsOf(large),
+          rowsOf(large) - largeCensus,
           `取回行数随库增长（${SMALL} 行库取回 ${rowsOf(small)} 行 → ${LARGE} 行库取回 ${rowsOf(large)} 行）：\n` +
             `这条路径没有上界，库长大就会把整张表搬进内存（RFC-311 的立项动机）。\n` +
             large
               .filter((x) => x.rows > 0)
               .map((x) => `  ${x.rows} 行 ← ${x.sql.replace(/\s+/g, ' ').slice(0, 110)}`)
               .join('\n'),
-        ).toBe(rowsOf(small))
+        ).toBe(rowsOf(small) - smallCensus)
 
       // ⑤ 列表查询不碰重列（详情路径豁免——它本来就是去读正文的）。
       if ((path.kind ?? 'list') === 'list') {

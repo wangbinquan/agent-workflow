@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-333 — deterministic human-gate open fault witnesses.
 //
 // Both providers install real row triggers at the same later write. The original
@@ -311,15 +312,17 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       )
 
       const error = await failureOf(() =>
-        dispatchReviewNode({
-          db,
-          taskId,
-          appHome,
-          scopeRoot: worktree,
-          definition,
-          node: reviewNode,
-          iteration: 0,
-        }),
+        dispatchReviewNode(
+          withO2Closure({
+            db,
+            taskId,
+            appHome,
+            scopeRoot: worktree,
+            definition,
+            node: reviewNode,
+            iteration: 0,
+          }),
+        ),
       )
       expect(error.message).toContain('rfc333-second-doc')
 
@@ -370,15 +373,17 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       })
 
       await removeFault()
-      const retried = await dispatchReviewNode({
-        db,
-        taskId,
-        appHome,
-        scopeRoot: worktree,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const retried = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          appHome,
+          scopeRoot: worktree,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(retried.kind).toBe('awaiting_review')
       expect(
         await db.select().from(docVersions).where(eq(docVersions.taskId, taskId)),
@@ -459,15 +464,17 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       )
 
       const error = await failureOf(() =>
-        dispatchReviewNode({
-          db,
-          taskId,
-          appHome,
-          scopeRoot: worktree,
-          definition,
-          node: reviewNode,
-          iteration: 0,
-        }),
+        dispatchReviewNode(
+          withO2Closure({
+            db,
+            taskId,
+            appHome,
+            scopeRoot: worktree,
+            definition,
+            node: reviewNode,
+            iteration: 0,
+          }),
+        ),
       )
       expect(error.message).toContain('rfc333-task-park')
       const { docVersions, collaborationGateOperations, collaborationGateArtifacts } = tablesOf(db)
@@ -568,7 +575,7 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
           },
         ],
       }
-      const error = await failureOf(() => createClarifyRound(request))
+      const error = await failureOf(() => createClarifyRound(withO2Closure(request)))
       expect(error.message).toContain('rfc333-clarify-round')
 
       const { clarifyRounds, nodeRuns, taskQuestions, collaborationGateOperations } = tablesOf(db)
@@ -606,7 +613,7 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       expect(operations[0]).toMatchObject({ state: 'prepared', gateKind: 'clarify' })
 
       await removeFault()
-      const retried = await createClarifyRound(request)
+      const retried = await createClarifyRound(withO2Closure(request))
       expect(retried.round.id).toBe(operations[0]!.id + ':round')
       expect(
         (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(

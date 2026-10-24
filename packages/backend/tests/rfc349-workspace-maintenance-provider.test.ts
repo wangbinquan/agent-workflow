@@ -1,3 +1,5 @@
+import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -17,7 +19,7 @@ import { monotonicFactory } from 'ulid'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
-import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
+import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -121,7 +123,9 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       },
       async close() {},
     }
-    const store = new DrizzleWorkspaceMaintenanceStore(createPostgresqlDatabaseClient(runtime))
+    const store = new PortWorkspaceMaintenanceStore(
+      composeSourceControlTaskPorts(createPostgresqlDatabaseClient(runtime)),
+    )
 
     await expect(store.listGcCandidates()).resolves.toEqual([
       expect.objectContaining({ id: 'task-pg', workspacePrunedAt: null }),
@@ -175,13 +179,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       finishedAt: 2,
     })
     const invalidated: string[] = []
-    const command = composeWorkspaceMaintenanceCommand({
-      db,
-      appHome,
-      terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
-      isMaterializingTask: () => false,
-      invalidateWorkspacePath: (path) => invalidated.push(path),
-    })
+    const command = composeWorkspaceMaintenanceCommand(
+      withWorkspaceMaintenancePorts({
+        db,
+        appHome,
+        terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
+        isMaterializingTask: () => false,
+        invalidateWorkspacePath: (path: string) => invalidated.push(path),
+      }),
+    )
 
     await expect(
       command.runGcPhase({
@@ -229,13 +235,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
     mkdirSync(collision, { recursive: true })
     utimesSync(partial, old, old)
     utimesSync(collision, old, old)
-    const command = composeWorkspaceMaintenanceCommand({
-      db,
-      appHome,
-      terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
-      isMaterializingTask: (taskId) => taskId === leasedId,
-      invalidateWorkspacePath() {},
-    })
+    const command = composeWorkspaceMaintenanceCommand(
+      withWorkspaceMaintenancePorts({
+        db,
+        appHome,
+        terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
+        isMaterializingTask: (taskId: string) => taskId === leasedId,
+        invalidateWorkspacePath() {},
+      }),
+    )
     const common = {
       activeTaskIds: [] as const,
       worktreeAutoGc: { enabled: true },
@@ -300,13 +308,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       cleanupPlanJson: JSON.stringify({ v: 1, kind: 'workspace-prune', taskId }),
       now: 100,
     })
-    const command = composeWorkspaceMaintenanceCommand({
-      db,
-      appHome,
-      terminalMaintenance,
-      isMaterializingTask: () => false,
-      invalidateWorkspacePath() {},
-    })
+    const command = composeWorkspaceMaintenanceCommand(
+      withWorkspaceMaintenancePorts({
+        db,
+        appHome,
+        terminalMaintenance,
+        isMaterializingTask: () => false,
+        invalidateWorkspacePath() {},
+      }),
+    )
 
     await expect(command.recover({ activeTaskIds: [], now: 1_000 })).resolves.toEqual({
       completed: 1,
@@ -349,13 +359,15 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       startedAt: 1,
       finishedAt: 2,
     })
-    const command = composeWorkspaceMaintenanceCommand({
-      db,
-      appHome,
-      terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
-      isMaterializingTask: () => false,
-      invalidateWorkspacePath() {},
-    })
+    const command = composeWorkspaceMaintenanceCommand(
+      withWorkspaceMaintenancePorts({
+        db,
+        appHome,
+        terminalMaintenance: new DrizzleTerminalMaintenancePersistence(db),
+        isMaterializingTask: () => false,
+        invalidateWorkspacePath() {},
+      }),
+    )
 
     await expect(
       command.runGcPhase({
@@ -399,7 +411,7 @@ describeEachProvider('RFC-349 Source Control workspace maintenance provider', (h
       finishedAt: 2,
       workspacePruningAt: 200,
     })
-    const store = new DrizzleWorkspaceMaintenanceStore(db)
+    const store = new PortWorkspaceMaintenanceStore(composeSourceControlTaskPorts(db))
 
     await expect(store.releaseIsoClaim(taskId, 100)).resolves.toBeFalse()
     expect((await readTaskFixtures(db, { id: taskId }))[0]?.workspacePruningAt).toBe(200)

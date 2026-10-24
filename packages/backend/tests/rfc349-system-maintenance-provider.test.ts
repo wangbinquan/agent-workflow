@@ -1,3 +1,5 @@
+import { composeRetentionSweepPhases } from '@/bootstrap/retentionSweepPhases'
+import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
 // RFC-349 T5/T6 — maintenance admission/lease transitions are Promise ports
 // and PostgreSQL writes share the live-generation transaction fence.
 
@@ -7,11 +9,8 @@ import { describe, expect, test } from 'bun:test'
 
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
-import {
-  createPostgresqlEventsArchiveStore,
-  runPostgresqlEventsArchiveSlice,
-} from '@/platform/persistence/postgresqlEventsArchive'
-import { createHealthDatabaseReadModel } from '@/modules/system-operations/infrastructure/healthReadModel'
+import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
+import { createTaskStatusCounts } from '@/modules/task-execution/composition'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -188,7 +187,7 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
   test('health projection executes through the PostgreSQL provider client', async () => {
     const fake = fixture()
 
-    await expect(createHealthDatabaseReadModel(fake.client).countRunningTasks()).resolves.toBe(3)
+    await expect(createTaskStatusCounts(fake.client).countRunningTasks()).resolves.toBe(3)
 
     expect(fake.statements.at(-1)).toContain('"agent_workflow"."tasks"')
   })
@@ -237,7 +236,7 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     // 这条用例仍是有价值的：它用**假 pool** 断言这一份实现在 PostgreSQL 客户端上发出的
     // 语句形状（`WITH candidates AS (…) DELETE … USING candidates`）与游标推进。
     const result = await runRetentionSweepSlice(
-      createPostgresqlDatabaseClient(runtime),
+      composeRetentionSweepPhases(createPostgresqlDatabaseClient(runtime)),
       { eventStreamRetentionDays: 30, webhookTriggerFiresRetentionDays: 0 },
       undefined,
       3_000_000_000,
@@ -313,23 +312,23 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
       providerPool: () => pool,
       async close() {},
     }
-    const store = createPostgresqlEventsArchiveStore(createPostgresqlDatabaseClient(runtime))
+    const store = createTaskNodeEventArchiveStore(createPostgresqlDatabaseClient(runtime))
 
     await expect(
-      runPostgresqlEventsArchiveSlice({
+      createEventsArchiveMaintenanceCommand({
         store,
-        config: {
-          eventsArchiveThresholds: {
-            perNodeRunRows: 5_000,
-            globalRows: 1_000_000,
-            perNodeRunBytes: 0,
-            globalBytes: 0,
-          },
-        },
         logsDir: '/archive-not-reached-during-count',
+      }).runSlice({
+        thresholds: {
+          perNodeRunRows: 5_000,
+          globalRows: 1_000_000,
+          perNodeRunBytes: 0,
+          globalBytes: 0,
+        },
       }),
     ).resolves.toEqual({
       counters: { countedRows: 7 },
+      delta: { kind: 'none' },
       continuation: {
         cursor: {
           version: 1,

@@ -32,11 +32,11 @@ describe('RFC-346 CLI typed cutover', () => {
     const restore = source.split("case 'restore': {")[1]!.split("case '")[0]!
     expect(backup).toContain('const provider = await resolveCommandProvider()')
     expect(backup.replace(/\s+/g, '')).toContain(
-      'composeLocalSystemOperations({contract:buildLogicalSchemaContract(),providerRuntime:provider.runtime,})',
+      'composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:buildLogicalSchemaContract(),providerRuntime:provider.runtime,})',
     )
     expect(backup).toContain('backupCommand(Bun.argv.slice(3), operations)')
     expect(restore.replace(/\s+/g, '')).toContain(
-      'constoperations=composeLocalSystemOperations({contract,providerRuntime})',
+      'constoperations=composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract,providerRuntime,})',
     )
     expect(restore).toContain('restoreCommand(Bun.argv.slice(3), operations)')
     for (const command of [backup, restore])

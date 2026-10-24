@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W7 —— 协作路由持久化面（`CollaborationRoutePersistenceOperations`）：
 // **一份实现，两个 provider 共用**。
 //
@@ -33,6 +34,7 @@ const loadClarifyOperations = () => import('./clarifyRounds')
 const loadClarifySeal = () => import('./clarify/seal')
 
 export interface CreateCollaborationRouteOperationsInput {
+  readonly taskLock: HumanGateTaskLockPort
   readonly reviewReader?: CommittedReviewArtifactReader
   readonly db: PersistenceDb
   /** 草稿提交后的实时投影：装配点注入，持久化实现不直接够全局广播器。 */
@@ -119,6 +121,7 @@ export function createCollaborationRouteOperations(
           targetNodeId: request.targetNodeId,
         },
         request.actor,
+        input.taskLock,
       ),
     confirm: async (request) =>
       await (

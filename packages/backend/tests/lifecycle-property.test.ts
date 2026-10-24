@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1h — property-based: random event sequences preserve
 // cross-table invariants.
 //
@@ -292,16 +293,18 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
         .from(docVersions)
         .where(and(eq(docVersions.reviewNodeRunId, target.id), eq(docVersions.decision, 'pending')))
       if (dvs.length === 0) return false
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: target.id,
-        decision:
-          ev.kind === 'approve' ? 'approved' : ev.kind === 'iterate' ? 'iterated' : 'rejected',
-        expectedReviewIteration: target.reviewIteration,
-        author: 'rng',
-        ...(ev.kind === 'reject' ? { rejectReason: 'r' } : {}),
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: target.id,
+          decision:
+            ev.kind === 'approve' ? 'approved' : ev.kind === 'iterate' ? 'iterated' : 'rejected',
+          expectedReviewIteration: target.reviewIteration,
+          author: 'rng',
+          ...(ev.kind === 'reject' ? { rejectReason: 'r' } : {}),
+        }),
+      )
       return true
     }
     if (ev.kind === 'dispatch') {
@@ -309,15 +312,17 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       // (otherwise dispatch is no-op or idempotent).
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
       const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
-      await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       return true
     }
     if (ev.kind === 'retry-agent') {

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
@@ -8,6 +9,7 @@ import {
   composeCrewStationReviewArtifacts,
   composeCrewStationReviewObjectSweep,
 } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
+import { existingTaskIds } from '@/modules/task-execution/composition'
 import { composeCrewStationCodeReviewObjectSweep } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
 import {
   composeCrewStationIntentArtifacts,
@@ -135,6 +137,7 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
     })
     const publications = objectPublications.publications
     const workspace = composeCrewStationWorkspaceOwner({
+      taskPorts: composeSourceControlTaskPorts(db),
       db,
       api,
       fence,
@@ -169,7 +172,10 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
         composeCrewStationTaskObjectSweep({ db, fence, publications }),
         composeCrewStationReviewObjectSweep({ db, publications }),
         // §10 V16: code-review artifacts of deleted tasks.
-        composeCrewStationCodeReviewObjectSweep({ db, publications }),
+        composeCrewStationCodeReviewObjectSweep({
+          tasks: { existingTaskIds: (ids) => existingTaskIds(db, ids) },
+          publications,
+        }),
       ]),
       databaseBackups: composeCrewStationDatabaseBackups({
         contract: buildLogicalSchemaContract(),

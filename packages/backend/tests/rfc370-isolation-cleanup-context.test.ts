@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370 hosted acceptance (2026-10-18) — the isolation cleanup receipt stays
 // with the SQLite daemon's contexts.
 //
@@ -95,7 +96,9 @@ async function seedClaimedTask(db: PersistenceDb) {
     retryIndex: 0,
     iteration: 0,
   })
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
     persistence,

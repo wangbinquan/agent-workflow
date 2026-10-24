@@ -6,7 +6,7 @@ import {
   registerTerminalWorkspacePrunePolicy,
   resolveTerminalWorkspacePruneDecision,
   type TerminalWorkspacePrunePolicy,
-} from '@/platform/persistence/terminalWorkspacePrune'
+} from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 
 function deferred<T>() {
   let resolve!: (value: T) => void

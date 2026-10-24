@@ -311,8 +311,9 @@ describe('RFC-368 实现门 findings', () => {
     expect(read('src/modules/task-execution/application/taskIdleTimeoutReaper.ts')).toContain(
       'await operations.cancelTask(taskId, reason)',
     )
-    expect(read('src/modules/system-operations/composition/resourceLimits.ts')).toContain(
-      "kind: 'resource-reaped'",
+    expect(read('src/bootstrap/resourceLimits.ts')).toContain('cancelTask: input.cancelTask')
+    expect(read('src/services/limits.ts')).not.toContain(
+      'composeLegacySqliteResourceLimitOperations',
     )
     expect(read('src/bootstrap/daemonStart.ts')).toContain("kind: 'resource-reaped'")
     expect(

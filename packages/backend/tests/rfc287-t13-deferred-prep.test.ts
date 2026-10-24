@@ -1,3 +1,5 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 
 import {
@@ -919,7 +921,10 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
     const { deleteCachedRepo } = await import('@/services/gitRepoCache')
     let code = ''
     try {
-      await deleteCachedRepo({ store: composeSqliteRepositoryWorkspaceStore(db) }, repoId)
+      await deleteCachedRepo(
+        { store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)) },
+        repoId,
+      )
     } catch (err) {
       code = (err as { code?: string }).code ?? (err as Error).message
     }
@@ -1093,18 +1098,22 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
           workspace: createTaskRouteWorkspaceParticipant({
             db: db2,
             sourceContexts: identityAccess2.taskPreparationContext,
-            repositoryPreparation: composeRepositoryPreparation({ db: db2, appHome: home }),
+            repositoryPreparation: composeRepositoryPreparation(
+              withSourceControlTaskPorts({ db: db2, appHome: home }),
+            ),
             appHome: home,
           }),
           coordinator: createTestTaskDriveCoordinator({
             deps: { db: db2, schedulerDriver: schedulerDriver2, configPath: cfgPath },
             appHome: home,
             repositoryPreparation: composeDeferredRepositoryPreparation({
-              repositoryPreparation: composeRepositoryPreparation({
-                db: db2,
-                appHome: home,
-                cloneTimeoutMs: 3000,
-              }),
+              repositoryPreparation: composeRepositoryPreparation(
+                withSourceControlTaskPorts({
+                  db: db2,
+                  appHome: home,
+                  cloneTimeoutMs: 3000,
+                }),
+              ),
               db: db2,
               appHome: home,
 
@@ -1431,9 +1440,9 @@ describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', (
         import.meta.dir,
         '..',
         'src',
-        'platform',
-        'persistence',
-        'sqlite',
+        'modules',
+        'task-execution',
+        'infrastructure',
         'taskLifecycle.ts',
       ),
       'utf8',

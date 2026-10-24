@@ -1,5 +1,5 @@
 // RFC-389 — one system-maintenance graph for both database providers.
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { RetentionSweepPhase } from './retentionSweepPhase'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { createEventsArchiveMaintenanceCommand } from './eventsArchiveMaintenance'
 import type { MaintenanceSystemOperations } from './maintenanceJobRunner'
@@ -8,7 +8,7 @@ const MAINTENANCE_RETENTION_SLICE_ROWS = 1_000
 const CLEANUP_COOLDOWN_MS = 25
 
 export function composeMaintenanceSystemOperations(input: {
-  readonly db: PersistenceDb
+  readonly retentionPhases: readonly RetentionSweepPhase[]
   readonly eventsArchiveStore: Parameters<typeof createEventsArchiveMaintenanceCommand>[0]['store']
   readonly eventsArchiveContent?: Parameters<
     typeof createEventsArchiveMaintenanceCommand
@@ -30,7 +30,7 @@ export function composeMaintenanceSystemOperations(input: {
       async runSlice(request: Parameters<MaintenanceSystemOperations['retention']['runSlice']>[0]) {
         // RFC-359 W57: both providers use the same cursor, phases and counters.
         const result = await runRetentionSweepSlice(
-          input.db,
+          input.retentionPhases,
           request,
           request.cursor,
           Date.now(),

@@ -1,3 +1,5 @@
+import { o2Ports, withO2Closure } from './o2Closure'
+import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 
 import { readAgentFixtures } from './model'
@@ -186,11 +188,17 @@ export async function createEachProviderTaskExecution(
     authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
     resources,
   })
-  const persistence = createTaskExecutionPersistence(db, { workspacePresence })
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    ...{ workspacePresence },
+  })
   const dynamicWorkflow = createTestDynamicWorkflowOperations(db)
   const appHome = runConfig.appHome
   const configPath = join(appHome, 'config.json')
-  const collaborationRuntime = createCollaborationRuntimeMechanics(db)
+  const collaborationRuntime = createCollaborationRuntimeMechanics(db, {
+    taskLock: o2Ports(db).taskLock,
+    ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+  })
   const workgroupClarify = composeWorkgroupTaskRoomClarifyParticipantFactory()
   const workgroupTurns = composeWorkgroupTurnsOperations(
     db,
@@ -263,81 +271,87 @@ export async function createEachProviderTaskExecution(
 
   if (harness.capabilities.isolation === 'exclusive') {
     const sqlite = db as unknown as DbClient
-    const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime({
-      db: sqlite,
-      persistence,
-      execution: composeProcessTaskExecutionBinding(sqlite),
-      log: createLogger('task'),
-      finalizeWorkspace: async (taskId) => {
-        await workspaceMaintenanceForTest(sqlite).finalizeClaimedWorkspace(taskId)
-      },
-      workgroupTaskRoom: { collaboration: workgroupClarify },
-      coordinatorFactory: testDriveFactory(
-        db,
-        {
-          attach: (request) => provider.driverLifecycle.attach(request),
-          releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
+    const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
+      withO2Closure({
+        archiveCollaboration: o2Ports(sqlite).collaborationReads.archive,
+        clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
+        db: sqlite,
+        persistence,
+        execution: composeProcessTaskExecutionBinding(sqlite),
+        log: createLogger('task'),
+        finalizeWorkspace: async (taskId) => {
+          await workspaceMaintenanceForTest(sqlite).finalizeClaimedWorkspace(taskId)
         },
-        () => ({ configPath, ...runConfig }),
-      ),
-      runtime: {
-        taskDagCollaboration: createTaskDagCollaborationOperations(db),
-        processConcurrencyScope: sqlite,
-        ...runBinding,
-        workspaceExcludeProfilesFor,
-        ...(options.isolationWorkspaces === undefined
-          ? {}
-          : { isolationWorkspaces: options.isolationWorkspaces }),
-        workspacePresence,
-        identityAccess: runtimeIdentity,
-        memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
-        collaborationRuntime,
-        workgroupTurns,
-        dynamicWorkflow,
-        runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-        observationInvocations: composeRunObservationCalls(sqlite),
-        runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
-        nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
-        repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
-        codeHostConnections: unusedCapability('code-host connection'),
-      },
-      routeLaunch: {
-        configPath,
-        // RFC-359 AC-1（plan §5hn 批次一）：单代理启动臂现在也要根内核的那套依赖。
-        // 本 harness 不经路由启动 agent（它直接用 `launch` / `launchViaKernel`），
-        // 所以这几格给到不会被调用到的最小形状——真被调用会当场炸，而不是静默走假路径。
-        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-        agent: {
-          // RFC-359 AC-1（第 13 刀下）：`resources` 交**生产那一份**——`syncWorkflow` 合一之后
-          // 它的静态校验门就是这里的 `validateHostWorkflow`（两个引擎同一份、只收中立句柄）。
-          // 此前这一格是「一碰就炸」的桩，于是本 harness 上的 sync 一调用就撞桩。
-          resources: composeAgentLaunchResourceOperations({ db }),
-          integrity: unusedCapability('agent route launch integrity'),
+        workgroupTaskRoom: { collaboration: workgroupClarify },
+        coordinatorFactory: testDriveFactory(
+          db,
+          {
+            attach: (request) => provider.driverLifecycle.attach(request),
+            releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
+          },
+          () => ({ configPath, ...runConfig }),
+        ),
+        runtime: {
+          taskDagCollaboration: createTaskDagCollaborationOperations(db),
+          processConcurrencyScope: sqlite,
+          ...runBinding,
+          workspaceExcludeProfilesFor,
+          ...(options.isolationWorkspaces === undefined
+            ? {}
+            : { isolationWorkspaces: options.isolationWorkspaces }),
+          workspacePresence,
+          identityAccess: runtimeIdentity,
+          memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
+          collaborationRuntime,
+          workgroupTurns,
+          dynamicWorkflow,
+          runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
+          observationInvocations: composeRunObservationCalls(sqlite),
+          runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
+          nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
+          repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+          codeHostConnections: unusedCapability('code-host connection'),
         },
-        resourceAuthorityFor: () => launchResources,
-        coordinator: { submit: () => unavailable('agent route coordinator') },
-        workgroup: unusedCapability('workgroup route launch resources'),
-      },
-      routeWorkspace: {
-        sourceContexts: identityAccess.taskPreparationContext,
-        appHome,
-        repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
-      },
-      // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
-      // 最后一个要 legacy `TaskContinuationDependencies` 的路由动词，合一之后路由层不再持有它。
-      routes: () => ({
-        collaboration: unusedCapability('collaboration route'),
-        multipart: unusedCapability('multipart upload'),
-        resourceAuthorityFor: () => launchResources,
-        owners: composeOwnerIdentityQueries(db),
-        assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
-        appHome,
-        ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
+        routeLaunch: {
+          configPath,
+          // RFC-359 AC-1（plan §5hn 批次一）：单代理启动臂现在也要根内核的那套依赖。
+          // 本 harness 不经路由启动 agent（它直接用 `launch` / `launchViaKernel`），
+          // 所以这几格给到不会被调用到的最小形状——真被调用会当场炸，而不是静默走假路径。
+          gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+          agent: {
+            // RFC-359 AC-1（第 13 刀下）：`resources` 交**生产那一份**——`syncWorkflow` 合一之后
+            // 它的静态校验门就是这里的 `validateHostWorkflow`（两个引擎同一份、只收中立句柄）。
+            // 此前这一格是「一碰就炸」的桩，于是本 harness 上的 sync 一调用就撞桩。
+            resources: composeAgentLaunchResourceOperations({ db }),
+            integrity: unusedCapability('agent route launch integrity'),
+          },
+          resourceAuthorityFor: () => launchResources,
+          coordinator: { submit: () => unavailable('agent route coordinator') },
+          workgroup: unusedCapability('workgroup route launch resources'),
+        },
+        routeWorkspace: {
+          sourceContexts: identityAccess.taskPreparationContext,
+          appHome,
+          repositoryPreparation: composeRepositoryPreparation(
+            withSourceControlTaskPorts({ db, appHome }),
+          ),
+        },
+        // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
+        // 最后一个要 legacy `TaskContinuationDependencies` 的路由动词，合一之后路由层不再持有它。
+        routes: () => ({
+          collaboration: unusedCapability('collaboration route'),
+          multipart: unusedCapability('multipart upload'),
+          resourceAuthorityFor: () => launchResources,
+          owners: composeOwnerIdentityQueries(db),
+          assertWorkflowLaunchable: async () => unavailable('workflow route validation'),
+          appHome,
+          ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
+        }),
+        lifecycleRepair: {},
+        fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
+        rootResumeRuntime,
       }),
-      lifecycleRepair: {},
-      fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
-      rootResumeRuntime,
-    })
+    )
     return {
       provider,
       actor,
@@ -418,77 +432,83 @@ export async function createEachProviderTaskExecution(
 
   const postgresql = db as unknown as PostgresqlDatabaseClient
   const log = createLogger('rfc359-execution-chain')
-  const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime({
-    db: postgresql,
-    persistence,
-    execution: composeSessionTaskExecutionBinding({
-      daemonGeneration: `rfc359-execution-chain-${ulid()}`,
+  const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
+    withO2Closure({
+      archiveCollaboration: o2Ports(postgresql).collaborationReads.archive,
+      clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
+      db: postgresql,
       persistence,
+      execution: composeSessionTaskExecutionBinding({
+        daemonGeneration: `rfc359-execution-chain-${ulid()}`,
+        persistence,
+      }),
+      log,
+      finalizeWorkspace: async () => {},
+      coordinatorFactory: testDriveFactory(
+        db,
+        {
+          attach: (request) => provider.driverLifecycle.attach(request),
+          releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
+        },
+        () => ({ configPath, ...runConfig }),
+      ),
+      runtime: {
+        ...runBinding,
+        workspaceExcludeProfilesFor,
+        ...(options.isolationWorkspaces === undefined
+          ? {}
+          : { isolationWorkspaces: options.isolationWorkspaces }),
+        workspacePresence,
+        observationInvocations: composeRunObservationCalls(db),
+        runtimeRegistry: composeRuntimeRegistryOperations(db),
+        nodeRunRuntime: composeNodeRunRuntimePersistence(db),
+        runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
+        memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
+        taskDagCollaboration: createTaskDagCollaborationOperations(db),
+        collaborationRuntime,
+        workgroupTurns,
+        dynamicWorkflow,
+        identityAccess: runtimeIdentity,
+        repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
+        codeHostConnections: unusedCapability('code-host connection'),
+        processConcurrencyScope: {},
+      },
+      routeLaunch: {
+        configPath,
+        gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+        resourceAuthorityFor: () => launchResources,
+        coordinator: {
+          submit: (request) => coordinator.submit({ ...request, completionMode }),
+        },
+        agent: {
+          // RFC-359 AC-1（第 13 刀下）：与 SQLite 泳道**同一份**——`syncWorkflow` 的静态校验门。
+          resources: composeAgentLaunchResourceOperations({ db }),
+          integrity: unusedCapability('agent route integrity'),
+        },
+        workgroup: unusedCapability('workgroup route resources'),
+      },
+      routeWorkspace: {
+        sourceContexts: identityAccess.taskPreparationContext,
+        appHome,
+        repositoryPreparation: composeRepositoryPreparation(
+          withSourceControlTaskPorts({ db, appHome }),
+        ),
+      },
+      routes: () => ({
+        collaboration: unusedCapability('collaboration route'),
+        users: unusedCapability('task user directory'),
+        owners: unusedCapability('task owner directory'),
+        membershipEvents: unusedCapability('task member events'),
+        deletionEvents: unusedCapability('task deletion events'),
+        appHome,
+        ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
+      }),
+      lifecycleRepair: {},
+      fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
+      rootResumeRuntime,
+      workgroupTaskRoom: { collaboration: workgroupClarify },
     }),
-    log,
-    finalizeWorkspace: async () => {},
-    coordinatorFactory: testDriveFactory(
-      db,
-      {
-        attach: (request) => provider.driverLifecycle.attach(request),
-        releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
-      },
-      () => ({ configPath, ...runConfig }),
-    ),
-    runtime: {
-      ...runBinding,
-      workspaceExcludeProfilesFor,
-      ...(options.isolationWorkspaces === undefined
-        ? {}
-        : { isolationWorkspaces: options.isolationWorkspaces }),
-      workspacePresence,
-      observationInvocations: composeRunObservationCalls(db),
-      runtimeRegistry: composeRuntimeRegistryOperations(db),
-      nodeRunRuntime: composeNodeRunRuntimePersistence(db),
-      runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
-      memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
-      taskDagCollaboration: createTaskDagCollaborationOperations(db),
-      collaborationRuntime,
-      workgroupTurns,
-      dynamicWorkflow,
-      identityAccess: runtimeIdentity,
-      repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
-      codeHostConnections: unusedCapability('code-host connection'),
-      processConcurrencyScope: {},
-    },
-    routeLaunch: {
-      configPath,
-      gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-      resourceAuthorityFor: () => launchResources,
-      coordinator: {
-        submit: (request) => coordinator.submit({ ...request, completionMode }),
-      },
-      agent: {
-        // RFC-359 AC-1（第 13 刀下）：与 SQLite 泳道**同一份**——`syncWorkflow` 的静态校验门。
-        resources: composeAgentLaunchResourceOperations({ db }),
-        integrity: unusedCapability('agent route integrity'),
-      },
-      workgroup: unusedCapability('workgroup route resources'),
-    },
-    routeWorkspace: {
-      sourceContexts: identityAccess.taskPreparationContext,
-      appHome,
-      repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
-    },
-    routes: () => ({
-      collaboration: unusedCapability('collaboration route'),
-      users: unusedCapability('task user directory'),
-      owners: unusedCapability('task owner directory'),
-      membershipEvents: unusedCapability('task member events'),
-      deletionEvents: unusedCapability('task deletion events'),
-      appHome,
-      ...(taskRunRoot === undefined ? {} : { nodeRunPrompts: taskRunRoot.nodeRunPrompts }),
-    }),
-    lifecycleRepair: {},
-    fusion: { workspaces: createFileFusionWorkspaceEffects({ appHome }) },
-    rootResumeRuntime,
-    workgroupTaskRoom: { collaboration: workgroupClarify },
-  })
+  )
   const coordinator = new DefaultTaskDriveCoordinator({
     runtime: resolveTaskDriveConfig(runConfig),
     lifecycle: provider.driverLifecycle,

@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-359 W1-T2c（F-H2-1 之三）—— 评审决定命令在两个引擎上各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 F-H2-1：PostgreSQL daemon 从未注入 `reviewDecisions`，
@@ -90,12 +91,14 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
   test('approve：评审 run done、doc_version approved、approved_doc + approval_meta 落 outputs、回执 + 决定事件', async () => {
     const db = harness.db
     round = await seedReviewRound(db)
-    const command = createReviewDecisionCommand({ db, appHome: round.appHome })
-    const context = createCollaborationCommandContext({
-      db,
-      appHome: round.appHome,
-      reviewDecisions: command,
-    })
+    const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
+    const context = createCollaborationCommandContext(
+      withO2Closure({
+        db,
+        appHome: round.appHome,
+        reviewDecisions: command,
+      }),
+    )
     const result = await submitReviewDecision(context, {
       actor,
       authorRole: 'owner',
@@ -142,7 +145,7 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
   test('reject + 批量评论：上游 run 作废并铸 review-reject 重跑，评审 run 回 pending 且 iteration+1，评论归档进 doc_version', async () => {
     const db = harness.db
     round = await seedReviewRound(db)
-    const command = createReviewDecisionCommand({ db, appHome: round.appHome })
+    const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
     const result = await command.submit({
       actor,
       authorRole: 'owner',
@@ -182,7 +185,7 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
   test('重放：同 idempotencyKey 再提交 → replayed 回执、不再铸第二个重跑', async () => {
     const db = harness.db
     round = await seedReviewRound(db)
-    const command = createReviewDecisionCommand({ db, appHome: round.appHome })
+    const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
     const submit = () =>
       command.submit({
         actor,
@@ -207,7 +210,7 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
   test('过期 gate revision → human-gate-operation-stale，整个决定事务回滚', async () => {
     const db = harness.db
     round = await seedReviewRound(db)
-    const command = createReviewDecisionCommand({ db, appHome: round.appHome })
+    const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
     let error: unknown
     try {
       await command.submit({
@@ -270,7 +273,9 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     expect(
       await reviewEvents(db, round.reviewRunId, 'collaboration.review-selection-changed.v1'),
     ).toHaveLength(1)
-    const result = await createReviewDecisionCommand({ db, appHome: round.appHome }).submit({
+    const result = await createReviewDecisionCommand(
+      withO2Closure({ db, appHome: round.appHome }),
+    ).submit({
       actor,
       authorRole: 'owner',
       nodeRunId: round.reviewRunId,

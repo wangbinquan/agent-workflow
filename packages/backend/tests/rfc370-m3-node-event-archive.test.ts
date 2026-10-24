@@ -19,7 +19,7 @@ import {
   nodeRunStdoutProjection,
 } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { archiveEventsWithStore } from '@/platform/persistence/sqlite/systemEventsArchive'
-import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
+import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
 import { objectFixture } from './helpers/rfc370Objects'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -54,7 +54,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
         parentSessionId: i < 3 ? null : 'root-session',
       })),
     )
-    const all = await createEventsArchiveStore(db).listOldestEvents('run', 100)
+    const all = await createTaskNodeEventArchiveStore(db).listOldestEvents('run', 100)
     let held = true,
       loseAfterUpload = false
     const fence = {
@@ -192,7 +192,7 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
     const f = await setup(),
       archive = f.reopen()
     const result = await archiveEventsWithStore(
-      createEventsArchiveStore(f.db),
+      createTaskNodeEventArchiveStore(f.db),
       {
         eventsArchiveThresholds: { perNodeRunRows: 2, globalRows: 100 },
       },

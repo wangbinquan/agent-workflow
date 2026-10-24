@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   agentFixture,
   patchAgentFixture,
@@ -162,13 +163,18 @@ function sharedInput(
     }),
     workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
     workspacePresence: createFileWorkspacePresenceQueries(),
-    persistence: createTaskExecutionPersistence(db),
+    persistence: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     memoryInjectionQueries: sqliteMemoryInjectionQueries(db as unknown as DbClient),
     observationInvocations: composeRunObservationCalls(db),
     runtimeRegistry: composeRuntimeRegistryOperations(db),
     nodeRunRuntime: composeNodeRunRuntimePersistence(db),
-    collaborationRuntime: createCollaborationRuntimeMechanics(db),
+    collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    }),
     childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db as unknown as DbClient),
     workgroupTurns: passthrough('workgroupTurns'),
     dynamicWorkflow: createTestDynamicWorkflowOperations(db),

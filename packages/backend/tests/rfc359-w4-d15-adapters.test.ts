@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 import { patchWorkflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -83,6 +84,7 @@ function calling(workflowName: string): WorkflowDefinition {
 function repositoryFor(db: PersistenceDb, events: string[] = []) {
   const catalog = composeResourceCatalogFor({ db })
   const semantics = createWorkflowPersistenceSemantics({
+    taskReferences: composeSubjectTaskReferencePort,
     authorization: catalog.authorization,
     events: {
       created: (workflow) => {

@@ -1,3 +1,4 @@
+import { withWorkspaceMaintenancePorts } from './sourceControlTaskPorts'
 // RFC-383: real session bundles on each provider; no daemon, timers or external services.
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
@@ -86,13 +87,15 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     },
     bindEventAutomationContexts: createEventAutomationDelegatedContextBinding,
     runtimeRegistry: taskExecution.executionModule.runtimeRegistry,
-    workspaceMaintenance: composeWorkspaceMaintenanceCommand({
-      db,
-      appHome,
-      terminalMaintenance: taskExecution.persistence.terminalMaintenance,
-      isMaterializingTask: () => false,
-      invalidateWorkspacePath() {},
-    }),
+    workspaceMaintenance: composeWorkspaceMaintenanceCommand(
+      withWorkspaceMaintenancePorts({
+        db,
+        appHome,
+        terminalMaintenance: taskExecution.persistence.terminalMaintenance,
+        isMaterializingTask: () => false,
+        invalidateWorkspacePath() {},
+      }),
+    ),
     taskExecutions: taskExecution.trigger.taskExecutions,
     digitalEmployeeWorkStart: { launch: (request) => employee.workStart.launch(request) },
     developmentDeliveryProvider: repository.developmentDeliveryProvider,

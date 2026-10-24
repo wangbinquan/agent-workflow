@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— `TaskExecutionEffectPersistence` 端口的双引擎对拍。
 //
 // 合一前这一对是两台**同构**引擎：SQLite 侧是 `sqliteTaskExecutionEffectPersistence.ts`（369 行
@@ -149,7 +150,9 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
       lineageSlotPathJson: slotPathJson,
     },
   ])
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
     persistence,

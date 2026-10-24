@@ -77,7 +77,7 @@
 //   packages/backend/src/services/mcpProbe.ts:193-211            partial：status 仍是 ok，只标 errorCode
 //   packages/backend/src/services/mcpProbe.ts:367-411            classifyProbeError 的分档顺序
 //   packages/backend/src/services/mcpProbe.ts:52                 HARD_TOTAL_TIMEOUT_MS = 60_000（timeout 档的唯一来源）
-//   packages/backend/src/services/agent.ts:1037-1065             plugin-disabled（422）
+//   packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#validatePluginReferences             plugin-disabled（422）
 //   packages/shared/src/mcp-operation.ts:42-57                   操作 hash 覆盖 updatedAt ⇒ 任何写入都会让旧 hash 作废
 //   packages/system-mocks/src/mcp/stdio.ts:6-18                  stdio 桩的 ok / crash / hang 三档（本文件只用既有档，未新增）
 //   packages/system-mocks/src/code-host/http.ts:17-20            未带凭据的请求一律 401（auth-required 的真来源）

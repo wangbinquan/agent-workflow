@@ -1,5 +1,6 @@
 // RFC-349 — runtime-management owns provider-selected realtime composition.
 
+import type { RealtimeTaskFactsPort, RealtimeResourceAclPort } from './composition/required-ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { createRealtimeChannelAccess } from './application/realtimeChannelAccess'
@@ -24,12 +25,17 @@ function composeRealtimeRuntime(input: {
  */
 export function composeRealtimeRuntimeFor(input: {
   readonly db: PersistenceDb
+  readonly taskFacts: RealtimeTaskFactsPort
+  readonly resources: RealtimeResourceAclPort
   readonly credentials: WebSocketAuthenticationParticipant
   readonly policy: RealtimeCompositionPolicy
 }): RealtimeRuntime {
   return composeRealtimeRuntime({
     credentials: input.credentials,
-    channels: createRealtimeChannelAccess(new DrizzleRealtimeStore(input.db), input.policy),
+    channels: createRealtimeChannelAccess(
+      new DrizzleRealtimeStore(input.db, input.taskFacts, input.resources),
+      input.policy,
+    ),
   })
 }
 

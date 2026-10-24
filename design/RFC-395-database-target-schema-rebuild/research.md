@@ -66,7 +66,7 @@ SQL 文件数只统计目录下 `*.sql`，不把 metadata / JSON 快照文件算
 | supersession 两处表达 | [domain/nodeRunSupersession.ts](../../packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts)、infrastructure/nodeRunSupersession.ts（`packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts`） | 先保留现有 shard 包含关系语义，再统一选择合同；不能用简单 MAX 替代 |
 | 澄清整包修改 | [clarifyRounds.ts](../../packages/backend/src/modules/collaboration/infrastructure/clarifyRounds.ts) 答案 / attribution / draft 更新；[seal.ts](../../packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts) | 只对独立编辑状态关系化；问题 snapshot 与 round 不拆成大材料系统 |
 | 资源扫描与注释漂移 | [resourceRefs.ts](../../packages/backend/src/modules/resource-catalog/infrastructure/legacy/resourceRefs.ts) 约 435 的 LIKE + parse；[ref/codecs.ts](../../packages/shared/src/ref/codecs.ts) 与 Agent schema | 当前 Agent 引用落库是 ID；保留便携导入名称和 Workflow call 的有意名称选择语义 |
-| 从 SQLite 投影全部 provider | `packages/backend/src/db/providerSchema.ts`（I-b 已删除）、[query.ts](../../packages/backend/src/db/query.ts)、[postgresqlDatabaseClient.ts](../../packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts)、[postgresqlSql.ts](../../packages/backend/src/platform/persistence/postgresqlSql.ts) | 显式合同 + 原生 provider，不让业务类型伪装成 SQLite |
+| 从 SQLite 投影全部 provider | `packages/backend/src/db/providerSchema.ts`（I-b 已删除）、`packages/backend/src/db/query.ts`（II-b O 已删除，见文末路径更正）、[postgresqlDatabaseClient.ts](../../packages/backend/src/platform/persistence/postgresqlDatabaseClient.ts)、[postgresqlSql.ts](../../packages/backend/src/platform/persistence/postgresqlSql.ts) | 显式合同 + 原生 provider，不让业务类型伪装成 SQLite |
 | owner / JSON heuristic | schemaContract 的 `ownerFor`（400）、`codecFor`（503）、`postgresqlType`（约 532） | owner 显式声明；现有 JSON 文本命名推断不完整，不能据其统计宣称全部 JSON 已识别 |
 | 内容形态 | [nodeRunPrompt.ts](../../packages/backend/src/modules/task-execution/application/nodeRunPrompt.ts) 小 prompt inline 阈值；[databaseSkillTrees.ts](../../packages/backend/src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts) UTF-8 / base64；schema `hosted_object_publications`（4353） | inline 是合理策略；统一内容引用，演进已有发布账本，去除正常 DB 的文本编码补丁 |
 | Apply codec 兼容 | [intentApplyArtifactLifecycle.ts](../../packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts)；schema 两个 apply 表（约 5698 / 5780） | 机制归一、场景幂等与事务边界保留 |
@@ -86,3 +86,7 @@ owner 校正的直接读写证据还包括：`code-capability/infrastructure/cap
 本 RFC 是源代码与一个本机快照支持的阶段目标设计，不是生产部署普查。正式迁移前仍须对每个真实实例重新 fingerprint、预检、演练和审批操作计划；特别是非空 PostgreSQL、活动进程、外部内容完整性、托管切换与备份恢复，没有由本次文档得到通过证据。
 
 > 更正（2026-10-23，RFC-395 II-a）：上文 `legacy/workgroup/launch.ts` 已删除（宿主快照与工作组运行配置的生产实现在 `packages/backend/src/modules/task-execution/infrastructure/workgroupRuntimeConfig.ts`）；`infrastructure/nodeRunSupersession.ts` 已删除（SQL 形态在 `packages/backend/src/modules/task-execution/infrastructure/runSelection/oracle/supersessionSql.ts`）。两处原链接改为纯文本路径，以免链接检查指向不存在的文件。
+
+### 2026-10-23 路径更正（RFC-395 II-b O）
+
+`packages/backend/src/db/query.ts` 已删除；Drizzle helpers 直接从 `drizzle-orm` 导入，中立句柄类型位于 `packages/backend/src/platform/persistence/persistenceDb.ts`，任务可见性判据位于 `packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts`。上文旧地址及行号保留为当时记录，不再作为现行源码入口。

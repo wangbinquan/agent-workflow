@@ -9,7 +9,6 @@ import { and, desc, eq } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
 import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
-import { taskVisibilitySubjectOf, visibleTaskIdsFor } from '@/db/query'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationTaskAccessDecision,
@@ -93,9 +92,12 @@ export function createCollaborationTaskAccessPort(db: PersistenceDb): Collaborat
       return { roundExists: true, nodeRunExists: true, taskId: round.taskId, ...decision }
     },
     async visibleTaskIds(actor, taskIds) {
-      // RFC-359 W57：判据 + 分块都走 `db/query.ts` 的唯一一份。此前这一段与
+      // RFC-395 II-b：判据 + 分块都走 task-execution 的唯一一份。此前这一段与
       // `reviewTaskAccess.ts` 里的**逐字相同**，且两份各自把分块大小硬写成 500。
-      return await visibleTaskIdsFor(db, taskVisibilitySubjectOf(actor), taskIds)
+      return await createTaskGateQueries(db).visibleTaskIds(
+        { userId: actor.user.id, canReadAllTasks: actor.permissions.has('tasks:read:all') },
+        taskIds,
+      )
     },
     async questionTaskId(entryId) {
       const { taskQuestions } = tablesOf(db)

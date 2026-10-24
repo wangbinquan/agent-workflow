@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-359 W7 —— `CollaborationRouteOperations` 持久化面的双引擎对拍。
 //
 // 为什么存在：合一前这一对是 `sqliteCollaborationRouteOperations.ts`（116 行纯转发，逐方法
@@ -70,10 +71,12 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 
 // 合一后两个引擎装配的是同一个工厂；`describeEachProvider` 只换客户端。
 function operations(db: PersistenceDb): CollaborationRoutePersistenceOperations {
-  return createCollaborationRouteOperations({
-    db,
-    clarifyDraftEvents: createCollaborationClarifyDraftEventPublisher(),
-  })
+  return createCollaborationRouteOperations(
+    withO2Closure({
+      db,
+      clarifyDraftEvents: createCollaborationClarifyDraftEventPublisher(),
+    }),
+  )
 }
 
 function reviewDefinition(): WorkflowDefinition {

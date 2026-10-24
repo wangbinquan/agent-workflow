@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 import {
   clarifyRoundFixture,
@@ -165,7 +166,10 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     }
     const content = Object.freeze(new Content()),
       prompts = composeNodeRunPromptOperations(content)
-    const detail = await taskNodeRunsProjection({ db, nodeRunPrompts: prompts }, taskId)
+    const detail = await taskNodeRunsProjection(
+      withO2Closure({ db, nodeRunPrompts: prompts }),
+      taskId,
+    )
     expect(detail.runs.map((run) => run.promptText)).toEqual([...bodies.values()])
     const session = await getSessionTree(
       createTaskExecutionReadModels(db).sessions,
@@ -397,7 +401,9 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       retryIndex: 0,
       reviewIteration: 0,
     })
-    const original = createTaskExecutionPersistence(db)
+    const original = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     const prompts: NodeRunPromptOperations = Object.freeze({
       async store(task: string, run: string, prompt: string) {
         expect([task, run]).toEqual([taskId, nodeRunId])

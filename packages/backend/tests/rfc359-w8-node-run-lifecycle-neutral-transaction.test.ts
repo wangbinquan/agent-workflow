@@ -1,7 +1,8 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— `transitionNodeRunStatus` / `setNodeRunStatus` 的「有执行上下文」分支从
 // `withOwnedTaskTx`（`dbTxSync` + inline owner CAS，bun:sqlite 独有的**同步**事务）改走中立事务原语
 // （`withTaskExecutionWrite` + `fenceTaskWrite` + 中立异步 CAS）。同步事务面账本
-// `platform/persistence/sqlite/taskLifecycle.ts` 4 → 2。
+// `modules/task-execution/infrastructure/taskLifecycle.ts` 4 → 2。
 //
 // 为什么这份用例存在（别在重构时删掉它）：
 //
@@ -39,7 +40,7 @@ import {
 import {
   setNodeRunStatus,
   transitionNodeRunStatus,
-} from '@/platform/persistence/sqlite/taskLifecycle'
+} from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { describeEachProvider } from './helpers/eachProvider'
 
 /** 断言拒绝的是**错误码**而不是消息文本：消息在合一中改过措辞，码没变。 */
@@ -111,7 +112,9 @@ async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done')
     retryIndex: 0,
     iteration: 0,
   })
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const module = createProviderTaskExecutionModule({
     daemonGeneration: `gen-${ulid()}`,
     persistence,

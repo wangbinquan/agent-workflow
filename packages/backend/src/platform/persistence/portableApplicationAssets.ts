@@ -19,7 +19,7 @@
 // 词汇**（选哪些行），不是谁的领域概念，而两个消费者一个在模块里、一个在
 // `platform/persistence/sqlite/` 这条 legacy 线上。定义在模块内会让后者记一条
 // 「legacy 指向模块内部」的越界边（`rfc317-module-boundary` 实测会红）——理由与
-// `db/query.ts` 顶端给 `PersistenceDb` 选家的那条完全一样。
+// `platform/persistence/persistenceDb.ts` 的中立句柄边界一致。
 //
 // 合一时取的是 SQLite 侧的错误契约（对拍照出的真分叉）：损坏的 definition 抛
 // `ValidationError('workflow-definition-corrupt')`（422 带 workflowId），而不是裸的

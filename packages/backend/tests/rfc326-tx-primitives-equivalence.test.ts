@@ -356,9 +356,9 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
     import.meta.dir,
     '..',
     'src',
-    'platform',
-    'persistence',
-    'sqlite',
+    'modules',
+    'task-execution',
+    'infrastructure',
     'taskLifecycle.ts',
   )
 

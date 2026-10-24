@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-033-T3: /ws/repo-imports/{batchId} channel.
 // RFC-285 B6②：本频道自此有升级门（发起者 ∨ 资源管理员；缺行同形拒绝）——
@@ -55,7 +56,7 @@ function seedBatch(db: PersistenceDb, ownerUserId: string): string {
   // stub resolver 永不返回：本套件只做频道语义，不跑真实 clone。
   const result = startBatchImport(
     {
-      store: composeSqliteRepositoryWorkspaceStore(db),
+      store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       resolveCachedRepo: () => new Promise(() => {}) as never,
     },
     { urls: ['https://h/seed.git'] },

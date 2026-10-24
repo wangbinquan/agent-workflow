@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-359 W4 —— D14 / D15 把 Agent / Workflow 聚合切到 provider 形状的一份实现后，CI 在 94ce5351b 抓到两条只有
 // 旧 SQLite 路径才有的行为被丢掉了（PG daemon 此前一直缺，也没有 e2e 盯着）。两条都补回一份实现里，这里两引擎各锁一遍：
 //   ① 引用缺失先走 RFC-228 结构化预检（`agent-resources-invalid` + issues），不是逐类存在性围栏的 `skill-not-found`
@@ -60,6 +61,7 @@ function agentInput(name: string, overrides: Partial<CreateAgent> = {}): CreateA
 function agentRepositoryFor(db: PersistenceDb) {
   const catalog = composeResourceCatalogFor({ db })
   const semantics = createAgentPersistenceSemantics({
+    taskReferences: composeSubjectTaskReferencePort,
     db,
     authorization: catalog.authorization,
     resourceInventory: composeDatabaseAgentResourceInventorySource({
@@ -118,7 +120,10 @@ describeEachProvider('RFC-359 W4 —— D14 / D15 回归', (harness) => {
     const catalog = composeResourceCatalogFor({ db: harness.db })
     const repository = createWorkflowRepository({
       db: harness.db,
-      semantics: createWorkflowPersistenceSemantics({ authorization: catalog.authorization }),
+      semantics: createWorkflowPersistenceSemantics({
+        taskReferences: composeSubjectTaskReferencePort,
+        authorization: catalog.authorization,
+      }),
     })
     const { authority: owner } = await seedUser(harness.db)
     const viewer = await seedUser(harness.db)

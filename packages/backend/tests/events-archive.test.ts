@@ -10,7 +10,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
+import { archiveEvents } from './helpers/taskEventArchive'
+import { readArchivedEvents } from '../src/services/eventsArchive'
 import {
   nodeRunEventsProjection,
   nodeRunStdoutProjection,

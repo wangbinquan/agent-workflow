@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-023 PR-B T13 — integration tests for the four /api/clarify endpoints.
 //
 //   GET    /api/clarify                       — list + filter
@@ -116,17 +117,19 @@ async function seedSession(
     iteration: 0,
     shardKey: opts.sourceShardKey ?? null,
   })
-  const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'designer',
-    askingNodeRunId: sourceRunId,
-    askingShardKey: opts.sourceShardKey ?? null,
-    intermediaryNodeId: 'c1',
-    iteration: opts.iterationIndex ?? 0,
-    questions: [QUESTION],
-  })
+  const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: opts.sourceShardKey ?? null,
+      intermediaryNodeId: 'c1',
+      iteration: opts.iterationIndex ?? 0,
+      questions: [QUESTION],
+    }),
+  )
   return { taskId, intermediaryNodeRunId: clarifyNodeRunId, sessionId: session.id }
 }
 

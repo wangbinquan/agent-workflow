@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-363: durable commits must control real Git effects after branch/group edits.
 import { afterEach, expect, test } from 'bun:test'
 import { execFileSync } from 'node:child_process'
@@ -73,7 +74,10 @@ describeEachProvider('RFC-363 frozen materialization', (harness) => {
       }),
       {
         appHome: join(f.root, 'home'),
-        repositoryWorkspace: composeRepositoryWorkspaceStore(harness.db),
+        repositoryWorkspace: composeRepositoryWorkspaceStore(
+          harness.db,
+          composeSourceControlTaskPorts(harness.db),
+        ),
         preResolvedSources: [f.source],
         frozenLayout: null,
         loadFrozenSpaceLayout: async () => {
@@ -116,7 +120,10 @@ describeEachProvider('RFC-363 frozen materialization', (harness) => {
     })
     const dependencies = {
       appHome: join(f.root, 'home'),
-      repositoryWorkspace: composeRepositoryWorkspaceStore(harness.db),
+      repositoryWorkspace: composeRepositoryWorkspaceStore(
+        harness.db,
+        composeSourceControlTaskPorts(harness.db),
+      ),
       preResolvedSources: [f.source, { ...f.source, resolvedCommit: second }],
       frozenLayout: {
         repos: [planned('first'), planned('second')],

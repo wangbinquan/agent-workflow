@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // LOCKS: RFC-057 — stuckTaskDetector embeds `repairHint` in S1/S2/S3 detail.
 // Mirrors design/RFC-057-diagnose-repair-actions/design.md §2.2.
 // Locks in:
@@ -86,7 +87,9 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     })
     const runId = await addRun(db, taskId, 'rev_1', 'interrupted')
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts).toHaveLength(1)
@@ -104,7 +107,9 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     })
     const runId = await addRun(db, taskId, 'clarify_1', 'interrupted')
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts[0]!.detail).toMatchObject({
@@ -122,7 +127,9 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     const runId = await addRun(db, taskId, 'rev_1', 'awaiting_review')
     // No doc_versions → S1 violates.
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts.map((a) => a.rule)).toContain('S1')
@@ -140,7 +147,9 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     })
     const runId = await addRun(db, taskId, 'clarify_1', 'awaiting_human')
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     const s2 = r.openAlerts.find((a) => a.rule === 'S2')
@@ -157,7 +166,9 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
       startedAtAgoMs: 10 * 60 * 1000,
     })
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     const s4 = r.openAlerts.find((a) => a.rule === 'S4')
@@ -174,7 +185,9 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     })
     await addRun(db, taskId, 'out_1', 'done')
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIdFilter: [taskId],
     })
     expect(r.openAlerts[0]!.detail).not.toHaveProperty('repairHint')

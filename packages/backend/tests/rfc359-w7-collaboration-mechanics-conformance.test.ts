@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W7 —— `CollaborationRuntimeMechanics` 的双引擎对拍。
 //
 // 为什么存在：合一前这一对是 `sqliteCollaborationRuntimeMechanics.ts`（81 行纯转发，逐方法打到
@@ -183,7 +184,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const runId = await seedRun(db, taskId, CROSS, { status: 'pending' })
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     const orphanDefinition = JSON.parse(JSON.stringify(definition())) as WorkflowDefinition
     ;(orphanDefinition as unknown as { edges: unknown[] }).edges = []
     expect(
@@ -204,7 +208,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const runId = await seedRun(db, taskId, CROSS, { status: 'pending' })
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     expect(
       await mechanics.inspectCrossClarify({
         taskId,
@@ -231,7 +238,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       directive: 'stop',
       updatedAt: 1,
     })
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     expect(
       await mechanics.inspectCrossClarify({
         taskId,
@@ -260,7 +270,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       updatedAt: 1,
     })
     expect(
-      await createCollaborationRuntimeMechanics(db).inspectCrossClarify({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).inspectCrossClarify({
         taskId,
         crossClarifyNodeId: CROSS,
         nodeRunId: runId,
@@ -276,7 +289,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
   test('getNodeClarifyDirective —— 节点级与 per-asker 回退（RFC-207）', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     expect(await mechanics.getNodeClarifyDirective({ taskId, nodeId: ASKER })).toBeUndefined()
     const { taskNodeClarifyDirectives } = tablesOf(db)
     await db.insert(taskNodeClarifyDirectives).values([
@@ -299,9 +315,12 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
   test('isTaskClarifySuppressed —— 无工作组配置不抑制', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    expect(await createCollaborationRuntimeMechanics(db).isTaskClarifySuppressed({ taskId })).toBe(
-      false,
-    )
+    expect(
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).isTaskClarifySuppressed({ taskId }),
+    ).toBe(false)
   })
 
   test('isTaskClarifySuppressed —— 全 agent 工作组恒抑制；有人类成员则看预算', async () => {
@@ -309,7 +328,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const agentsOnly = await seedTask(db, {
       workgroupConfigJson: JSON.stringify({ members: [{ memberType: 'agent' }] }),
     })
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     expect(await mechanics.isTaskClarifySuppressed({ taskId: agentsOnly })).toBe(true)
 
     await patchTaskFixture(
@@ -341,7 +363,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         clarifyBudget: 1,
       }),
     })
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     const askingRun = await seedRun(db, taskId, WG_LEADER)
     const parkRun = await seedRun(db, taskId, WG_CLARIFY, { status: 'awaiting_human' })
     await clarifyRoundFixture(db, {
@@ -387,7 +412,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
         clarifyBudget: 5,
       }),
     })
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     expect(
       await mechanics.isTaskClarifySuppressed({ taskId, nodeId: WG_LEADER, shardKey: null }),
     ).toBe(false)
@@ -464,9 +492,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       answeredAt: Date.now(),
     })
 
-    const result = await createCollaborationRuntimeMechanics(
-      db,
-    ).dismissOpenClarifyParksForAutonomous({ taskId })
+    const result = await createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    }).dismissOpenClarifyParksForAutonomous({ taskId })
     expect(result).toEqual({
       dismissedSessions: 1,
       canceledParkRuns: [{ nodeRunId: parkRun, nodeId: WG_CLARIFY }],
@@ -525,9 +554,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       status: 'awaiting_human',
       createdAt: Date.now(),
     })
-    const result = await createCollaborationRuntimeMechanics(
-      db,
-    ).dismissOpenClarifyParksForAutonomous({ taskId })
+    const result = await createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    }).dismissOpenClarifyParksForAutonomous({ taskId })
     expect(result.requeuedAssignments).toEqual([{ id: assignmentId, to: 'open' }])
     const assignment = await db
       .select({
@@ -561,7 +591,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       status: 'awaiting_human',
       createdAt: Date.now(),
     })
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     const { databaseSessionFor } = await import('@/platform/persistence/databaseTransaction')
     await expect(
       databaseSessionFor(db).transaction(async () => {
@@ -583,7 +616,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const askingRunId = await seedRun(db, taskId, ASKER, { status: 'running' })
-    const receipt = await createCollaborationRuntimeMechanics(db).openAgentClarify({
+    const receipt = await createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    }).openAgentClarify({
       kind: 'self',
       taskId,
       askingNodeId: ASKER,
@@ -619,7 +655,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const askingRunId = await seedRun(db, taskId, ASKER, { status: 'running' })
-    const receipt = await createCollaborationRuntimeMechanics(db).openAgentClarify({
+    const receipt = await createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    }).openAgentClarify({
       kind: 'cross',
       taskId,
       askingNodeId: ASKER,
@@ -648,7 +687,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     expect(
-      await createCollaborationRuntimeMechanics(db).resolveBorrowForNode({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).resolveBorrowForNode({
         taskId,
         nodeId: DESIGNER,
         iteration: 0,
@@ -709,7 +751,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       updatedAt: now,
     })
     expect(
-      await createCollaborationRuntimeMechanics(db).resolveBorrowForNode({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).resolveBorrowForNode({
         taskId,
         nodeId: DESIGNER,
         iteration: 0,
@@ -718,7 +763,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     ).toBeNull()
     // 提问者本人这一侧同样不报借壳。
     expect(
-      await createCollaborationRuntimeMechanics(db).resolveBorrowForNode({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).resolveBorrowForNode({
         taskId,
         nodeId: ASKER,
         iteration: 0,
@@ -736,7 +784,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const taskId = await seedTask(db)
     const dispatchedRunId = await seedRun(db, taskId, ASKER, { status: 'running' })
     expect(
-      await createCollaborationRuntimeMechanics(db).buildClarifyQueueContext({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).buildClarifyQueueContext({
         definition: definition(),
         taskId,
         consumerNodeId: ASKER,
@@ -796,7 +847,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       createdAt: now,
       updatedAt: now,
     })
-    const context = await createCollaborationRuntimeMechanics(db).buildClarifyQueueContext({
+    const context = await createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    }).buildClarifyQueueContext({
       definition: definition(),
       taskId,
       consumerNodeId: ASKER,
@@ -814,7 +868,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
   test('dispatchReviewNode —— 任务不存在 / 已取消 / 非可派发状态各自的收场', async () => {
     const db = harness.db
     const reviewNode = definition().nodes.find((node) => node.id === REVIEW)!
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     const base = {
       appHome: APP_HOME,
       definition: definition(),
@@ -844,7 +901,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     const reviewNode = definition().nodes.find((node) => node.id === REVIEW)!
-    const mechanics = createCollaborationRuntimeMechanics(db)
+    const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    })
     const request = {
       taskId,
       appHome: APP_HOME,
@@ -902,7 +962,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     const db = harness.db
     const taskId = await seedTask(db)
     expect(
-      await createCollaborationRuntimeMechanics(db).buildReviewPromptContext({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).buildReviewPromptContext({
         appHome: APP_HOME,
         upstreamNodeId: WRITER,
         taskId,
@@ -937,7 +1000,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       decidedAt: 2_000,
       decidedBy: 'u1',
     })
-    const context = await createCollaborationRuntimeMechanics(db).buildReviewPromptContext({
+    const context = await createCollaborationRuntimeMechanics(db, {
+      taskLock: o2Ports(db).taskLock,
+      ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+    }).buildReviewPromptContext({
       appHome: APP_HOME,
       upstreamNodeId: WRITER,
       taskId,
@@ -951,7 +1017,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
       .set({ decision: 'rejected', decisionReason: 'not acceptable' })
       .where(eq(docVersions.taskId, taskId))
     expect(
-      await createCollaborationRuntimeMechanics(db).buildReviewPromptContext({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).buildReviewPromptContext({
         appHome: APP_HOME,
         upstreamNodeId: WRITER,
         taskId,
@@ -962,7 +1031,10 @@ describeEachProvider('RFC-359 W7 —— 协作运行期机制（CollaborationRun
     // approved / superseded / pending 都不产生上下文
     await db.update(docVersions).set({ decision: 'approved' }).where(eq(docVersions.taskId, taskId))
     expect(
-      await createCollaborationRuntimeMechanics(db).buildReviewPromptContext({
+      await createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }).buildReviewPromptContext({
         appHome: APP_HOME,
         upstreamNodeId: WRITER,
         taskId,

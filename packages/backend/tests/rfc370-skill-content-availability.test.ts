@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-370 H6: classic catalogs must use the selected immutable-version facts
 // and content adapters. The real workflow loader must not probe another root.
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -81,6 +82,7 @@ describeEachProvider('RFC-370 classic selected skill content', (harness) => {
 
   function compose(versionPresence?: SkillVersionPresenceQueries) {
     return composeClassicCatalogs({
+      taskReferences: composeSubjectTaskReferencePort,
       db: harness.db,
       appHome: fallbackHome,
       resourceCatalog: composeResourceCatalogFor({ db: harness.db }),

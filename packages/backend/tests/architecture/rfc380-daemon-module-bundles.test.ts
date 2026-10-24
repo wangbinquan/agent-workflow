@@ -91,7 +91,7 @@ const FACTORIES = new Set([
   'createAuthRuntimeFor',
   'createTokenCallAudit',
   'createIdentityAccessRuntime',
-  'createHealthDatabaseReadModel',
+  'createTaskStatusCounts',
   'composeRuntimeProfileParticipants',
   'composeRuntimeRegistryOperations',
   'composeRealtimeRuntimeFor',

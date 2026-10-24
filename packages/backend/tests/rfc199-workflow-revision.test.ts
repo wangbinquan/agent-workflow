@@ -1,3 +1,4 @@
+import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 // RFC-199 B1 regression locks.
 // Workflow saves and deletes are full-snapshot, actor-aware CAS operations:
 // two edits from one base cannot share a successor revision, retries reconcile
@@ -35,7 +36,6 @@ import { buildActor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createWorkflow,
-  deleteWorkflow,
   getWorkflow,
   migrateDefinitionToLatest,
   updateWorkflow,

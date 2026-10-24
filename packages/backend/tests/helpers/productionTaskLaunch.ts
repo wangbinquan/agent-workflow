@@ -1,3 +1,6 @@
+import { o2Ports } from './o2Closure'
+import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：既有启动夹具改走生产根启动内核 / workflow 参与者；这里只装配依赖与工作区租约。
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
@@ -121,7 +124,11 @@ function transferredWorkspace(
               {
                 appHome,
                 repositoryWorkspace:
-                  options.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(options.db),
+                  options.repositoryWorkspace ??
+                  composeSqliteRepositoryWorkspaceStore(
+                    options.db,
+                    composeSourceControlTaskPorts(options.db),
+                  ),
                 loadFrozenSpaceLayout: (id) => loadFrozenSpaceLayout(options.db, id),
                 internalSource: options.internalSource,
                 gitCommitIdentity: request.gitCommitIdentity,
@@ -239,7 +246,9 @@ export async function launchTestTask(
       composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
     ),
   }
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   if (options.callLaunch !== undefined) {
     const call = options.callLaunch
     if (options.materializedSpace === undefined) throw new Error('child fixture workspace missing')
@@ -281,12 +290,14 @@ export async function launchTestTask(
   }
   const repositoryPreparation =
     options.repositoryPreparation ??
-    composeRepositoryPreparation({
-      db,
-      appHome,
-      secretBox: options.secretBox,
-      cloneTimeoutMs: options.cloneTimeoutMs,
-    })
+    composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db,
+        appHome,
+        secretBox: options.secretBox,
+        cloneTimeoutMs: options.cloneTimeoutMs,
+      }),
+    )
   const workspace =
     options.internalSource !== undefined ||
     options.materializedSpace !== undefined ||

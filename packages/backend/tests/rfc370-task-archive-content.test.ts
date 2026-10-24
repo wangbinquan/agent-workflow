@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370 A2: content ACKs must precede archive finalization; recovery uses the same claim.
 import {
   nodeRunFixture,
@@ -194,10 +195,9 @@ async function taskExists(db: PersistenceDb) {
 }
 
 function runSweep(db: PersistenceDb, content: TaskArchiveContentPort) {
-  return createDrizzleTaskArchiveMaintenanceCommand(db, { content }).runSweep(
-    { enabled: true, retentionDays: 1, maxTreesPerSweep: 10 },
-    OPTIONS,
-  )
+  return createDrizzleTaskArchiveMaintenanceCommand(db, o2Ports(db).collaborationReads.archive, {
+    content,
+  }).runSweep({ enabled: true, retentionDays: 1, maxTreesPerSweep: 10 }, OPTIONS)
 }
 
 describeEachProvider('RFC-370 selected archive content', (harness) => {
@@ -296,7 +296,11 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
         }
       },
     })
-    const command = createDrizzleTaskArchiveMaintenanceCommand(db, { content: store.content })
+    const command = createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+      { content: store.content },
+    )
     await command.runSweep({ enabled: true, retentionDays: 1, maxTreesPerSweep: 10 }, OPTIONS)
     expect(await taskExists(db)).toBe(false)
     expect((await claims(db))[0]!.state).toBe('db-finalized')
@@ -317,7 +321,11 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
         }
       },
     })
-    const command = createDrizzleTaskArchiveMaintenanceCommand(db, { content: store.content })
+    const command = createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+      { content: store.content },
+    )
     const first = await command.runSweep(
       { enabled: true, retentionDays: 1, maxTreesPerSweep: 10 },
       OPTIONS,
@@ -358,7 +366,11 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
         }
       },
     })
-    const command = createDrizzleTaskArchiveMaintenanceCommand(db, { content: store.content })
+    const command = createDrizzleTaskArchiveMaintenanceCommand(
+      db,
+      o2Ports(db).collaborationReads.archive,
+      { content: store.content },
+    )
     expect(
       await command.runSweep({ enabled: true, retentionDays: 1, maxTreesPerSweep: 10 }, OPTIONS),
     ).toEqual({ archived: [], skipped: 1 })
@@ -434,9 +446,13 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
         },
       })
       store.makeDirectory(`${TEMPORARY}/db`)
-      const pending = createDrizzleTaskArchiveMaintenanceCommand(db, {
-        content: store.content,
-      }).recover(OPTIONS)
+      const pending = createDrizzleTaskArchiveMaintenanceCommand(
+        db,
+        o2Ports(db).collaborationReads.archive,
+        {
+          content: store.content,
+        },
+      ).recover(OPTIONS)
       try {
         await Promise.race([
           entered.promise,
@@ -468,10 +484,14 @@ describeEachProvider('RFC-370 bound archive command roots', (harness) => {
     await seedTask(harness.db)
     const store = memoryContent()
     const locations = { ...OPTIONS }
-    const command = createTaskArchiveMaintenanceCommand(harness.db, {
-      content: store.content,
-      locations,
-    })
+    const command = createTaskArchiveMaintenanceCommand(
+      harness.db,
+      o2Ports(harness.db).collaborationReads.archive,
+      {
+        content: store.content,
+        locations,
+      },
+    )
     locations.archiveDir = 'caller:changed-after-composition'
     store.putFile(`${OPTIONS.runsDir}/${ROOT}/prompt.md`, 'bound prompt')
     const caller = {
@@ -510,10 +530,14 @@ describeEachProvider('RFC-370 bound archive command roots', (harness) => {
   test('bound manual command keeps actor, explicit retention and audit timestamp', async () => {
     await seedTask(harness.db)
     const store = memoryContent()
-    const command = createTaskArchiveMaintenanceCommand(harness.db, {
-      content: store.content,
-      locations: OPTIONS,
-    })
+    const command = createTaskArchiveMaintenanceCommand(
+      harness.db,
+      o2Ports(harness.db).collaborationReads.archive,
+      {
+        content: store.content,
+        locations: OPTIONS,
+      },
+    )
     const result = await command.runManual(
       { retentionDays: 1, maxTrees: 1, actorUserId: 'archive-user', now: NOW },
       { archiveDir: 'other:archive', runsDir: 'other:runs', logsDir: 'other:logs', now: 0 },
@@ -541,10 +565,14 @@ describeEachProvider('RFC-370 bound archive command roots', (harness) => {
       },
     })
     store.makeDirectory(`${TEMPORARY}/db`)
-    const command = createTaskArchiveMaintenanceCommand(harness.db, {
-      content: store.content,
-      locations: OPTIONS,
-    })
+    const command = createTaskArchiveMaintenanceCommand(
+      harness.db,
+      o2Ports(harness.db).collaborationReads.archive,
+      {
+        content: store.content,
+        locations: OPTIONS,
+      },
+    )
     const pending = command.recover({
       archiveDir: 'other:archive',
       runsDir: 'other:runs',
@@ -575,10 +603,14 @@ describeEachProvider('RFC-370 bound archive command roots', (harness) => {
         if (operation === 'exists') throw failure
       },
     })
-    const command = createTaskArchiveMaintenanceCommand(harness.db, {
-      content: store.content,
-      locations: OPTIONS,
-    })
+    const command = createTaskArchiveMaintenanceCommand(
+      harness.db,
+      o2Ports(harness.db).collaborationReads.archive,
+      {
+        content: store.content,
+        locations: OPTIONS,
+      },
+    )
     await expect(
       command.recover({
         archiveDir: 'other:archive',

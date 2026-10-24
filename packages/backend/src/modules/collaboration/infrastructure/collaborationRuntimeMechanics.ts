@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
 import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
 import type { PortArtifactReader } from '@/modules/task-execution/public/queries'
 // RFC-359 W7 —— collaboration 的运行期机制（`CollaborationRuntimeMechanics`）：
@@ -28,15 +29,19 @@ import {
 export function createCollaborationRuntimeMechanics(
   db: PersistenceDb,
   dependencies: Readonly<{
+    taskLock: HumanGateTaskLockPort
+    upstreamAgents: ReviewUpstreamAgentPort
     portArtifactReaderFor?: (appHome: string) => PortArtifactReader
     reviewArtifacts?: ReviewArtifactSelection
-  }> = {},
+  }>,
 ): CollaborationRuntimeMechanics {
   return Object.freeze({
     async dispatchReviewNode(input) {
       const { dispatchReviewNode } = await import('./review')
       return dispatchReviewNode({
         db,
+        upstreamAgents: dependencies.upstreamAgents,
+        taskLock: dependencies.taskLock,
         ...input,
         reviewArtifacts: dependencies.reviewArtifacts,
         ...(dependencies.portArtifactReaderFor === undefined
@@ -52,6 +57,7 @@ export function createCollaborationRuntimeMechanics(
       const { createClarifyRound } = await import('./clarify/service')
       const common = {
         db,
+        taskLock: dependencies.taskLock,
         taskId: input.taskId,
         askingNodeId: input.askingNodeId,
         askingNodeRunId: input.askingNodeRunId,
@@ -98,6 +104,7 @@ export function createCollaborationRuntimeMechanics(
         input.upstreamNodeId,
         input.taskId,
         input.iteration,
+        dependencies.upstreamAgents,
       )
     },
     async getNodeClarifyDirective(input) {

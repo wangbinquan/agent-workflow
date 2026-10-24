@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W20: Main 34223843004 returned no PG row for the existing ACME
 // repository search. Both providers must preserve the original ASCII search,
 // literal wildcard escaping, NULL fallback, ordering and page cursor behavior.
@@ -98,7 +99,10 @@ describeEachProvider('RFC-359 W20 repository search conformance', (harness) => {
   test('all three text fields preserve mixed ASCII case, literal patterns, NULLs and full pages', async () => {
     const { cachedRepos } = tablesOf(harness.db)
     await harness.db.insert(cachedRepos).values(repositories)
-    const store = new DrizzleRepositoryWorkspaceStore(harness.db)
+    const store = new DrizzleRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     const matching = ['search-z', 'search-y', 'search-x', 'search-w']
     const cases: ReadonlyArray<readonly [string, readonly string[]]> = [
       ['ACME', matching],
@@ -173,11 +177,9 @@ describeEachProvider('RFC-359 W20 repository search conformance', (harness) => {
         async run() {
           throw new Error('repository-search-unexpected-write')
         },
-        async cachedRepoFacets() {
-          throw new Error('repository-search-unexpected-facets')
-        },
       },
       engineOf(probe.db),
+      composeSourceControlTaskPorts(harness.db),
     )
     try {
       let observed: unknown

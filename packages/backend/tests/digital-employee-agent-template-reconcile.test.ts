@@ -20,7 +20,7 @@ import { expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
-import { getAgentById, listAgents } from '@/services/agent'
+import { getAgentById, listAgents } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
   ensureDigitalEmployeeAgentTemplates,

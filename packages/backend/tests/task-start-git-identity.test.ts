@@ -16,7 +16,7 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { createWorkflow } from '../src/services/workflow'
 import { UserAccessError } from '@/modules/identity-access/public/types'

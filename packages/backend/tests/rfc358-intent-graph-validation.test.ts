@@ -31,7 +31,7 @@ import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { createIntentSession } from '@/modules/intent/application/session'
 import { withAgentSidecarsFrom } from '@/modules/resource-catalog/domain/agentSidecarBackfill'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   buildIntentGraphCandidates,
   draftGraphResolution,

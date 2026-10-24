@@ -31,7 +31,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { committedEventGroupId } from '@/platform/events/committed/types'
-import { ConcurrentTaskTransition } from '@/platform/persistence/sqlite/taskLifecycle'
+import { ConcurrentTaskTransition } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
 import { derivedSupersededIds } from './helpers/nodeRunSupersession'

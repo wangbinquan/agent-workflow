@@ -60,9 +60,10 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  * The exact per-file snapshot catches a new write authority in either provider.
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
-  'modules/source-control/infrastructure/repositoryWorkspaceStore.ts': 1,
+  // RFC-395 O1: the source-sealing Task write moved to its owner; still one write.
+  'modules/task-execution/infrastructure/taskRepositoryUsage.ts': 1,
   // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
-  'modules/system-operations/infrastructure/resourceLimitPersistence.ts': 1,
+  'modules/task-execution/infrastructure/taskResourceLimitFacts.ts': 1,
   'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts': 1,
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 4 / 5 刀）：`taskRouteOperations.ts`
   // **整行销账**（2 → 1 → 0）。第 4 刀删掉 PG 内联的 `replaceTaskMembers`（那处
@@ -100,7 +101,7 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // 与「别人取消了我的子任务」。只写 `error_message`，且写入门是 `status='canceled'`——
   // 不翻状态，抢不到就是空操作，与上面 taskIdleTimeoutPersistence 那条同形。
   'modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts': 1,
-  'platform/persistence/sqlite/taskLifecycle.ts': 1,
+  'modules/task-execution/infrastructure/taskLifecycle.ts': 1,
   'modules/task-execution/infrastructure/taskPreparationParticipant.ts': 1,
   'modules/task-execution/infrastructure/taskDeletionParticipant.ts': 1,
 }
@@ -196,7 +197,7 @@ describe('S-14 ratchet: direct tasks.status writes confined to provider lifecycl
     expect(
       counts.status['modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts'],
     ).toBe(3)
-    expect(counts.status['platform/persistence/sqlite/taskLifecycle.ts']).toBeUndefined()
+    expect(counts.status['modules/task-execution/infrastructure/taskLifecycle.ts']).toBeUndefined()
     expect(
       counts.status['modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts'],
     ).toBeUndefined()

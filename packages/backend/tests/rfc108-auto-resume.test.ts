@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T18 (AR-03) — boot auto-resume (default OFF).
 //
 // 为什么这条测试存在：boot auto-resume 一旦开启，必须只重跑「daemon-restart 致
@@ -71,7 +72,9 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
     await seedTask(db, 'interrupted', 'node-timeout') // other errorSummary → skipped
     await seedTask(db, 'failed', 'daemon-restart') // other status → skipped
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const resumedCalls: string[] = []
     const res = await autoResumeInterruptedTasks({
       operations,
@@ -101,7 +104,9 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
       workgroupId: 'wg-dyn',
       mode: 'dynamic_workflow',
     })
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const res = await autoResumeInterruptedTasks({
       operations,
       breaker: BREAKER,
@@ -117,7 +122,9 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
   test('skips a quarantined task', async () => {
     const db = harness.db
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     // Trip the breaker for `a` (4 attempts > maxPerWindow 3 → suspended).
     for (let i = 0; i < 4; i++) {
       await recordAutoRecoveryAttempt(operations, a, BREAKER, 1000)
@@ -143,7 +150,9 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     const db = harness.db
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const res = await autoResumeInterruptedTasks({
       operations,
       breaker: BREAKER,

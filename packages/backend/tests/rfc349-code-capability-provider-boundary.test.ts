@@ -89,11 +89,16 @@ describe('RFC-349 code-capability provider boundary', () => {
       ['templateUpstreamPersistence.ts'],
       ['capabilityTemplatePersistence.ts'],
       ['capabilityParamRead.ts'],
-      ['codeWorkspaceRead.ts'],
       ['demoSeedPersistence.ts'],
     ]
     const missing = families.flatMap((family) => family.filter((file) => !infrastructure.has(file)))
     expect(missing).toEqual([])
+    expect(infrastructure.has('codeWorkspaceRead.ts')).toBe(false)
+    expect(
+      files(join(MODULE, '..', 'task-execution', 'infrastructure')).some((file) =>
+        file.endsWith('/taskCodeWorkspaceQueries.ts'),
+      ),
+    ).toBe(true)
   })
 
   test('PostgreSQL adapters do not cast to SQLite, shadow data, or deasync', () => {

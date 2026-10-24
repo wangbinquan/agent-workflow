@@ -23,6 +23,7 @@ const HTTP_OWNERS = [
   'composeIdentityUserOperations',
   'composeCodeHistoryQueries',
   'composeLegacyCodeReadProviders',
+  'createTaskCodeWorkspaceQueries',
   'composeClarifyFollowupGenerator',
   'composeTaskRuntimeInventoryContent',
   'composeRuntimeProbeConfigFence',

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-287 G7 / AC-10 第二轮 —— 准备窗口把四类既有代码的输入分布改掉了。
 //
 // 这批的共同点：**代码一行没改，变的是喂给它的值**。G7 把仓库准备移到任务行落库
@@ -127,7 +128,11 @@ describeEachProvider('G7 —— 身份登记不得堵在克隆锁后面', (harne
       // 占锁：故意不 await，让它在后台把克隆锁握满 3 秒。
       let cloneSettled = false
       const blocking = resolveCachedRepo(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, cloneTimeoutMs: 3_000 },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+          cloneTimeoutMs: 3_000,
+        },
         { url },
       )
         .catch(() => null)
@@ -145,7 +150,10 @@ describeEachProvider('G7 —— 身份登记不得堵在克隆锁后面', (harne
 
       const t0 = Date.now()
       const id = await ensureCachedRepoIdentity(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+        },
         { url },
       )
       const elapsed = Date.now() - t0

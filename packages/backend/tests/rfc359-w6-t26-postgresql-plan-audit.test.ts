@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W6-T26 —— PostgreSQL 执行计划审计：一本**只降不升**的缺口账。
 //
 // # 为什么需要它
@@ -78,7 +79,7 @@ import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
-import { archiveEvents } from '@/services/eventsArchive'
+import { archiveEvents } from './helpers/taskEventArchive'
 import { listCachedReposPage } from '@/services/gitRepoCache'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { runProductionOverview } from './helpers/productionOverview'
@@ -329,7 +330,13 @@ const AUDITED: readonly AuditedPath[] = [
   {
     name: '/api/cached-repos — keyset 首页',
     run: (db) =>
-      listCachedReposPage(composeSqliteRepositoryWorkspaceStore(db as never), { limit: 20 }),
+      listCachedReposPage(
+        composeSqliteRepositoryWorkspaceStore(
+          db as never,
+          composeSourceControlTaskPorts(db as never),
+        ),
+        { limit: 20 },
+      ),
   },
   {
     name: '/api/code/missions — keyset 首页',
@@ -930,6 +937,20 @@ if (!postgresqlSelected) {
             continue
           }
           explained += 1
+          if (/WITH candidates\(id\) AS \(VALUES/i.test(statement.sql)) {
+            // RFC-395 II-b O1: both usage and count reads stay candidate-bounded index probes.
+            expect(statement.params.length).toBeLessThanOrEqual(500)
+            expect(statement.sql).not.toContain('cached_repos')
+            expect(plan).toMatch(
+              /(?:Index Only Scan|Index Scan|Bitmap Index Scan).*idx_tasks_cached_repo/,
+            )
+            expect(
+              [...(relationScans(plan).get('tasks') ?? [])].some((kind) =>
+                kind.endsWith('Seq Scan'),
+              ),
+            ).toBe(false)
+          }
+
           for (const defect of observePlanDefects(plan, AUDIT_ROWS)) {
             if (defect.defect === 'jit-compilation') {
               // 只报告不断言，见 PlanGap.defect 的注释。

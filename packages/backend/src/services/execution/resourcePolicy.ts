@@ -58,7 +58,7 @@ export { PLUGIN_DISABLED_ERROR_CODE } from '@/modules/resource-catalog/public/ty
  *  product behavior change; four upstream launch gates consume them). */
 export const PLUGIN_DISABLED_SITES: readonly string[] = [
   'services/workflow.validator.ts',
-  'services/agent.ts',
+  'modules/resource-catalog/infrastructure/legacy/agent.ts',
   'modules/resource-catalog/application/agents/agentResourceIntegrity.ts',
   'services/execution/resolveInjection.ts',
 ]

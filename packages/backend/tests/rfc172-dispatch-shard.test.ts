@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-172 route 2 — the (home, shardKey) dispatch/mint re-keying that lets a workgroup MEMBER's
 // human clarify answer round-trip to the correct member assignment (all members share the one
 // __wg_member__ host node, separated only by node_runs.shard_key). design §6 (S0–S6).
@@ -429,6 +430,7 @@ describeEachProvider(
           taskId,
           { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
           actor,
+          o2Ports(db).taskLock,
         )
       } catch (e) {
         threw = e
@@ -450,6 +452,7 @@ describeEachProvider(
         taskId,
         { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
         actor,
+        o2Ports(db).taskLock,
       )
       const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
@@ -469,6 +472,7 @@ describeEachProvider(
         taskId,
         { title: 't', body: 'b', targetNodeId: '__wg_leader__' },
         actor,
+        o2Ports(db).taskLock,
       )
       // …then MOVED onto the shared member node → the R2-T5 reassign guard rejects.
       let threw: unknown = null

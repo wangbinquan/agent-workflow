@@ -14,7 +14,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CapabilityTemplateRecord } from '@/modules/code-capability/application/ports/capabilityTemplatePersistence'
 import { createCapabilityParamRead } from '@/modules/code-capability/infrastructure/capabilityParamRead'
 import { createCapabilityTemplatePersistence } from '@/modules/code-capability/infrastructure/capabilityTemplatePersistence'
-import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { createCodeCapabilityDemoSeedPersistence } from '@/modules/code-capability/infrastructure/demoSeedPersistence'
 import { createRepoEndpointRead } from '@/modules/code-capability/infrastructure/repoEndpointRead'
 import { createRoundAttemptsRead } from '@/modules/code-capability/infrastructure/roundAttemptsRead'
@@ -243,7 +243,7 @@ describeEachProvider(
 
     test('代码工作区读取 / 轮次尝试投影', async () => {
       const db = harness.db
-      const read = createCodeWorkspaceRead(db)
+      const read = createTaskCodeWorkspaceQueries(db)
       expect(await read.findTask('missing')).toBeNull()
 
       await seedTask(db, 'task-b5a')

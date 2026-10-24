@@ -31,7 +31,7 @@ import type { TaskNodeChangeV1 } from '@/modules/task-execution/domain/taskLifec
 import { writeTaskRuntimeLifecycleInTx } from '@/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
-import { setTaskStatus } from '@/platform/persistence/sqlite/taskLifecycle'
+import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
 import { MIGRATIONS } from './migration-freeze'

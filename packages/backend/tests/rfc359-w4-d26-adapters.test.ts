@@ -1,3 +1,4 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-359 W4-D26 —— 手工提问开启写面合一：此前 `sqliteManualQuestionOpenWriter.ts`（165 行，走
 // `SqliteHumanGateOperationStore` 记账）与 `postgresqlManualQuestionOpenWriter.ts`（269 行，把
 // begin / markPrepared 两步**内联重写**成裸 INSERT + UPDATE）各一份。现在只剩一份中立实现。
@@ -47,7 +48,10 @@ async function seedTask(
 }
 
 function writerFor(db: PersistenceDb): DatabaseManualQuestionOpenWriter {
-  return new DatabaseManualQuestionOpenWriter(db, new DatabaseHumanGateOperationJournal())
+  return new DatabaseManualQuestionOpenWriter(
+    db,
+    new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort),
+  )
 }
 
 describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness) => {

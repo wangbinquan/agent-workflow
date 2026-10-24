@@ -1,6 +1,6 @@
 // RFC-359 —— human-gate 的任务生命周期跃迁：一份实现，两个引擎。
 //
-// 蓝本是 `platform/persistence/sqlite/taskLifecycle.ts` 的 `transitionHumanGateTaskTx`（生产跑了
+// 蓝本是 `modules/task-execution/infrastructure/taskLifecycle.ts` 的 `transitionHumanGateTaskTx`（生产跑了
 // 最久的那份），语义与错误类逐条保留：任务不存在 → NotFoundError('task-not-found')；修订号不符 /
 // CAS 失败 → ConcurrentTaskTransition；状态不在合法源集合 → ConflictError('illegal-task-transition')。
 // 此前 PostgreSQL 侧的重推（`transitionPostgresqlHumanGateTaskTx`）把这三类都折成了
@@ -22,7 +22,7 @@ import { and, eq, sql } from 'drizzle-orm'
 
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ConcurrentTaskTransition } from '@/platform/persistence/sqlite/taskLifecycle'
+import { ConcurrentTaskTransition } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import {
@@ -32,7 +32,7 @@ import {
 
 /**
  * RFC-359：这个联合此前有**两份逐字相同的定义**——`humanGateTaskLifecycleTransaction.ts`（连同一个
- * 全仓零实现、零消费者的 `HumanGateTaskLifecycle` 接口）与 `platform/persistence/sqlite/taskLifecycle.ts`。
+ * 全仓零实现、零消费者的 `HumanGateTaskLifecycle` 接口）与 `modules/task-execution/infrastructure/taskLifecycle.ts`。
  * 前者随同步人工门链退役；这里是唯一一份，legacy 生命周期层从本文件取。
  */
 export type HumanGateTaskTransition =

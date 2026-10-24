@@ -39,7 +39,7 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {

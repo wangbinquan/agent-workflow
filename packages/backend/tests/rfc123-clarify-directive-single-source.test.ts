@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-123 — 反问 directive 双向单一事实源（RFC-122 修订）.
 //
 // 用户报（2026-06-29）：「我已经在反问页面选择要求停止反问了，为什么任务节点上的
@@ -166,17 +167,19 @@ async function seedSelfStopAnswered(
     retryIndex: 0,
     iteration: 0,
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'designer',
-    askingNodeRunId: srcId,
-    askingShardKey: null,
-    intermediaryNodeId: 'clarify1',
-    iteration: opts.iterationIndex ?? 0,
-    questions: [makeQ()],
-  })
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: srcId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: opts.iterationIndex ?? 0,
+      questions: [makeQ()],
+    }),
+  )
   await autoDispatchClarifyRound({
     db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -211,17 +214,19 @@ async function seedCrossStopAnswered(
     retryIndex: 0,
     iteration: 0,
   })
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'cross1',
-    askingNodeId: 'qA',
-    askingNodeRunId: 'nr_qA',
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions: [makeQ()],
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'qA',
+      askingNodeRunId: 'nr_qA',
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions: [makeQ()],
+    }),
+  )
   await autoDispatchClarifyRound({
     db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

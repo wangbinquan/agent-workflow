@@ -1,9 +1,9 @@
-// Legacy SQLite lifecycle compatibility operations.
+// Legacy lifecycle compatibility operations.
 //
-// This entrypoint is deliberately narrower than participants.ts: the platform
-// lifecycle adapter needs these exact mutation atoms, but must not load the
-// human-gate and recovery composition graph just to perform a node CAS. New
-// business consumers receive provider-selected TaskExecution ports instead.
+// RFC-395 II-b O1: the writer now belongs to task-execution. This entrypoint
+// keeps services/lifecycle callers on the same mutation atoms without loading
+// the human-gate and recovery composition graph. New business consumers receive
+// provider-selected TaskExecution ports.
 
 import { currentTaskExecutionContext as currentTaskExecutionContextInternal } from '../application/taskExecutionContext'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
@@ -22,7 +22,7 @@ export function currentTaskExecutionContext(
   return currentTaskExecutionContextInternal(expectedTaskId)
 }
 // RFC-359：`taskExecutionModule` 从这条窄合同上退役。它此前唯一的消费者是
-// `platform/persistence/sqlite/taskLifecycle.ts` 的 `ownership.withOwnedTaskTx`——写事务搬到中立
+// `modules/task-execution/infrastructure/taskLifecycle.ts` 的 `ownership.withOwnedTaskTx`——写事务搬到中立
 // 的显式边界之后那处消失了。仍需要进程级单例的调用方走 `public/participants` 那一条（它本来就
 // 在导出），本文件是「SQLite 生命周期桥接层要的那几个精确原子」，不该顺带背一个组合根单例。
 export { fenceTaskWrite, withTaskExecutionWrite } from '../composition/ownedTaskMutation'
@@ -41,3 +41,30 @@ export {
 
 // RFC-395: compose config reads into the caller's existing provider statement.
 export { taskWorkgroupConfigSelection } from '../infrastructure/taskWorkgroupConfig'
+
+// RFC-395 II-b O1: legacy callers enter the owner through this surface.
+export {
+  ConcurrentNodeRunTransition,
+  ConcurrentTaskTransition,
+  TERMINAL_TASK_STATUSES,
+  assertNodeRunSourceTerminationAdmission,
+  cancelOpenNodeRuns,
+  isTerminalTaskStatus,
+  setNodeRunStatus,
+  setNodeRunStatusTx,
+  setTaskStatus,
+  transitionNodeRunStatus,
+  transitionNodeRunStatusTx,
+  transitionTaskStatusByEvent,
+  trySetTaskStatus,
+  type HumanGateTaskTransition,
+  type NodeRunStatusUpdateExtra,
+  type TaskStatusUpdateExtra,
+  type WorkspacePruneCause,
+} from '../infrastructure/taskLifecycle'
+export {
+  registerTerminalWorkspacePrunePolicy,
+  resolveTerminalWorkspacePruneDecision,
+  type TerminalWorkspacePruneDecision,
+  type TerminalWorkspacePrunePolicy,
+} from '../infrastructure/terminalWorkspacePrune'

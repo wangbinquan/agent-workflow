@@ -1,3 +1,4 @@
+import { composeRetentionSweepPhases } from '@/bootstrap/retentionSweepPhases'
 // RFC-359 W8 / W57 —— 保留期清理（retention sweep）的双引擎判据。
 //
 // 曾经的一对，W57 已收成一份
@@ -80,7 +81,7 @@ function sweepSlice(
   const db = harness.db
   // W57 起两个引擎同一份实现——不再按能力选分支。
   return async (cursor, batchSize) =>
-    await runRetentionSweepSlice(db, CONFIG, cursor, NOW, batchSize)
+    await runRetentionSweepSlice(composeRetentionSweepPhases(db), CONFIG, cursor, NOW, batchSize)
 }
 
 /** 循环到 done，累加计数并记下走过的相位序列。 */
@@ -425,6 +426,51 @@ async function survivors(db: PersistenceDb): Promise<Record<string, string[]>> {
 }
 
 describeEachProvider('RFC-359 W8 —— 保留期清理在两个引擎上删同一批', (harness) => {
+  test('RFC-395 II-b O3: webhook owner emits one DELETE and identical cursor/counter bytes', async () => {
+    await seed(harness.db)
+    const recorded = harness.recordStatements()
+    let result
+    try {
+      result = await runRetentionSweepSlice(
+        composeRetentionSweepPhases(harness.db),
+        CONFIG,
+        {
+          version: 1,
+          phase: 'webhook-trigger-fires',
+          eventCutoff: CUTOFF,
+          webhookCutoff: CUTOFF,
+        },
+        NOW,
+        3,
+      )
+    } finally {
+      recorded.stop()
+    }
+    expect(JSON.stringify(result)).toBe(
+      JSON.stringify({
+        done: true,
+        cursor: { version: 1, phase: 'done', eventCutoff: CUTOFF, webhookCutoff: CUTOFF },
+        counters: {
+          distillEvents: 0,
+          intentTurnEvents: 0,
+          mcpRuntimeTestEvents: 0,
+          webhookTriggerFires: 2,
+          userAccessAudit: 0,
+        },
+      }),
+    )
+    const deletes = recorded.statements.filter((statement) =>
+      /delete\s+from[\s\S]*webhook_trigger_fires/i.test(statement.sql),
+    )
+    expect(deletes).toHaveLength(1)
+    expect(deletes[0]?.sql).toMatch(/NOT\s+EXISTS[\s\S]*tasks/i)
+    expect(
+      recorded.statements.filter((statement) =>
+        /^\s*select[\s\S]*\bfrom\b[\s\S]*[".]tasks["\s]/i.test(statement.sql),
+      ),
+    ).toHaveLength(0)
+  })
+
   test('① 整趟清理：两侧删掉同一批、留下同一批', async () => {
     await seed(harness.db)
 
@@ -490,7 +536,7 @@ describeEachProvider('RFC-359 W8 —— 保留期清理在两个引擎上删同�
     const db = harness.db
     const offForEvents = { eventStreamRetentionDays: 0, webhookTriggerFiresRetentionDays: 1 }
     const slice = async (cursor: unknown) =>
-      await runRetentionSweepSlice(db, offForEvents, cursor, NOW, 50)
+      await runRetentionSweepSlice(composeRetentionSweepPhases(db), offForEvents, cursor, NOW, 50)
 
     // 事件三胞胎被关掉 ⇒ 第一片直接落在 webhook 相位，三张事件表一行不动。
     const first = await slice(null)

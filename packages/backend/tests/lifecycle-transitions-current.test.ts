@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1a — node_run.status transition matrix, *current* behavior.
 //
 // Each test exercises one service-layer entry point that mutates
@@ -223,15 +224,17 @@ describeEachProvider(
         const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
         const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
 
-        const res = await dispatchReviewNode({
-          db: h.db,
-          taskId: h.taskId,
-          scopeRoot: task.worktreePath,
-          appHome: h.appHome,
-          definition: h.definition,
-          node: reviewNode,
-          iteration: 0,
-        })
+        const res = await dispatchReviewNode(
+          withO2Closure({
+            db: h.db,
+            taskId: h.taskId,
+            scopeRoot: task.worktreePath,
+            appHome: h.appHome,
+            definition: h.definition,
+            node: reviewNode,
+            iteration: 0,
+          }),
+        )
         expect(res.kind).toBe('awaiting_review')
 
         const rows = await h.db
@@ -250,15 +253,17 @@ describeEachProvider(
         const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'pending', 3)
         const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
 
-        const res = await dispatchReviewNode({
-          db: h.db,
-          taskId: h.taskId,
-          scopeRoot: task.worktreePath,
-          appHome: h.appHome,
-          definition: h.definition,
-          node: reviewNode,
-          iteration: 0,
-        })
+        const res = await dispatchReviewNode(
+          withO2Closure({
+            db: h.db,
+            taskId: h.taskId,
+            scopeRoot: task.worktreePath,
+            appHome: h.appHome,
+            definition: h.definition,
+            node: reviewNode,
+            iteration: 0,
+          }),
+        )
         expect(res.kind).toBe('awaiting_review')
 
         const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
@@ -289,15 +294,17 @@ describeEachProvider(
         })
         const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
 
-        await dispatchReviewNode({
-          db: h.db,
-          taskId: h.taskId,
-          scopeRoot: task.worktreePath,
-          appHome: h.appHome,
-          definition: h.definition,
-          node: reviewNode,
-          iteration: 0,
-        })
+        await dispatchReviewNode(
+          withO2Closure({
+            db: h.db,
+            taskId: h.taskId,
+            scopeRoot: task.worktreePath,
+            appHome: h.appHome,
+            definition: h.definition,
+            node: reviewNode,
+            iteration: 0,
+          }),
+        )
 
         const dvs = await h.db.select().from(docVersions).where(eq(docVersions.taskId, h.taskId))
         expect(dvs.length).toBe(1) // no phantom v2
@@ -324,14 +331,16 @@ describeEachProvider(
           decision: 'pending',
         })
 
-        const res = await submitReviewDecision({
-          db: h.db,
-          appHome: h.appHome,
-          nodeRunId: reviewRunId,
-          decision: 'approved',
-          expectedReviewIteration: 2,
-          author: 'tester',
-        })
+        const res = await submitReviewDecision(
+          withO2Closure({
+            db: h.db,
+            appHome: h.appHome,
+            nodeRunId: reviewRunId,
+            decision: 'approved',
+            expectedReviewIteration: 2,
+            author: 'tester',
+          }),
+        )
         expect(res.resumeRequired).toBe(true)
 
         const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
@@ -363,14 +372,16 @@ describeEachProvider(
           decision: 'pending',
         })
 
-        const res = await submitReviewDecision({
-          db: h.db,
-          appHome: h.appHome,
-          nodeRunId: reviewRunId,
-          decision: 'iterated',
-          expectedReviewIteration: 0,
-          author: 'tester',
-        })
+        const res = await submitReviewDecision(
+          withO2Closure({
+            db: h.db,
+            appHome: h.appHome,
+            nodeRunId: reviewRunId,
+            decision: 'iterated',
+            expectedReviewIteration: 0,
+            author: 'tester',
+          }),
+        )
         expect(res.resumeRequired).toBe(true)
         expect(res.reviewIteration).toBe(1)
 
@@ -417,15 +428,17 @@ describeEachProvider(
           decision: 'pending',
         })
 
-        const res = await submitReviewDecision({
-          db: h.db,
-          appHome: h.appHome,
-          nodeRunId: reviewRunId,
-          decision: 'rejected',
-          expectedReviewIteration: 0,
-          author: 'tester',
-          rejectReason: 'try again',
-        })
+        const res = await submitReviewDecision(
+          withO2Closure({
+            db: h.db,
+            appHome: h.appHome,
+            nodeRunId: reviewRunId,
+            decision: 'rejected',
+            expectedReviewIteration: 0,
+            author: 'tester',
+            rejectReason: 'try again',
+          }),
+        )
         expect(res.resumeRequired).toBe(true)
 
         const reviewAfter = (
@@ -484,15 +497,17 @@ describeEachProvider(
           decision: 'pending',
         })
 
-        await submitReviewDecision({
-          db: h.db,
-          appHome: h.appHome,
-          nodeRunId: rev1RunId,
-          decision: 'rejected',
-          expectedReviewIteration: 0,
-          author: 'tester',
-          rejectReason: 'r',
-        })
+        await submitReviewDecision(
+          withO2Closure({
+            db: h.db,
+            appHome: h.appHome,
+            nodeRunId: rev1RunId,
+            decision: 'rejected',
+            expectedReviewIteration: 0,
+            author: 'tester',
+            rejectReason: 'r',
+          }),
+        )
 
         // rev_2 is cascaded — its row's reviewIteration bumped, status remains
         // awaiting_review (the sibling still waits for the user to re-review
@@ -517,14 +532,16 @@ describeEachProvider(
         let threw = false
         let code: string | undefined
         try {
-          await submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'tester',
-          })
+          await submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'tester',
+            }),
+          )
         } catch (err) {
           threw = true
           code = (err as { code?: string }).code
@@ -537,14 +554,16 @@ describeEachProvider(
         const reviewRunId = await seedReviewRow(h.db, h.taskId, 'rev_1', 'awaiting_review', 3)
         let code: string | undefined
         try {
-          await submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'tester',
-          })
+          await submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'tester',
+            }),
+          )
         } catch (err) {
           code = (err as { code?: string }).code
         }

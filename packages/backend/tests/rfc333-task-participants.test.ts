@@ -1,3 +1,5 @@
+import { withO2Closure } from './helpers/o2Closure'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-333 T5 — human-gate park/decision participants share one SQLite
 // transaction with domain projections, the canonical lifecycle event, exactly
 // one continuation intent, and the linked pre-drive rollback effect.
@@ -176,7 +178,10 @@ async function prepareOpenOperation(input: { db: PersistenceDb; taskId: string }
   })
 
   const result = await new ClarifyGateOpenPreparation(
-    new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
+    new DatabaseHumanGateOperationPersistence(
+      databaseSessionFor(input.db),
+      composeHumanGateTaskLockPort,
+    ),
     new DatabaseClarifyQuestionSnapshotReader(input.db),
   ).prepare({
     taskId: input.taskId,
@@ -362,7 +367,7 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
 
 describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harness) => {
   const createManual = (db: PersistenceDb, taskId: string) =>
-    createManualQuestionOpen(createCollaborationCommandContext({ db }), {
+    createManualQuestionOpen(createCollaborationCommandContext(withO2Closure({ db })), {
       taskId,
       title: 'Investigate this edge case',
       body: 'Re-run the fixer with this instruction.',

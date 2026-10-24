@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-D C3 — multi-source wait 守门.
 //
 // When N cross-clarify nodes point at the same designer (via manual
@@ -214,39 +215,45 @@ async function buildHarness(db: PersistenceDb): Promise<{
   const qSec = await seedQRun(db, taskId, 'qSec')
   const qUx = await seedQRun(db, taskId, 'qUx')
   const qPerf = await seedQRun(db, taskId, 'qPerf')
-  const sec = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'crossSec',
-    askingNodeId: 'qSec',
-    askingNodeRunId: qSec,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions: [makeQ('q1')],
-  })
-  const ux = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'crossUx',
-    askingNodeId: 'qUx',
-    askingNodeRunId: qUx,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions: [makeQ('q1')],
-  })
-  const perf = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'crossPerf',
-    askingNodeId: 'qPerf',
-    askingNodeRunId: qPerf,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions: [makeQ('q1')],
-  })
+  const sec = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'crossSec',
+      askingNodeId: 'qSec',
+      askingNodeRunId: qSec,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions: [makeQ('q1')],
+    }),
+  )
+  const ux = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'crossUx',
+      askingNodeId: 'qUx',
+      askingNodeRunId: qUx,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions: [makeQ('q1')],
+    }),
+  )
+  const perf = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'crossPerf',
+      askingNodeId: 'qPerf',
+      askingNodeRunId: qPerf,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions: [makeQ('q1')],
+    }),
+  )
   return {
     db,
     taskId,

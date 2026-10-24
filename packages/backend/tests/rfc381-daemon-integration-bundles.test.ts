@@ -1,3 +1,5 @@
+import { o2Ports } from './helpers/o2Closure'
+import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 // RFC-381: one passive session graph owns all integration state; MR termination stops the selected driver and cleanup failures never stall its stream.
 import { readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -231,7 +233,9 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
 
   test('MR close requests stop on the session registry and waits for released before succeeding', async () => {
     const taskId = await seed(harness.db)
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const executionModule =
       harness.applicationBinding.provider === 'sqlite'
         ? taskExecutionModule
@@ -302,7 +306,9 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
 
   test('cleanup failure keeps the claim, completes the MR job and lets the next same-stream effect run', async () => {
     const taskId = await seed(harness.db)
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     let fail = true
     const filesystem: WorkspaceMaintenanceFilesystem = {
       exists: () => true,
@@ -319,14 +325,16 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
       removeAgedPath: async () => false,
       runPartialCloneGc: async () => ({ scanned: 0, removed: 0 }),
     }
-    const workspaceMaintenance = composeWorkspaceMaintenanceCommand({
-      db: harness.db,
-      appHome: home(),
-      terminalMaintenance: persistence.terminalMaintenance,
-      filesystem,
-      isMaterializingTask: () => false,
-      invalidateWorkspacePath() {},
-    })
+    const workspaceMaintenance = composeWorkspaceMaintenanceCommand(
+      withWorkspaceMaintenancePorts({
+        db: harness.db,
+        appHome: home(),
+        terminalMaintenance: persistence.terminalMaintenance,
+        filesystem,
+        isMaterializingTask: () => false,
+        invalidateWorkspacePath() {},
+      }),
+    )
     registerTerminalWorkspacePrunePolicy(
       composeWebhookTerminalWorkspacePrunePolicy({ db: harness.db, enabled: () => true }),
     )

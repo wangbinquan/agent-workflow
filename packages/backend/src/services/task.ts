@@ -161,6 +161,7 @@ const {
   createDatabaseTaskDriverLifecyclePort,
   createTaskDriveCoordinatorFactory,
   createTaskExecutionPersistence,
+  composeSourceControlTaskPorts,
   isTaskDriverActive,
   PersistedRepositoryPreparationStep,
   skipRepositoryPreparation,
@@ -462,7 +463,10 @@ export interface TaskContinuationDependencies {
 function repositoryWorkspaceFor(
   deps: Pick<TaskContinuationDependencies, 'db' | 'repositoryWorkspace'>,
 ) {
-  return deps.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(deps.db)
+  return (
+    deps.repositoryWorkspace ??
+    composeSqliteRepositoryWorkspaceStore(deps.db, composeSourceControlTaskPorts(deps.db))
+  )
 }
 
 /**
@@ -477,7 +481,7 @@ function repositoryWorkspaceFor(
  * 因为 PG 的根拿不到一个它能构造的准备步骤，只能传 `skipRepositoryPreparation`。
  *
  * `repositoryWorkspace` 在这里是**必填**：`TaskContinuationDependencies` 那边缺省会回落到
- * `composeSqliteRepositoryWorkspaceStore(db)`，那正是本 RFC 在消灭的隐式 provider 绑定。
+ * `composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))`，那正是本 RFC 在消灭的隐式 provider 绑定。
  * 装配方各自交自己那份（PG 根有 `composePostgresqlRepositoryWorkspaceStore`）。
  */
 export interface DeferredRepositoryPreparationDependencies extends Pick<
@@ -776,7 +780,7 @@ export function composeTestTaskDriveFactory(input: {
       workspacePresence: input.deps.workspacePresence,
     })
   const maintenance = composeWorkspaceMaintenanceCommand({
-    db: input.deps.db,
+    ...composeSourceControlTaskPorts(input.deps.db),
     appHome: input.appHome,
     terminalMaintenance: persistence.terminalMaintenance,
     isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
@@ -1856,7 +1860,7 @@ async function reclaimStalePrepArtifacts(
     try {
       for (const m of (
         await resolveRepoGroupLayout(
-          composeSqliteRepositoryWorkspaceStore(db),
+          composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           requestedSource.repoGroupId,
         )
       ).repos) {

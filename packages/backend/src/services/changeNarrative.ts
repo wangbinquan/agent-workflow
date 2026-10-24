@@ -36,7 +36,7 @@ import {
   type CodeReviewReads,
 } from '@/services/structuralDiff/service'
 import { ecosystemForManifest } from '@/services/structuralDiff/deps/manifests'
-import type { CodeWorkspaceRead } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
+import type { TaskCodeWorkspaceQueries } from '@/modules/task-execution/public/types'
 import {
   composeLocalCodeReviewArtifacts,
   type CodeReviewArtifactStore,
@@ -293,7 +293,7 @@ export function extractJsonObject(text: string): unknown | null {
 
 export interface ChangeNarrativeDeps {
   /** The bare workspace port keeps the standalone content and artifact store. */
-  workspace: CodeWorkspaceRead | CodeReviewReads
+  workspace: TaskCodeWorkspaceQueries | CodeReviewReads
   /** Closed collaboration authorization; no task/member rows cross this seam. */
   requireMember(actor: Actor, taskId: string): Promise<void>
   /** Provider-neutral runtime profile resolved by the runtime-registry owner. */

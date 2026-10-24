@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // Hosted-only real process: terminate at an acknowledged durable Git checkpoint,
 // then open the same real SQLite file / PostgreSQL generation in a fresh process.
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
@@ -60,7 +61,7 @@ if (input.provider.kind === 'sqlite') {
 }
 try {
   const journal = createRepositoryPreparationJournal(db)
-  const store = composeRepositoryWorkspaceStore(db)
+  const store = composeRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
   const operation = decodeRepositoryLaunchRef('operation', input.operation)
   const snapshot = decodeRepositoryLaunchRef('preparation', input.snapshot)
   const appHome = join(input.root, 'home')

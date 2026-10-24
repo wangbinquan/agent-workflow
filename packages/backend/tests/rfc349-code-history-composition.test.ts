@@ -1,3 +1,4 @@
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-349 — the code-history HTTP surface consumes one provider-neutral
 // aggregate. A PostgreSQL composition must reach all four history endpoints
 // without the route selecting or reopening SQLite.
@@ -73,7 +74,10 @@ function postgresqlHistoryFixture() {
     async close() {},
   }
   return {
-    history: composeCodeHistoryQueries(createPostgresqlDatabaseClient(runtime)),
+    history: composeCodeHistoryQueries(
+      createPostgresqlDatabaseClient(runtime),
+      createAgentExecutionQueries(createPostgresqlDatabaseClient(runtime)),
+    ),
     executions,
   }
 }
@@ -118,7 +122,7 @@ describe('RFC-349 code-history composition', () => {
     expect(routeSource).not.toContain('deps.db')
     expect(
       readFileSync(resolve(import.meta.dir, '../src/bootstrap/daemonHttpComposition.ts'), 'utf8'),
-    ).toContain('const codeHistoryQueries = composeCodeHistoryQueries(input.db)')
+    ).toContain('createAgentExecutionQueries(input.db)')
     expect(serverSource).toContain('mountCodeRoutes(app, input.code.history)')
     expect(applicationSource).not.toContain('composeCodeHistoryQueries(')
     expect(applicationSource).toContain('composeProviderAppComposition({')

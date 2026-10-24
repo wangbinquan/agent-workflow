@@ -1,3 +1,4 @@
+import type { SubjectTaskReferencePort } from './required-ports'
 import type { Workflow } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
@@ -130,7 +131,7 @@ export function composeWorkflowCatalog(
 }
 
 /** 目录变更向 `/ws/workflows` 的广播：两个 provider 同一份事件接线。 */
-function workflowBroadcastEvents(): NonNullable<
+export function workflowBroadcastEvents(): NonNullable<
   Parameters<typeof createWorkflowPersistenceSemantics>[0]['events']
 > {
   return {
@@ -189,6 +190,7 @@ export function composeSkillContentAvailability(input: {
  * （RFC-294 §3.1 的 offered 边只允许 bootstrap → composition）。
  */
 export function composeDatabaseWorkflowCatalog(input: {
+  readonly taskReferences: SubjectTaskReferencePort
   readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly skillContent: SkillContentAvailability
@@ -196,6 +198,7 @@ export function composeDatabaseWorkflowCatalog(input: {
   return composeWorkflowCatalog({
     db: input.db,
     persistence: createWorkflowPersistenceSemantics({
+      taskReferences: input.taskReferences,
       authorization: input.resourceCatalog.authorization,
       events: workflowBroadcastEvents(),
     }),

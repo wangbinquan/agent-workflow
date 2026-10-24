@@ -1,3 +1,4 @@
+import { createHumanGatePersistenceParticipantInTx } from '../infrastructure/humanGatePersistenceParticipant'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -14,7 +15,10 @@ export function composeGateContinuationPreDrive(input: {
 }) {
   return createGateContinuationPreDriveStep({
     persistence: input.persistence ?? createTaskExecutionPersistence(input.db),
-    humanGateOperations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
+    humanGateOperations: new DatabaseHumanGateOperationPersistence(
+      databaseSessionFor(input.db),
+      createHumanGatePersistenceParticipantInTx,
+    ),
     clarifyConvergence: createClarifyContinuationConvergence(input),
   })
 }

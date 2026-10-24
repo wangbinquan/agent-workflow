@@ -3,8 +3,6 @@
 // strings in the DB and (un)marshaled at this boundary. Routes upstream see
 // pure JS objects.
 
-import { collectStoredAgentDependents } from '../agentReferenceCodec'
-import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first, queryWrite } from '@/platform/persistence/queryHelpers'
@@ -16,15 +14,15 @@ import type {
   ResourceAccess,
   UpdateAgent,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, like, notInArray, type SQL } from 'drizzle-orm'
+import { and, eq, inArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { scheduledRowsReferencing } from '@/services/scheduledTaskRefs'
+
 import type { DbTxSync } from '@/db/txSync'
 import { affectedRows, databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { resolveResourceAccessForTx } from '../resourceAclTransaction'
-import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+
 import {
   ConflictError,
   ForbiddenError,
@@ -43,17 +41,10 @@ import {
   initialBuiltinResourceAcl,
   initialPrivateResourceAcl,
 } from '../../application/resourceDefaults'
-import {
-  discloseRefsSync,
-  discloseScheduleRefs,
-  canEditAccess,
-  canGovernAccess,
-  canViewAccess,
-  hasResourceAclBypass,
-} from '../../domain/resourceAccess'
-import { listGrantedResourceIds } from '../sqliteResourceGrantRepository'
+import { canEditAccess, canGovernAccess, canViewAccess } from '../../domain/resourceAccess'
+
 import type { Actor } from '@/auth/actor'
-import { isAgentLaunching } from '@/services/agentLaunchReservation'
+
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
 import {
   assertNoMissingRefs,
@@ -778,169 +769,6 @@ export async function updateAgent(
   return updated
 }
 
-export async function deleteAgent(
-  db: PersistenceDb,
-  id: string,
-  actor: Actor,
-  fence?: { expectedUpdatedAt: number; expectedAclRevision: number },
-): Promise<void> {
-  const existing = await getAgentById(db, id)
-  if (existing === null) {
-    throw new NotFoundError('agent-not-found', 'agent not found')
-  }
-  const name = existing.name
-  // RFC-203 T6: reference-disclosure grant sets, pre-fetched OUTSIDE the write
-  // transaction — used only to decide which referencing resource NAMES the
-  // refusal details may show, never as a fence. (RFC-359 W9: the neutral
-  // primitive would now let them read inside, but "谁的名字能出现在拒绝理由里"
-  // 不是不变量的一部分，多占一段写锁没有收益。)
-  const wfGranted = hasResourceAclBypass(actor)
-    ? new Set<string>()
-    : await listGrantedResourceIds(db, actor, 'workflow')
-  const agGranted = hasResourceAclBypass(actor)
-    ? new Set<string>()
-    : await listGrantedResourceIds(db, actor, 'agent')
-  // RFC-165 (F17-r3): guards + the delete run in ONE transaction — the old
-  // check-then-await-then-write shape let a reference land between the check
-  // and the delete.
-  //
-  // RFC-359 W9：这一笔从 bun:sqlite 独有的同步 `dbTxSync` 迁到中立事务原语，两个引擎共用
-  // 一条。事务体里的每一条语句都必须 `await`——**漏掉不是小事**：读漏 await 只有 PG 红，
-  // 写漏 await（`.run()` 那一档）在 PG 上**静默**失真（`changes` 恒 undefined）。
-  await databaseSessionFor(db).transaction(async (tx) => {
-    // Canonical-id fence: a rename cannot retarget this operation. A concurrent
-    // delete is reported as the same non-enumerating 404 as an absent id.
-    if (fence === undefined) {
-      const { agents } = tablesOf(tx)
-      const [fenceRow] = await tx
-        .select({ id: agents.id })
-        .from(agents)
-        .where(eq(agents.id, id))
-        .limit(1)
-      if (fenceRow === undefined) {
-        throw new NotFoundError('agent-not-found', 'agent not found')
-      }
-    } else {
-      await requireAgentMutationRevisionTx(tx, id, actor, fence, 'govern')
-    }
-
-    // RFC-175 (§2e): refuse while a single-agent launch holds this agent's id.
-    // The launch resolves the agent by NAME from a frozen snapshot, so deleting
-    // (then recreating same-name) mid-launch would run a DIFFERENT agent than
-    // the task recorded (ABA). Synchronous in-process reservation (single-process
-    // daemon), checked here in the same tx as the delete; the launch's
-    // post-acquire re-verify covers the reverse check→acquire race.
-    if (isAgentLaunching(existing.id)) {
-      throw new ConflictError(
-        'agent-launching',
-        `agent '${name}' has a task launch in progress; retry after it completes`,
-      )
-    }
-    const { workflows, agents, tasks, scheduledTasks } = tablesOf(tx)
-    const wfRows = await tx
-      .select({
-        id: workflows.id,
-        name: workflows.name,
-        definition: workflows.definition,
-        ownerUserId: workflows.ownerUserId,
-        visibility: workflows.visibility,
-      })
-      .from(workflows)
-      .where(workflowCatalogPredicate(workflows.id))
-    // RFC-285 B2 档位说明：agent 对**任务**引用零检查即是统一中档——任务快照
-    // 冻结（workflowSnapshot/agent 定义随任务落盘），删除 agent 不影响在跑或
-    // 历史任务，展示层容忍悬空 agent 名。此处的 agent-in-use 挡的是 **workflow
-    // 定义**引用（活的编辑面），与任务引用中档是两回事。
-    const refs = workflowsUsingAgentIn(wfRows, existing.id)
-    if (refs.length > 0) {
-      const refIds = new Set(refs.map((r) => r.id))
-      throw new ConflictError(
-        'agent-in-use',
-        `agent '${name}' is referenced by ${refs.length} workflow(s)`,
-        discloseRefsSync(
-          actor,
-          wfRows.filter((r) => refIds.has(r.id)),
-          wfGranted,
-        ),
-      )
-    }
-    // RFC-022 reverse-dep guard: refuse to delete an agent any other agent's
-    // dependsOn closure mentions. Forces the caller to deref upstream first so
-    // runtime never spawns with a dangling reference (which would surface as
-    // a node failure with `agent-dependency-not-found`).
-    const depRows = await tx
-      .select({
-        id: agents.id,
-        name: agents.name,
-        dependsOn: agents.dependsOn,
-        ownerUserId: agents.ownerUserId,
-        visibility: agents.visibility,
-      })
-      .from(agents)
-      // RFC-223 (PR-1): dependsOn stores agent IDS now — match this agent's id.
-      .where(like(agents.dependsOn, `%"${existing.id}"%`))
-    const dependents = collectStoredAgentDependents(depRows, existing.id)
-    if (dependents.length > 0) {
-      throw new ConflictError(
-        'agent-dependency-still-referenced',
-        `agent '${name}' is referenced by ${dependents.length} other agent(s)' dependsOn`,
-        discloseRefsSync(actor, dependents, agGranted),
-      )
-    }
-    // RFC-165 §4: a NON-terminal single-agent task still runs (or will run)
-    // against this agent — deleting now would strand it mid-flight. 409 until
-    // those tasks finish/cancel. Terminal tasks are the accepted limitation:
-    // their retry/resume later fails with agent-not-found (same soft-reference
-    // philosophy as RFC-164 workgroup members).
-    //
-    // RFC-223 (PR-3a, R3-3): match by the CANONICAL `source_agent_id` (frozen at
-    // launch), NOT by name. After PR-8 lifts global name uniqueness a by-name
-    // guard would let a DIFFERENT owner's same-named task block this delete (and
-    // leak that task's id via the error). A pre-0091 legacy task has NULL
-    // source_agent_id and is already R4-1-quarantined (un-resumable), so not
-    // blocking on it is correct.
-    const live = await tx
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.sourceAgentId, existing.id),
-          notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-        ),
-      )
-    if (live.length > 0) {
-      throw new ConflictError(
-        'agent-tasks-active',
-        `agent '${name}' has ${live.length} non-terminal single-agent task(s); cancel or wait before deleting`,
-        { taskIds: live.map((t) => t.id) },
-      )
-    }
-    const schedRows = await tx
-      .select({
-        id: scheduledTasks.id,
-        name: scheduledTasks.name,
-        launchKind: scheduledTasks.launchKind,
-        launchPayload: scheduledTasks.launchPayload,
-        ownerUserId: scheduledTasks.ownerUserId,
-      })
-      .from(scheduledTasks)
-    // RFC-284 T9（§2.2）：本地副本收编 scheduledTasks.scheduledRowsReferencing。
-    const schedRefRows = scheduledRowsReferencing(schedRows, {
-      launchKind: 'agent',
-      payloadKey: 'agentId',
-      id: existing.id,
-    })
-    if (schedRefRows.length > 0) {
-      throw new ConflictError(
-        'agent-scheduled-referenced',
-        `agent '${name}' is the target of ${schedRefRows.length} scheduled task(s); delete or repoint them first`,
-        discloseScheduleRefs(actor, schedRefRows),
-      )
-    }
-    await tx.delete(agents).where(eq(agents.id, id))
-  })
-}
-
 export async function renameAgent(
   db: PersistenceDb,
   id: string,
@@ -1130,28 +958,6 @@ async function requireAgentMutationRevisionTx(
 function staleAgentError(id: string): ConflictError {
   // RFC-285 B5：家族先行站点收编 staleConflictError（补 resource 字段）。
   return staleConflictError('agent', `agent '${id}' changed; reload and retry`)
-}
-
-/** Pure core of the workflow-reference check — RFC-165 (F17-r3): the
- *  rename/delete guards run it on rows read INSIDE their dbTxSync
- *  transaction (the old async shell around it died with them). */
-function workflowsUsingAgentIn(
-  rows: ReadonlyArray<{ id: string; name: string; definition: string }>,
-  agentId: string,
-): Array<{ id: string; name: string }> {
-  const out: Array<{ id: string; name: string }> = []
-  for (const row of rows) {
-    try {
-      const def = JSON.parse(row.definition) as {
-        nodes?: Array<{ agentId?: string }>
-      }
-      const used = def.nodes?.some((n) => n.agentId === agentId) ?? false
-      if (used) out.push({ id: row.id, name: row.name })
-    } catch {
-      // Skip malformed JSON; workflow validator catches it on save in P-2-01.
-    }
-  }
-  return out
 }
 
 /**

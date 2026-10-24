@@ -20,7 +20,7 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 type GuardUnit = Pick<SourceUnit, 'path' | 'text' | 'source'>
 
 const WORKER_MUTATION_FILES = new Set([
-  'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
   'packages/backend/src/services/nodeRunMint.ts',
   'packages/backend/src/services/runner.ts',
   'packages/backend/src/services/scheduler.ts',
@@ -182,7 +182,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
 ])
 const CANONICAL_MUTATION_SYMBOLS = new Map<string, ReadonlySet<string>>([
   [
-    'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
+    'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
     new Set([
       'setNodeRunStatus',
       'setNodeRunStatusTx',

@@ -7,7 +7,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {} from './helpers/providerHttpApplication'
 

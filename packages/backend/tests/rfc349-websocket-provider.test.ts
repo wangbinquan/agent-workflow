@@ -1,3 +1,5 @@
+import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/composition'
+import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -329,7 +331,11 @@ describe('RFC-349 WebSocket provider boundary', () => {
 
     test('store answers audience / memory scope / ordered events off real rows', async () => {
       await seed()
-      const store = new DrizzleRealtimeStore(harness.db)
+      const store = new DrizzleRealtimeStore(
+        harness.db,
+        composeRealtimeTaskFacts(harness.db),
+        composeRealtimeResourceAcl(harness.db),
+      )
 
       expect(await store.findTaskAudience('realtime-task', 'realtime-member')).toEqual({
         ownerUserId: 'realtime-owner',
@@ -352,12 +358,19 @@ describe('RFC-349 WebSocket provider boundary', () => {
 
     test('channel access preserves task audience and ordered redacted replay', async () => {
       await seed()
-      const channels = createRealtimeChannelAccess(new DrizzleRealtimeStore(harness.db), {
-        resourceVisibility: { canViewResource: async () => false },
-        memoryVisibility: { canViewMemory: async () => false },
-        repoImportOwnerUserId: () => null,
-        redactTaskEventPayload: (payload) => ({ payload, redacted: true }),
-      })
+      const channels = createRealtimeChannelAccess(
+        new DrizzleRealtimeStore(
+          harness.db,
+          composeRealtimeTaskFacts(harness.db),
+          composeRealtimeResourceAcl(harness.db),
+        ),
+        {
+          resourceVisibility: { canViewResource: async () => false },
+          memoryVisibility: { canViewMemory: async () => false },
+          repoImportOwnerUserId: () => null,
+          redactTaskEventPayload: (payload) => ({ payload, redacted: true }),
+        },
+      )
       const actor = buildActor({
         user: {
           id: 'realtime-member',

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-210 G7 self-renewal regression — locks the Codex impl-gate [medium]
 // finding (design/RFC-210-recursive-submodule-isolation/codex-impl-gate-2026-07-22.md):
 //
@@ -93,7 +94,11 @@ describeEachProvider(
       remoteUrl = r.url
       // Cold-clone so there is a real, fetchable mirror on disk.
       const resolved = await resolveCachedRepo(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, fetchOnReuse: false },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+          fetchOnReuse: false,
+        },
         { url: remoteUrl },
       )
       repoId = resolved.cached.id
@@ -119,7 +124,11 @@ describeEachProvider(
     test('touchRecency:false holds last_fetched_at but still writes the rest of the row', async () => {
       // Auto-refresh path: fetch succeeds but recency is deliberately NOT renewed.
       const res = await refreshCachedRepo(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+          now: () => NOW + 5 * DAY,
+        },
         repoId,
         {
           touchRecency: false,
@@ -141,7 +150,11 @@ describeEachProvider(
 
     test('default (manual refresh) advances last_fetched_at', async () => {
       const res = await refreshCachedRepo(
-        { store: composeSqliteRepositoryWorkspaceStore(db), appHome, now: () => NOW + 5 * DAY },
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          appHome,
+          now: () => NOW + 5 * DAY,
+        },
         repoId,
       )
       expect(res.fetchOk).toBe(true)
@@ -167,15 +180,22 @@ describeEachProvider(
       const outcomes: Array<{ day: number; refreshed: number; due: number }> = []
       for (let day = 0; day <= 5; day++) {
         const at = NOW + day * DAY + 1000
-        const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-          now: at,
-          intervalMs: HOUR,
-          onlyRecentDays: 3,
-        })
-        const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), cfg, {
-          now: () => at,
-          appHome,
-        })
+        const due = await selectDueRepos(
+          composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          {
+            now: at,
+            intervalMs: HOUR,
+            onlyRecentDays: 3,
+          },
+        )
+        const res = await refreshDueRepos(
+          composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          cfg,
+          {
+            now: () => at,
+            appHome,
+          },
+        )
         outcomes.push({ day, refreshed: res.refreshed, due: due.length })
       }
 

@@ -40,7 +40,7 @@ import {
 import { buildActor } from '../src/auth/actor'
 import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   AGENT_HOST_AGENT_NODE_ID,
   buildAgentHostSnapshot,

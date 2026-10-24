@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-033-T2: locks the queue / concurrency / dedupe / failure-isolation
 // invariants of services/repoBatchImport.ts. Uses a stub resolver so the
 // suite stays hermetic (no git, no filesystem) — the real clone path is
@@ -79,7 +80,10 @@ function stubResolver(
 
 function deps(harness: Harness, resolver: StubResolver, concurrency = 3): RepoBatchImportDeps {
   return {
-    store: composeSqliteRepositoryWorkspaceStore(harness.db),
+    store: composeSqliteRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    ),
     resolveCachedRepo: resolver,
     concurrency,
     emit: (batchId, msg) => {

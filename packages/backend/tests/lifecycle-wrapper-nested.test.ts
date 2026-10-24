@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1f — loop / fan-out / wrapper nesting interactions.
 //
 // Locks key shape invariants for nested constructs:
@@ -187,15 +188,17 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       })
 
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 1,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 1,
+        }),
+      )
       expect(res.kind).toBe('awaiting_review')
 
       // iter=0 row untouched.
@@ -288,14 +291,16 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         reason: 'lifecycle-wrapper-nested-test-review-park',
       })
 
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: reviewRunId,
-        decision: 'iterated',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: reviewRunId,
+          decision: 'iterated',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
 
       // iter=0 agent row untouched.
       const iter0After = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, iter0Agent)))[0]!
@@ -390,15 +395,17 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       // child, it would fail with review-source-port-missing.
 
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 0,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 0,
+        }),
+      )
       // If dispatch wrongly picked child it would be 'failed'; correct
       // selection of parent yields 'awaiting_review' (or 'ok' if any-done
       // short-circuit — no review rows exist yet, so it's awaiting_review).
@@ -475,15 +482,17 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       })
 
       const task = (await readTaskFixtures(h.db, { id: h.taskId }))[0]!
-      const res = await dispatchReviewNode({
-        db: h.db,
-        taskId: h.taskId,
-        scopeRoot: task.worktreePath,
-        appHome: h.appHome,
-        definition: h.definition,
-        node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
-        iteration: 2,
-      })
+      const res = await dispatchReviewNode(
+        withO2Closure({
+          db: h.db,
+          taskId: h.taskId,
+          scopeRoot: task.worktreePath,
+          appHome: h.appHome,
+          definition: h.definition,
+          node: h.definition.nodes.find((n) => n.id === 'rev_1')!,
+          iteration: 2,
+        }),
+      )
       expect(res.kind).toBe('awaiting_review')
 
       // iter=0 and iter=1 doc_versions unchanged.

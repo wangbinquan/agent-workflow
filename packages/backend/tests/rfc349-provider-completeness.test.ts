@@ -89,6 +89,12 @@ const CANONICAL_UNION_FILE = 'packages/backend/src/platform/persistence/database
 //   boot-fence           the deliberate closed list that refuses to boot a
 //                        provider nobody has adapted yet (see the test below).
 const PROVIDER_FORK_LEDGER = {
+  // RFC-395 O3: the existing SQLite/PG Doctor reads now share one owner factory.
+  // NativeDatabaseReadSource discriminates the native handle; no fallback client exists.
+  'modules/task-execution/infrastructure/taskStatusCounts.ts': {
+    forks: 1,
+    fence: 'discriminated-union',
+  },
   // RFC-359 AC-10 第二波：`cli/database.ts` 的条目退役。两处品牌分叉都换成了 traits ——
   // `--to` 先解析成 `DatabaseProvider` 再问 `migrationRole === 'target'`，
   // `db info` 的服务端版本兜底改读 `serverVersionFallback`。

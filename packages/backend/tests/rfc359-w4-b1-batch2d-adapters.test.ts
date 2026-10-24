@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2d —— 四对只差事务 / 围栏原语的适配器合到 `ownedTaskExecution.ts` 上，两个引擎各跑一遍：
 // 运行时会话捕获（appendEvents 受围栏）、人工门 continuation pre-drive（inspect / releaseClarifyForRetry
 // 按 token 精确围栏）、merge_state 迁移（读 + CAS 写同一事务）、TaskEngine drive 快照 + 工作区 profile 更新。
@@ -95,7 +96,9 @@ async function seedClaimedOwner(
   const context = createTaskExecutionContext({
     intentId: `intent_${ulid()}`,
     token,
-    persistence: createTaskExecutionPersistence(db),
+    persistence: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }),
   })
   return { token, context }
 }
@@ -232,7 +235,9 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
       execution: createTaskExecutionContext({
         intentId,
         token,
-        persistence: createTaskExecutionPersistence(db),
+        persistence: createTaskExecutionPersistence(db, {
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }),
       }),
       signal: new AbortController().signal,
       runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc359-composed-pre-drive' }),

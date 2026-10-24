@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-248 PR-3 T21 —— `materializeGroupSpace` 的端到端物化测试（真 git）。
 //
@@ -124,7 +125,7 @@ interface MountSpec {
 
 async function makeGroup(name: string, mounts: MountSpec[]): Promise<string> {
   const g = await createRepoGroup(
-    { store: composeSqliteRepositoryWorkspaceStore(db) },
+    { store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)) },
     {
       name,
       description: '',
@@ -146,7 +147,7 @@ async function makeGroup(name: string, mounts: MountSpec[]): Promise<string> {
 
 async function makeTreeGroup(name: string, nodes: RepoGroupNodeInput[]): Promise<string> {
   const group = await createRepoGroup(
-    { store: composeSqliteRepositoryWorkspaceStore(db) },
+    { store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)) },
     { name, description: '', nodes },
     null,
   )
@@ -457,7 +458,7 @@ describe('materializeGroupSpace —— 原型布局的完整复现（proposal E8
     ])
 
     await updateRepoGroup(
-      { store: composeSqliteRepositoryWorkspaceStore(db) },
+      { store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)) },
       gid,
       {
         name: '快照树',

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359: both providers use one automatic loop and their existing repair engine.
 // PostgreSQL manual and automatic repair share preflight, apply, audit and alert
 // reconciliation. The automatic binding retains null actor attribution and the
@@ -86,7 +87,9 @@ function repairEngineFor(
     beforeTransition?: (taskId: string) => Promise<void>
   } = {},
 ) {
-  const persistence = createTaskExecutionPersistence(harness.db)
+  const persistence = createTaskExecutionPersistence(harness.db, {
+    recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+  })
   if (options.beforeTransition !== undefined) {
     const trySet = persistence.runtimeLifecycle.trySet.bind(persistence.runtimeLifecycle)
     persistence.runtimeLifecycle.trySet = async (input) => {

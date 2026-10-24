@@ -1,3 +1,4 @@
+import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 // End-to-end coverage for the three WS channels (P-2-02).
 //
 // Spawns a real Bun.serve() bound to an ephemeral port so we can connect a
@@ -13,7 +14,7 @@ import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createWorkflow, deleteWorkflow, updateWorkflow } from '../src/services/workflow'
+import { createWorkflow, updateWorkflow } from '../src/services/workflow'
 import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { describeEachProviderWebSocketApplication } from './helpers/providerWebSocketScope'
 

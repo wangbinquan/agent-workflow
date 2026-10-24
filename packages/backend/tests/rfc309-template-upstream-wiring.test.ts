@@ -1,3 +1,4 @@
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-309 T16 — the T64 upstream link, connected to a caller at last.
 //
 // `domain/templateUpstream.ts` shipped with RFC-304, was unit-tested, and had
@@ -522,7 +523,7 @@ describeEachProvider('RFC-309 T16 — the merge endpoint says which thing went w
         }),
     }
     mountCapabilityTemplateRoutes(app, {
-      codeHistoryQueries: composeCodeHistoryQueries(db),
+      codeHistoryQueries: composeCodeHistoryQueries(db, createAgentExecutionQueries(db)),
       capabilityTemplates: composeCapabilityTemplateOperations({
         db,
         access: {

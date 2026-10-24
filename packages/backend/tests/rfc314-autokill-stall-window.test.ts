@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-314 D1 —— autoKill 的「最后一次活动」判据：有界窗口取代全表 max(ts)。
 //
 // 这条测试为什么存在（2026-08-21 生产量级实测）：`findStalledRunningChildren` 原本是
@@ -99,7 +100,9 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
     })
 
     const found = await findStalledRunningChildren(
-      createTaskExecutionPersistence(db).recoveryAdministration,
+      createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       STALL_MS,
       NOW,
     )
@@ -113,7 +116,9 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
     const id = await seedRun(db, { startedAt, events: staleEvents(10, quietTs) })
 
     const found = await findStalledRunningChildren(
-      createTaskExecutionPersistence(db).recoveryAdministration,
+      createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       STALL_MS,
       NOW,
     )
@@ -126,7 +131,9 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
     const id = await seedRun(db, { startedAt: NOW - 10 * STALL_MS, events: [] })
 
     const found = await findStalledRunningChildren(
-      createTaskExecutionPersistence(db).recoveryAdministration,
+      createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       STALL_MS,
       NOW,
     )
@@ -148,7 +155,9 @@ describeEachProvider(
       })
 
       const found = await findStalledRunningChildren(
-        createTaskExecutionPersistence(db).recoveryAdministration,
+        createTaskExecutionPersistence(db, {
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }).recoveryAdministration,
         STALL_MS,
         NOW,
       )
@@ -179,7 +188,9 @@ async function capture(
     recordStatements((db as unknown as { $client: Parameters<typeof recordStatements>[0] }).$client)
   try {
     await findStalledRunningChildren(
-      createTaskExecutionPersistence(db).recoveryAdministration,
+      createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       STALL_MS,
       NOW,
     )

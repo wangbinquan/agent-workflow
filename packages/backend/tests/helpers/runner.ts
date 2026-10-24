@@ -1,3 +1,4 @@
+import { o2Ports } from './o2Closure'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import {
   runNode as runNodeWithProvider,
@@ -42,7 +43,11 @@ export async function runNode(options: RunNodeOptions) {
     observationInvocations: options.observationInvocations ?? composeRunObservationCalls(db),
     memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
     runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
-    persistence: options.persistence ?? createTaskExecutionPersistence(db),
+    persistence:
+      options.persistence ??
+      createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
     runtimeRegistry: options.runtimeRegistry ?? composeRuntimeRegistryOperations(db),
   })
 }

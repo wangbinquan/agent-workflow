@@ -1,3 +1,4 @@
+import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-370 v3 V6: review documents are `collaboration-review` publications of
 // the neutral journal; the gate journal keeps receipts and stays the recovery
 // authority. Cleanup is an owner release settled by maintenance, and the
@@ -229,13 +230,19 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     })
     let failFinalization = true
     const mechanics = createCollaborationRuntimeMechanics(db, {
-      reviewArtifacts: {
-        ...first,
-        store: {
-          ...first.store,
-          async finalizeReviewArtifact(artifact) {
-            if (failFinalization) throw new Error('simulated restart after gate commit')
-            return first.store.finalizeReviewArtifact(artifact)
+      taskLock: o2Ports(db).taskLock,
+      ...{
+        upstreamAgents: o2Ports(db).upstreamAgents,
+        ...{
+          reviewArtifacts: {
+            ...first,
+            store: {
+              ...first.store,
+              async finalizeReviewArtifact(artifact) {
+                if (failFinalization) throw new Error('simulated restart after gate commit')
+                return first.store.finalizeReviewArtifact(artifact)
+              },
+            },
           },
         },
       },
@@ -265,11 +272,13 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
         docs.sort((a, b) => a.itemIndex! - b.itemIndex!).map((doc) => reader.read(doc.bodyPath)),
       ),
     ).toEqual(bodies)
-    const routes = createCollaborationRouteOperations({
-      db,
-      reviewReader: reader,
-      clarifyDraftEvents: { publish: async () => undefined },
-    })
+    const routes = createCollaborationRouteOperations(
+      withO2Closure({
+        db,
+        reviewReader: reader,
+        clarifyDraftEvents: { publish: async () => undefined },
+      }),
+    )
     const detail = await routes.reviews.versionDetail({
       appHome,
       nodeRunId: docs[0]!.reviewNodeRunId,
@@ -289,17 +298,19 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     expect(rounds[0]!.members[0]!.commentCount).toBe(1)
     failFinalization = false
     let authorityHeld = false
-    const recovery = composeCrewStationHumanGateRecovery({
-      db,
-      fence: {
-        current: () => ({ epoch: 1, leaseId: 'lease', instanceId: 'instance' }),
-        assertHeld: async () => {
-          if (!authorityHeld) throw new Error('gate recovery lease lost')
+    const recovery = composeCrewStationHumanGateRecovery(
+      withO2Closure({
+        db,
+        fence: {
+          current: () => ({ epoch: 1, leaseId: 'lease', instanceId: 'instance' }),
+          assertHeld: async () => {
+            if (!authorityHeld) throw new Error('gate recovery lease lost')
+          },
         },
-      },
-      artifacts: second.store,
-      now: () => Date.now() + 60_000,
-    })
+        artifacts: second.store,
+        now: () => Date.now() + 60_000,
+      }),
+    )
     await expect(recovery.runOnce()).rejects.toThrow('gate recovery lease lost')
     authorityHeld = true
     expect((await recovery.runOnce()).finalized).toBe(1)

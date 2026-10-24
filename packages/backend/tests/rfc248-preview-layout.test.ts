@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-248 T36 —— **未保存**成员表的干跑展平预览（编辑器右侧实时预览的后端）。
 //
 // 这条路由存在的理由：`GET /:id/layout` 只服务已存在的组，而用户在编辑器里
@@ -47,10 +48,13 @@ function previewRepoGroupLayout(
   database: PersistenceDb,
   input: { name?: string; attachments: readonly RepoGroupAttachmentSpec[] },
 ) {
-  return previewRepoGroupLayoutImpl(composeSqliteRepositoryWorkspaceStore(database), {
-    ...(input.name === undefined ? {} : { name: input.name }),
-    nodes: repoGroupNodesFromAttachments(input.attachments),
-  })
+  return previewRepoGroupLayoutImpl(
+    composeSqliteRepositoryWorkspaceStore(database, composeSourceControlTaskPorts(database)),
+    {
+      ...(input.name === undefined ? {} : { name: input.name }),
+      nodes: repoGroupNodesFromAttachments(input.attachments),
+    },
+  )
 }
 
 /** 建一个真实的组（预览里可以被 `kind:'group'` 成员引用）。 */

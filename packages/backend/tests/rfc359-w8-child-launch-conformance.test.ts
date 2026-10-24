@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8-A —— `ChildExecutionLaunchOperations` 的**双引擎对拍**。
 //
 // 这一对**不是**一份实现被抄了两遍，对拍就是用来把这一点钉住的证据（判定与逐条差额见
@@ -390,7 +391,9 @@ function operationsFor(
   workgroup: ChildWorkgroupLaunchResources = unusedWorkgroupResources(),
 ): LaunchTarget {
   const db = harness.db as unknown as PostgresqlDatabaseClient
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   let finalized = false
   if (harness.capabilities.isolation === 'exclusive') {
     return {

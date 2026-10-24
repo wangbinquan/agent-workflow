@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-359 —— `TaskRouteOperations` / `TaskRouteLaunchOperations` 两对适配器的双引擎对拍。
 //
 // # 现状：`TaskRouteOperations` 这一对**已合一**（AC-1 第 13 刀）
@@ -173,42 +174,47 @@ function resourceAuthorityFor(db: PersistenceDb): () => never {
  */
 function operations(harness: ProviderHarness): TaskRouteOperations {
   const db = harness.db
-  return createTaskRouteOperations({
-    db,
-    collaboration: {} as never,
-    owners: composeOwnerIdentityQueries(db),
-    // RFC-359 AC-1（第 5 刀）：活跃度是**注入的参与者**了，于是 A19 终于能在两个引擎上
-    // 把 `task-active` 那道门喂出来——合并前 SQLite 侧读模块全局，对拍驱不动。
-    activity: {
-      isActive: (taskId: string) => activeTaskIds.has(taskId),
-      awaitReleasedSettled: async () => {},
-    },
-    // 本对拍只驱动到前置门为止，这几样一次也不会被调到。
-    validateHostWorkflow: async () => ({ ok: true, issues: [] }),
-    resourceAuthorityFor: resourceAuthorityFor(db),
-    launches: { launch: async () => unusedDependency('launches.launch') } as never,
-    persistence: createTaskExecutionPersistence(db),
-    children: {
-      resume: async () => unusedDependency('children.resume'),
-      cancel: async () => unusedDependency('children.cancel'),
-    },
-    topology: {} as never,
-    resumeRuntimeFor: () => ({}) as never,
-    repositoryPreparationRetry: {
-      // B5：retry 对 `__repo_prep__` 行不做任何过期判定，整条转交给这个命令。
-      async retry() {
-        throw Object.assign(new Error('repository preparation retry invoked'), {
-          code: 'rfc359-w7-repository-preparation-retry-called',
-        })
+  return createTaskRouteOperations(
+    withO2Closure({
+      clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
+      db,
+      collaboration: {} as never,
+      owners: composeOwnerIdentityQueries(db),
+      // RFC-359 AC-1（第 5 刀）：活跃度是**注入的参与者**了，于是 A19 终于能在两个引擎上
+      // 把 `task-active` 那道门喂出来——合并前 SQLite 侧读模块全局，对拍驱不动。
+      activity: {
+        isActive: (taskId: string) => activeTaskIds.has(taskId),
+        awaitReleasedSettled: async () => {},
       },
-    },
-    repair: {
-      collaborationRuntime: {} as never,
-      clarify: {} as never,
-      review: {} as never,
-    },
-    appHome: APP_HOME,
-  })
+      // 本对拍只驱动到前置门为止，这几样一次也不会被调到。
+      validateHostWorkflow: async () => ({ ok: true, issues: [] }),
+      resourceAuthorityFor: resourceAuthorityFor(db),
+      launches: { launch: async () => unusedDependency('launches.launch') } as never,
+      persistence: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
+      children: {
+        resume: async () => unusedDependency('children.resume'),
+        cancel: async () => unusedDependency('children.cancel'),
+      },
+      topology: {} as never,
+      resumeRuntimeFor: () => ({}) as never,
+      repositoryPreparationRetry: {
+        // B5：retry 对 `__repo_prep__` 行不做任何过期判定，整条转交给这个命令。
+        async retry() {
+          throw Object.assign(new Error('repository preparation retry invoked'), {
+            code: 'rfc359-w7-repository-preparation-retry-called',
+          })
+        },
+      },
+      repair: {
+        collaborationRuntime: {} as never,
+        clarify: {} as never,
+        review: {} as never,
+      },
+      appHome: APP_HOME,
+    }),
+  )
 }
 
 /** `TaskRouteLaunchOperations` 这一对：两侧的 agent / workgroup 两条臂。 */

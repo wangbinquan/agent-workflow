@@ -934,7 +934,8 @@ describe('RFC-243 §3.1 — freezeCallClosure', () => {
     ).rejects.toMatchObject({
       code: 'workflow-call-ref-missing',
     })
-    const { createAgent } = await import('../src/services/agent')
+    const { createAgent } =
+      await import('../src/modules/resource-catalog/infrastructure/legacy/agent')
     const { createWorkgroup } = await import('../src/services/workgroups')
     const { buildActor } = await import('../src/auth/actor')
     const actor = buildActor({

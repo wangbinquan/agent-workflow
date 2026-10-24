@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-6 —— 「从源任务重放」这条路在两个引擎上必须给出同一种拒绝。
 //
@@ -50,10 +51,12 @@ describeEachProvider('RFC-359 —— 冻结空间布局的重放拒绝在两个�
       sourceContexts: () => {
         throw new Error('legacy materializer must not seal a request source')
       },
-      repositoryPreparation: composeRepositoryPreparation({
-        db: harness.db as never,
-        appHome: appHome,
-      }),
+      repositoryPreparation: composeRepositoryPreparation(
+        withSourceControlTaskPorts({
+          db: harness.db as never,
+          appHome: appHome,
+        }),
+      ),
       db: harness.db as never,
       appHome,
     })

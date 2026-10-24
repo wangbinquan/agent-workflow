@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-052 regression: `dispatchReviewNode` must short-circuit when the
 // freshest top-level review node_run is already in a terminal state
 // (`done` / `canceled`). Without this short-circuit, an upstream
@@ -182,15 +183,17 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     })
 
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
 
     expect(result.kind).toBe('ok')
 
@@ -236,15 +239,17 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     })
 
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
 
     expect(result.kind).toBe('awaiting_review')
     const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-287 T11（G5）—— `file://` 从此**不是可运行的来源**，按非法参数处理。
 //
 // 用户拍板：「从此再也不支持运行，直接非法参数」。要害在于**拒在哪**：
@@ -80,11 +81,14 @@ describeEachProvider('RFC-287 T11 ② — 后台自动保鲜也不再碰 file://
         createdAt: now - 1_000,
       })
     }
-    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      now,
-      intervalMs: 1,
-      onlyRecentDays: 30,
-    })
+    const due = await selectDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        now,
+        intervalMs: 1,
+        onlyRecentDays: 30,
+      },
+    )
     const dueIds = new Set(due.map((d) => d.id))
     for (const [id, keep] of ids) {
       expect(dueIds.has(id), `${id} keep=${String(keep)}`).toBe(keep)
@@ -199,7 +203,12 @@ describeEachProvider('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', (
     } as never)
     let code = ''
     try {
-      await refreshCachedRepo({ store: composeSqliteRepositoryWorkspaceStore(db) } as never, id)
+      await refreshCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        } as never,
+        id,
+      )
     } catch (err) {
       code = (err as { code?: string }).code ?? String(err)
     }
@@ -225,7 +234,12 @@ describeEachProvider('RFC-287 G5 —— 刷新的拒绝码不得张冠李戴', (
     } as never)
     let code = ''
     try {
-      await refreshCachedRepo({ store: composeSqliteRepositoryWorkspaceStore(db) } as never, id)
+      await refreshCachedRepo(
+        {
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        } as never,
+        id,
+      )
     } catch (err) {
       code = (err as { code?: string }).code ?? String(err)
     }

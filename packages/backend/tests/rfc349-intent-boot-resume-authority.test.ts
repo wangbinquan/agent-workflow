@@ -48,7 +48,7 @@ import {
 import { createIntentSession, insertUserTurnAndReserve } from '@/modules/intent/application/session'
 import { cancelIntentTurn } from '@/modules/intent/application/turnEngine'
 import { submitIntentWorkingSetChange } from '@/modules/intent/application/workingSet'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'

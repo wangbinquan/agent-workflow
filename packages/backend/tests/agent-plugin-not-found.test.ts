@@ -12,7 +12,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createAgent, updateAgent } from '../src/services/agent'
+import {
+  createAgent,
+  updateAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   composePluginServiceBindingForTest,
   createPlugin,

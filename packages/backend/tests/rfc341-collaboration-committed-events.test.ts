@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 import { taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -208,7 +209,7 @@ describeEachProvider('RFC-341 collaboration committed-event contracts', (harness
       }
 
       await expect(
-        createManualQuestionOpen(createCollaborationCommandContext({ db }), {
+        createManualQuestionOpen(createCollaborationCommandContext(withO2Closure({ db })), {
           taskId: 'task-question-rollback',
           title: 'Question',
           body: 'Investigate the failed append.',

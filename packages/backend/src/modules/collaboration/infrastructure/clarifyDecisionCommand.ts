@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W1-T2b（F-H2-1 之二）—— collaboration 的快速澄清决定命令端口：一份实现，两个引擎。
 //
 // 此前只有 `createSqliteClarifyDecisionCommand`（`legacySqliteClarifyDecisionComposition.ts`），
@@ -20,12 +21,14 @@ import { createCollaborationCommandContext } from '../composition/commandContext
 export function createClarifyDecisionCommand(
   db: PersistenceDb,
   memoryDistillEnqueuer: MemoryDistillEnqueuer,
+  taskLock: HumanGateTaskLockPort,
 ): ClarifyDecisionCommandPort {
   return {
     async submit(command) {
       const { autoDispatchClarifyRoundWithDecision } = await import('./clarify/autoDispatch')
       const decided = await autoDispatchClarifyRoundWithDecision({
         db,
+        taskLock,
         originNodeRunId: command.nodeRunId,
         answers: [...command.answers],
         directive: command.directive,
@@ -66,13 +69,19 @@ export function createClarifyDecisionCommand(
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createClarifyDecisionCommandContext(input: {
+  readonly taskLock: HumanGateTaskLockPort
   readonly db: DbClient
   readonly actor: Actor
   readonly role: TaskActorRole
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }): CollaborationCommandContext<'clarifyDecisions'> {
   return createCollaborationCommandContext({
+    taskLock: input.taskLock,
     db: input.db,
-    clarifyDecisions: createClarifyDecisionCommand(input.db, input.memoryDistillEnqueuer),
+    clarifyDecisions: createClarifyDecisionCommand(
+      input.db,
+      input.memoryDistillEnqueuer,
+      input.taskLock,
+    ),
   })
 }

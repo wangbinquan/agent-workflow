@@ -1,3 +1,4 @@
+import { deleteAgent, deleteWorkgroup } from './helpers/resourceCatalogDeletion'
 // RFC-203 T6 —— 删除/改名拒绝详情的 principal-aware 披露（deleteWorkflow 先例
 // 推广到全部引用发射点）。
 //
@@ -21,9 +22,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { createAgent, deleteAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
-import { deleteWorkgroup } from '../src/services/workgroups'
+
 import { ConflictError } from '../src/util/errors'
 import {
   createMcpForTest as createMcp,
@@ -106,11 +107,26 @@ describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => 
       ),
       'utf8',
     )
-    const fences =
-      src.match(/first\(tx\.select\(\)\.from\(agents\)\.where\(eq\(agents\.id, id\)\)\)/g) ?? []
-    expect(fences.length).toBeGreaterThanOrEqual(2)
-    // delete fence stays after the async disclosure-grant prefetch.
-    expect(src.indexOf('fenceRow')).toBeGreaterThan(src.indexOf('listGrantedResourceIds'))
+    const repository = readFileSync(
+      resolve(import.meta.dir, '../src/modules/resource-catalog/infrastructure/agentRepository.ts'),
+      'utf8',
+    )
+    const deletion = repository.slice(
+      repository.indexOf('async delete('),
+      repository.indexOf('async rename('),
+    )
+    expect(deletion).toContain('.where(eq(agents.id, id))')
+    expect(deletion.indexOf('.where(eq(agents.id, id))')).toBeLessThan(
+      deletion.indexOf('assertDeleteInTransaction'),
+    )
+    expect(deletion.indexOf('assertDeleteInTransaction')).toBeLessThan(
+      deletion.indexOf('.delete(agents)'),
+    )
+    const rename = src.slice(src.indexOf('export async function renameAgent('))
+    expect(rename).toContain("requireAgentMutationRevisionTx(tx, id, opts.actor, opts, 'govern')")
+    expect(rename.indexOf('requireAgentMutationRevisionTx')).toBeLessThan(
+      rename.indexOf('.update(agents)'),
+    )
   })
 })
 

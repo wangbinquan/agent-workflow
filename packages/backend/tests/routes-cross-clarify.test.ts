@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-B T7 — integration tests for the cross-clarify side of /api/clarify.
 //
 // Mixed routes (existing /api/clarify endpoints, augmented):
@@ -144,7 +145,7 @@ async function seedCrossClarifySession(
     iteration: 0,
   })
   const { round: session, intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
-    {
+    withO2Closure({
       kind: 'cross',
       db,
       taskId,
@@ -154,7 +155,7 @@ async function seedCrossClarifySession(
       targetConsumerNodeId: 'designer',
       loopIter: 0,
       questions: [Q1],
-    },
+    }),
   )
   return { taskId, intermediaryNodeRunId: crossClarifyNodeRunId, sessionId: session.id }
 }
@@ -212,17 +213,19 @@ describe('GET /api/clarify — mixed self + cross with kind chip', () => {
         retryIndex: 0,
         iteration: 0,
       })
-      await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId: taskA,
-        askingNodeId: 'designer',
-        askingNodeRunId: sourceRunId,
-        askingShardKey: null,
-        intermediaryNodeId: 'c1',
-        iteration: 0,
-        questions: [Q1],
-      })
+      await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId: taskA,
+          askingNodeId: 'designer',
+          askingNodeRunId: sourceRunId,
+          askingShardKey: null,
+          intermediaryNodeId: 'c1',
+          iteration: 0,
+          questions: [Q1],
+        }),
+      )
 
       await seedCrossClarifySession(db)
 

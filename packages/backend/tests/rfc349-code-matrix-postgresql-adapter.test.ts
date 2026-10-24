@@ -1,3 +1,4 @@
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-349 — the repository capability matrix reads provider-owned facts while
 // application code remains the only owner of readiness and repair derivation.
 
@@ -111,7 +112,9 @@ describe('RFC-349 PostgreSQL code capability matrix adapter', () => {
       ],
       [['agent-1']],
     ])
-    const app = appWithHistory(composeCodeHistoryQueries(fake.db))
+    const app = appWithHistory(
+      composeCodeHistoryQueries(fake.db, createAgentExecutionQueries(fake.db)),
+    )
 
     const response = await app.request(`/api/code/matrix/${REPO}`)
     expect(response.status).toBe(200)
@@ -144,7 +147,9 @@ describe('RFC-349 PostgreSQL code capability matrix adapter', () => {
 
   test('missing PostgreSQL prerequisites remain actionable rather than throwing', async () => {
     const fake = fixture([[[REPO, 'mr-review', null, true]], []])
-    const query = createCodeMatrixQuery(createCapabilityMatrixRead(fake.db))
+    const query = createCodeMatrixQuery(
+      createCapabilityMatrixRead(fake.db, createAgentExecutionQueries(fake.db)),
+    )
 
     const [row] = await query.forRepo(REPO)
     expect(row?.readiness).toBe('misconfigured')

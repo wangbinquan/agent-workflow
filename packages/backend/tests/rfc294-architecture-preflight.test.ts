@@ -338,7 +338,6 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/system-operations/composition.ts -> packages/backend/src/modules/memory/composition.ts',
   'packages/backend/src/modules/system-operations/composition.ts -> packages/backend/src/modules/resource-catalog/composition/skillVersionCommit.ts',
   'packages/backend/src/modules/system-operations/composition.ts -> packages/backend/src/modules/source-control/composition.ts',
-  'packages/backend/src/modules/system-operations/composition/resourceLimits.ts -> packages/backend/src/modules/task-execution/composition/taskCancellation.ts',
   'packages/backend/src/modules/task-execution/composition/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts',
   'packages/backend/src/modules/task-execution/composition/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts',
   'packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts -> packages/backend/src/modules/runtime-management/composition/crewstationRuntimeManagement.ts',
@@ -516,6 +515,10 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/task-execution/infrastructure/taskDetailQueries.ts#createTaskDetailQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskPreparationQueries.ts#createTaskPreparationQueries: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/task-execution/infrastructure/taskPreparationParticipant.ts#createTaskPreparationParticipantInTx: forbidden type import @/platform/persistence/persistenceDb#PersistenceTx',
+  // RFC-395 II-b O3, plan §6.13: user-accepted same-statement webhook DELETE fragment.
+  'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
+  'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#AnyColumn',
+  'modules/task-execution/infrastructure/nonTerminalTaskExists.ts#nonTerminalTaskExists: forbidden type import drizzle-orm#SQL',
 ]
 // END COMMITTED G3 BASELINES
 const G3_SUCCESSORS = {

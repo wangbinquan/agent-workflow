@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
 import {
@@ -35,7 +36,7 @@ import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
 // RFC-132 ②a 缺口② 回归锁: S3 + S6 drive answers through the unified autoDispatchClarifyRound.
 // They previously deadlocked on a genuine behavior gap — review iterate/reject SUPERSEDES the
@@ -351,13 +352,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
 
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -440,26 +443,30 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
       commentText: 'please revise',
     })
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev1!.id,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev1!.id,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
     // review should be awaiting again on v2
     const rev2 = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev2).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev2!.id,
-      decision: 'approved',
-      expectedReviewIteration: 1,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev2!.id,
+        decision: 'approved',
+        expectedReviewIteration: 1,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -588,13 +595,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
       commentText: 'revise',
     })
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev1!.id,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev1!.id,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     // RFC-123: answering the round-0 clarify with stop now writes the durable
     // per-(task, asking-node) directive (canvas toggle = single source of truth), so
     // the designer would stay muzzled (STOP CLARIFYING) on the iterate rerun. The
@@ -656,13 +665,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(rev2).toBeDefined()
 
     // approve v2 (whose content already reflects the latest designer run)
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev2!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev2!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev2!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev2!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -754,13 +765,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -838,13 +851,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     expect(revA && revB).toBeTruthy()
 
     // approve B first
-    const approvalB = await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: revB!.id,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    const approvalB = await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: revB!.id,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     await reenterScheduler(c.db, approvalB.taskId)
     await runTask({
       taskId: approvalB.taskId,
@@ -853,14 +868,16 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       binaryOverride: opencodeCmd(),
     })
     // then reject A (rerunnable designer) → designer reruns v2 → B's approval is now stale
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: revA!.id,
-      decision: 'rejected',
-      expectedReviewIteration: 0,
-      rejectReason: 'no good',
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: revA!.id,
+        decision: 'rejected',
+        expectedReviewIteration: 0,
+        rejectReason: 'no good',
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -967,14 +984,16 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
     const rev1 = await awaitingReviewRun(c.db, task.id, 'rev')
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev1!.id,
-      decision: 'rejected',
-      expectedReviewIteration: 0,
-      rejectReason: 'redo',
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev1!.id,
+        decision: 'rejected',
+        expectedReviewIteration: 0,
+        rejectReason: 'redo',
+      }),
+    )
     // RFC-123: the round-0 'stop' answer wrote the durable node directive (toggle=stop),
     // and the RFC-123 follow-up now ENFORCES it — a stopped designer that emits clarify is
     // rejected (clarify-forbidden). To let the designer clarify again on the reject rerun,
@@ -998,13 +1017,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     const rev2 = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev2).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev2!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev2!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev2!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev2!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -1107,13 +1128,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -1196,13 +1219,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
     )
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
     // builder now asks clarify
@@ -1543,13 +1568,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -1657,13 +1684,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
     const revA = await awaitingReviewRun(c.db, task.id, 'revA')
     expect(revA).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: revA!.id,
-      decision: 'approved',
-      expectedReviewIteration: revA!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: revA!.id,
+        decision: 'approved',
+        expectedReviewIteration: revA!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -1777,13 +1806,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -1896,13 +1927,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // designer v1 → rev1 awaiting. approve.
     const rev1 = await awaitingReviewRun(c.db, task.id, 'rev1')
     expect(rev1).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev1!.id,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev1!.id,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
     // questioner ran and asked cross-clarify → awaiting_human
@@ -1939,13 +1972,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       if (st === 'awaiting_review') {
         const r = await awaitingReviewRun(c.db, task.id, 'rev1')
         if (r) {
-          await submitReviewDecision({
-            db: c.db,
-            appHome: c.appHome,
-            nodeRunId: r.id,
-            decision: 'approved',
-            expectedReviewIteration: r.reviewIteration,
-          })
+          await submitReviewDecision(
+            withO2Closure({
+              db: c.db,
+              appHome: c.appHome,
+              nodeRunId: r.id,
+              decision: 'approved',
+              expectedReviewIteration: r.reviewIteration,
+            }),
+          )
           continue
         }
         break
@@ -2056,37 +2091,43 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
       commentText: 'revise',
     })
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev1a!.id,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev1a!.id,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
     const rev1b = await awaitingReviewRun(c.db, task.id, 'rev1')
     expect(rev1b).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev1b!.id,
-      decision: 'approved',
-      expectedReviewIteration: 1,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev1b!.id,
+        decision: 'approved',
+        expectedReviewIteration: 1,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
     const rev2 = await awaitingReviewRun(c.db, task.id, 'rev2')
     expect(rev2).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev2!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev2!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev2!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev2!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -2156,13 +2197,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const designerDone = (await topLevel(c.db, task.id, 'designer')).filter(
       (r) => r.status === 'done',
     )
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -2278,13 +2321,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const revA = await awaitingReviewRun(c.db, task.id, 'revA')
     const revB = await awaitingReviewRun(c.db, task.id, 'revB')
     expect(revA && revB).toBeTruthy()
-    const approvalA = await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: revA!.id,
-      decision: 'approved',
-      expectedReviewIteration: revA!.reviewIteration,
-    })
+    const approvalA = await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: revA!.id,
+        decision: 'approved',
+        expectedReviewIteration: revA!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, approvalA.taskId)
     await runTask({
       taskId: approvalA.taskId,
@@ -2292,13 +2337,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       appHome: c.appHome,
       binaryOverride: opencodeCmd(),
     })
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: revB!.id,
-      decision: 'approved',
-      expectedReviewIteration: revB!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: revB!.id,
+        decision: 'approved',
+        expectedReviewIteration: revB!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 
@@ -2437,13 +2484,15 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     const rev = await awaitingReviewRun(c.db, task.id, 'rev')
     expect(rev).toBeDefined()
-    await submitReviewDecision({
-      db: c.db,
-      appHome: c.appHome,
-      nodeRunId: rev!.id,
-      decision: 'approved',
-      expectedReviewIteration: rev!.reviewIteration,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: c.db,
+        appHome: c.appHome,
+        nodeRunId: rev!.id,
+        decision: 'approved',
+        expectedReviewIteration: rev!.reviewIteration,
+      }),
+    )
     await reenterScheduler(c.db, task.id)
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
 

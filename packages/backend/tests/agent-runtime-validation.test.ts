@@ -9,7 +9,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CreateAgent } from '@agent-workflow/shared'
-import { createAgent, updateAgent } from '../src/services/agent'
+import {
+  createAgent,
+  updateAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   createRuntime,
   seedBuiltinRuntimes,

@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-049 PR-B: integration test locking the post-forgiveness review-flow
 // contract. The original incident (linked in commit history) was: upstream
 // agent emitted an absolute .md path on an undeclared port → doc_versions
@@ -146,15 +147,17 @@ describeEachProvider(
         declareMarkdownFileKind: true,
       })
       const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
-      const result = await dispatchReviewNode({
-        db,
-        taskId: task.id,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId: task.id,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(result.kind).toBe('awaiting_review')
 
       const { docVersions } = tablesOf(db)
@@ -170,15 +173,17 @@ describeEachProvider(
         declareMarkdownFileKind: false,
       })
       const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
-      const result = await dispatchReviewNode({
-        db,
-        taskId: task.id,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId: task.id,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(result.kind).toBe('awaiting_review')
 
       const { docVersions } = tablesOf(db)

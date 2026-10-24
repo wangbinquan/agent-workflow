@@ -1,3 +1,4 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-359 W1-T1（前置）—— human-gate 操作日志（journal）与其 db-owning 端口实现在两个引擎上各跑一遍。
 //
 // 用例移植自 `rfc333-human-gate-operation-store.test.ts`（SQLite 同步 store 的黄金锁，仍保留）：同一段
@@ -83,7 +84,7 @@ async function expectOperationError(
   expect((error as HumanGateOperationError).code).toBe(code)
 }
 
-const journal = new DatabaseHumanGateOperationJournal()
+const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
 
 function begin(
   tx: PersistenceTx,

@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-076 PR-0 (T0) — clarify rerun continuation, torn-read safety (functional lock).
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -149,18 +150,20 @@ describeEachProvider('RFC-076 PR-0 — clarify rerun write-ordering', (harness) 
       checkpoints: [{ mountPath: '', preSnapshot: 'snap-x' }],
     })
 
-    const sess = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'agent_x',
-      askingNodeRunId: agentRunId,
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify_x',
-      iteration: 0,
-      questions: [makeQ('q1')],
-      truncationWarnings: [],
-    })
+    const sess = await createClarifyRound(
+      withO2Closure({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'agent_x',
+        askingNodeRunId: agentRunId,
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify_x',
+        iteration: 0,
+        questions: [makeQ('q1')],
+        truncationWarnings: [],
+      }),
+    )
 
     await autoDispatchClarifyRound({
       db,

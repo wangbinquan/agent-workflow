@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-a A3 sites-a：双 provider 锁定帧、消费新鲜度、跨代 fanout 与 call 收养的旧决策，避免简单 MAX(seq) 替换。
 import { expect, test } from 'bun:test'
 import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -48,7 +49,9 @@ async function run(
   await nodeRunFixture(db, { id, taskId: 'task', nodeId, status: 'done', ...spec })
 }
 function wrapperPorts(db: PersistenceDb, def = definition) {
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const state = {
     taskId: 'task',
     task: {},
@@ -87,7 +90,9 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     await run(db, 'new-pending', 'source', { status: 'pending' })
     await run(db, 'other-frame', 'source', { containerRunId: 'wrapper' })
     await run(db, 'child', 'source', { parentNodeRunId: 'wrapper', containerRunId: 'wrapper' })
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     const read = () =>
       readPortRowAtFrame(persistence.nodeExecution, 'task', 'source', 'answer', {
         containerRunId: null,
@@ -109,7 +114,9 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       { id: 'a', kind: 'agent-single' },
       { id: 'b', kind: 'agent-single' },
     ] as WorkflowNode[]
-    const rows = await createTaskExecutionPersistence(db).nodeExecution.list({ taskId: 'task' })
+    const rows = await createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).nodeExecution.list({ taskId: 'task' })
     const frontier = await deriveFrontier(
       rows,
       { ...definition, nodes },
@@ -132,7 +139,9 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       rerunCause: 'wrapper-init',
       retryIndex: 20,
     })
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     const input = { taskId: 'task', nodeId: 'wrapper', containerRunId: null, iteration: 0 }
     expect((await persistence.wrapperRuns.findResumable(input))?.id).toBe('waiting')
     await run(db, 'terminal', 'wrapper', { status: 'failed', rerunCause: 'wrapper-init' })
@@ -155,7 +164,9 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       parentNodeRunId: 'w-new',
       containerRunId: 'w-new',
     })
-    const rows = await createTaskExecutionPersistence(db).nodeExecution.list({ taskId: 'task' })
+    const rows = await createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).nodeExecution.list({ taskId: 'task' })
     expect((await selectResumeRollbackTargets(rows)).map((row) => row.id)).toEqual([])
   })
 
@@ -286,7 +297,9 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       { id: 'target', kind: 'agent-single' },
     ] as WorkflowNode[]
     const def = { ...definition, nodes }
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     const frontier = async (released = new Set<string>()) =>
       deriveFrontier(
         await persistence.nodeExecution.list({ taskId: 'task' }),
@@ -335,7 +348,9 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       parentNodeRunId: 'selected-call',
       containerRunId: 'selected-call',
     })
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     const rows = await persistence.nodeExecution.list({
       taskId: 'task',
       nodeId: 'call',

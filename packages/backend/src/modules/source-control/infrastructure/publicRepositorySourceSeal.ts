@@ -1,3 +1,4 @@
+import type { RepositoryWorkspaceTaskPorts } from '../composition/required-ports'
 import { canonicalJson } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -13,12 +14,13 @@ import { composeRepositoryWorkspaceStore } from './repositoryWorkspaceStore'
 
 /** No clone/fetch. The existing cache identity owner still seals credentials as before. */
 export function createPublicRepositorySourceSeal(input: {
+  readonly taskPorts: RepositoryWorkspaceTaskPorts
   readonly db: PersistenceDb
   readonly appHome: string
   readonly secretBox?: SecretBox
 }): PublicRepositorySourceSealPort {
   const journal = createRepositoryPreparationJournal(input.db)
-  const store = composeRepositoryWorkspaceStore(input.db)
+  const store = composeRepositoryWorkspaceStore(input.db, input.taskPorts)
   return Object.freeze<PublicRepositorySourceSealPort>({
     async seal(context, source) {
       const requestKey = `public-source:${context.idempotencyKey}`

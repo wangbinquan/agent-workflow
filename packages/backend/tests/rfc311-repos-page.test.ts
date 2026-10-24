@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-311 T28 — /api/cached-repos O(页) 分页的语义等价与形状锁。
 //
 // 快路径(listCachedReposPage,SQL 下推)必须与旧全量管线(listCachedRepos +
@@ -254,7 +255,7 @@ function jsFilter(
 describeEachProvider('RFC-311 T28 — listCachedReposPage oracle', (harness) => {
   let store: RepositoryWorkspaceStore
   beforeEach(async () => {
-    store = composeRepositoryWorkspaceStore(harness.db)
+    store = composeRepositoryWorkspaceStore(harness.db, composeSourceControlTaskPorts(harness.db))
     await seed(harness.db)
   })
 

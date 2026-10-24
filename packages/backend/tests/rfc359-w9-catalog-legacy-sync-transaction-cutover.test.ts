@@ -1,3 +1,4 @@
+import { deleteAgent, deleteWorkflow, deleteWorkgroup } from './helpers/resourceCatalogDeletion'
 // RFC-359 W9 —— resource-catalog legacy（agent / workflow / workgroup）的**删除 / 改名面**
 // 从 bun:sqlite 独有的同步 `dbTxSync` 切到中立事务原语之后的行为锁。
 //
@@ -53,9 +54,8 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { deleteAgent, renameAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
-import { deleteWorkflow } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
-import { deleteWorkgroup } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
+import { renameAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
+
 import {
   casGateStatus,
   ensureWorkgroupTaskStateRow,

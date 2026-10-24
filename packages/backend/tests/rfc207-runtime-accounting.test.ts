@@ -33,7 +33,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { setTaskStatus } from '../src/services/lifecycle'
-import { enforceLimits } from '../src/services/limits'
+import { enforceLimits } from './helpers/resourceLimits'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 let db: PersistenceDb

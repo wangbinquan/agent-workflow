@@ -23,7 +23,7 @@ import {
 import { renderRosterBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
 import { buildRosterAgentCards } from '../src/services/workgroup/state'
 
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 

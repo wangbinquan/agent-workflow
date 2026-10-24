@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W8-T29 —— 「先查存在、再插入唯一键表」这一族在**并发**下的用户可见收场，两个引擎各跑一遍。
 //
 // 这个文件为什么存在
@@ -196,7 +197,7 @@ async function seedTaskRow(db: PersistenceDb): Promise<string> {
 describeEachProvider('RFC-359 W8-T29 —— 两个用户同时建同名仓库组', (harness) => {
   test('输的一方拿到 name-conflict（→ 409），不是驱动层的唯一键错误', async () => {
     const db = harness.db
-    const store = new DrizzleRepositoryWorkspaceStore(db)
+    const store = new DrizzleRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     const repo = await seedCachedRepo(db)
     // 单轮就能复现（变异后 PG 每轮必红），12 轮把「刚好被自然串行化」的偶然性排掉。
     for (let round = 0; round < 12; round += 1) {

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370 v3 V6: the hosted task archive index (`hosted_task_archive_entries`)
 // lists object parts that are `task-archive` publications of the neutral
 // journal; object-backed sources are linked, never copied, and no archived byte
@@ -138,7 +139,11 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
       )
     }
     const binding = f.reopen()
-    const command = createDrizzleTaskArchiveMaintenanceCommand(f.db, binding)
+    const command = createDrizzleTaskArchiveMaintenanceCommand(
+      f.db,
+      o2Ports(f.db).collaborationReads.archive,
+      binding,
+    )
     const result = await command.runSweep(
       { enabled: true, retentionDays: 1 },
       { ...binding.locations, now: 100 * 86400_000 },
@@ -174,19 +179,23 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     const f = await setup()
     const first = f.reopen()
     let lost = false
-    const command = createDrizzleTaskArchiveMaintenanceCommand(f.db, {
-      ...first,
-      content: {
-        ...first.content,
-        async move(from, to) {
-          await first.content.move(from, to)
-          if (to === 'cs-archive:tasks/parent' && !lost) {
-            lost = true
-            throw new Error('archive publication reply lost')
-          }
+    const command = createDrizzleTaskArchiveMaintenanceCommand(
+      f.db,
+      o2Ports(f.db).collaborationReads.archive,
+      {
+        ...first,
+        content: {
+          ...first.content,
+          async move(from, to) {
+            await first.content.move(from, to)
+            if (to === 'cs-archive:tasks/parent' && !lost) {
+              lost = true
+              throw new Error('archive publication reply lost')
+            }
+          },
         },
       },
-    })
+    )
     await command.runSweep(
       { enabled: true, retentionDays: 1 },
       { ...first.locations, now: 100 * 86400_000 },
@@ -194,7 +203,11 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     expect(lost).toBe(true)
     expect(await readTaskFixtures(f.db)).toHaveLength(2)
     const second = f.reopen()
-    const recovery = createDrizzleTaskArchiveMaintenanceCommand(f.db, second)
+    const recovery = createDrizzleTaskArchiveMaintenanceCommand(
+      f.db,
+      o2Ports(f.db).collaborationReads.archive,
+      second,
+    )
     await recovery.recover({ ...second.locations, now: 101 * 86400_000 })
     expect(await readTaskFixtures(f.db)).toHaveLength(0)
     expect(await second.readText('cs-archive:tasks/parent/runs/child/node/prompt.md')).toBe(

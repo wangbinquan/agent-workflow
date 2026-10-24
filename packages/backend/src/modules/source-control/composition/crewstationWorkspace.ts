@@ -1,3 +1,4 @@
+import type { RepositoryWorkspaceTaskPorts } from './required-ports'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BusinessEnvironmentValue } from '@/platform/crewstation/nativeMaterial'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
@@ -47,6 +48,7 @@ import { sha256Hex } from '@/util/hash'
  * and the parents' pause / resume / close lifecycle (§9.2 V3). */
 export function composeCrewStationWorkspaceOwner(
   input: Parameters<typeof createHostedTaskWorkspaces>[0] & {
+    readonly taskPorts: RepositoryWorkspaceTaskPorts
     readonly secretBox: SecretBox
     readonly commandEnvironment?: (
       operation: string,
@@ -243,6 +245,7 @@ export function composeCrewStationWorkspaceOwner(
         }),
         employeeCaseWorkspaceEffects: createHostedEmployeeCaseWorkspaceOperations({ helper }),
         repositoryPreparationEffects: createHostedRepositoryPreparation({
+          taskPorts: input.taskPorts,
           db: input.db,
           secretBox: input.secretBox,
           helper,

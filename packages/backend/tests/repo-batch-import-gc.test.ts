@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-033-T2: TTL-based GC for completed batches.
 
 // RFC-285 B6②：startBatchImport 增 owner 第三参（ownership 落 BatchRecord），
@@ -52,7 +53,7 @@ describeEachProvider('gcBatches (RFC-033-T2)', (harness) => {
   test('evicts completed batch past TTL', async () => {
     const db = harness.db
     const myDeps: RepoBatchImportDeps = {
-      store: composeSqliteRepositoryWorkspaceStore(db),
+      store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       resolveCachedRepo: happyResolver(),
       emit: () => {},
     }
@@ -74,7 +75,7 @@ describeEachProvider('gcBatches (RFC-033-T2)', (harness) => {
         /* never resolve */
       })) as Resolver
     const myDeps: RepoBatchImportDeps = {
-      store: composeSqliteRepositoryWorkspaceStore(db),
+      store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       resolveCachedRepo: heldResolver,
       emit: () => {},
     }

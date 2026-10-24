@@ -1,3 +1,4 @@
+import { o2Ports } from './o2Closure'
 // RFC-359 AC-1（第 8 刀）—— 修复引擎的**唯一**测试装配点。
 //
 // 为什么存在：修复这件事曾经有两份实现（`platform/persistence/sqlite/taskLifecycleRepair.ts`
@@ -97,7 +98,9 @@ export function createRepairEngine(
   options: RepairEngineOptions = {},
 ): RepairEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-repair-engine-'))
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const resumedTaskIds: string[] = []
   const activity: ActiveTaskExecutionParticipant = {
     isActive: options.isActive ?? (() => false),
@@ -112,7 +115,12 @@ export function createRepairEngine(
       resumedTaskIds.push(taskId)
       await options.resume?.(taskId)
     },
-    collaborationRuntime: options.collaborationRuntime ?? createCollaborationRuntimeMechanics(db),
+    collaborationRuntime:
+      options.collaborationRuntime ??
+      createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      }),
     clarify: createClarifyRepairParticipant(db),
     review: createReviewRepairParticipant(db),
     appHome,

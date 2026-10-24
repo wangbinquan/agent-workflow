@@ -322,7 +322,8 @@ describe('RFC-317 T66 —— 过期断言不变量（散文与源码脱钩即红
     // 派生端：SQLite lifecycle persistence 是否导出同步事务版内核入口。
     // findings LC-12：三处直写拿这句话当理由，而它写下三天后就有了 setNodeRunStatusTx。
     const lifecycle = CORPUS.find(
-      (u) => u.path === 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
+      (u) =>
+        u.path === 'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
     )
     expect(lifecycle, '派生端文件不存在：SQLite taskLifecycle persistence').toBeDefined()
     const hasSyncEntry = /export function setNodeRunStatusTx/.test(lifecycle!.text)

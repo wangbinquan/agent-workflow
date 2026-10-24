@@ -1,3 +1,5 @@
+import { o2Ports } from './helpers/o2Closure'
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
@@ -372,13 +374,15 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
         }
       },
     }
-    const root = composeRepositoryPreparation({
-      db: harness.db,
-      appHome: home(),
-      cloneTimeoutMs: 999,
-      preparationConfiguration: query,
-      preparationEffects: factory,
-    })
+    const root = composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        appHome: home(),
+        cloneTimeoutMs: 999,
+        preparationConfiguration: query,
+        preparationEffects: factory,
+      }),
+    )
     const request = {
       taskId: 'configuration-closure',
       operationRef: operation,
@@ -436,7 +440,9 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       inputs: '{}',
       startedAt: 1,
     })
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     await submitTaskContinuation(persistence.intents, {
       taskId,
       intentId,

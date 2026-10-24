@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   nodeRunOutputFixture,
@@ -307,9 +308,15 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
     const operations = composePortArtifactOperations(content, h.root),
       selectedHomes: string[] = []
     const collaboration = createCollaborationRuntimeMechanics(db, {
-      portArtifactReaderFor: (appHome) => {
-        selectedHomes.push(appHome)
-        return operations
+      taskLock: o2Ports(db).taskLock,
+      ...{
+        upstreamAgents: o2Ports(db).upstreamAgents,
+        ...{
+          portArtifactReaderFor: (appHome) => {
+            selectedHomes.push(appHome)
+            return operations
+          },
+        },
       },
     })
     let settled = false

@@ -1,3 +1,6 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
+import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/composition'
 import type { Actor } from '@/auth/actor'
 import { admitDaemonIdentity, actorOfDirectAuthority } from '@/auth/session'
 import { type DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
@@ -34,12 +37,12 @@ import {
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
 import {
-  createHealthDatabaseReadModel,
   type PostgresqlSystemOperationsModule,
   type SystemOperationsModule,
 } from '@/modules/system-operations/composition'
 import { type MaintenanceDiskOperations } from '@/modules/system-operations/public/operations'
-import { type HealthDatabaseReadModel } from '@/modules/system-operations/public/queries'
+import { createTaskStatusCounts } from '@/modules/task-execution/composition'
+import type { TaskStatusCountQueries } from '@/modules/task-execution/public/types'
 import { type DatabaseProvider } from '@/platform/persistence/databaseProviders'
 
 /** Bootstrap event sink shared by both database-provider compositions. */
@@ -98,7 +101,7 @@ export interface DaemonProviderCore<
   daemonActor(errorCode?: string): Promise<Actor>
   /** The selected credential mechanism's HTTP admission (WebSocket uses its twin). */
   readonly httpAuthentication: HttpAuthenticationParticipant
-  readonly healthDatabase: HealthDatabaseReadModel
+  readonly healthDatabase: TaskStatusCountQueries
   readonly runtimeRegistry: RuntimeRegistryOperations
   readonly repositoryWorkspaceStore: RepositoryWorkspaceStore
   readonly repositoryWorkspaceOperations: RepositoryWorkspaceOperations
@@ -146,7 +149,10 @@ export function composeDaemonProviderCore<P extends DatabaseProvider>(
     readonly adapters: DaemonProviderCoreAdapters<P>
   },
 ): SelectedDaemonProviderCore<P> {
-  const repositoryWorkspaceStore = composeRepositoryWorkspaceStore(input.db)
+  const repositoryWorkspaceStore = composeRepositoryWorkspaceStore(
+    input.db,
+    composeSourceControlTaskPorts(input.db),
+  )
   const repositoryWorkspaceOperations = composeRepositoryWorkspaceOperations(
     repositoryWorkspaceStore,
     input.secretBox,
@@ -182,7 +188,7 @@ export function composeDaemonProviderCore<P extends DatabaseProvider>(
       return actorOfDirectAuthority(identity)
     },
     httpAuthentication: credentials.http,
-    healthDatabase: createHealthDatabaseReadModel(input.db),
+    healthDatabase: createTaskStatusCounts(input.db),
     runtimeRegistry: composeRuntimeRegistryOperations(
       input.db,
       composeRuntimeProfileParticipants(),
@@ -192,6 +198,8 @@ export function composeDaemonProviderCore<P extends DatabaseProvider>(
     repositoryTransportCredentialRepository,
     realtime: composeRealtimeRuntimeFor({
       db: input.db,
+      taskFacts: composeRealtimeTaskFacts(input.db),
+      resources: composeRealtimeResourceAcl(input.db),
       credentials: credentials.webSocket,
       policy: input.realtimePolicy,
     }),

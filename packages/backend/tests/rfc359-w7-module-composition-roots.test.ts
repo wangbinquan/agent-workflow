@@ -1,3 +1,6 @@
+import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
+import { o2Ports } from './helpers/o2Closure'
+import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 // RFC-359 W7 —— code-capability / development-automation / source-control / task-execution 的
 // provider 组合根：**真的构造 + 真的驱动**（口径同本批另外两个文件）。
 //
@@ -130,8 +133,14 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
       checkpoints: [{ mountPath: '', preSnapshot: 'stash-hash' }],
     })
 
-    const sqlite = composeLegacyCodeReadProviders(asSqlite(harness.db))
-    const postgresql = composeLegacyCodeReadProviders(asPostgresql(harness.db))
+    const sqlite = {
+      ...composeLegacyCodeReadProviders(asSqlite(harness.db)),
+      workspace: createTaskCodeWorkspaceQueries(harness.db),
+    }
+    const postgresql = {
+      ...composeLegacyCodeReadProviders(asPostgresql(harness.db)),
+      workspace: createTaskCodeWorkspaceQueries(harness.db),
+    }
 
     const task = await sqlite.workspace.findTask(taskId)
     expect(task).toMatchObject({ id: taskId, status: 'running' })
@@ -307,14 +316,17 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
         workspacePruningAt: T0,
         workspacePruneCause: 'webhook-terminal',
       })
-      const command = composeWorkspaceMaintenanceCommand({
-        db: harness.db,
-        appHome,
-        terminalMaintenance: createTaskExecutionPersistence(asSqlite(harness.db))
-          .terminalMaintenance,
-        isMaterializingTask: () => false,
-        invalidateWorkspacePath() {},
-      })
+      const command = composeWorkspaceMaintenanceCommand(
+        withWorkspaceMaintenancePorts({
+          db: harness.db,
+          appHome,
+          terminalMaintenance: createTaskExecutionPersistence(asSqlite(harness.db), {
+            recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,
+          }).terminalMaintenance,
+          isMaterializingTask: () => false,
+          invalidateWorkspacePath() {},
+        }),
+      )
       // ticker 语义：租约刚盖章，不接管。
       expect(await command.recover({ activeTaskIds: [], now: T0 + 1_000 })).toEqual({
         completed: 0,

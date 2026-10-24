@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -89,7 +90,9 @@ describeEachProvider('gracefulShutdown', (harness) => {
 
   test('returns immediately when no tasks are running', async () => {
     const t0 = Date.now()
-    const persistence = createTaskExecutionPersistence(h.db)
+    const persistence = createTaskExecutionPersistence(h.db, {
+      recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+    })
     await gracefulShutdown(
       {
         controller: {
@@ -110,7 +113,9 @@ describeEachProvider('gracefulShutdown', (harness) => {
     // No AbortController registered — abortAllActiveTasks is a no-op, and
     // the row stays running. After the short budget, the survivor path
     // marks it interrupted.
-    const persistence = createTaskExecutionPersistence(h.db)
+    const persistence = createTaskExecutionPersistence(h.db, {
+      recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+    })
     await gracefulShutdown(
       {
         controller: {
@@ -133,7 +138,9 @@ describeEachProvider('gracefulShutdown', (harness) => {
   // RFC-379: a driver that ignores abort cannot hold the provider open indefinitely.
   test('session shutdown bounds a stuck provider driver then persists its survivor', async () => {
     const taskId = await seedRunning(h.db)
-    const persistence = createTaskExecutionPersistence(h.db)
+    const persistence = createTaskExecutionPersistence(h.db, {
+      recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+    })
     const module =
       harness.applicationBinding.provider === 'postgresql'
         ? createProviderTaskExecutionModule({ daemonGeneration: 'rfc379', persistence })

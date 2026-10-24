@@ -17,7 +17,7 @@
 // （`derivedSupersededIds` = 生产 SQL 谓词），并在下一次迁移尝试时被拦成非法迁移、收成 abandoned 落库
 // （`expectFencedToAbandoned`）。每格断言「铸造没写旧代」+「推导集合 = 改前会被 abandon 的集合」。
 //
-// RFC-359：判据原本打在 `platform/persistence/sqlite/taskLifecycle.ts` 的
+// RFC-359：判据原本打在 `modules/task-execution/infrastructure/taskLifecycle.ts` 的
 // `transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates`
 // 上——那三个是**零生产调用方**的 SQLite 孪生实现（生产早已走
 // `DrizzleMergeStateLifecyclePersistence` 与 `nodeRunMintProgram`，两者都是

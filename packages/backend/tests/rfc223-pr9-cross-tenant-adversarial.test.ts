@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-223 PR-9 (T16) — cross-tenant same-name adversarial coverage.
 //
 // This suite deliberately exercises the real id-canonical consumers that were
@@ -43,7 +44,10 @@ import type { Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { __setProbeOptionsForTesting } from '../src/routes/mcps'
-import { createAgent, renameAgent } from '../src/services/agent'
+import {
+  createAgent,
+  renameAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   approveFusion,
   createFusion as createFusionWithAuthority,
@@ -653,13 +657,15 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       createdAt: 1,
     })
 
-    const block = await buildSiblingOutputsBlock({
-      db,
-      appHome: '/tmp/rfc223-review-home',
-      taskId,
-      upstreamNodeId: 'writer',
-      targetPortName: 'design',
-    })
+    const block = await buildSiblingOutputsBlock(
+      withO2Closure({
+        db,
+        appHome: '/tmp/rfc223-review-home',
+        taskId,
+        upstreamNodeId: 'writer',
+        targetPortName: 'design',
+      }),
+    )
     expect(block).toContain('- proposal: docs/proposal.md')
   })
 

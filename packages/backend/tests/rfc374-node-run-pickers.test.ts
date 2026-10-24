@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-374 T7/T10: inverted IDs exercise freshness, rollback, frame/branch projections, memory and real persistence readers.
 import {
   createRunHistorySnapshot,
@@ -20,7 +21,6 @@ import { selectResumeRollbackTargets } from '@/services/task'
 import { selectSyncRollbackTargets } from '@/services/task'
 import { compareNodeRunsForTimeline } from '@/services/reviewRoundStart'
 import { resolveNodeScope } from '@/services/structuralDiff/refSelect'
-import { planFrameBackfill } from '@/modules/task-execution/domain/legacyMigration/frameBackfill'
 import { getTaskBranchTrace } from '@/modules/task-execution/application/branchTrace'
 import { loadInjectedSnapshotFromFirstAttempt } from '@/modules/memory/application/injection/injectMemory'
 import {
@@ -187,14 +187,6 @@ describe('RFC-374 pure selection', () => {
       ),
     ).toEqual({ kind: 'between', fromRef: 'old', toRef: 'new' })
   })
-  test('frame repair attaches to the generation minted before a child with a smaller ID', () => {
-    const plan = planFrameBackfill({
-      parentOf: new Map([['n', 'wrapper']]),
-      rows: [row('a', 2), row('z', 1, { nodeId: 'wrapper' })],
-    })
-    expect(plan.updates).toEqual([{ id: 'a', containerRunId: 'z', scopePath: 'wrapper:0' }])
-    expect(plan.unresolved).toEqual([])
-  })
   test('branch trace keeps iteration primary, then seq for a tied generation', async () => {
     const runs = [
       { ...row('z', 1), errorMessage: null },
@@ -331,7 +323,8 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, { id: 'z' })
     await mintSequenceRun(db, taskId, { id: 'a' })
     const payload = await taskNodeRunsProjection(
-      {
+      withO2Closure({
+        clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
         db,
         nodeRunPrompts: {
           async read(row) {
@@ -341,7 +334,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
             throw new Error('unexpected prompt write')
           },
         },
-      },
+      }),
       taskId,
     )
     const operations = createBoundMcpOperationHandles({
@@ -466,7 +459,9 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     })
     const { nodeRuns } = tablesOf(db)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)),
-      persistence = createTaskExecutionPersistence(db)
+      persistence = createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      })
     const result = await resolveSchedulerRunRow({
       lifecycle: persistence.nodeRuns,
       projections: persistence.nodeExecution,
@@ -502,7 +497,9 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, { id: 'z', nodeId: 'out', status: 'done' })
     await mintSequenceRun(db, taskId, { id: 'a', nodeId: 'out', status: 'failed' })
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
     })
     expect(result.openAlerts.some((alert) => alert.rule === 'T3')).toBe(true)

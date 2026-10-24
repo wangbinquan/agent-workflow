@@ -1,3 +1,4 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-395 II-a A4: persisted prompts, copied port archives and gate bodies retain the original read/fallback behavior on both providers.
 import { expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
@@ -175,7 +176,7 @@ describeEachProvider('A4 content persistence', (harness) => {
       await seedTask(taskId, home)
       const body = '\ufeff# review\n中文\0'
       const artifacts = new FsHumanGateArtifactStore(home)
-      const journal = new DatabaseHumanGateOperationJournal()
+      const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
       const session = databaseSessionFor(harness.db)
       const plan = artifacts.planReviewArtifact({
         operationId,

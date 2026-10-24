@@ -84,6 +84,13 @@ export type { RepositoryPreparationEffectFactory } from './application/ports/rep
 export type { ScratchWorkspaceEffects } from './application/ports/scratchWorkspaceEffects'
 // RFC-370 §10 V20: the standalone fusion engine workspace (`fusions/<id>/iter<n>/work`).
 export { createFileFusionWorkspaceEffects } from './infrastructure/local/fileFusionWorkspaceEffects'
+export type {
+  WorkspaceGcTaskPort,
+  TaskWorkspacePruneParticipant,
+  CachedRepositoryTaskUsagePort,
+  TaskRepositorySourceSealingPort,
+  RepositoryWorkspaceTaskPorts,
+} from './composition/required-ports'
 export type { WorkspaceMaintenanceFilesystem } from './application/ports/workspaceMaintenance'
 
 export interface RepositoryWorkspaceOperations {

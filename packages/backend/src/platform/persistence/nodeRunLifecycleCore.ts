@@ -2,8 +2,8 @@
 // provider 无关、零向上依赖，是这条链上的叶子。
 //
 // 为什么要单独一层：`node_run` 的 CAS 现在有两份实现——
-//   · `platform/persistence/sqlite/taskLifecycle.ts` 的**同步**版（`DbTxSync`，bun:sqlite 独有，
-//     仍被 `cancelOpenNodeRunsTx` 与 `services/task.ts` 的同步事务体直调，本波不退役）；
+//   · `modules/task-execution/infrastructure/taskLifecycle.ts` 的**同步**版（`DbTxSync`，bun:sqlite 独有，
+//     RFC-303 / RFC-326 仍直接验证其事务与异步孪生的等价性，本波保留）；
 //   · `modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts` 的**中立异步孪生**
 //     （两个引擎共用）。
 // 两份共用同一张转移表、同一个 MR/PR 围栏判据、同一个终态覆写闸——这三个符号就是那份共用面。

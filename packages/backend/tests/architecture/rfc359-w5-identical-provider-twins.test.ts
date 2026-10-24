@@ -181,7 +181,10 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // RFC-392 removes composeSqliteAppDeps and composeSqliteApplicationDeps: 50 -> 48.
       // RFC-395 I-a deletes the unused legacy projector buildPostgresqlTable: 48 -> 47.
       // RFC-395 II-a A6: four maintenance/apply constructors become neutral, 47 -> 43.
-    ).toBeGreaterThanOrEqual(43)
+      // RFC-395 O3: composeLegacySqliteResourceLimitOperations becomes the neutral
+      // bootstrap/resourceLimits factory; createPostgresqlEventsArchiveStore moves
+      // to task-execution's createTaskNodeEventArchiveStore. Both implementations remain.
+    ).toBeGreaterThanOrEqual(41)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

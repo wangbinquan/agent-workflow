@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 patch 2026-05-25 — questioner cascade must not skip a clarify-only row.
 //
 // Live failure shape: production task 01KS86DPCSERV7S41GQA5Y81RN ended with
@@ -359,17 +360,19 @@ describeEachProvider(
 
       // New session HWDACF-equivalent (iteration=1, awaiting_human, from
       // questioner_v1 emitting clarify).
-      const sess = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: questionerV1,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('hwdacf')],
-      })
+      const sess = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: questionerV1,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('hwdacf')],
+        }),
+      )
       expect(sess.round.iteration).toBe(1)
 
       // User continues.
@@ -436,18 +439,20 @@ describeEachProvider(
         checkpoints: [{ mountPath: '', preSnapshot: 'snap-x-v1' }],
       })
 
-      const sess = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: 'agent_x',
-        askingNodeRunId: agentRunId,
-        askingShardKey: null,
-        intermediaryNodeId: 'clarify_x',
-        iteration: 0,
-        questions: [makeQ('cx1')],
-        truncationWarnings: [],
-      })
+      const sess = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: 'agent_x',
+          askingNodeRunId: agentRunId,
+          askingShardKey: null,
+          intermediaryNodeId: 'clarify_x',
+          iteration: 0,
+          questions: [makeQ('cx1')],
+          truncationWarnings: [],
+        }),
+      )
 
       await autoDispatchClarifyRound({
         db,
@@ -503,17 +508,19 @@ describeEachProvider(
         // Clarify-only — empty outputs.
       })
 
-      const sess = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: questionerV1,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1')],
-      })
+      const sess = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: questionerV1,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1')],
+        }),
+      )
 
       await autoDispatchClarifyRound({
         db,

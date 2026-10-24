@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-333/RFC-375 — pending continuations recover through the live managed worker.
 import { nodeRunFixture, readNodeRunFixtures, readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -94,9 +95,13 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
       iteration: 1,
     })
 
-    expect(await reapOrphanRuns(createTaskExecutionPersistence(db).recoveryAdministration)).toEqual(
-      { tasks: 0, runs: 0 },
-    )
+    expect(
+      await reapOrphanRuns(
+        createTaskExecutionPersistence(db, {
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }).recoveryAdministration,
+      ),
+    ).toEqual({ tasks: 0, runs: 0 })
     expect(
       (
         await readTaskFixtures(db, { id: 'task-gate-before-wake' }).then((rows) =>
@@ -161,9 +166,14 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
     ])
 
     expect(
-      await reapOrphanRuns(createTaskExecutionPersistence(db).recoveryAdministration, {
-        killStaleRunProcessTree: async () => 'no-pid',
-      }),
+      await reapOrphanRuns(
+        createTaskExecutionPersistence(db, {
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }).recoveryAdministration,
+        {
+          killStaleRunProcessTree: async () => 'no-pid',
+        },
+      ),
     ).toEqual({ tasks: 0, runs: 1 })
     expect(
       (

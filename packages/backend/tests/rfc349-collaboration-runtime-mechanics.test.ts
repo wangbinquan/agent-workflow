@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   patchTaskFixture,
@@ -134,7 +135,10 @@ describe('RFC-349 collaboration runtime mechanics', () => {
 
     test('SQLite composition owns live suppression and closes orphaned clarify rounds', async () => {
       const taskId = await seedTask(db, { members: [{ memberType: 'agent' }] })
-      const runtime = createCollaborationRuntimeMechanics(db)
+      const runtime = createCollaborationRuntimeMechanics(db, {
+        taskLock: o2Ports(db).taskLock,
+        ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+      })
 
       await expect(runtime.isTaskClarifySuppressed({ taskId })).resolves.toBe(true)
       const { clarifyRounds } = tablesOf(db)

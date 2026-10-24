@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2e —— 任务恢复读 / 写（TaskRecoveryOperations）两份约千行的 provider 实现合成一份，两个引擎各跑一遍：
 // 恢复事件簿、自动恢复窗口 / 熔断、repo-prep 行、运行时会话租约的孤儿修复（复用 / 作废两支）、
 // 四条注入的状态迁移只做转发（周期性收割先看有无活 run）。
@@ -109,7 +110,14 @@ function operationsFor(db: PersistenceDb): {
   calls: string[]
 } {
   const { mutations, calls } = recordingMutations()
-  return { operations: createTaskRecoveryOperations(db, mutations), calls }
+  return {
+    operations: createTaskRecoveryOperations(
+      db,
+      mutations,
+      o2Ports(db).collaborationReads.recovery,
+    ),
+    calls,
+  }
 }
 
 describeEachProvider('RFC-359 W4-B1 批 2e —— 恢复事件簿与自动恢复窗口', (harness) => {

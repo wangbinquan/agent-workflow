@@ -41,8 +41,8 @@ const unitOf = (rel: string): SourceUnit =>
 //   · `KERNEL` —— 通用状态写点本体。「kernel 不许自己铸回收原因」钉的是**它**；
 //     语料下限（>10k 字符）也是它的规模，证明确实解析到了那台 kernel。
 //   · `PORT` —— 策略端口的**形状**（入参中立、返回闭合联合）。端口搬家，判据跟着端口走。
-const KERNEL = 'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts'
-const PORT = 'packages/backend/src/platform/persistence/terminalWorkspacePrune.ts'
+const KERNEL = 'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts'
+const PORT = 'packages/backend/src/modules/task-execution/domain/terminalWorkspacePrune.ts'
 
 /** Read the compiled column domain; new values automatically join the kernel vocabulary check. */
 export function columnEnumValues(tables: readonly TableDefinition[], column: string): string[] {

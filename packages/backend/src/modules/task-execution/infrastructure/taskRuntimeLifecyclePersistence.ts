@@ -1,5 +1,5 @@
 // RFC-359 W4-B1 批 2g —— 任务运行时状态迁移（tasks.status 的 CAS + lifecycle committed event）：一份实现，两个 provider 共用。
-// 此前 SQLite 侧只是 `platform/persistence/sqlite/taskLifecycle.ts` 同步内核的薄壳，PG 侧是整份实现；现在端口两侧都走
+// 此前 SQLite 侧只是 `modules/task-execution/infrastructure/taskLifecycle.ts` 同步内核的薄壳，PG 侧是整份实现；现在端口两侧都走
 // 统一写事务 + owner 围栏（PG READ COMMITTED：CAS 与围栏都是行级条件 UPDATE）。同步内核暂留给尚未迁移的 legacy 直接调用方。
 
 import { taskWorkspaceRootMatchesSql } from './taskRepositorySql'
@@ -12,11 +12,8 @@ import { and, eq, isNull } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import {
-  ConcurrentTaskTransition,
-  isTerminalTaskStatus,
-  resolveTerminalWorkspacePruneDecision,
-} from '@/services/lifecycle'
+import { ConcurrentTaskTransition, isTerminalTaskStatus } from './taskLifecycle'
+import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type {
   TaskRuntimeLifecycleMutation,

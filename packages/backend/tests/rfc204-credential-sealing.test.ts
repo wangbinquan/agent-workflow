@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-204 T7 — the at-rest sealing gate.
 //
 // Wire redaction (T1/T3) stopped the credential leaving the daemon; this locks
@@ -50,7 +51,11 @@ function ensureSealed(
   secretBox: Parameters<typeof ensureCredentialsSealed>[1],
   options?: Parameters<typeof ensureCredentialsSealed>[2],
 ): ReturnType<typeof ensureCredentialsSealed> {
-  return ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), secretBox, options)
+  return ensureCredentialsSealed(
+    composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+    secretBox,
+    options,
+  )
 }
 
 async function seedRepo(

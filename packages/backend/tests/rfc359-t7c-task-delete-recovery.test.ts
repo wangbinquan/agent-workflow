@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
@@ -64,7 +65,9 @@ function plan(taskId: string, over: Partial<Record<'worktrees', unknown>> = {}):
 }
 
 async function claimTree(db: PersistenceDb, rootTaskId: string, cleanupPlanJson: string) {
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const members = await persistence.terminalMaintenance.snapshotTree(rootTaskId)
   const claim = await persistence.terminalMaintenance.claim({
     rootTaskId,

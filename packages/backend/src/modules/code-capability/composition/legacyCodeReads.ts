@@ -1,11 +1,8 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CapabilityParamRead } from '../application/ports/capabilityParamRead'
-import type { CodeWorkspaceRead } from '../application/ports/codeWorkspaceRead'
 import { createCapabilityParamRead } from '../infrastructure/capabilityParamRead'
-import { createCodeWorkspaceRead } from '../infrastructure/codeWorkspaceRead'
 
 export interface LegacyCodeReadProviders {
-  readonly workspace: CodeWorkspaceRead
   readonly capabilityParams: CapabilityParamRead
 }
 
@@ -15,7 +12,6 @@ export interface LegacyCodeReadProviders {
  */
 export function composeLegacyCodeReadProviders(db: PersistenceDb): LegacyCodeReadProviders {
   return Object.freeze({
-    workspace: createCodeWorkspaceRead(db),
     capabilityParams: createCapabilityParamRead(db),
   })
 }

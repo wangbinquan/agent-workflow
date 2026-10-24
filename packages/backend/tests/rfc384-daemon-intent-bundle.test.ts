@@ -38,7 +38,7 @@ import {
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
 import { createUser } from './helpers/userFixture'
-import { createAgent } from '@/services/agent'
+import { createAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { employeeAutomationFixture } from './helpers/daemonEmployeeAutomationBundle'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'

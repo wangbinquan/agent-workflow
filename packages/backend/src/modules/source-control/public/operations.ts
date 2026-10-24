@@ -10,7 +10,6 @@ export type {
   RepositoryGroupRecord,
   RepositoryGroupSnapshot,
   RepositoryWorkspaceStore,
-  WorktreeTaskRecord,
 } from '../ports/repositoryWorkspaceStore'
 
 export { invalidateRepositoryWorkspaceFacetCaches } from '../ports/repositoryWorkspaceStore'

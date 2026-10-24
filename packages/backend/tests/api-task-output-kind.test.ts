@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-072 — locks the REST projection of node_run_outputs.kind into the
 // wire-level `kind` field on NodeRunOutput (taskNodeRunsProjection). The Outputs tab
@@ -86,7 +87,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
       content: 'out/report.md',
       kind: 'markdown_file',
     })
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     const out = res.outputs.find((o) => o.port === 'doc')
     expect(out).toBeDefined()
     expect(out?.kind).toBe('markdown_file')
@@ -102,7 +103,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
       content: 'all good',
       kind: null,
     })
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(res.outputs.find((o) => o.port === 'summary')?.kind).toBeNull()
   })
 
@@ -134,7 +135,7 @@ describeEachProvider('RFC-072 — taskNodeRunsProjection surfaces output kind', 
     const task = await loadTaskProjection(db, taskId)
     expect(task?.codeRoundId).toBe(codeRoundId)
     expect(taskExecutionKind(task!)).toBe('code-round')
-    const projection = await taskNodeRunsProjection({ db }, taskId)
+    const projection = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(projection.runs.map((run) => run.nodeId)).toEqual([CODE_ROUND_NODE_ID])
     expect(projection.outputs).toEqual([
       {

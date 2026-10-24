@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— 后继 daemon 恢复（`TaskExecutionRecoveryPersistence`）端口的双引擎取证基线。
 //
 // 形态与 D28a 的归属端口一模一样：SQLite 侧是 20 行薄适配器套 393 行同步实现
@@ -225,7 +226,9 @@ function lockProofFor(generation: string): ExclusiveDaemonLockProof {
 
 describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引擎上同形', (harness) => {
   test('① prepare：只撤销上一代 daemon 的 claimed owner，本代的原样留着', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const stale = await crashPreviousDaemon(harness.db, persistence, `w8a_${ulid()}`)
     const successor = `gen-new-${ulid()}`
 
@@ -244,7 +247,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('② prepare：同代 daemon 自己的 owner 不是候选（不会自撤）', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const live = await crashPreviousDaemon(harness.db, persistence, `w8b_${ulid()}`)
     const owner = await persistence.ownership.read(live.taskId)
     if (owner === null) throw new Error('owner row missing')
@@ -258,7 +263,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('③ finalize 必须先有孤儿收割屏障的证据，否则拒绝', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     await expect(
       persistence.recovery.finalize({
         lockProof: lockProofFor(`gen-new-${ulid()}`),
@@ -271,7 +278,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('④ finalize：没有未决 effect 的任务被释放，活跃 intent 转 failed', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const crashed = await crashPreviousDaemon(harness.db, persistence, `w8c_${ulid()}`)
     const lockProof = lockProofFor(`gen-new-${ulid()}`)
     await persistence.recovery.prepare({ lockProof, now: 201 })
@@ -301,7 +310,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('⑤ finalize：未消费的 actor-replay-authorized 决策回退成 requires-actor（缺口 08）', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const crashed = await crashPreviousDaemon(harness.db, persistence, `w8d_${ulid()}`)
     const decisionId = `decision_${ulid()}`
     const pathJson = canonicalJson(rootPath(crashed.taskId))
@@ -352,7 +363,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('⑥ finalize：还开着的 code-host effect 没有探针结论时以 outcome-unknown 闭合，不释放', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const crashed = await crashPreviousDaemon(harness.db, persistence, `w8e_${ulid()}`)
     const seeded = await seedCodeHostEffect(harness.db, persistence, crashed, {
       action: 'pipeline.cancel',
@@ -394,7 +407,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('⑦ finalize + 探针：applied 的落 succeeded 并投影 node_run；definitely-not-applied 的转 retry-authorized', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const applied = await crashPreviousDaemon(harness.db, persistence, `w8f_${ulid()}`)
     const appliedEffect = await seedCodeHostEffect(harness.db, persistence, applied, {
       action: 'pipeline.cancel',
@@ -490,7 +505,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('⑧ takeover 证明摘要的载荷含探针判据（缺口 05）—— 两个引擎必须算出同一个摘要', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     const taskId = `w8h_${ulid()}`
     const crashed = await crashPreviousDaemon(harness.db, persistence, taskId)
     const seeded = await seedCodeHostEffect(harness.db, persistence, crashed, {
@@ -583,7 +600,9 @@ describeEachProvider('RFC-359 W8 —— 后继 daemon 恢复端口在两个引�
   })
 
   test('⑨ 未经铸造的独占锁证明当场被拒 —— prepare / finalize 都不许因为「恰好没有候选」而静默放行（缺口 04）', async () => {
-    const persistence = createTaskExecutionPersistence(harness.db)
+    const persistence = createTaskExecutionPersistence(harness.db, {
+      recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+    })
     // 形状对得上、但没经过 createExclusiveDaemonLockProof 铸造：能力本身不可信。
     const forged = {
       daemonGeneration: `gen-forged-${ulid()}`,

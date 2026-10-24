@@ -1,3 +1,4 @@
+import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 AC-10 —— `checkConfiguredDatabase` 的第一份判据。
 //
 // # 为什么这个文件此刻才出现
@@ -59,7 +60,10 @@ function writeConfig(database: unknown): void {
 describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
   test('配置读不出来时只报一条，且是 not-ok', async () => {
     writeFileSync(join(process.env.AGENT_WORKFLOW_HOME!, 'config.json'), '{ not json', 'utf8')
-    const checks = await checkConfiguredDatabase(buildLogicalSchemaContract())
+    const checks = await checkConfiguredDatabase(
+      buildLogicalSchemaContract(),
+      composeSystemOperationsTaskPorts(),
+    )
     expect(checks).toHaveLength(1)
     expect(checks[0]?.name).toBe('database provider')
     expect(checks[0]?.ok).toBe(false)
@@ -68,7 +72,10 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
 
   test('SQLite 且本地库文件还不存在：报「还没有库」，并带上另外两条检查', async () => {
     writeConfig({ provider: 'sqlite' })
-    const checks = await checkConfiguredDatabase(buildLogicalSchemaContract())
+    const checks = await checkConfiguredDatabase(
+      buildLogicalSchemaContract(),
+      composeSystemOperationsTaskPorts(),
+    )
     expect(checks).toHaveLength(3)
     expect(checks[0]).toMatchObject({
       name: 'database provider',
@@ -93,7 +100,10 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
       statementTimeoutMs: 1_000,
       idleTimeoutMs: 1_000,
     })
-    const checks = await checkConfiguredDatabase(buildLogicalSchemaContract())
+    const checks = await checkConfiguredDatabase(
+      buildLogicalSchemaContract(),
+      composeSystemOperationsTaskPorts(),
+    )
     // 关键断言：**没有**那句 SQLite 专属的回话。改动前这里拿到的就是它。
     expect(checks.map((check) => check.message)).not.toContain('SQLite (no database yet)')
     // 它继续往下走到 provider runtime 解析，并在那里以一条 not-ok 收场

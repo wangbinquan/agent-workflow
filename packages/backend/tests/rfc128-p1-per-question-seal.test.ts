@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-128 P1 — per-question seal 落库地基（先红后绿）。
 //
 // P1 把 clarify「整轮一次 seal」改造成逐题 seal 的存储地基：task_questions.sealed_at +
@@ -135,17 +136,19 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'designer',
-    askingNodeRunId: sourceRunId,
-    askingShardKey: null,
-    intermediaryNodeId: 'clarify1',
-    iteration: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify1',
+      iteration: 0,
+      questions,
+    }),
+  )
   return { taskId, originNodeRunId: clarifyNodeRunId }
 }
 
@@ -167,17 +170,19 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'cross1',
-    askingNodeId: 'questioner',
-    askingNodeRunId: questionerRunId,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: questionerRunId,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions,
+    }),
+  )
   return { taskId, originNodeRunId: crossClarifyNodeRunId }
 }
 

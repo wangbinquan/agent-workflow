@@ -277,6 +277,8 @@ const FACADE_DEFINITIONS: readonly FacadeDefinition[] = [
 ]
 
 const RETIRED_FACADES = [
+  // RFC-395 II-b O: all tests now import the owner implementation directly.
+  'services/agent.ts',
   'services/agentResourceIntegrity.ts',
   // RFC-345 T9: the last production consumer (the resource-package parser, which
   // is Resource Catalog's own legacy package layer) now reads the archive codec
@@ -313,13 +315,8 @@ const edge = (
  * stem fallback: a new edge must be reviewed and added explicitly.
  */
 const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
-  edge(
-    'services/agent.ts',
-    'modules/collaboration/infrastructure/review.ts',
-    ['snapshotNodeAgentWhere'],
-    'review node Agent snapshot',
-    REMOVE_OWNERS.agentQueries,
-  ),
+  // RFC-395 O2: review reads Agent snapshots through ReviewUpstreamAgentPort;
+  // the final production consumer of services/agent.ts has retired.
   // RFC-359 AC-1（plan §5hl）：这条边**销账**——数字员工执行的两份 composer 合一后，
   // Agent 查询改成由装配方交进来的 `agents` 端口（三个组合根各自绑自己的目录查询面），
   // composer 自己不再 import `services/agent` 的 `getAgentById`。债是还掉的，不是挪走的。

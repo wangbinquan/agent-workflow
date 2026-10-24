@@ -1,3 +1,5 @@
+import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // Real repository-group launch fixture shared by the 9956ce39d checkpoint
 // regression and the 2026-10-21 single non-root workspace discriminator fix.
 import { agentFixture, workflowFixture } from './model'
@@ -108,7 +110,7 @@ export async function singleMemberWorkspaceFixture(
     })
   }
   const group = await createRepoGroup(
-    { store: composeRepositoryWorkspaceStore(db) },
+    { store: composeRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)) },
     {
       name: ulid(),
       description: '',
@@ -129,7 +131,9 @@ export async function singleMemberWorkspaceFixture(
       db,
       appHome,
       sourceContexts: execution.identityAccess.taskPreparationContext,
-      repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+      repositoryPreparation: composeRepositoryPreparation(
+        withSourceControlTaskPorts({ db, appHome }),
+      ),
     }),
     coordinator: {
       async submit(request) {

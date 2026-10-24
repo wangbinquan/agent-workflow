@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-074 PR-B — review awaiting-refresh (B14-B15, design §7 / decision D5).
 //
 // When a review is parked at awaiting_review and its upstream source produces a
@@ -173,15 +174,17 @@ describeEachProvider(
         createdAt: Date.now(),
       })
 
-      const result = await dispatchReviewNode({
-        db,
-        taskId,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(result.kind).toBe('awaiting_review')
 
       // v1 retired as superseded with the upstream-refreshed reason.
@@ -215,15 +218,17 @@ describeEachProvider(
       const { taskId, task, definition, reviewNode } = await seed('running')
       await seedSrc(taskId, '01A_OLD', 0, '# old body')
 
-      const opened = await dispatchReviewNode({
-        db,
-        taskId,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const opened = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(opened.kind).toBe('awaiting_review')
       const { nodeRuns, docVersions, collaborationGateOperations } = tablesOf(db)
       const firstRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1')))[0]!
@@ -234,15 +239,17 @@ describeEachProvider(
         .lifecycleEventRevision
 
       await seedSrc(taskId, '01B_NEW', 4, '# new body after upstream rerun')
-      const refreshed = await dispatchReviewNode({
-        db,
-        taskId,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const refreshed = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(refreshed.kind).toBe('awaiting_review')
 
       const reviewRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1'))
@@ -358,15 +365,17 @@ describeEachProvider(
         }
 
         await expect(
-          dispatchReviewNode({
-            db,
-            taskId,
-            scopeRoot: task.worktreePath,
-            appHome,
-            definition,
-            node: reviewNode,
-            iteration: 0,
-          }).catch((error: unknown) => {
+          dispatchReviewNode(
+            withO2Closure({
+              db,
+              taskId,
+              scopeRoot: task.worktreePath,
+              appHome,
+              definition,
+              node: reviewNode,
+              iteration: 0,
+            }),
+          ).catch((error: unknown) => {
             let failure = error
             while (failure instanceof Error && failure.cause instanceof Error) {
               failure = failure.cause
@@ -398,15 +407,17 @@ describeEachProvider(
         expect(operation.state).toBe('prepared')
 
         await clearProjectionFailure()
-        const retried = await dispatchReviewNode({
-          db,
-          taskId,
-          scopeRoot: task.worktreePath,
-          appHome,
-          definition,
-          node: reviewNode,
-          iteration: 0,
-        })
+        const retried = await dispatchReviewNode(
+          withO2Closure({
+            db,
+            taskId,
+            scopeRoot: task.worktreePath,
+            appHome,
+            definition,
+            node: reviewNode,
+            iteration: 0,
+          }),
+        )
         expect(retried.kind).toBe('awaiting_review')
         expect(
           (

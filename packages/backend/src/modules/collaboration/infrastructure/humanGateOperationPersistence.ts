@@ -1,3 +1,5 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
+import { DatabaseHumanGateOperationJournal } from './humanGateOperationJournal'
 // RFC-359 —— 应用层 `HumanGateOperationStore` 端口（db-owning、每次调用自开事务）的**唯一**实现，
 // 两个 provider 共用：`DatabaseSession.transaction` 里跑 `DatabaseHumanGateOperationJournal`。
 // 替代此前的 `sqliteHumanGateOperationPersistence.ts`（dbTxSync 包同步 store）与
@@ -10,16 +12,18 @@ import type {
   HumanGateOperationStore,
 } from '../application/ports/humanGateOperationStore'
 import type { HumanGateOperationSnapshot } from '../domain/humanGateOperation'
-import {
-  DatabaseHumanGateOperationJournal,
-  type HumanGateOperationJournal,
-} from './humanGateOperationJournal'
+import { type HumanGateOperationJournal } from './humanGateOperationJournal'
 
 export class DatabaseHumanGateOperationPersistence implements HumanGateOperationStore {
   constructor(
     private readonly session: DatabaseSession,
-    private readonly journal: HumanGateOperationJournal = new DatabaseHumanGateOperationJournal(),
-  ) {}
+    journal: HumanGateOperationJournal | HumanGateTaskLockPort,
+  ) {
+    this.journal =
+      typeof journal === 'function' ? new DatabaseHumanGateOperationJournal(journal) : journal
+  }
+
+  private readonly journal: HumanGateOperationJournal
 
   async begin(input: BeginHumanGateOperationInput): Promise<BegunHumanGateOperation> {
     return await this.session.transaction(async (tx) => {

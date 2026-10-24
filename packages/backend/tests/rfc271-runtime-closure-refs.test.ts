@@ -23,7 +23,10 @@ import {
   VALIDATE_CALL_POLICY,
   type Agent,
 } from '@agent-workflow/shared'
-import { createAgent, getAgentById } from '../src/services/agent'
+import {
+  createAgent,
+  getAgentById,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { resolveDependsClosure } from '../src/services/agentDeps'
 import { collectMcpIdsFromClosure } from '../src/services/mcpClosure'
 import { collectPluginIdsFromClosure } from '../src/services/pluginClosure'

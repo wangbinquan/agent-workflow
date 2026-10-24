@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-144 T4 — stale replay 回归（先红后绿）+ merge-failed 行为缺口补齐。
 //
 // 为什么这条测试存在（锁 design/RFC-144-merge-state-machine/design.md §7）：
@@ -449,7 +450,9 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       opts: {
         appHome: h.appHome,
         isolationWorkspaces: selectIsolationWorkspaceFactory(),
-        persistence: createTaskExecutionPersistence(h.db),
+        persistence: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }),
       },
       log: createLogger('rfc144-test'),
       writeSem: new Semaphore(1),
@@ -497,7 +500,9 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     expect(gen1.mergeState).toBe('isolating')
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
       ?.isolationBase ?? null)!
-    const mergeStates = createTaskExecutionPersistence(h.db).mergeStates
+    const mergeStates = createTaskExecutionPersistence(h.db, {
+      recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+    }).mergeStates
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-pending-merge' } })
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-merged' } })
     // 旧代 git progress（PR-5 复核：必须随 reenter 原子清空，防崩溃窗口漏检）。
@@ -592,7 +597,9 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const gen1 = (await readNodeRunFixtures(h.db, { id: runId }))[0]!
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
       ?.isolationBase ?? null)!
-    const mergeStates = createTaskExecutionPersistence(h.db).mergeStates
+    const mergeStates = createTaskExecutionPersistence(h.db, {
+      recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+    }).mergeStates
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-pending-merge' } })
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'park-conflict-human' } })
     const handle = await createOrRebuildWrapperIso(state, runId, {

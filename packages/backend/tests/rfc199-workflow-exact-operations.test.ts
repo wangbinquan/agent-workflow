@@ -1,3 +1,4 @@
+import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 // RFC-199 B3 regression locks for exact persisted-revision consumers.
 //
 // Why this file exists: a version/hash check followed by a second workflow
@@ -19,7 +20,6 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createWorkflow,
-  deleteWorkflow,
   getWorkflow,
   updateWorkflow,
   workflowDraftSnapshotOf,

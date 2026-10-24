@@ -55,3 +55,25 @@ export { createCommittedHumanInputQueries } from './infrastructure/committedHuma
 
 export { createClarifyAnswerQueries } from './infrastructure/clarifyAnswerQueries'
 export { schemaContribution } from './composition/schema'
+
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import {
+  composeTaskArchiveCollaborationSectionsPort,
+  composeTaskRecoveryHumanGateFactsPort,
+  composeTaskNodeRunClarifyNavPort,
+} from './application/adapters/task-execution-adapter'
+import {
+  createTaskArchiveCollaborationSections,
+  createTaskRecoveryHumanGateFacts,
+  createTaskNodeRunClarifyNav,
+} from './infrastructure/taskCollaborationReads'
+
+export function composeTaskCollaborationReads(db: PersistenceDb) {
+  return {
+    archive: composeTaskArchiveCollaborationSectionsPort(
+      createTaskArchiveCollaborationSections(db),
+    ),
+    recovery: composeTaskRecoveryHumanGateFactsPort(createTaskRecoveryHumanGateFacts(db)),
+    clarifyNav: composeTaskNodeRunClarifyNavPort(createTaskNodeRunClarifyNav(db)),
+  }
+}

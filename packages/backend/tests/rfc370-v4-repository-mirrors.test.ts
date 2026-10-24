@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 §10 V17 — registered repositories are read, registered and refreshed
 // where their content lives.
@@ -168,7 +169,10 @@ describeEachProvider('RFC-370 V17 hosted repository mirrors', (harness) => {
   const home = mkdtempSync(join(tmpdir(), 'aw-rfc370-v17-home-'))
   afterAll(() => rmSync(home, { recursive: true, force: true }))
   const hosted = (calls: string[][], now = () => 1_700_000_000_000) => {
-    const store = composeRepositoryWorkspaceStore(harness.db)
+    const store = composeRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     return {
       store,
       mirrors: composeRepositoryMirrors({

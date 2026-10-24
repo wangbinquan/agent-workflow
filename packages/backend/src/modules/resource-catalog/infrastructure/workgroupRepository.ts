@@ -1,3 +1,4 @@
+import type { SubjectTaskReferencePort } from '../composition/required-ports'
 // RFC-359 W4-D18 —— Workgroup 聚合的唯一仓库实现（此前 `sqliteWorkgroupRepository` / `postgresqlWorkgroupRepository`
 // 各一份、逐字同形）。写路径全在统一的 serializable 事务里；owner + name 唯一冲突经能力矩阵 `uniqueViolationTarget`
 // 映射回 `workgroup-name-in-use` / `workgroup-copy-name-conflict`。
@@ -6,7 +7,6 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import {
   resolveWorkgroupOutputContract,
   serializeWorkgroupEditableSnapshotV1,
-  TERMINAL_TASK_STATUSES,
   WorkgroupNameSchema,
   type CreateWorkgroup,
   type ResourceAccess,
@@ -15,7 +15,7 @@ import {
   type WorkgroupDetail,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, isNull, ne, notInArray } from 'drizzle-orm'
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
@@ -73,6 +73,7 @@ export interface WorkgroupScheduledReferenceRow {
 }
 
 export interface WorkgroupRepositoryDependencies {
+  readonly taskReferences: SubjectTaskReferencePort
   readonly canViewInTransaction: (
     transaction: ResourceCatalogTransaction,
     authority: WorkgroupOperationContext,
@@ -655,7 +656,7 @@ export function createWorkgroupRepository(
       input: ValidatedWorkgroupDeleteInput,
     ): Promise<WorkgroupDeleteResult> {
       return runResourceCatalogTransaction(db, async (transaction) => {
-        const { workgroups, workgroupMembers, scheduledTasks, tasks } = tablesOf(transaction)
+        const { workgroups, workgroupMembers, scheduledTasks } = tablesOf(transaction)
         const row = (
           await transaction.select().from(workgroups).where(eq(workgroups.id, input.id)).limit(1)
         )[0]
@@ -693,15 +694,9 @@ export function createWorkgroupRepository(
           )
         }
         const nonTerminalRefs = (
-          await transaction
-            .select({ id: tasks.id })
-            .from(tasks)
-            .where(
-              and(
-                eq(tasks.workgroupId, input.id),
-                notInArray(tasks.status, [...TERMINAL_TASK_STATUSES]),
-              ),
-            )
+          await deps
+            .taskReferences(transaction)
+            .nonTerminalTaskIds({ kind: 'workgroup', sourceId: input.id })
         ).length
         if (nonTerminalRefs > 0) {
           throw new ConflictError(

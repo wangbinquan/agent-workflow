@@ -3,7 +3,7 @@ import type { LogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { DoctorResult } from '@/modules/system-operations/domain/doctorDiagnostics'
 import { composeDoctorApplication } from '@/modules/system-operations/composition/doctorDiagnostics'
-import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
+import { createLocalDoctorDiagnosticsFactory } from '@/bootstrap/doctorDiagnostics'
 export type {
   CheckResult,
   DoctorResult,

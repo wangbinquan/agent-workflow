@@ -30,7 +30,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 /**
  * Provider-neutral merge-state kernels, pinned by exact file/count. RFC-359：这张表原本还挂着
- * `platform/persistence/sqlite/taskLifecycle.ts: 2`（`transitionMergeState` 的 CAS 写 +
+ * `modules/task-execution/infrastructure/taskLifecycle.ts: 2`（`transitionMergeState` 的 CAS 写 +
  * `abandonSupersededMergeStates` 的集合写）与一个早已退役的
  * `sqliteNodeRunMintParticipant.ts`——前者是零生产调用方的 SQLite 孪生，与后者一并删除；
  * 两条写路径今天各自只剩**中立的一份**，两个引擎共用。

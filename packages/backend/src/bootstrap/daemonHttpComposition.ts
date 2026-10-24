@@ -1,3 +1,5 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
 // RFC-392: passive HTTP composition from the application graph's session bundles.
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { type DaemonIntentModules } from '@/bootstrap/daemonModules/intent'
@@ -58,6 +60,8 @@ import { composeRuntimeProbeConfigFence } from '@/modules/runtime-management/com
 import { ForbiddenError, NotFoundError } from '@/util/errors'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import { composeLegacyCodeReadProviders } from '@/modules/code-capability/composition/legacyCodeReads'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/composition/codeReviewArtifacts'
 import { composeLocalRepositoryRevisionContent } from '@/modules/source-control/composition/repositoryRevisionContent'
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/composition'
@@ -209,8 +213,15 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     afterDisabled: async () => await mcpRuntimeTests.reconcileDurableIntents(),
   })
 
-  const codeHistoryQueries = composeCodeHistoryQueries(input.db)
-  const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
+  const codeHistoryQueries = composeCodeHistoryQueries(
+    input.db,
+    createAgentExecutionQueries(input.db),
+  )
+  const codeReads = {
+    ...composeLegacyCodeReadProviders(input.db),
+    workspace: createTaskCodeWorkspaceQueries(input.db),
+  }
+  const codeWorkspace = codeReads.workspace
   const collaborationTaskAccess = createCollaborationTaskAccessPort(input.db)
   const taskRoutes = Object.freeze({
     configuration,
@@ -233,7 +244,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         input.selections?.repositoryRevisionContent ?? composeLocalRepositoryRevisionContent(),
       artifacts: input.selections?.codeReviewArtifacts ?? composeLocalCodeReviewArtifacts(),
     }),
-    repositoryWorkspace: core.repositoryWorkspaceStore,
+    repositoryWorkspace: createTaskWorktreeLocator(input.db),
     changeNarrative: Object.freeze({
       async requireMember(actor: Actor, taskId: string) {
         const access = await resolveCollaborationTaskAccess(boundCollaborationContext, {
@@ -264,15 +275,16 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     }),
   })
   const worktreeFiles = Object.freeze({
-    store: core.repositoryWorkspaceStore,
-    canViewTask: async (actor: Actor, task: { readonly id: string }) =>
-      (await collaborationTaskAccess.resolveTask(actor, task.id)).visible,
+    locator: createTaskWorktreeLocator(input.db),
+    canViewTask: async (actor: Actor, task: { readonly taskId: string }) =>
+      (await collaborationTaskAccess.resolveTask(actor, task.taskId)).visible,
     // RFC-370 §10 V15: the same content the task workspace queries read.
     content: (workspaceRef: string) =>
       input.selections?.workspaceContent?.bind(workspaceRef) ??
       createFileWorkspaceContentEffects(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
+    taskLock: composeHumanGateTaskLockPort,
     followupGenerator: composeClarifyFollowupGenerator({
       db: input.db,
       registry: core.runtimeRegistry,

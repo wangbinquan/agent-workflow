@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-210 T38-T42 — 后台定时刷新缓存仓 + submodule。
 //
 // 为什么这条测试存在：
@@ -61,11 +62,14 @@ describeEachProvider('RFC-210 background refresh — repo selection', (harness) 
       { id: 'stale', fetchedAt: NOW - DAY, autoRefreshAt: NOW - 12 * 60 * 60 * 1000 },
       { id: 'fresh', fetchedAt: NOW - DAY, autoRefreshAt: NOW - 60_000 },
     ])
-    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      now: NOW,
-      intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
-      onlyRecentDays: DEFAULT_ONLY_RECENT_DAYS,
-    })
+    const due = await selectDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        now: NOW,
+        intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+        onlyRecentDays: DEFAULT_ONLY_RECENT_DAYS,
+      },
+    )
     expect(due.map((r) => r.id).sort()).toEqual(['never', 'stale'])
   })
 
@@ -76,28 +80,37 @@ describeEachProvider('RFC-210 background refresh — repo selection', (harness) 
       // Untouched for a year: refreshing it forever serves nobody.
       { id: 'abandoned', fetchedAt: NOW - 365 * DAY, autoRefreshAt: null },
     ])
-    const due = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      now: NOW,
-      intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
-      onlyRecentDays: DEFAULT_ONLY_RECENT_DAYS,
-    })
+    const due = await selectDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        now: NOW,
+        intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+        onlyRecentDays: DEFAULT_ONLY_RECENT_DAYS,
+      },
+    )
     expect(due.map((r) => r.id)).toEqual(['recent'])
   })
 
   test('the recency window is configurable', async () => {
     const db = harness.db
     await seed(db, [{ id: 'r', fetchedAt: NOW - 40 * DAY, autoRefreshAt: null }])
-    const narrow = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      now: NOW,
-      intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
-      onlyRecentDays: 30,
-    })
+    const narrow = await selectDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        now: NOW,
+        intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+        onlyRecentDays: 30,
+      },
+    )
     expect(narrow).toHaveLength(0)
-    const wide = await selectDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      now: NOW,
-      intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
-      onlyRecentDays: 90,
-    })
+    const wide = await selectDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        now: NOW,
+        intervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+        onlyRecentDays: 90,
+      },
+    )
     expect(wide).toHaveLength(1)
   })
 })
@@ -106,9 +119,12 @@ describeEachProvider('RFC-210 background refresh — tick behaviour', (harness) 
   test('disabled config makes the tick a no-op that touches nothing', async () => {
     const db = harness.db
     await seed(db, [{ id: 'r', fetchedAt: NOW - DAY, autoRefreshAt: null }])
-    const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      submoduleAutoRefresh: { enabled: false },
-    })
+    const res = await refreshDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        submoduleAutoRefresh: { enabled: false },
+      },
+    )
     expect(res).toEqual({ refreshed: 0, failed: 0 })
     const { cachedRepos } = tablesOf(db)
     const row = (await rawRows(
@@ -123,9 +139,12 @@ describeEachProvider('RFC-210 background refresh — tick behaviour', (harness) 
     // broken repo must not abort the whole sweep.
     const db = harness.db
     await seed(db, [{ id: 'gone', fetchedAt: NOW - DAY, autoRefreshAt: null }])
-    const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      submoduleAutoRefresh: { enabled: true },
-    })
+    const res = await refreshDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        submoduleAutoRefresh: { enabled: true },
+      },
+    )
     expect(res.failed).toBe(1)
     expect(res.refreshed).toBe(0)
     const { cachedRepos } = tablesOf(db)
@@ -140,9 +159,12 @@ describeEachProvider('RFC-210 background refresh — tick behaviour', (harness) 
   test('nothing due ⟹ no writes at all', async () => {
     const db = harness.db
     await seed(db, [{ id: 'fresh', fetchedAt: NOW - DAY, autoRefreshAt: Date.now() }])
-    const res = await refreshDueRepos(composeSqliteRepositoryWorkspaceStore(db), {
-      submoduleAutoRefresh: { enabled: true },
-    })
+    const res = await refreshDueRepos(
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+      {
+        submoduleAutoRefresh: { enabled: true },
+      },
+    )
     expect(res).toEqual({ refreshed: 0, failed: 0 })
   })
 })
@@ -152,7 +174,7 @@ describeEachProvider('RFC-210 background refresh — loop contract', (harness) =
     const db = harness.db
     let ticks = 0
     const loop = await startConfiguredSubmoduleRefreshLoop(
-      composeSqliteRepositoryWorkspaceStore(db),
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       {
         read: () => {
           ticks += 1
@@ -178,7 +200,7 @@ describeEachProvider('RFC-210 background refresh — loop contract', (harness) =
     let ticks = 0
     let enabled = true
     const loop = await startConfiguredSubmoduleRefreshLoop(
-      composeSqliteRepositoryWorkspaceStore(db),
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       {
         read: () => {
           ticks += 1

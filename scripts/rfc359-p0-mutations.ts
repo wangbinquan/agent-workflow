@@ -647,7 +647,7 @@ export const sourceFiles = [
   'packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskLifecycleCommittedEvents.ts',
-  'packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts',
   'packages/backend/src/platform/persistence/transactionProgram.ts',
   'packages/backend/src/platform/events/committed/append.ts',
   'packages/backend/src/platform/events/committed/appendProgram.ts',

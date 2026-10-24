@@ -1,4 +1,4 @@
-// RFC-359 AC1: the two established archive owners must retain their actual
+// RFC-359 AC1 / RFC-395 II-b O3: the Task store and its composition entry retain
 // numeric rows, state watermarks and inclusive/exclusive deletion boundaries.
 // The original events-archive suite separately exercises all four DB/FS faults.
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
@@ -6,28 +6,14 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
+import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
+import { createTaskNodeEventArchiveStore as ownerStore } from '@/modules/task-execution/infrastructure/taskNodeEventArchiveStore'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_001_734_000
 
-function isPostgresql(db: PersistenceDb): db is PostgresqlDatabaseClient {
-  return '$provider' in db && db.$provider === 'postgresql'
-}
-
-function assertSqlite(db: PersistenceDb): asserts db is DbClient {
-  if ('$provider' in db) throw new Error('unexpected-archive-fixture-provider')
-}
-
-function originalConstructor(db: PersistenceDb) {
-  if (isPostgresql(db)) return createPostgresqlEventsArchiveStore(db)
-  assertSqlite(db)
-  return createEventsArchiveStore(db)
-}
+const originalConstructor = ownerStore
 
 async function seed(db: PersistenceDb): Promise<void> {
   const { nodeRunEvents } = tablesOf(db)
@@ -105,7 +91,7 @@ describeEachProvider('RFC-359 events archive store preserves original owner beha
   test('sparse IDs, mixed channels and numeric projections survive exact range deletion', async () => {
     await seed(h.db)
     const store = originalConstructor(h.db)
-    const shared = createEventsArchiveStore(h.db)
+    const shared = createTaskNodeEventArchiveStore(h.db)
     expect(await store.maxEventId()).toBe(250_001)
     expect(await store.countAllEvents()).toBe(4)
     expect(await store.averageRecentPayloadBytes(2)).toBe(2)

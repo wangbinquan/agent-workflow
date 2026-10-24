@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // The real Task core persists transported runtime facts while still running;
 // presentation-only observation failures do not change the business result.
 import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
@@ -221,7 +222,9 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
             inputs: {},
             templateMeta: { taskId, repoPath: 'repo:declared', baseBranch: 'main' },
             runtime,
-            persistence: createTaskExecutionPersistence(db),
+            persistence: createTaskExecutionPersistence(db, {
+              recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+            }),
             observationInvocations: composeRunObservationCalls(db),
             memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
             runtimeRegistry: composeRuntimeRegistryOperations(db),

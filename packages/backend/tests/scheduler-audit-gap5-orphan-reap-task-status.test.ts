@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // design/scheduler-audit-2026-06-10.md §⑥ 缺口5 (orphans 收割与任务状态) — 半锁半修。
 //
 // RFC-097 之后本缺口拆成两半，本文件相应一半锁缺陷、一半锁新语义：
@@ -130,7 +131,11 @@ describeEachProvider(
       // submit would mint / the scheduler would reuse via pendingExisting).
       const anchorRunId = await seedRun(h.db, taskId, 'designer', 'pending')
 
-      const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
+      const r = await reapOrphanRuns(
+        createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
+      )
 
       // Task-level reap scans task.status ∈ {'running','pending'} (RFC-097) →
       // awaiting_human is outside the set, 0 tasks flipped.
@@ -158,7 +163,11 @@ describeEachProvider(
       const taskId = await seedTask(h.db, 'pending')
       const runId = await seedRun(h.db, taskId, 'a', 'pending')
 
-      const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
+      const r = await reapOrphanRuns(
+        createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
+      )
 
       // RFC-097 (design §3): a pending task at boot time is by construction an
       // orphan (boot reap runs before HTTP listen; startTask kicks in-process)

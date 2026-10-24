@@ -1,3 +1,5 @@
+import { withO2Closure } from './helpers/o2Closure'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -175,7 +177,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationPersistence(databaseSessionFor(db))
+      const operations = new DatabaseHumanGateOperationPersistence(
+        databaseSessionFor(db),
+        composeHumanGateTaskLockPort,
+      )
       const real = new FsHumanGateArtifactStore(appHome)
       const stage = deferredEffect()
       const publish = deferredEffect()
@@ -280,7 +285,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const journal = new DatabaseHumanGateOperationJournal()
+      const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
       const real = new FsHumanGateArtifactStore(appHome)
       const plan = await prepareReviewOperation({
         db,
@@ -290,7 +295,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
         idempotencyKey: 'async-cleanup',
         body: '# cleanup\n',
       })
-      const operations = new DatabaseHumanGateOperationPersistence(databaseSessionFor(db))
+      const operations = new DatabaseHumanGateOperationPersistence(
+        databaseSessionFor(db),
+        composeHumanGateTaskLockPort,
+      )
       const cleanup = deferredEffect()
       const artifacts: HumanGateArtifactStore = {
         planReviewArtifact: (input) => real.planReviewArtifact(input),
@@ -333,7 +341,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const body = '# alternate content\n'
       const plan = await prepareReviewOperation({
         db,
-        operations: new DatabaseHumanGateOperationJournal(),
+        operations: new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort),
         artifacts: real,
         operationId: 'operation-content-port',
         idempotencyKey: 'content-port',
@@ -341,28 +349,30 @@ describe('RFC-333 T4 review artifact recovery', () => {
       })
       await commitPrepared({
         db,
-        operations: new DatabaseHumanGateOperationJournal(),
+        operations: new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort),
         operationId: plan.operationId,
       })
       const objects = new Map<string, Uint8Array>([[plan.stagedPath, Buffer.from(body)]])
       const reads: string[] = []
       const loaded = deferredEffect()
       let readFailure: Error | null = null
-      const context = createCollaborationCommandContext({
-        db,
-        reviewArtifacts: {
-          store: real,
-          content: {
-            async read(reference) {
-              reads.push(reference)
-              await loaded.wait()
-              if (readFailure !== null) throw readFailure
-              const bytes = objects.get(reference)
-              return bytes === undefined ? null : { body: bytes, label: `fixture:${reference}` }
+      const context = createCollaborationCommandContext(
+        withO2Closure({
+          db,
+          reviewArtifacts: {
+            store: real,
+            content: {
+              async read(reference) {
+                reads.push(reference)
+                await loaded.wait()
+                if (readFailure !== null) throw readFailure
+                const bytes = objects.get(reference)
+                return bytes === undefined ? null : { body: bytes, label: `fixture:${reference}` }
+              },
             },
           },
-        },
-      })
+        }),
+      )
       const reader = resolveCollaborationCommandContext(context).persistence.committedArtifacts
       if (reader === undefined) throw new Error('content reader was not composed')
       expect(resolveCollaborationCommandContext(context).artifacts).toBe(real)
@@ -402,7 +412,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal()
+      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
       const artifacts = new FsHumanGateArtifactStore(appHome)
       const body = '# reviewed\n\ncomplete body\n'
       const plan = await prepareReviewOperation({
@@ -424,7 +434,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
       ).toBe(body)
 
       const recovery = new HumanGateOperationRecovery({
-        operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
+        operations: new DatabaseHumanGateOperationPersistence(
+          databaseSessionFor(db),
+          composeHumanGateTaskLockPort,
+        ),
         artifacts,
         preparedInspector: {
           inspectPreparedOperation: () => 'retain-for-owner-retry',
@@ -472,7 +485,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal()
+      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
       const realArtifacts = new FsHumanGateArtifactStore(appHome)
       const body = '# retryable\n'
       const plan = await prepareReviewOperation({
@@ -501,7 +514,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
       }
       let now = NOW + 4 + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
       const firstRecovery = new HumanGateOperationRecovery({
-        operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
+        operations: new DatabaseHumanGateOperationPersistence(
+          databaseSessionFor(db),
+          composeHumanGateTaskLockPort,
+        ),
         artifacts: faultingArtifacts,
         preparedInspector: {
           inspectPreparedOperation: () => 'retain-for-owner-retry',
@@ -519,7 +535,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
 
       now += DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
       const secondRecovery = new HumanGateOperationRecovery({
-        operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
+        operations: new DatabaseHumanGateOperationPersistence(
+          databaseSessionFor(db),
+          composeHumanGateTaskLockPort,
+        ),
         artifacts: realArtifacts,
         preparedInspector: {
           inspectPreparedOperation: () => 'retain-for-owner-retry',
@@ -538,7 +557,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal()
+      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
       const artifacts = new FsHumanGateArtifactStore(appHome)
       const plan = await prepareReviewOperation({
         db,
@@ -550,7 +569,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
       })
 
       const recovery = new HumanGateOperationRecovery({
-        operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
+        operations: new DatabaseHumanGateOperationPersistence(
+          databaseSessionFor(db),
+          composeHumanGateTaskLockPort,
+        ),
         artifacts,
         preparedInspector: {
           inspectPreparedOperation: () => 'cleanup-stale',
@@ -598,7 +620,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal()
+      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
       const artifacts = new FsHumanGateArtifactStore(appHome)
       await databaseSessionFor(db).transaction(async (tx) => {
         await operations.beginTx({
@@ -611,7 +633,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
       })
       let now = NOW + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS + 1
       const recovery = new HumanGateOperationRecovery({
-        operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
+        operations: new DatabaseHumanGateOperationPersistence(
+          databaseSessionFor(db),
+          composeHumanGateTaskLockPort,
+        ),
         artifacts,
         preparedInspector: {
           inspectPreparedOperation: () => 'cleanup-stale',

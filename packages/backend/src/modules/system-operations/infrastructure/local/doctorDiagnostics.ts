@@ -1,3 +1,4 @@
+import type { DoctorTaskLifecyclePort } from '../../composition/required-ports'
 import {
   evaluateLifecycleHealth,
   evaluateGitCheck,
@@ -44,27 +45,21 @@ function safeDoctorCount(value: unknown): number {
 
 export async function checkPostgresqlLifecycleHealth(
   runtime: PostgresqlDatabaseRuntime,
+  tasks: DoctorTaskLifecyclePort,
 ): Promise<CheckResult> {
   try {
+    const counts = await tasks.countLifecycleStates({
+      provider: 'postgresql',
+      pool: runtime.providerPool(),
+    })
     const rows = await runtime
       .providerPool()
       .unsafe(
-        'SELECT ' +
-          "count(*) FILTER (WHERE status = 'interrupted') AS interrupted, " +
-          "count(*) FILTER (WHERE status = 'failed') AS failed, " +
-          "count(*) FILTER (WHERE status = 'awaiting_review') AS awaiting_review, " +
-          "count(*) FILTER (WHERE status = 'awaiting_human') AS awaiting_human, " +
-          'count(*) FILTER (WHERE auto_recovery_suspended = TRUE) AS quarantined, ' +
-          '(SELECT count(*) FROM agent_workflow.lifecycle_alerts WHERE resolved_at IS NULL) AS open_alerts ' +
-          'FROM agent_workflow.tasks',
+        'SELECT count(*) AS open_alerts FROM agent_workflow.lifecycle_alerts WHERE resolved_at IS NULL',
       )
     const row = rows[0] ?? {}
     return evaluateLifecycleHealth({
-      interrupted: safeDoctorCount(row.interrupted),
-      failed: safeDoctorCount(row.failed),
-      awaitingReview: safeDoctorCount(row.awaiting_review),
-      awaitingHuman: safeDoctorCount(row.awaiting_human),
-      quarantined: safeDoctorCount(row.quarantined),
+      ...counts,
       openAlerts: safeDoctorCount(row.open_alerts),
     })
   } catch (error) {
@@ -137,26 +132,34 @@ export async function checkPostgresqlSealedCredentials(
  * 品牌不符即抛——这一支本来就只会在自己那一格里被取到。
  */
 const ENGINE_HEALTH_CHECKS = {
-  sqlite: async (): Promise<readonly CheckResult[]> => [
-    checkLifecycleHealth(),
+  sqlite: async (
+    _resolved: ResolvedDatabaseProviderRuntime,
+    tasks: DoctorTaskLifecyclePort,
+  ): Promise<readonly CheckResult[]> => [
+    await checkLifecycleHealth(tasks),
     checkSealedCredentials(),
   ],
   postgresql: async (
     resolved: ResolvedDatabaseProviderRuntime,
+    tasks: DoctorTaskLifecyclePort,
   ): Promise<readonly CheckResult[]> => {
     const runtime = requireDatabaseProviderRuntime(resolved, 'postgresql').runtime
     return [
-      await checkPostgresqlLifecycleHealth(runtime),
+      await checkPostgresqlLifecycleHealth(runtime, tasks),
       await checkPostgresqlSealedCredentials(runtime),
     ]
   },
 } satisfies Record<
   DatabaseProvider,
-  (resolved: ResolvedDatabaseProviderRuntime) => Promise<readonly CheckResult[]>
+  (
+    resolved: ResolvedDatabaseProviderRuntime,
+    tasks: DoctorTaskLifecyclePort,
+  ) => Promise<readonly CheckResult[]>
 >
 
 export async function checkConfiguredDatabase(
   contract: LogicalSchemaContract,
+  tasks: DoctorTaskLifecyclePort,
   configuration?: ApplicationConfigurationQueries,
 ): Promise<CheckResult[]> {
   let config: Config
@@ -183,7 +186,7 @@ export async function checkConfiguredDatabase(
         ok: true,
         message: absentLocalStore,
       },
-      checkLifecycleHealth(),
+      await checkLifecycleHealth(tasks),
       checkSealedCredentials(),
     ]
   }
@@ -221,7 +224,7 @@ export async function checkConfiguredDatabase(
         // 不再由调用方先问存储形态再自己拼。
         (report.ok ? '' : (databaseProviderTraits(report.provider).failureRecoveryHint ?? '')),
     }
-    return [providerCheck, ...(await ENGINE_HEALTH_CHECKS[resolved.provider](resolved))]
+    return [providerCheck, ...(await ENGINE_HEALTH_CHECKS[resolved.provider](resolved, tasks))]
   } finally {
     await resolved.close()
   }
@@ -336,26 +339,15 @@ export function checkBackups(): CheckResult {
   }
 }
 
-function checkLifecycleHealth(): CheckResult {
+async function checkLifecycleHealth(tasks: DoctorTaskLifecyclePort): Promise<CheckResult> {
   if (!existsSync(Paths.db)) {
     return { name: 'lifecycle', ok: true, message: '(no database yet)' }
   }
   let dbh: Database | null = null
   try {
     dbh = new Database(Paths.db, { readonly: true })
-    const taskCount = (status: string): number =>
-      (dbh!.query('SELECT count(*) AS n FROM tasks WHERE status = ?').get(status) as { n: number })
-        .n
     const counts: LifecycleHealthCounts = {
-      interrupted: taskCount('interrupted'),
-      failed: taskCount('failed'),
-      awaitingReview: taskCount('awaiting_review'),
-      awaitingHuman: taskCount('awaiting_human'),
-      quarantined: (
-        dbh.query('SELECT count(*) AS n FROM tasks WHERE auto_recovery_suspended = 1').get() as {
-          n: number
-        }
-      ).n,
+      ...(await tasks.countLifecycleStates({ provider: 'sqlite', db: dbh })),
       openAlerts: (
         dbh.query('SELECT count(*) AS n FROM lifecycle_alerts WHERE resolved_at IS NULL').get() as {
           n: number
@@ -535,6 +527,7 @@ function checkMigrations(): CheckResult {
 }
 
 export function createLocalDoctorDiagnostics(input: {
+  readonly tasks: DoctorTaskLifecyclePort
   readonly contract: LogicalSchemaContract
   readonly configuration?: ApplicationConfigurationQueries
 }): DoctorDiagnosticsFamily {
@@ -571,7 +564,7 @@ export function createLocalDoctorDiagnostics(input: {
       return checkMigrations()
     },
     database() {
-      return checkConfiguredDatabase(input.contract, configuration)
+      return checkConfiguredDatabase(input.contract, input.tasks, configuration)
     },
     backups() {
       return checkBackups()
@@ -581,10 +574,11 @@ export function createLocalDoctorDiagnostics(input: {
 
 export function createLocalDoctorDiagnosticsFactory(
   contract: LogicalSchemaContract,
+  tasks: DoctorTaskLifecyclePort,
 ): DoctorDiagnosticsFactory {
   return {
     create(input) {
-      return createLocalDoctorDiagnostics({ ...input, contract })
+      return createLocalDoctorDiagnostics({ ...input, contract, tasks })
     },
   }
 }

@@ -1,6 +1,6 @@
 import type { Agent, Mcp, Skill } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { listAgents } from '../../src/services/agent'
+import { listAgents } from '../../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { listSkills } from '../../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { composeMcpServiceBindingForTest, listMcpsForTest as listMcps } from './mcpServiceBinding'
 

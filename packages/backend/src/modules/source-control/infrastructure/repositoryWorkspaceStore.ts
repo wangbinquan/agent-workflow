@@ -1,12 +1,14 @@
+import type {
+  RepositoryWorkspaceTaskPorts,
+  TaskRepositorySourceSealingParticipant,
+} from '../composition/required-ports'
 // RFC-359 W4-B6 —— 仓库工作区存储：一份实现，两个 provider 共用。
 // 仓库组的图版本核对 + 改写在统一事务里做，PG 侧原本的 `LOCK TABLE … SHARE ROW EXCLUSIVE` 改为引擎能力矩阵的
 // 事务级 advisory lock（所有仓库组写入都经本存储，写者之间互斥即等价；SQLite 单写者下 no-op）；
 // 凭据擦除后的存储回收也走能力矩阵。
 //
-// RFC-359 W8-T26：facets 聚合原本靠 `engine.indexHint()` 在 SQLite 侧渲染 `INDEXED BY` 压住
-// 一个逐行相关子查询，PostgreSQL 无对应语法只能硬吃。改成「每格一条标量子查询、`exists` 回到
-// WHERE 里」（形状与实测见 `repositoryWorkspaceSqlStore.referencedFacetCounts`）之后两个引擎
-// 各自都能上提成 semi/anti join，索引提示随之退场——两个引擎都自选到了覆盖索引。
+// RFC-395 II-b O1：任务引用与 URL sealing 经消费方端口交给 task-execution；
+// source-control 只查询自身的仓库 / schedule 事实，分页与 5 秒 facet 缓存保持原边界。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -46,45 +48,6 @@ function executor(db: PersistenceDb): RepositoryWorkspaceSqlExecutor {
     async run(query): Promise<number> {
       return affectedRows(await rawExec(db, query))
     },
-    async cachedRepoFacets(input) {
-      const { cachedRepos } = tablesOf(db)
-      // 每格一条标量子查询：`exists` 回到 WHERE 子句里，两个 planner 都会把它上提成
-      // semi/anti join；外层是一行常量，所以每格只求值一次。为什么不是一次聚合扫描、
-      // 也不是预聚合 + LEFT JOIN，见 `repositoryWorkspaceSqlStore.referencedFacetCounts`。
-      const rows = await rawRows<{
-        all_count: number
-        explicit_count: number
-        legacy_count: number
-        scheduled_count: number
-        attention_count: number
-      }>(
-        db,
-        sql`
-        SELECT
-          (SELECT count(*) FROM ${cachedRepos}) AS all_count,
-          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.explicit}) AS explicit_count,
-          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.legacyOnly}) AS legacy_count,
-          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.scheduledOnly}) AS scheduled_count,
-          (SELECT count(*) FROM ${cachedRepos} WHERE ${input.attention}) AS attention_count
-      `,
-        {
-          all_count: 'int',
-          explicit_count: 'int',
-          legacy_count: 'int',
-          scheduled_count: 'int',
-          attention_count: 'int',
-        },
-      )
-      return (
-        rows[0] ?? {
-          all_count: 0,
-          explicit_count: 0,
-          legacy_count: 0,
-          scheduled_count: 0,
-          attention_count: 0,
-        }
-      )
-    },
   }
 }
 
@@ -108,21 +71,17 @@ function graphVersionsMatch(
 async function applySealingMutation(
   tx: PersistenceTx,
   mutation: RepositoryCredentialSealingMutation,
+  participant: TaskRepositorySourceSealingParticipant,
 ): Promise<void> {
   for (const update of mutation.cachedRepoUpdates) {
     const { cachedRepos } = tablesOf(tx)
     await tx.update(cachedRepos).set(update.patch).where(eq(cachedRepos.id, update.id))
   }
   for (const update of mutation.taskRepoUpdates) {
-    const { taskRepos } = tablesOf(tx)
-    await tx
-      .update(taskRepos)
-      .set(update.patch)
-      .where(and(eq(taskRepos.taskId, update.taskId), eq(taskRepos.repoIndex, update.repoIndex)))
+    await participant.updateMount(update.taskId, update.ordinal, update.patch)
   }
   for (const update of mutation.taskUpdates) {
-    const { tasks } = tablesOf(tx)
-    await tx.update(tasks).set(update.patch).where(eq(tasks.id, update.id))
+    await participant.updateRequestedSource(update.id, update.patch)
   }
   for (const update of mutation.scheduleUpdates) {
     const { scheduledTasks } = tablesOf(tx)
@@ -139,8 +98,11 @@ export class DrizzleRepositoryWorkspaceStore
 {
   readonly runtimeIdentity: object
 
-  constructor(private readonly db: PersistenceDb) {
-    super(executor(db), engineOf(db))
+  constructor(
+    private readonly db: PersistenceDb,
+    taskPorts: RepositoryWorkspaceTaskPorts,
+  ) {
+    super(executor(db), engineOf(db), taskPorts)
     this.runtimeIdentity = db as object
   }
 
@@ -167,7 +129,8 @@ export class DrizzleRepositoryWorkspaceStore
     mutation: RepositoryCredentialSealingMutation,
   ): Promise<void> {
     await databaseSessionFor(this.db).transaction(
-      async (tx) => await applySealingMutation(tx, mutation),
+      async (tx) =>
+        await applySealingMutation(tx, mutation, this.taskPorts.sourceSealing.participant(tx)),
     )
   }
 
@@ -326,6 +289,9 @@ export class DrizzleRepositoryWorkspaceStore
   }
 }
 
-export function composeRepositoryWorkspaceStore(db: PersistenceDb): RepositoryWorkspaceStore {
-  return new DrizzleRepositoryWorkspaceStore(db)
+export function composeRepositoryWorkspaceStore(
+  db: PersistenceDb,
+  taskPorts: RepositoryWorkspaceTaskPorts,
+): RepositoryWorkspaceStore {
+  return new DrizzleRepositoryWorkspaceStore(db, taskPorts)
 }

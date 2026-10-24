@@ -1,3 +1,4 @@
+import { existingTaskIds } from '@/modules/task-execution/composition'
 // RFC-370 §10 V16 — the code-review artifact store (structural diffs of a
 // terminal generation, the change narrative) on both deployments.
 //
@@ -235,7 +236,7 @@ describeEachProvider('RFC-370 §10 V16 hosted code-review object sweep', (harnes
       await store.writeNarrative(taskId, narrative(taskId))
     }
     const sweep = composeCrewStationCodeReviewObjectSweep({
-      db: harness.db,
+      tasks: { existingTaskIds: (ids) => existingTaskIds(harness.db, ids) },
       publications: journal,
       graceMs: 0,
     })

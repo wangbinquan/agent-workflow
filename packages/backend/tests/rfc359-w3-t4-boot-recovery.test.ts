@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   patchNodeRunFixture,
@@ -104,7 +105,9 @@ async function seedRunningTask(db: PersistenceDb, taskId: string): Promise<strin
 
 /** 上一代 daemon（gen-old）认领了任务并挂上 runtime，然后整个进程被 SIGKILL。 */
 async function crashPreviousDaemon(db: PersistenceDb, taskId: string) {
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  })
   const previous = createProviderTaskExecutionModule({
     daemonGeneration: `gen-old-${ulid()}`,
     persistence,
@@ -278,7 +281,9 @@ describeEachProvider('RFC-359 W3-T4 —— boot 恢复四步（P0-3 / P0-4）', 
 
   test('没有孤儿时四步都是 no-op', async () => {
     const db = harness.db
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     const report = await runTaskExecutionBootRecovery({
       persistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),

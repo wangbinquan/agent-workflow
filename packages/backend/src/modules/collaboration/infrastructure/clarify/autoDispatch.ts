@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 // RFC-128 / RFC-349 — SQLite quick-channel seal + AUTODISPATCH.
 //
 // RFC-132 (universal deferred model) UPDATE: the per-task `deferred_question_dispatch` flag and the
@@ -785,7 +786,10 @@ export async function finishCommittedClarifyAutoDispatch(input: {
  * existing dispatch phase then mints the same functional reruns while the
  * already-admitted continuation remains the sole drive authority. */
 export async function autoDispatchClarifyRoundWithDecision(
-  args: AutoDispatchClarifyRoundArgs & { readonly decision?: ClarifyDecisionArgs },
+  args: AutoDispatchClarifyRoundArgs & {
+    readonly taskLock: HumanGateTaskLockPort
+    readonly decision?: ClarifyDecisionArgs
+  },
 ): Promise<AutoDispatchClarifyDecisionResult> {
   const { clarifyRounds } = tablesOf(args.db)
   const round = (
@@ -846,6 +850,7 @@ export async function autoDispatchClarifyRoundWithDecision(
 
   const prepared = await prepareClarifyDecision({
     db: args.db,
+    taskLock: args.taskLock,
     taskId: round.taskId,
     originNodeRunId: args.originNodeRunId,
     roundId: round.id,

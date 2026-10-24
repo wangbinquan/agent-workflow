@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-053 PR-D — invariants R1/R2 (review ↔ doc_versions / node_runs).
 //
 // Calls the real services/lifecycleInvariants.runLifecycleInvariants(); each
@@ -157,7 +158,9 @@ describeEachProvider(
         versionIndex: 1,
       })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(rulesOf(result.openAlerts)).toEqual([])
@@ -172,7 +175,9 @@ describeEachProvider(
         versionIndex: 1,
       })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       const r1 = result.openAlerts.filter((a) => a.rule === 'R1')
@@ -200,7 +205,9 @@ describeEachProvider(
       }
       // First scan: warning + 'new' callback
       const r1 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
         now: () => t0,
         onAlert,
@@ -214,7 +221,9 @@ describeEachProvider(
       // Second scan, within 24h: still warning, no callback
       calls = []
       const r2 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
         now: () => t0 + 23 * HOUR_MS,
         onAlert,
@@ -227,7 +236,9 @@ describeEachProvider(
       // Third scan, past 24h: promoted to error + 'promoted' callback fires once
       calls = []
       const r3 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
         now: () => t0 + 25 * HOUR_MS,
         onAlert,
@@ -241,7 +252,9 @@ describeEachProvider(
       // Fourth scan, still violating: no second promotion (only one transition per row)
       calls = []
       const r4 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
         now: () => t0 + 48 * HOUR_MS,
         onAlert,
@@ -260,7 +273,9 @@ describeEachProvider(
       })
       // First scan: R1 violates (T1 also satisfied — there *is* an awaiting_review run).
       const r1 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(r1.openAlerts.filter((a) => a.rule === 'R1')).toHaveLength(1)
@@ -270,7 +285,9 @@ describeEachProvider(
       await patchTaskFixture(h.db, { id: h.taskId }, { status: 'done' })
       // Second scan: R1 row resolved; no new R1 inserted.
       const r2 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(r2.resolvedAlerts).toBeGreaterThanOrEqual(1)
@@ -301,7 +318,9 @@ describeEachProvider(
         versionIndex: 1,
       })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'R2')).toHaveLength(0)
@@ -316,7 +335,9 @@ describeEachProvider(
         versionIndex: 1,
       })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       const r2 = result.openAlerts.filter((a) => a.rule === 'R2')
@@ -328,7 +349,9 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'failed')
       await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'R2')).toHaveLength(1)
@@ -339,12 +362,16 @@ describeEachProvider(
       const run = await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
       // Two scans without fixing the violation: still 1 open row, no dup insert.
       const r1 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(r1.newAlerts).toBe(1)
       const r2 = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(r2.newAlerts).toBe(0)

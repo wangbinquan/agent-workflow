@@ -40,7 +40,6 @@ const expectedSteps = [
   'task-delete-recovery',
   'archive-recovery',
   'workspace-maintenance-recovery',
-  'frame-backfill',
   'fusion-decision-recovery',
   'mr-terminal-reconcile',
   'webhook-delivery-recovery',

@@ -1,3 +1,4 @@
+import { deleteAgent, deleteWorkflow, deleteWorkgroup } from './helpers/resourceCatalogDeletion'
 // RFC-282 D1 — behavior lock for the ACL-predicate convergence (设计门 P2-1).
 //
 // Locks the (visibility, error-code, throw-order) triple of the four inline
@@ -34,9 +35,6 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
-import { deleteAgent } from '../src/services/agent'
-import { deleteWorkflow } from '../src/services/workflow'
-import { deleteWorkgroup } from '../src/services/workgroups'
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 

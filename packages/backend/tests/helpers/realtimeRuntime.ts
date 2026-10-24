@@ -1,3 +1,5 @@
+import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/composition'
+import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
 import { composeLocalWebSocketAuthentication } from '../../src/modules/identity-access/composition/authentication'
 import type { WsCredentialWithExpiry } from '../../src/auth/session'
 import type { ActorSource } from '../../src/auth/actor'
@@ -63,6 +65,8 @@ export function composeTestSqliteRealtimeRuntime(input: {
 }): RealtimeRuntime {
   const resourceCatalog = composeResourceCatalogFor({ db: input.db })
   return composeRealtimeRuntimeFor({
+    taskFacts: composeRealtimeTaskFacts(input.db),
+    resources: composeRealtimeResourceAcl(input.db),
     db: input.db,
     credentials: composeLocalWebSocketAuthentication({
       auth: createAuthRuntimeFor({ db: input.db, onCredentialRevoked: () => {} }),
@@ -118,6 +122,8 @@ export function composeTestProviderRealtimeRuntime(input: {
   }
   if (binding.provider === 'sqlite') {
     return composeRealtimeRuntimeFor({
+      taskFacts: composeRealtimeTaskFacts(binding.db),
+      resources: composeRealtimeResourceAcl(binding.db),
       db: binding.db,
       credentials: composeLocalWebSocketAuthentication({
         auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),
@@ -128,6 +134,8 @@ export function composeTestProviderRealtimeRuntime(input: {
     })
   }
   return composeRealtimeRuntimeFor({
+    taskFacts: composeRealtimeTaskFacts(binding.db),
+    resources: composeRealtimeResourceAcl(binding.db),
     db: binding.db,
     credentials: composeLocalWebSocketAuthentication({
       auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),

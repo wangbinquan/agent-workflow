@@ -429,7 +429,10 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       // `createFileIntent{Skill,Plugin}ArtifactOwner`，文件实现和生产消费者保留。
       // RFC-395 II-a A6: two maintenance roots, SQLite artifact recovery and PG apply
       // converge into neutral scene adapters; measured declarations 48 -> 44.
-    ).toBeGreaterThanOrEqual(44)
+      // RFC-395 O3: composeLegacySqliteResourceLimitOperations and
+      // createPostgresqlEventsArchiveStore become neutral owner factories (44 -> 42).
+      // Their behavior remains in bootstrap/resourceLimits and taskNodeEventArchiveStore.
+    ).toBeGreaterThanOrEqual(42)
   })
 
   test('零生产消费者的适配器与账本逐字相等（增了是新摆设，减了是收敛，都要改账本）', () => {

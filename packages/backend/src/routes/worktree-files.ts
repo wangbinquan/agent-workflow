@@ -18,9 +18,9 @@ import { extname, isAbsolute, resolve, sep } from 'node:path'
 import type { Hono } from 'hono'
 import { actorOf, type Actor } from '@/auth/actor'
 import type {
-  RepositoryWorkspaceStore,
-  WorktreeTaskRecord,
-} from '@/modules/source-control/public/operations'
+  TaskWorktreeLocator,
+  TaskWorktreeLocation,
+} from '@/modules/task-execution/public/queries'
 import type {
   BoundedWorkspaceContent,
   WorkspaceReadRequest,
@@ -44,8 +44,8 @@ const MIME_BY_EXT: Record<string, string> = {
 }
 
 export interface WorktreeFilesRouteDeps {
-  readonly store: RepositoryWorkspaceStore
-  readonly canViewTask: (actor: Actor, task: WorktreeTaskRecord) => Promise<boolean>
+  readonly locator: TaskWorktreeLocator
+  readonly canViewTask: (actor: Actor, task: TaskWorktreeLocation) => Promise<boolean>
   /** RFC-370 §10 V15: bounded reads of the task's workspace through the
    * selected Source Control content (local files, or a hosted task volume
    * through the platform file API). */
@@ -69,10 +69,8 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: WorktreeFilesRouteDeps
     },
     async (c) => {
       const taskId = c.req.param('taskId')
-      // Load the raw task row (not the Task DTO — canViewTask needs ownerUserId,
-      // which the DTO drops). One query yields both the visibility fields and
-      // worktreePath.
-      const task = await deps.store.findWorktreeTask(taskId)
+      // The owner supplies the workspace projection used by this legacy route.
+      const task = await deps.locator.find(taskId)
       if (task === null) {
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       }
@@ -124,7 +122,7 @@ export function mountWorktreeFilesRoutes(app: Hono, deps: WorktreeFilesRouteDeps
       if (isTaskWorkspaceUnbound(task.worktreePath)) {
         throw new NotFoundError(
           'worktree-not-ready',
-          `task '${task.id}' has no worktree yet (repository preparation has not completed)`,
+          `task '${task.taskId}' has no worktree yet (repository preparation has not completed)`,
         )
       }
       const rootAbs = resolve(task.worktreePath)

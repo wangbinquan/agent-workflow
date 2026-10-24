@@ -1,3 +1,4 @@
+import type { TaskRecoveryHumanGateFactsPort } from './required-ports'
 import { createNodeRunSeqBackfillStore } from '../infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
@@ -54,64 +55,69 @@ import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSes
 function createRecoveryAdministration(
   db: PersistenceDb,
   taskLifecycle: Pick<DrizzleTaskRuntimeLifecyclePersistence, 'trySet' | 'trySetWithGuard'>,
+  humanGates?: TaskRecoveryHumanGateFactsPort,
 ) {
   const nodeLifecycle = new DrizzleNodeRunLifecyclePersistence(db)
   const runtimeLeaseOperations = createRuntimeSessionLeaseOperationsInternal(db)
-  return createTaskRecoveryOperations(db, {
-    async interruptBootOrphanTask(input) {
-      return await taskLifecycle.trySetWithGuard(
-        {
+  return createTaskRecoveryOperations(
+    db,
+    {
+      async interruptBootOrphanTask(input) {
+        return await taskLifecycle.trySetWithGuard(
+          {
+            taskId: input.taskId,
+            to: 'interrupted',
+            allowedFrom: [input.from],
+            extra: {
+              finishedAt: input.now,
+              errorSummary: input.failureCode,
+              errorMessage: input.errorMessage,
+            },
+            now: input.now,
+            reason: 'reapOrphanRuns',
+          },
+          (tx) =>
+            terminalizeTaskExecutionIntentsInTx(tx, {
+              taskId: input.taskId,
+              state: 'failed',
+              failureCode: input.failureCode,
+              now: input.now,
+            }),
+        )
+      },
+      async interruptNodeRun(input) {
+        try {
+          await nodeLifecycle.transition({
+            nodeRunId: input.nodeRunId,
+            event: { kind: 'mark-interrupted' },
+            extra: {
+              identity: {
+                finishedAt: input.now,
+                ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
+              },
+            },
+          })
+          return true
+        } catch {
+          return false
+        }
+      },
+      async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
+        return repairRuntimeSessionLeasesAfterOrphanReap(runtimeLeaseOperations, true, nodeRunId)
+      },
+      async interruptPeriodicTaskIfIdle(input) {
+        return taskLifecycle.trySet({
           taskId: input.taskId,
           to: 'interrupted',
-          allowedFrom: [input.from],
-          extra: {
-            finishedAt: input.now,
-            errorSummary: input.failureCode,
-            errorMessage: input.errorMessage,
-          },
+          allowedFrom: ['running'],
+          extra: { finishedAt: input.now, errorSummary: input.failureCode },
           now: input.now,
-          reason: 'reapOrphanRuns',
-        },
-        (tx) =>
-          terminalizeTaskExecutionIntentsInTx(tx, {
-            taskId: input.taskId,
-            state: 'failed',
-            failureCode: input.failureCode,
-            now: input.now,
-          }),
-      )
-    },
-    async interruptNodeRun(input) {
-      try {
-        await nodeLifecycle.transition({
-          nodeRunId: input.nodeRunId,
-          event: { kind: 'mark-interrupted' },
-          extra: {
-            identity: {
-              finishedAt: input.now,
-              ...(input.errorMessage === undefined ? {} : { errorMessage: input.errorMessage }),
-            },
-          },
+          reason: 'reconcileDeadRunningRuns',
         })
-        return true
-      } catch {
-        return false
-      }
+      },
     },
-    async repairRuntimeSessionLeaseAfterOrphanReap(nodeRunId) {
-      return repairRuntimeSessionLeasesAfterOrphanReap(runtimeLeaseOperations, true, nodeRunId)
-    },
-    async interruptPeriodicTaskIfIdle(input) {
-      return taskLifecycle.trySet({
-        taskId: input.taskId,
-        to: 'interrupted',
-        allowedFrom: ['running'],
-        extra: { finishedAt: input.now, errorSummary: input.failureCode },
-        now: input.now,
-        reason: 'reconcileDeadRunningRuns',
-      })
-    },
-  })
+    humanGates,
+  )
 }
 
 /**
@@ -125,6 +131,7 @@ function createRecoveryAdministration(
  * 第三个 provider 在这里什么都不用加。
  */
 export interface TaskExecutionPersistenceDependencies {
+  readonly recoveryHumanGates?: TaskRecoveryHumanGateFactsPort
   readonly workspacePresence?: WorkspacePresenceQueries
 }
 
@@ -168,7 +175,11 @@ export function createTaskExecutionPersistence(
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle,
     reads: createTaskExecutionReadModels(db),
-    recoveryAdministration: createRecoveryAdministration(db, runtimeLifecycle),
+    recoveryAdministration: createRecoveryAdministration(
+      db,
+      runtimeLifecycle,
+      dependencies.recoveryHumanGates,
+    ),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })

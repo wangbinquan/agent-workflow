@@ -1,3 +1,5 @@
+import { composeRetentionSweepPhases } from '@/bootstrap/retentionSweepPhases'
+import { o2Ports } from './helpers/o2Closure'
 // RFC-338 D5 / AC-2 — owner adapters expose bounded, replay-safe slices so
 // foreground writers get a lock handoff between maintenance batches.
 
@@ -22,7 +24,7 @@ import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execu
 import { createTokenCallAudit } from '@/auth/composition'
 import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
 import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
-import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
+import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 import { pruneTokenAuditSlice } from '@/services/tokenAudit'
 import { gcDeliveriesSlice } from '@/services/webhook/deliveryStore'
@@ -63,12 +65,17 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
     executionFence: async () => 'clear' as const,
   },
   integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
-  taskRecovery: createTaskExecutionPersistence(db).recoveryAdministration,
-  taskArchive: createDrizzleTaskArchiveMaintenanceCommand(db),
+  taskRecovery: createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  }).recoveryAdministration,
+  taskArchive: createDrizzleTaskArchiveMaintenanceCommand(
+    db,
+    o2Ports(db).collaborationReads.archive,
+  ),
   tokenAudit: createTokenCallAudit(db),
   system: {
     eventsArchive: createEventsArchiveMaintenanceCommand({
-      store: createEventsArchiveStore(db),
+      store: createTaskNodeEventArchiveStore(db),
       logsDir: join(appHome, 'logs'),
     }),
     retention: {
@@ -386,13 +393,25 @@ describe('RFC-338 bounded maintenance owner slices', () => {
         })),
       )
       const config = { eventStreamRetentionDays: 1, webhookTriggerFiresRetentionDays: 0 }
-      const first = await runRetentionSweepSlice(db, config, null, 100_000_000, 2)
+      const first = await runRetentionSweepSlice(
+        composeRetentionSweepPhases(db),
+        config,
+        null,
+        100_000_000,
+        2,
+      )
       expect(first).toMatchObject({
         done: false,
         cursor: { version: 1, phase: 'distill-events', eventCutoff: 13_600_000 },
         counters: { distillEvents: 2 },
       })
-      const second = await runRetentionSweepSlice(db, config, first.cursor, 100_000_000, 2)
+      const second = await runRetentionSweepSlice(
+        composeRetentionSweepPhases(db),
+        config,
+        first.cursor,
+        100_000_000,
+        2,
+      )
       expect(second).toMatchObject({
         done: false,
         cursor: { version: 1, phase: 'intent-turn-events' },

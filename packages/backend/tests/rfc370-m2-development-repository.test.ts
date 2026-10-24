@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -47,12 +48,14 @@ describeEachProvider('RFC-370 canonical development repository volume', (harness
         return { path: '/work/repos/repo', defaultBranch: 'main' } as T
       },
     }
-    const owner = createHostedDevelopmentRepositoryPreparation({
-      db: harness.db,
-      secretBox,
-      helper,
-      taskId: 'development:shared',
-    })
+    const owner = createHostedDevelopmentRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        secretBox,
+        helper,
+        taskId: 'development:shared',
+      }),
+    )
     await expect(owner.prepare({ repositoryId: 'repo' })).rejects.toThrow('result unknown')
     const prepared = await owner.prepare({ repositoryId: 'repo' })
     expect(calls[0]!.operationId).toBe(calls[1]!.operationId)

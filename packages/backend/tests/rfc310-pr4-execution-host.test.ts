@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-310 PR-4 T41/T43/T52 —— digital-employee host 执行链（真子进程）。
 //
 // 锁的合同：
@@ -41,7 +42,10 @@ import {
   type AgentActionExecutionRunner,
 } from '../src/modules/task-execution/composition/agentActionExecution'
 import { DIGITAL_EMPLOYEE_RESULT_PORT } from '../src/modules/task-execution/domain/digitalEmployeeHost'
-import { createAgent, getAgentById } from '../src/services/agent'
+import {
+  createAgent,
+  getAgentById,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -158,7 +162,9 @@ async function buildHarness(): Promise<Harness> {
     actor,
     identityAccess,
     launchResources,
-    persistence: createTaskExecutionPersistence(db),
+    persistence: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }),
   }
 }
 

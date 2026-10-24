@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { readTaskFixtures, taskFixture, workflowFixture } from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -102,7 +103,10 @@ export function taskBundleInput(
         return actorOfDirectAuthority(identity)
       },
       runtimeRegistry,
-      repositoryWorkspaceStore: composeRepositoryWorkspaceStore(db),
+      repositoryWorkspaceStore: composeRepositoryWorkspaceStore(
+        db,
+        composeSourceControlTaskPorts(db),
+      ),
     },
     observation: {
       workspacePresence: createFileWorkspacePresenceQueries(),

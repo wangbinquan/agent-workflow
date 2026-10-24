@@ -49,7 +49,7 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   DW_GATE_CAUSE,
   runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithProvider,

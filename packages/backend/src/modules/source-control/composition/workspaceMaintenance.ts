@@ -1,17 +1,19 @@
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { WorkspaceGcTaskPort, TaskWorkspacePruneParticipant } from './required-ports'
 import { createWorkspaceMaintenanceCommand } from '../application/workspaceMaintenance'
 import type {
   WorkspaceMaintenanceFilesystem,
   WorkspaceTerminalMaintenance,
 } from '../application/ports/workspaceMaintenance'
 import { createNodeWorkspaceMaintenanceFilesystem } from '../infrastructure/nodeWorkspaceMaintenanceFilesystem'
-import { DrizzleWorkspaceMaintenanceStore } from '../infrastructure/workspaceMaintenanceStore'
+import { PortWorkspaceMaintenanceStore } from '../infrastructure/workspaceMaintenanceStore'
 import type {
   WorkspaceClaimFinalizationCommand,
   WorkspaceMaintenanceCommand,
 } from '../public/commands'
 
 interface WorkspaceMaintenanceCompositionInput {
+  readonly workspaceGc: WorkspaceGcTaskPort
+  readonly workspacePrune: TaskWorkspacePruneParticipant
   readonly appHome: string
   readonly terminalMaintenance: WorkspaceTerminalMaintenance
   readonly isMaterializingTask: (taskId: string) => boolean
@@ -33,10 +35,10 @@ function filesystem(input: WorkspaceMaintenanceCompositionInput) {
 
 /** RFC-359 W3-T15-B / W4-B6：一份 store，调用方（boot / 测试）看不见 provider。 */
 export function composeWorkspaceMaintenanceCommand(
-  input: WorkspaceMaintenanceCompositionInput & { readonly db: PersistenceDb },
+  input: WorkspaceMaintenanceCompositionInput,
 ): WorkspaceMaintenanceCommand & WorkspaceClaimFinalizationCommand {
   return createWorkspaceMaintenanceCommand({
-    store: new DrizzleWorkspaceMaintenanceStore(input.db),
+    store: new PortWorkspaceMaintenanceStore(input),
     terminalMaintenance: input.terminalMaintenance,
     filesystem: filesystem(input),
   })

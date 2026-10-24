@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-326 — batched decisions: comments[] + selections[] on the decision
 // (proposal AC-14 / AC-15; design §4.2, §6.1 prepare B/C/D).
 //
@@ -411,15 +412,17 @@ async function buildMulti(
     writeFileSync(abs, bodyFor(p), 'utf8')
   }
   const task = (await readTaskFixtures(db, { id: taskId }))[0]!
-  const r = await dispatchReviewNode({
-    db,
-    taskId,
-    scopeRoot: task.worktreePath,
-    appHome,
-    definition,
-    node: definition.nodes.find((n) => n.id === 'rev_1')!,
-    iteration: 0,
-  })
+  const r = await dispatchReviewNode(
+    withO2Closure({
+      db,
+      taskId,
+      scopeRoot: task.worktreePath,
+      appHome,
+      definition,
+      node: definition.nodes.find((n) => n.id === 'rev_1')!,
+      iteration: 0,
+    }),
+  )
   if (r.kind !== 'awaiting_review') throw new Error(`dispatch → ${JSON.stringify(r)}`)
   const docs = await db
     .select()
@@ -487,20 +490,22 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       })
       expect(earlier.warnings).toEqual([])
 
-      const result = await submitReviewDecision({
-        db: f.db,
-        appHome: f.appHome,
-        nodeRunId: f.reviewRunId,
-        decision: 'iterated',
-        expectedReviewIteration: 0,
-        author: 'reviewer',
-        comments: [
-          { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
-          { commentText: 'THREE: web form', anchor: webAnchor(SINGLE_BODY, 'Design v1') },
-          // Exact duplicate of TWO inside the same batch → skipped, not double-posted.
-          { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
-        ],
-      })
+      const result = await submitReviewDecision(
+        withO2Closure({
+          db: f.db,
+          appHome: f.appHome,
+          nodeRunId: f.reviewRunId,
+          decision: 'iterated',
+          expectedReviewIteration: 0,
+          author: 'reviewer',
+          comments: [
+            { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
+            { commentText: 'THREE: web form', anchor: webAnchor(SINGLE_BODY, 'Design v1') },
+            // Exact duplicate of TWO inside the same batch → skipped, not double-posted.
+            { commentText: 'TWO: also the export job', anchorRequest: { quote: 'export job' } },
+          ],
+        }),
+      )
       expect(result.batch).toEqual({
         commentsAdded: 2,
         commentsSkippedAsDuplicate: 1,
@@ -537,7 +542,14 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       expect(run.reviewIteration).toBe(1)
 
       // The upstream re-run prompt sees ALL comments.
-      const ctx = await buildReviewPromptContext(f.db, f.appHome, 'doc', f.taskId, 0)
+      const ctx = await buildReviewPromptContext(
+        f.db,
+        f.appHome,
+        'doc',
+        f.taskId,
+        0,
+        o2Ports(f.db).upstreamAgents,
+      )
       expect(ctx?.comments ?? '').toContain('ONE: name the state')
       expect(ctx?.comments ?? '').toContain('TWO: also the export job')
       expect(ctx?.comments ?? '').toContain('THREE: web form')
@@ -556,14 +568,16 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         anchorRequest: { quote: 'partially_refunded' },
         commentText: 'same',
       })
-      const result = await submitReviewDecision({
-        db: f.db,
-        appHome: f.appHome,
-        nodeRunId: f.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        comments: [{ commentText: 'same', anchorRequest: { quote: 'partially_refunded' } }],
-      })
+      const result = await submitReviewDecision(
+        withO2Closure({
+          db: f.db,
+          appHome: f.appHome,
+          nodeRunId: f.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          comments: [{ commentText: 'same', anchorRequest: { quote: 'partially_refunded' } }],
+        }),
+      )
       expect(result.batch).toEqual({
         commentsAdded: 0,
         commentsSkippedAsDuplicate: 1,
@@ -576,13 +590,15 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
 
     test('a plain decision (no batch) reports no batch counters', async () => {
       f = await buildSingle()
-      const result = await submitReviewDecision({
-        db: f.db,
-        appHome: f.appHome,
-        nodeRunId: f.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-      })
+      const result = await submitReviewDecision(
+        withO2Closure({
+          db: f.db,
+          appHome: f.appHome,
+          nodeRunId: f.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+        }),
+      )
       expect(result.batch).toBeUndefined()
     })
   })
@@ -609,18 +625,20 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         PersistenceTables['docVersions']['$inferSelect'],
       ]
 
-      const result = await submitReviewDecision({
-        db: m.db,
-        appHome: m.appHome,
-        nodeRunId: m.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        selections: [
-          { docVersionId: a.id, selection: 'accepted' },
-          { docVersionId: b.id, selection: 'not_accepted' },
-          { docVersionId: c.id, selection: 'accepted' },
-        ],
-      })
+      const result = await submitReviewDecision(
+        withO2Closure({
+          db: m.db,
+          appHome: m.appHome,
+          nodeRunId: m.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          selections: [
+            { docVersionId: a.id, selection: 'accepted' },
+            { docVersionId: b.id, selection: 'not_accepted' },
+            { docVersionId: c.id, selection: 'accepted' },
+          ],
+        }),
+      )
       expect(result.batch).toEqual({
         commentsAdded: 0,
         commentsSkippedAsDuplicate: 0,
@@ -664,18 +682,20 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         PersistenceTables['docVersions']['$inferSelect'],
         PersistenceTables['docVersions']['$inferSelect'],
       ]
-      await submitReviewDecision({
-        db: m.db,
-        appHome: m.appHome,
-        nodeRunId: m.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        selections: [
-          { docVersionId: c.id, selection: 'accepted' },
-          { docVersionId: a.id, selection: 'not_accepted' },
-          { docVersionId: b.id, selection: 'accepted' },
-        ],
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: m.db,
+          appHome: m.appHome,
+          nodeRunId: m.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          selections: [
+            { docVersionId: c.id, selection: 'accepted' },
+            { docVersionId: a.id, selection: 'not_accepted' },
+            { docVersionId: b.id, selection: 'accepted' },
+          ],
+        }),
+      )
       const outs = await readNodeRunOutputFixtures(m.db, { nodeRunId: m.reviewRunId })
       const accepted = outs.find((o) => o.portName === 'accepted')!
       expect(accepted.kind).toBe('list<markdown>')
@@ -700,18 +720,20 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         .update(docVersions)
         .set({ selection: 'accepted', selectionStale: true })
         .where(eq(docVersions.id, a.id))
-      await submitReviewDecision({
-        db: m.db,
-        appHome: m.appHome,
-        nodeRunId: m.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        selections: [
-          { docVersionId: a.id, selection: 'accepted' },
-          { docVersionId: b.id, selection: 'not_accepted' },
-          { docVersionId: c.id, selection: 'not_accepted' },
-        ],
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: m.db,
+          appHome: m.appHome,
+          nodeRunId: m.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          selections: [
+            { docVersionId: a.id, selection: 'accepted' },
+            { docVersionId: b.id, selection: 'not_accepted' },
+            { docVersionId: c.id, selection: 'not_accepted' },
+          ],
+        }),
+      )
       const rowA = (await m.db.select().from(docVersions).where(eq(docVersions.id, a.id)))[0]!
       expect(rowA.selectionStale).toBe(false)
       const accepted = (await readNodeRunOutputFixtures(m.db, { nodeRunId: m.reviewRunId })).find(
@@ -751,15 +773,15 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
     test('single-document: bad anchors, stale iteration, non-member, fence, terminal task', async () => {
       f = await buildSingle()
       events = countTaskEvents(f.taskId)
-      const base: SubmitReviewDecisionArgs = {
+      const base: SubmitReviewDecisionArgs = withO2Closure({
         db: f.db,
         appHome: f.appHome,
         nodeRunId: f.reviewRunId,
         decision: 'iterated',
         expectedReviewIteration: 0,
-      }
+      })
       const run = (extra: Partial<SubmitReviewDecisionArgs>) => () =>
-        submitReviewDecision({ ...base, ...extra })
+        submitReviewDecision(withO2Closure({ ...base, ...extra }))
 
       const notFound = await expectZeroWrites(
         f.db,
@@ -858,11 +880,13 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       await patchTaskFixture(f.db, { id: f.taskId }, { status: 'awaiting_review' })
 
       // The fixture is still decidable afterwards — the refusals really were dry.
-      const ok = await submitReviewDecision({
-        ...base,
-        actor: actorFor(f.memberId),
-        comments: [{ commentText: 'fine', anchorRequest: { quote: 'export job' } }],
-      })
+      const ok = await submitReviewDecision(
+        withO2Closure({
+          ...base,
+          actor: actorFor(f.memberId),
+          comments: [{ commentText: 'fine', anchorRequest: { quote: 'export job' } }],
+        }),
+      )
       expect(ok.batch?.commentsAdded).toBe(1)
     })
 
@@ -874,15 +898,15 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         PersistenceTables['docVersions']['$inferSelect'],
         PersistenceTables['docVersions']['$inferSelect'],
       ]
-      const base: SubmitReviewDecisionArgs = {
+      const base: SubmitReviewDecisionArgs = withO2Closure({
         db: m.db,
         appHome: m.appHome,
         nodeRunId: m.reviewRunId,
         decision: 'approved',
         expectedReviewIteration: 0,
-      }
+      })
       const run = (extra: Partial<SubmitReviewDecisionArgs>) => () =>
-        submitReviewDecision({ ...base, ...extra })
+        submitReviewDecision(withO2Closure({ ...base, ...extra }))
 
       const unnamed = await expectZeroWrites(
         m.db,

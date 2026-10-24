@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-190 — GET /api/overview (homepage capability portal aggregate).
 //
@@ -69,7 +70,7 @@ function buildOverview(db: PersistenceDb, actor: Actor, now?: () => number) {
   const query = composeSystemOverviewQuery({
     resourceCatalog: composeResourceCatalogOverviewQuery(db),
     repositories: composeRepositoryWorkspaceOperations(
-      composeSqliteRepositoryWorkspaceStore(db),
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       undefined,
     ).overviewQueries,
     integration: scheduledTaskRuntime.overview,

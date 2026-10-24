@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
 import type { DeploymentSelections } from './deploymentProfile'
 import {
@@ -114,7 +115,7 @@ import {
 import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition'
-import { composeResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
+import { composeResourceLimitOperations } from './resourceLimits'
 import {
   composeTaskIdleTimeoutOperations,
   createTaskIdleTimeoutPersistence,
@@ -134,7 +135,6 @@ import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capabil
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import type { createLogger } from '@/util/log'
-import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
@@ -500,8 +500,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const taskExecutionPersistence = taskExecutionModules.persistence
   const boundCollaborationContext = taskExecutionModules.collaboration
   const workspaceMaintenance = composeWorkspaceMaintenanceCommand({
+    ...composeSourceControlTaskPorts(input.db),
     filesystem: input.workspaceMaintenanceFilesystem,
-    db: input.db,
     appHome: input.appHome,
     terminalMaintenance: taskExecutionPersistence.terminalMaintenance,
     isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
@@ -808,18 +808,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
         workspaceRecovery.healed > 0
       ) {
         log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
-      }
-    },
-    'frame-backfill': async () => {
-      const backfill = await runFrameBackfillOnBoot({ db: input.db })
-      if (!backfill.skipped) {
-        log.info('rfc354 frame backfill completed on boot', {
-          tasks: backfill.tasks,
-          rowsUpdated: backfill.rowsUpdated,
-          roundsUpdated: backfill.roundsUpdated,
-          unreadableTasks: backfill.unreadableTasks.length,
-          unresolvedRows: backfill.unresolvedRows,
-        })
       }
     },
     'scheduled-payload-heal': async () => {

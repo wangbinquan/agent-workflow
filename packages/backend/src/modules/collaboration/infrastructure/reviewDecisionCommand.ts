@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
 import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
 import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
 import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifactReader'
@@ -20,6 +21,8 @@ import type { ReviewDecisionCommandPort } from '@/modules/collaboration/applicat
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createReviewDecisionCommand(input: {
+  readonly taskLock: HumanGateTaskLockPort
+  readonly upstreamAgents: ReviewUpstreamAgentPort
   readonly db: PersistenceDb
   readonly reviewArtifacts?: ReviewArtifactSelection
   readonly rollbackSnapshots?: WorkspaceRollbackSnapshotInspector
@@ -30,6 +33,8 @@ export function createReviewDecisionCommand(input: {
       const { submitReviewDecision } = await import('./review')
       const decided = await submitReviewDecision({
         db: input.db,
+        taskLock: input.taskLock,
+        upstreamAgents: input.upstreamAgents,
         reviewReader:
           input.reviewArtifacts &&
           new DatabaseCommittedReviewArtifactReader(input.db, input.reviewArtifacts.content),
@@ -66,14 +71,22 @@ export function createReviewDecisionCommand(input: {
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createReviewDecisionCommandContext(input: {
+  readonly taskLock: HumanGateTaskLockPort
+  readonly upstreamAgents: ReviewUpstreamAgentPort
   readonly db: DbClient
   readonly appHome: string
   readonly actor: Actor
   readonly authorRole: TaskActorRole
 }): CollaborationCommandContext<'reviewDecisions'> {
   return createCollaborationCommandContext({
+    taskLock: input.taskLock,
     db: input.db,
     appHome: input.appHome,
-    reviewDecisions: createReviewDecisionCommand({ db: input.db, appHome: input.appHome }),
+    reviewDecisions: createReviewDecisionCommand({
+      db: input.db,
+      appHome: input.appHome,
+      taskLock: input.taskLock,
+      upstreamAgents: input.upstreamAgents,
+    }),
   })
 }

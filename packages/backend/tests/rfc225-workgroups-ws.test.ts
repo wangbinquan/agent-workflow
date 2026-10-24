@@ -1,3 +1,4 @@
+import { deleteWorkgroup } from './helpers/resourceCatalogDeletion'
 // RFC-225 — workgroup WS producer and per-frame ACL regression locks.
 
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -10,7 +11,6 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import {
   createWorkgroup,
-  deleteWorkgroup,
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'

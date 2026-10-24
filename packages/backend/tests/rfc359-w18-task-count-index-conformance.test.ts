@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W18: the original count queries keep their rows and statement
 // boundaries when the two additive covering indexes are present. This tiny
 // fixture proves results and plans; the original full HTTP gate owns latency.
@@ -118,7 +119,10 @@ async function counts(harness: ProviderHarness) {
   try {
     const overview = await createTaskOverviewQuery(harness.db).load({ actor, since })
     const references = [
-      ...(await composeRepositoryWorkspaceStore(harness.db).cachedRepoReferenceCounts(repoIds)),
+      ...(await composeRepositoryWorkspaceStore(
+        harness.db,
+        composeSourceControlTaskPorts(harness.db),
+      ).cachedRepoReferenceCounts(repoIds)),
     ].sort(([left], [right]) => left.localeCompare(right))
     return { overview, references, statements: [...recording.statements] }
   } finally {
@@ -131,7 +135,7 @@ function countStatementContract(
 ) {
   const projected = statements.map(({ sql, params, values }) => ({ sql, params, values }))
   // PG records completion order. Only the first four overview reads run in
-  // Promise.all; the three repository reads start afterwards and are serial.
+  // Promise.all; the owner reference count and schedule read follow serially.
   const overview = projected.slice(0, 4).sort((left, right) => {
     const leftKey = JSON.stringify(left)
     const rightKey = JSON.stringify(right)
@@ -159,10 +163,9 @@ test('count statement comparison ignores only concurrent completion order', () =
     'failed',
     since,
   ])
-  const explicit = statement('SELECT explicit references', repoIds)
-  const legacy = statement('SELECT legacy references', repoIds)
+  const references = statement('SELECT mounted and requested-only references', repoIds)
   const scheduled = statement('SELECT scheduled references', [])
-  const original = [running, awaiting, done, failed, explicit, legacy, scheduled]
+  const original = [running, awaiting, done, failed, references, scheduled]
   const expected = countStatementContract(original)
 
   for (const first of [running, awaiting, done, failed]) {
@@ -174,26 +177,26 @@ test('count statement comparison ignores only concurrent completion order', () =
           (item) => item !== first && item !== second && item !== third,
         )!
         expect(
-          countStatementContract([first, second, third, fourth, explicit, legacy, scheduled]),
+          countStatementContract([first, second, third, fourth, references, scheduled]),
         ).toEqual(expected)
       }
     }
   }
   const changed = [
-    [running, awaiting, done, done, explicit, legacy, scheduled],
-    [running, awaiting, done, failed, explicit, legacy, scheduled, scheduled],
-    [running, awaiting, done, failed, explicit, legacy],
+    [running, awaiting, done, done, references, scheduled],
+    [running, awaiting, done, failed, references, scheduled, scheduled],
+    [running, awaiting, done, failed, references],
     [{ ...running, sql: running.sql + ' LIMIT 1' }, ...original.slice(1)],
     [{ ...running, params: running.params + 1 }, ...original.slice(1)],
     [{ ...running, values: ['done'] }, ...original.slice(1)],
-    [running, awaiting, done, failed, legacy, explicit, scheduled],
-    [running, awaiting, done, explicit, failed, legacy, scheduled],
+    [running, awaiting, done, failed, scheduled, references],
+    [running, awaiting, done, references, failed, scheduled],
   ]
   for (const statements of changed) expect(countStatementContract(statements)).not.toEqual(expected)
-  expect(
-    countStatementContract([running, running, done, failed, explicit, legacy, scheduled]),
-  ).toEqual(countStatementContract([failed, running, done, running, explicit, legacy, scheduled]))
-  expect(original).toEqual([running, awaiting, done, failed, explicit, legacy, scheduled])
+  expect(countStatementContract([running, running, done, failed, references, scheduled])).toEqual(
+    countStatementContract([failed, running, done, running, references, scheduled]),
+  )
+  expect(original).toEqual([running, awaiting, done, failed, references, scheduled])
 })
 
 describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
@@ -234,7 +237,8 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
       [repoIds[0], 6],
       [repoIds[1], 5],
     ])
-    expect(withIndexes.statements).toHaveLength(7)
+    // RFC-395 O1 M12/M25: mounted and requested-only counts share one indexed owner query.
+    expect(withIndexes.statements).toHaveLength(6)
     const history = await loadPostgresqlMigrationHistory({
       headContract: buildLogicalSchemaContract(),
     })
@@ -253,7 +257,8 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
           .slice(0, 4)
           .every((plan) => plan.includes('COVERING INDEX idx_tasks_overview_counts')),
       ).toBe(true)
-      expect(plans[5]).toContain('COVERING INDEX idx_tasks_cached_repo_task')
+      expect(plans[4]).toContain('COVERING INDEX idx_tasks_cached_repo_task')
+      expect(plans[4]).toContain('COVERING INDEX idx_task_repos_cached_repo_task')
     }
     let removed = 0
     try {
@@ -295,11 +300,17 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
       }),
     ).toEqual(beforeRows)
     expect((await counts(harness)).overview).toEqual(withIndexes.overview)
-    expect(await composeRepositoryWorkspaceStore(harness.db).cachedRepoReferenceCounts([])).toEqual(
-      new Map(),
-    )
     expect(
-      await composeRepositoryWorkspaceStore(harness.db).cachedRepoReferenceCounts(['w18-unknown']),
+      await composeRepositoryWorkspaceStore(
+        harness.db,
+        composeSourceControlTaskPorts(harness.db),
+      ).cachedRepoReferenceCounts([]),
+    ).toEqual(new Map())
+    expect(
+      await composeRepositoryWorkspaceStore(
+        harness.db,
+        composeSourceControlTaskPorts(harness.db),
+      ).cachedRepoReferenceCounts(['w18-unknown']),
     ).toEqual(new Map())
   })
 })

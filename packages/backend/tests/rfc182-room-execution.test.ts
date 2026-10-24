@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-182 T1 —— 房间执行体验后端锁（runHistory 派生锁在
 // rfc179-member-current-run.test.ts 的 RFC-182 describe；引擎 mint→pending 帧
@@ -86,7 +87,7 @@ describeEachProvider('RFC-182 P1-3 — taskNodeRunsProjection 响应带 rerunCau
         },
       },
     })
-    const { runs } = await taskNodeRunsProjection({ db }, taskId)
+    const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     const run = runs.find((r) => r.id === runId)
     expect(run?.rerunCause).toBe('wg-message-turn')
   })

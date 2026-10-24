@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T19 (AR-04) — closed detect→classify→auto-repair loop (default OFF).
 //
 // 为什么这条测试存在：auto-repair loop 一旦开启，绝不能在「真人工选择」间瞎猜，也不能碰
@@ -78,7 +79,9 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
   test('enabled rule + exactly one eligible+available → applies + records event', async () => {
     const db = harness.db
     const taskId = await seedTaskWithAlert(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const applied: string[] = []
     const res = await runAutoRepairOnce({
       operations,
@@ -104,7 +107,9 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
   test('disabled rule → skipped, applyOption never called', async () => {
     const db = harness.db
     await seedTaskWithAlert(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     let applyCalled = false
     const res = await runAutoRepairOnce({
       operations,
@@ -124,7 +129,9 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
   test('two eligible+available options → no-single-eligible, not applied', async () => {
     const db = harness.db
     await seedTaskWithAlert(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const res = await runAutoRepairOnce({
       operations,
       breaker: BREAKER,
@@ -139,7 +146,9 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
   test('quarantined task → skipped', async () => {
     const db = harness.db
     const taskId = await seedTaskWithAlert(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     for (let i = 0; i < 4; i++) {
       await recordAutoRecoveryAttempt(operations, taskId, BREAKER, 1000)
     }
@@ -157,7 +166,9 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
   test('applyOption throws → skipped, not counted as repaired', async () => {
     const db = harness.db
     await seedTaskWithAlert(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const res = await runAutoRepairOnce({
       operations,
       breaker: BREAKER,

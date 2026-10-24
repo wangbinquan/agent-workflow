@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-158 — locks taskNodeRunsProjection' per-review-run `reviewNavKind` stamping, the
 // backend oracle the task-detail canvas uses to decide whether a review node is
@@ -127,7 +128,7 @@ async function seedDocVersion(
 }
 
 async function navKind(db: PersistenceDb, taskId: string, runId: string): Promise<unknown> {
-  const res = await taskNodeRunsProjection({ db }, taskId)
+  const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
   return res.runs.find((r) => r.id === runId)!.reviewNavKind ?? null
 }
 

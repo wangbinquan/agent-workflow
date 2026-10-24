@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T11 (AR-09) — auto-recovery circuit-breaker / quarantine.
 //
 // 为什么这条测试存在：auto-resume / auto-repair 一旦开启，一个确定性崩溃的任务会被
@@ -44,7 +45,9 @@ describeEachProvider('RFC-108 T11 — circuit-breaker / quarantine', (harness) =
   test('quarantines after maxPerWindow attempts + records event; clear resets', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const cfg = { maxPerWindow: 3, windowMs: 60 * 60 * 1000 }
 
     let r = { suspended: false, attempts: 0 }
@@ -73,7 +76,9 @@ describeEachProvider('RFC-108 T11 — circuit-breaker / quarantine', (harness) =
   test('window rolls over: an attempt outside the window resets the count to 1', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const cfg = { maxPerWindow: 3, windowMs: 1000 }
     await recordAutoRecoveryAttempt(operations, taskId, cfg, 0)
     await recordAutoRecoveryAttempt(operations, taskId, cfg, 500)

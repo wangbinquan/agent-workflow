@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // LOCKS: RFC-204 impl-gate P0-2 (Codex 2026-07-22) — the cold-clone path seals
 // the credentialed URL AT INSERT time when a SecretBox is wired in, so a fresh
 // private-repo row never persists its token as plaintext in db.sqlite/WAL.
@@ -54,7 +55,11 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
   test('with a SecretBox: row stores url_enc, has no plaintext column, and round-trips', async () => {
     const url = pathToFileURL(await seedRepo('sealme')).href
     const res = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome, secretBox: box },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+        secretBox: box,
+      },
       { url },
     )
     const { cachedRepos } = tablesOf(db)
@@ -79,7 +84,10 @@ describe('RFC-204 impl-gate P0-2 — cold clone seals at insert', () => {
   test('without a SecretBox: persistence is safe and the usable URL is process-client scoped', async () => {
     const url = pathToFileURL(await seedRepo('plain')).href
     const res = await resolveCachedRepo(
-      { store: composeSqliteRepositoryWorkspaceStore(db), appHome },
+      {
+        store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        appHome,
+      },
       { url },
     )
     const { cachedRepos } = tablesOf(db)

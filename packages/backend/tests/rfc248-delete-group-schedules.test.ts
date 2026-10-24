@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-248 #10（设计门二轮 H9 补的第 10 行）—— 删组要顾及**引用它的定时任务**。
 //
 // 漏掉这条的后果不是崩，而是**慢性烂账**：组删了，引用它的计划照旧到点触发、
@@ -71,7 +72,7 @@ async function seedSchedule(opts: {
 describeEachProvider('RFC-248 #10 —— 删组 × 定时任务', (harness) => {
   beforeEach(() => {
     db = harness.db
-    store = composeSqliteRepositoryWorkspaceStore(db)
+    store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
   })
   test('启用中的计划引用本组 ⇒ 默认拒绝删除，并在 details 里列出它', async () => {
     const gid = await seedGroup()

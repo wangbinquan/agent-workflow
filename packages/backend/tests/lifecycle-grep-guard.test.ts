@@ -151,7 +151,7 @@ const KERNEL_DIRECT_WRITES = 3
  * 改造前这条守卫的形态是：扫到直写 → 检查前 5 行有没有
  * `rfc053-allow-direct-status-write` → 有就当作没看见。任意文件、任意状态、任意次数。
  * 而它的两个兄弟棘轮（`tasks.status` 的 s14、`merge_state` 的 rfc144）**都是**逐文件
- * 精确计数的硬 allowlist（`{ 'platform/persistence/sqlite/taskLifecycle.ts': 1 }` / `{ …: 2 }`，并各自单独断言
+ * 精确计数的硬 allowlist（`{ 'modules/task-execution/infrastructure/taskLifecycle.ts': 1 }` / `{ …: 2 }`，并各自单独断言
  * 那个数字，防止空绿）。三台状态机里，调度器实际驱动的那一台防线最弱。
  *
  * 每一条被标记逃逸的直写同时绕过 `assertNodeRunSourceTerminationAdmission`
@@ -164,7 +164,7 @@ const KERNEL_DIRECT_WRITES = 3
  */
 const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   // 内核：`transitionNodeRunStatus` 与 `setNodeRunStatus` 各一处，外加 CAS 的重试写。
-  'platform/persistence/sqlite/taskLifecycle.ts': KERNEL_DIRECT_WRITES,
+  'modules/task-execution/infrastructure/taskLifecycle.ts': KERNEL_DIRECT_WRITES,
   // RFC-395 II-a A7：原 terminal sweep 的 2 处 + clarify seal 的 1 处迁入 owner。
   // 写点、CAS 与调用方事务不变，精确总数仍为 3。
   'modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts': 3,
@@ -182,7 +182,7 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
 }
 
 const LIFECYCLE_KERNEL_FILES: ReadonlySet<string> = new Set([
-  'platform/persistence/sqlite/taskLifecycle.ts',
+  'modules/task-execution/infrastructure/taskLifecycle.ts',
   'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts',
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
   'modules/task-execution/infrastructure/effectQuiescence.ts',
@@ -224,7 +224,7 @@ describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件�
 
   test('内核自己的直写都带标记（回归守卫）', () => {
     const kernel = matches.filter(
-      (match) => match.file === 'platform/persistence/sqlite/taskLifecycle.ts',
+      (match) => match.file === 'modules/task-execution/infrastructure/taskLifecycle.ts',
     )
     expect(kernel.length).toBe(KERNEL_DIRECT_WRITES)
     expect(kernel.every((match) => match.marked)).toBe(true)

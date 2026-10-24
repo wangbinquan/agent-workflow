@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W12 / W57：性能用例按**生产入口**查询真库——现在两个 provider 是同一个入口。
 //
 // W12 落地时这里有一条 `if (isPostgresql(db))` 硬分叉：SQLite 走
@@ -49,7 +50,7 @@ export function createProductionOverviewQuery(
   return composeSystemOverviewQuery({
     resourceCatalog: composeResourceCatalogOverviewQuery(db),
     repositories: composeRepositoryWorkspaceOperations(
-      composeRepositoryWorkspaceStore(db),
+      composeRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
       undefined,
     ).overviewQueries,
     integration: scheduledTaskRuntime.overview,

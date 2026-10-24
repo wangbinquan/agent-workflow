@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-046 — locks the REST projection of node_runs.injected_memories_json
 // into the wire-level `injectedMemories` field on NodeRun. Covers:
@@ -94,7 +95,7 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
       },
     ])
     await seedRun(db, taskId, payload)
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(res.runs.length).toBe(1)
     const im = res.runs[0]!.injectedMemories
     expect(im).not.toBeNull()
@@ -108,21 +109,21 @@ describeEachProvider('RFC-046 — taskNodeRunsProjection surfaces injectedMemori
   test('A2: legacy row with NULL column surfaces as injectedMemories=null', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, null)
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A3: corrupted JSON in column degrades to null (no 5xx)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '{not-an-array')
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(res.runs[0]!.injectedMemories).toBeNull()
   })
 
   test('A4: empty-array payload surfaces as [] (distinct from null)', async () => {
     const { taskId } = await seedTaskAndWorkflow(db)
     await seedRun(db, taskId, '[]')
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     expect(res.runs[0]!.injectedMemories).toEqual([])
   })
 })

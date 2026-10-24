@@ -13,7 +13,7 @@
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'

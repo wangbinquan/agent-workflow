@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370 A3: remote existence is awaited before terminal revival. A response
 // for an older workspace/lifecycle must not mark a new workspace as reclaimed.
 import {
@@ -143,7 +144,10 @@ describeEachProvider('RFC-370 terminal revival selected presence', (harness) => 
   for (const mode of ['runtime', 'human-gate'] as const) {
     const resume = async (presence: WorkspacePresenceQueries) => {
       const persistence = createTaskExecutionPersistence(harness.db, {
-        workspacePresence: presence,
+        recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+        ...{
+          workspacePresence: presence,
+        },
       })
       if (mode === 'runtime') return await persistence.runtimeLifecycle.trySet(transition)
       const result =

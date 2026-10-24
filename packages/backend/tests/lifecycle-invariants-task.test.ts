@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-053 PR-D — task-level invariants T1/T2/T3/U1.
 //
 //   T1  task.status='awaiting_review' ⟹ ∃ node_run.status='awaiting_review'
@@ -104,7 +105,9 @@ describeEachProvider(
       ])
       await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'T1')).toHaveLength(0)
@@ -116,7 +119,9 @@ describeEachProvider(
       ])
       await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       const t1 = result.openAlerts.filter((a) => a.rule === 'T1')
@@ -138,7 +143,9 @@ describeEachProvider(
       ])
       await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'awaiting_human' })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(0)
@@ -150,7 +157,9 @@ describeEachProvider(
       ])
       await insertRun(h.db, h.taskId, { nodeId: 'clr', status: 'running' })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'T2')).toHaveLength(1)
@@ -172,7 +181,9 @@ describeEachProvider(
       await insertRun(h.db, h.taskId, { nodeId: 'out_a', status: 'done', finishedAt: Date.now() })
       await insertRun(h.db, h.taskId, { nodeId: 'out_b', status: 'done', finishedAt: Date.now() })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
@@ -186,7 +197,9 @@ describeEachProvider(
       await insertRun(h.db, h.taskId, { nodeId: 'out_a', status: 'done', finishedAt: Date.now() })
       await insertRun(h.db, h.taskId, { nodeId: 'out_b', status: 'pending' })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       const t3 = result.openAlerts.filter((a) => a.rule === 'T3')
@@ -202,7 +215,9 @@ describeEachProvider(
       ])
       await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'done', finishedAt: Date.now() })
       const result = await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: h.taskId },
       })
       expect(result.openAlerts.filter((a) => a.rule === 'T3')).toHaveLength(0)
@@ -218,7 +233,9 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
     h = await buildHarness(harness.db, 'running', [{ id: 'rev_1', kind: 'review' } as WorkflowNode])
     await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.openAlerts.filter((a) => a.rule === 'U1')).toHaveLength(0)
@@ -231,7 +248,9 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
     const a = await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
     const b = await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'awaiting_review' })
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     const u1 = result.openAlerts.filter((a) => a.rule === 'U1')
@@ -255,7 +274,9 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
       reviewIteration: 1,
     })
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.openAlerts.filter((a) => a.rule === 'U1')).toHaveLength(0)
@@ -276,7 +297,9 @@ describeEachProvider('RFC-053 PR-D — U1 (≤ 1 active run per (task,node,iter,
       shardKey: 'b.md',
     })
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.openAlerts.filter((a) => a.rule === 'U1')).toHaveLength(0)
@@ -293,7 +316,9 @@ describeEachProvider('RFC-053 PR-D — scope selectors', (harness) => {
     ])
     await insertRun(h.db, h.taskId, { nodeId: 'rev_1', status: 'done', finishedAt: Date.now() })
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId: h.taskId },
     })
     expect(result.scanned).toBe(1)
@@ -302,7 +327,9 @@ describeEachProvider('RFC-053 PR-D — scope selectors', (harness) => {
   test('{ taskId } unknown id → scanned=0, no alerts', async () => {
     h = await buildHarness(harness.db, 'running', [])
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId: 'nonexistent' },
     })
     expect(result.scanned).toBe(0)
@@ -312,7 +339,9 @@ describeEachProvider('RFC-053 PR-D — scope selectors', (harness) => {
   test('{ all: true } scans every non-deleted task', async () => {
     h = await buildHarness(harness.db, 'running', [])
     const result = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(h.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { all: true },
     })
     expect(result.scanned).toBe(1)

@@ -5,7 +5,7 @@
 // `owner = 我 OR id IN (我参与的任务)` 是**授权判据**：漂一处，用户要么看见不该看见的任务，
 // 要么丢掉本该看见的。落这条守卫时它在仓里被逐字抄了**七份**：
 //
-//   1. `db/query.ts`（本次定为唯一一份）
+//   1. `modules/task-execution/infrastructure/taskAuthorization.ts`（唯一一份）
 //   2. `modules/task-execution/infrastructure/taskListPage/authorization.ts`（RFC-357）
 //   3. `modules/collaboration/infrastructure/collaborationTaskAccess.ts`
 //   4. `modules/collaboration/infrastructure/reviewTaskAccess.ts`（与 3 **逐字相同**）
@@ -29,7 +29,7 @@
 //     即**只按 userId** 取一整集（点查成员身份的 `and(eq(taskId,…), eq(userId,…))` 是另一回事，
 //     不在判据内）。
 //
-// 两条都必须**恰好命中一处**，且那一处必须是 `packages/backend/src/db/query.ts`。
+// 两条都必须**恰好命中一处**，且那一处必须是 `packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts`。
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
@@ -38,7 +38,8 @@ import ts from 'typescript'
 import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
-const SINGLE_SOURCE = 'packages/backend/src/db/query.ts'
+const SINGLE_SOURCE =
+  'packages/backend/src/modules/task-execution/infrastructure/taskAuthorization.ts'
 const UNITS = packageSrcUnits(REPO_ROOT, 'backend')
 
 function calleeName(node: ts.CallExpression): string {

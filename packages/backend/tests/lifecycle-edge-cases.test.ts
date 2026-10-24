@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-053 — edge-case coverage for runLifecycleInvariants /
 // reconcileLifecycleAlerts that the PR-D test suite skipped:
 //
@@ -97,7 +98,9 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -115,7 +118,9 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -132,7 +137,9 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -149,7 +156,9 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
       snapshotJson: REVIEW_ONLY_JSON,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { since: T0 - 60 * MIN_MS },
       now: () => T0,
     })
@@ -188,7 +197,9 @@ describeEachProvider('RFC-053 — workflow snapshot corrupt degrades gracefully'
     })
 
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -208,7 +219,9 @@ describeEachProvider('RFC-053 — workflow snapshot corrupt degrades gracefully'
       snapshotJson: JSON.stringify({ $schema_version: 2, nodes: 'oops', edges: [] }),
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -245,7 +258,9 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
       resolvedAt: null,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -273,7 +288,9 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
       resolvedAt: null,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -300,7 +317,9 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
       resolvedAt: null,
     })
     const r = await runLifecycleInvariants({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       scope: { taskId },
       now: () => T0,
     })
@@ -367,7 +386,9 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
     let calls = 0
     try {
       await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(env.db, {
+          recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+        }).recoveryAdministration,
         scope: { taskId: t1 },
         now: () => T0 + MIN_MS,
         onAlert: () => {
@@ -395,7 +416,9 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
     })
     const calls: Array<{ rule: string; transition: 'new' | 'promoted' }> = []
     await reconcileLifecycleAlerts({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIds: [taskId],
       findings: [
         { taskId, rule: 'S1', detail: { rule: 'S1' } },
@@ -418,7 +441,9 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
       snapshotJson: REVIEW_ONLY_JSON,
     })
     await reconcileLifecycleAlerts({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIds: [taskId],
       findings: [
         { taskId, rule: 'S1', detail: { rule: 'S1' } },
@@ -429,7 +454,9 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
     })
     const resolved: string[] = []
     const result = await reconcileLifecycleAlerts({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIds: [taskId],
       findings: [],
       now: T0 + MIN_MS,
@@ -469,7 +496,9 @@ describeEachProvider('RFC-053 — detail JSON round-trip with special characters
       quote: 'he said "hi"',
     }
     await reconcileLifecycleAlerts({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIds: [taskId],
       findings: [{ taskId, rule: 'S4', detail: exotic }],
       now: T0,
@@ -497,7 +526,9 @@ describeEachProvider('RFC-053 — detail JSON round-trip with special characters
       deep = { rule: 'S4', nested: deep, depth: i }
     }
     await reconcileLifecycleAlerts({
-      operations: createTaskExecutionPersistence(env.db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(env.db, {
+        recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
+      }).recoveryAdministration,
       taskIds: [taskId],
       findings: [{ taskId, rule: 'S4', detail: deep as unknown as Record<string, unknown> }],
       now: T0,

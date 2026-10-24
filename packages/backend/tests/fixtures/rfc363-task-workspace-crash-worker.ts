@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from '../helpers/sourceControlTaskPorts'
 // Hosted real-process oracle: kill a production Task launch before its row is committed.
 
 import { readTaskFixtures, workflowFixture } from '../helpers/model'
@@ -79,7 +80,7 @@ try {
   if (identity === null) throw new Error('daemon identity missing')
   const actor = actorOfDirectAuthority(identity)
   const appHome = join(input.root, 'home')
-  const binding = composeRepositoryPreparation({ db, appHome })
+  const binding = composeRepositoryPreparation(withSourceControlTaskPorts({ db, appHome }))
   const participant = createTaskRouteWorkspaceParticipant({
     db,
     appHome,

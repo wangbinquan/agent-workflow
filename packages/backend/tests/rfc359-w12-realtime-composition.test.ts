@@ -1,3 +1,5 @@
+import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/composition'
+import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
 // RFC-359 W12 — the composed realtime runtime replays real persisted task
 // events. Both provider factories are called; the database and event queries
 // are real. Unused composition inputs throw if accessed beyond construction.
@@ -41,8 +43,16 @@ function runtimeFor(harness: ProviderHarness): RealtimeRuntime {
     redactTaskEventPayload: (payload) => payload,
   }
   return harness.capabilities.isolation === 'exclusive'
-    ? composeRealtimeRuntimeFor({ db: harness.db as DbClient, credentials, policy })
+    ? composeRealtimeRuntimeFor({
+        taskFacts: composeRealtimeTaskFacts(harness.db as DbClient),
+        resources: composeRealtimeResourceAcl(harness.db as DbClient),
+        db: harness.db as DbClient,
+        credentials,
+        policy,
+      })
     : composeRealtimeRuntimeFor({
+        taskFacts: composeRealtimeTaskFacts(harness.db as PostgresqlDatabaseClient),
+        resources: composeRealtimeResourceAcl(harness.db as PostgresqlDatabaseClient),
         db: harness.db as PostgresqlDatabaseClient,
         credentials,
         policy,

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-349 T5/C2 — the task-execution provider adapters share one Promise
 // ownership contract.  This oracle locks the SQLite behavior and proves the
 // PostgreSQL implementation fences the same exact owner tuple and lease epoch.
@@ -133,7 +134,9 @@ describe('RFC-349 task-execution provider adapters', () => {
       branch: 'agent-workflow/task-1',
       worktreePath: '/tmp/worktree',
     })
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     await expect(persistence.drive.load('task-1')).resolves.toMatchObject({
       task: { id: 'task-1', status: 'pending' },
       // RFC-395 II-a: reads expose ordinal; the workspace-profile command retains repoIndex.
@@ -272,10 +275,13 @@ describe('RFC-349 task-execution provider adapters', () => {
     // 语句序列为 BEGIN → owner 围栏 UPDATE → task_repos UPDATE → COMMIT；上下文必须由
     // createTaskExecutionContext 铸造（SQLite 正身的 assertTaskExecutionContext 现在两侧同一规则）。
     const fake = postgresqlFixture([{}, { values: [[9]] }, { values: [[0]] }, {}])
+    const db = createInMemoryDb(MIGRATIONS)
     const executionContext = createTaskExecutionContext({
       intentId: 'intent-1',
       token,
-      persistence: createTaskExecutionPersistence(createInMemoryDb(MIGRATIONS)),
+      persistence: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
     })
 
     const outcome = await new DrizzleTaskEngineApplicationPersistence(fake.db)

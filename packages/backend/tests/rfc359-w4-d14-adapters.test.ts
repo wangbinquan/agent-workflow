@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -59,6 +60,7 @@ function repositoryFor(db: PersistenceDb) {
     authorization: catalog.authorization,
   })
   const semantics = createAgentPersistenceSemantics({
+    taskReferences: composeSubjectTaskReferencePort,
     db,
     authorization: catalog.authorization,
     resourceInventory: inventory,

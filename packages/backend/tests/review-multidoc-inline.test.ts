@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-081 PR-C — multi-document review over an INLINE list<markdown> upstream.
 //
 // Mirrors review-multidoc.test.ts (list<path<md>>) but the upstream `cases`
@@ -153,15 +154,17 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
       content: joinMarkdownDocs(DOCS),
     })
 
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(result.kind).toBe('awaiting_review')
     const docs = await db
       .select()
@@ -215,13 +218,15 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
       selection: 'accepted',
     })
 
-    await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewNodeRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
 
     const { nodeRuns } = tablesOf(db)
     const accepted = (

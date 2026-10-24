@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-203 T6/T4 — uniform error bodies + task-level failureCode projection.
 //
@@ -113,7 +114,7 @@ describeEachProvider('RFC-203 T4 — failureCode projection', (harness) => {
 
   test('taskNodeRunsProjection surfaces per-run failureCode', async () => {
     const { taskId } = await seedFailedTask(db, 'clarify-required')
-    const res = await taskNodeRunsProjection({ db }, taskId)
+    const res = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     const coded = res.runs.find((r) => r.failureCode === 'clarify-required')
     expect(coded).toBeDefined()
   })

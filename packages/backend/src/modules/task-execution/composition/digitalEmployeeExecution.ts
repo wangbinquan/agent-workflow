@@ -29,7 +29,8 @@ import { getTask } from '@/services/task'
 import { projectExecutionOutcome } from '@/services/execution/outcome'
 import { NotFoundError } from '@/util/errors'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
-import { readTaskResourceUsage } from '@/services/limits'
+import { readTaskResourceUsage } from '../application/taskResourceUsage'
+import { createTaskResourceLimitFacts } from '../infrastructure/taskResourceLimitFacts'
 import { createFileProgramToolSource } from '../infrastructure/local/fileProgramToolSource'
 import type { ProgramToolSource } from '../application/ports/scriptFixture'
 import {
@@ -875,7 +876,7 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
     },
     readModels: createTaskExecutionReadModels(db),
     resourceUsage: {
-      read: (taskId: string) => readTaskResourceUsage(db, taskId),
+      read: (taskId: string) => readTaskResourceUsage(createTaskResourceLimitFacts(db), taskId),
     },
     executionMetadata: {
       async load(taskId: string) {

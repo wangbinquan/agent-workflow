@@ -112,42 +112,6 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "edgeKind": "value",
-      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "introducedByRFC": "RFC-359 W8",
-      "owner": "task-execution",
-      "removeAfterWave": "RFC-359 W9：把 `setNodeRunStatusTx` / `transitionNodeRunStatusTx` 两个中立孪生迁进 `platform/persistence/`（届时这条边消失），或经 task-execution 的 exact public 合同取用",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/task-execution/infrastructure/nodeRunLifecycleTransition",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/nodeRunLifecycleTransition",
-      "why": "RFC-359 W8 三层下沉：`taskLifecycle.ts` 的两处 `withOwnedTaskTx` 转成中立异步事务，必须取用中立孪生 `setNodeRunStatusTx` / `transitionNodeRunStatusTx`；同步事务面因此 4 → 2。孪生今天住在 `modules/task-execution/infrastructure/`，而 `platform/` 取它就构成这条 inbound 边。**没有物理搬移它**的原因是：它的两个 importer 当时在别人手上，且 4 份 `architecture/*.json` 按路径钉着它；抽叶子（`nodeRunLifecycleCore.ts`）已足够达成无环，搬移零额外收益。"
-    },
-    {
-      "edgeKind": "type",
-      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "introducedByRFC": "RFC-359 W16",
-      "owner": "task-execution",
-      "removeAfterWave": "RFC-359 W12：完成公共 setTaskStatus 的同步 companion 调用迁移后退役 native 兼容入口及该入边",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "why": "RFC-359 W16 的原 native 同步任务生命周期入口委托共享物理写入序列，保留公开同步返回、CAS 错误和 companion 发布边界。这条兼容入口仍直接消费 task-execution 内部的共享函数或类型，必须如实保留该入边，不能以算法合一声称旧公共 API 已迁移。"
-    },
-    {
-      "edgeKind": "value",
-      "from": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
-      "introducedByRFC": "RFC-359 W16",
-      "owner": "task-execution",
-      "removeAfterWave": "RFC-359 W12：完成公共 setTaskStatus 的同步 companion 调用迁移后退役 native 兼容入口及该入边",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence",
-      "why": "RFC-359 W16 的原 native 同步任务生命周期入口委托共享物理写入序列，保留公开同步返回、CAS 错误和 companion 发布边界。这条兼容入口仍直接消费 task-execution 内部的共享函数或类型，必须如实保留该入边，不能以算法合一声称旧公共 API 已迁移。"
-    },
-    {
       "edgeKind": "type",
       "findingId": "G-01",
       "from": "packages/backend/src/routes/capabilityTemplates.ts",
@@ -421,19 +385,6 @@
       "why": "RFC-353 T9：技能来源追溯路由归 KE（取数横跨 resource-catalog 与 memory，拼装是知识演化的判断）。理由同上一条——bootstrap 挂载模块 inbound。"
     },
     {
-      "edgeKind": "value",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/agent.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "resource-catalog",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/resource-catalog/infrastructure/legacy/agent",
-      "syntax": "export",
-      "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
       "edgeKind": "type",
       "findingId": "G-01",
       "from": "packages/backend/src/services/autoKill.ts",
@@ -483,19 +434,6 @@
       "specifier": "@/modules/task-execution/application/ports/taskRecoveryOperations",
       "syntax": "static-import",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
-      "edgeKind": "type",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/changeNarrative.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "code-capability",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/code-capability/application/ports/codeWorkspaceRead",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/code-capability/application/ports/codeWorkspaceRead",
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
@@ -561,32 +499,6 @@
       "specifier": "@/modules/collaboration/infrastructure/clarifyDecision",
       "syntax": "export",
       "to": "packages/backend/src/modules/collaboration/infrastructure/clarifyDecision",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
-      "edgeKind": "type",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/codeIntel/codeIntel.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "code-capability",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/code-capability/application/ports/codeWorkspaceRead",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/code-capability/application/ports/codeWorkspaceRead",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
-      "edgeKind": "type",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/codeIntel/fileSymbols.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "code-capability",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/code-capability/application/ports/codeWorkspaceRead",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/code-capability/application/ports/codeWorkspaceRead",
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
@@ -1244,19 +1156,6 @@
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
-      "edgeKind": "value",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/limits.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "system-operations",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/system-operations/composition/resourceLimits",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/system-operations/composition/resourceLimits",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
       "edgeKind": "type",
       "findingId": "G-01",
       "from": "packages/backend/src/services/nodeRollback.ts",
@@ -1865,19 +1764,6 @@
       "specifier": "@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths",
       "syntax": "export",
       "to": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
-      "edgeKind": "type",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/structuralDiff/service.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "code-capability",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/code-capability/application/ports/codeWorkspaceRead",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/code-capability/application/ports/codeWorkspaceRead",
       "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
     },
     {
@@ -3427,18 +3313,6 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/cli/doctor.ts",
-      "to": "modules/system-operations/composition/localDoctorDiagnostics",
-      "specifier": "@/modules/system-operations/composition/localDoctorDiagnostics",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "system-operations",
-      "introducedByRFC": "RFC-370 Doctor Diagnostic SOURCE16-R1",
-      "why": "The unchanged original classifier records this actual complete Doctor family or migrated native helper address. Ordinary Doctor composition requires the selected complete diagnostics factory and forwards an opaque runtime configuration reference; only the selected native infrastructure interprets file paths, native probes, database/configuration helpers and inventory. Preserve all original complete helper and diagnostic-policy AST, public value identities, every surviving authored debt row and concurrent committed output. No classifier, rule, assertion or generic exemption changes. Any actual legacy or composition address retains its actual classification and final A-T7 cleanup.",
-      "removeAfterWave": "RFC-370 A-T5 Doctor diagnostics and A-T7 real roots"
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/cli/doctor.ts",
       "to": "modules/system-operations/domain/doctorDiagnostics",
       "specifier": "@/modules/system-operations/domain/doctorDiagnostics",
       "edgeKind": "type",
@@ -4509,8 +4383,8 @@
         "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts:1412-1436",
         "packages/backend/src/modules/execution-contract/public/commands.ts:5-22",
         "packages/backend/src/modules/execution-contract/domain/model.ts:105-116",
-        "packages/backend/src/services/agent.ts:143",
-        "packages/backend/src/services/agent.ts:375"
+        "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts:230",
+        "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts:482"
       ],
       "findingId": "DE-13",
       "kind": "escape-hatch",

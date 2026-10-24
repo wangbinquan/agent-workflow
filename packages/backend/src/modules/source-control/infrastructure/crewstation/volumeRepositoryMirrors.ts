@@ -86,6 +86,5 @@ export function createVolumeRepositoryMirrorStore(volumeRoot: string): Repositor
     createRepositoryGroup: unsupported('createRepositoryGroup'),
     updateRepositoryGroup: unsupported('updateRepositoryGroup'),
     deleteRepositoryGroup: unsupported('deleteRepositoryGroup'),
-    findWorktreeTask: unsupported('findWorktreeTask'),
   }
 }

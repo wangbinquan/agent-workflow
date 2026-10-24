@@ -1,3 +1,4 @@
+import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackupPreparation'
 // Entry point for the agent-workflow daemon CLI.
 // Subcommands:
 //   start    P-1-01 ✓
@@ -22,9 +23,7 @@ import { dbCompactCommand } from './cli/dbCompact'
 import { databaseCommand } from './cli/database'
 import { formatDoctor } from './cli/doctor'
 import { composeDoctorApplication } from '@/modules/system-operations/composition/doctorDiagnostics'
-import { createLocalDoctorDiagnosticsFactory } from '@/modules/system-operations/composition/localDoctorDiagnostics'
-import { frameBackfillCommand } from './cli/frameBackfill'
-import { runFrameBackfillOnBoot } from '@/modules/task-execution/composition/frameBackfill'
+import { createLocalDoctorDiagnosticsFactory } from '@/bootstrap/doctorDiagnostics'
 import {
   selectDeploymentProfile,
   migrateForDeployment,
@@ -432,23 +431,6 @@ async function main(): Promise<void> {
     }
 
     case 'doctor': {
-      // RFC-354 T4 — manual entry of the one-shot frame backfill (the daemon
-      // runs it at boot; this forces a re-walk with the daemon stopped).
-      if (Bun.argv.includes('--backfill-containers')) {
-        const result = await frameBackfillCommand({
-          run: async () => {
-            const provider = await resolveCommandProvider()
-            try {
-              return await runFrameBackfillOnBoot({ db: provider.db }, { force: true })
-            } finally {
-              await provider.runtime.close()
-            }
-          },
-        })
-        process.stdout.write(result.output)
-        if (result.status !== 'ok') process.exit(1)
-        break
-      }
       const result = await composeDoctorApplication({
         diagnostics: createLocalDoctorDiagnosticsFactory(buildLogicalSchemaContract()),
       }).run()
@@ -531,6 +513,7 @@ async function main(): Promise<void> {
       const operations = await (async () => {
         try {
           return composeLocalSystemOperations({
+            repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
             contract: buildLogicalSchemaContract(),
             providerRuntime: provider.runtime,
           })
@@ -572,7 +555,11 @@ async function main(): Promise<void> {
             ? resolvePostgresqlHistoricalContract(history, generation.payload.schemaDigest)
             : contract,
       })
-      const operations = composeLocalSystemOperations({ contract, providerRuntime })
+      const operations = composeLocalSystemOperations({
+        repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
+        contract,
+        providerRuntime,
+      })
       try {
         const result = await restoreCommand(Bun.argv.slice(3), operations)
         process.stdout.write(result.output)
@@ -622,9 +609,7 @@ async function main(): Promise<void> {
       console.log('  status                            print daemon status (PID, /health)')
       console.log('  version                           print version')
       console.log('  doctor                            run health checks (does not start daemon)')
-      console.log(
-        '  doctor --backfill-containers      re-run the RFC-354 frame backfill (daemon stopped)',
-      )
+      console.log()
       console.log(
         '  downgrade-audit rfc-295            read-only compatibility gate before RFC-295 rollback',
       )

@@ -1,7 +1,4 @@
-import {
-  taskRequestedSourceColumns,
-  taskRequestedSourceReferenceSql,
-} from '@/platform/persistence/taskRepositorySql'
+import type { RepositoryWorkspaceTaskPorts } from '../composition/required-ports'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, sql, type SQLWrapper } from 'drizzle-orm'
@@ -16,7 +13,6 @@ import type {
   RepositoryCredentialSealingSnapshot,
   RepositoryGroupSnapshot,
   RepositoryScheduleRecord,
-  WorktreeTaskRecord,
 } from '../ports/repositoryWorkspaceStore'
 import {
   currentRepositoryFacetCacheEpoch,
@@ -30,22 +26,6 @@ export interface RepositoryWorkspaceSqlExecutor {
     codecs?: RawRowCodecs<T>,
   ): Promise<readonly T[]>
   run(query: SQLWrapper): Promise<number>
-  /**
-   * 每格一条 `SELECT count(*) FROM cached_repos WHERE <谓词>` 的标量子查询。
-   * `referenced` 的三格互斥（见 `referencedFacetCounts`），调用方相加。
-   */
-  cachedRepoFacets(input: {
-    readonly explicit: SQLWrapper
-    readonly legacyOnly: SQLWrapper
-    readonly scheduledOnly: SQLWrapper
-    readonly attention: SQLWrapper
-  }): Promise<{
-    readonly all_count: number
-    readonly explicit_count: number
-    readonly legacy_count: number
-    readonly scheduled_count: number
-    readonly attention_count: number
-  }>
 }
 
 interface RawCachedRepoRow {
@@ -213,72 +193,9 @@ function scheduledCondition(db: object, scheduleIds: ReadonlySet<string>): SQLWr
       )})`
 }
 
-/** 被至少一行显式 `task_repos` 引用。 */
-const explicitReference = (db: object) => {
-  const { taskRepos, cachedRepos } = tablesOf(db)
-  return sql`exists (
-  select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id}
-)`
-}
-
-/** 被**遗留直挂**引用：任务自己带 `cached_repo_id`，且它一行 `task_repos` 都没有。 */
-const legacyReference = (db: object) => {
-  const { cachedRepos } = tablesOf(db)
-  return taskRequestedSourceReferenceSql(db, cachedRepos.id)
-}
-
-/** Row-level predicate: 三条来源的并集。用在**分页 WHERE** 里，两个 planner 在那个位置
- *  都能把 `exists` 上提成 semi/anti join，形状没有问题。 */
-function referencedCondition(db: object, scheduleIds: ReadonlySet<string>): SQLWrapper {
-  return sql`(
-    ${explicitReference(db)}
-    or ${legacyReference(db)}
-    or ${scheduledCondition(db, scheduleIds)}
-  )`
-}
-
-/**
- * RFC-359 W8-T26 —— facets 的 `referenced` 一格拆成**三格互斥计数**，每格一条标量子查询。
- *
- * 改写前是 `sum(case when (exists(…) or exists(…) or id in (…)) then 1 else 0 end)`：
- * 写在聚合 `CASE` 里的相关子查询**两个 planner 都无法上提**成 semi join，只能对
- * cached_repos 的每一行重跑一遍。PostgreSQL 上实测（50000 tasks 语料）：
- *
- *   · 50000 个仓库：322ms / 250,319 个 shared buffer，且估算代价越过 `jit_above_cost`
- *     又白搭进一次 JIT 编译；
- *   · 200 个仓库（生产比例：仓库少、任务多）：112ms / 16,702 buffer——planner 对
- *     `loops=200` 的子计划选了 `Seq Scan on task_repos`，比逐行索引探还糟。
- *
- * 支点是**把 `exists` 送回 WHERE 子句**：那个位置两个 planner 都会上提。外层是一行常量，
- * 所以每格只求值一次（loops=1）。三格按 `E / ¬E∧L / ¬E∧¬L∧S` 互斥切分，相加即原来的并集。
- *
- * 实测（同语料，PostgreSQL）：50000 仓库 322ms → 59ms、250,319 → 2,021 buffer，JIT 消失；
- * 200 仓库 112ms → 19ms、16,702 → 1,114 buffer。
- *
- * **为什么不是「预聚合 task_repos ∪ tasks 再 LEFT JOIN」**（T26 账本原本记的正解）：
- * 那个形状在 PostgreSQL 上同样快（49ms / 904 buffer），但它把代价从 O(仓库数) 换成了
- * O(**任务数**)——生产里任务表比仓库表大几个数量级。SQLite 上实测因此直接翻车：
- * 200 仓库 / 50000 任务的形态上 0.2ms → 16ms（八十倍），并且 `SCAN tasks` 触发
- * `rfc311-perf-guards` 的「不许扫无界表」判据。互斥三格两个引擎、两种表比例下都不退化
- * （SQLite 同形态 0.2ms → 0.4ms）。
- *
- * 结果等价（三格相加 === 原来的并集）由 `rfc359-w8-t26-plan-reshape-conformance`
- * 用一对多 / 空集 / NULL / 悬空键四类语料在两个引擎上钉住。
- */
-function referencedFacetCounts(
-  db: object,
-  scheduleIds: ReadonlySet<string>,
-): {
-  readonly explicit: SQLWrapper
-  readonly legacyOnly: SQLWrapper
-  readonly scheduledOnly: SQLWrapper
-} {
-  return {
-    explicit: explicitReference(db),
-    legacyOnly: sql`not ${explicitReference(db)} and ${legacyReference(db)}`,
-    scheduledOnly: sql`${scheduledCondition(db, scheduleIds)}
-      and not ${explicitReference(db)} and not ${legacyReference(db)}`,
-  }
+/** RFC-395 II-b O1: source-control filters only its own IDs, after the task-owner probes. */
+function referencedCondition(db: object, ids: ReadonlySet<string>): SQLWrapper {
+  return scheduledCondition(db, ids)
 }
 
 const attentionCondition = (db: object) => {
@@ -309,6 +226,7 @@ export class RepositoryWorkspaceSqlStore {
   constructor(
     protected readonly executor: RepositoryWorkspaceSqlExecutor,
     private readonly engine: Pick<EngineCapabilities, 'likeCaseInsensitive' | 'likeEscape'>,
+    protected readonly taskPorts: RepositoryWorkspaceTaskPorts,
   ) {}
 
   invalidateCachedRepoFacets(): void {
@@ -482,29 +400,7 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async cachedRepoReferenceCount(id: string): Promise<number> {
-    const persistenceDb = this.database
-    const requestedSource = taskRequestedSourceColumns(persistenceDb)
-
-    const { taskRepos, tasks } = tablesOf(persistenceDb)
-    const rows = await this.executor.all<{ count: number }>(
-      sql`
-      SELECT count(*) AS count FROM (
-        SELECT ${taskRepos.taskId} AS task_id
-        FROM ${taskRepos}
-        WHERE ${taskRepos.cachedRepoId} = ${id}
-        GROUP BY ${taskRepos.taskId}
-        UNION ALL
-        SELECT ${tasks.id} AS task_id
-        FROM ${tasks}
-        WHERE ${requestedSource.cachedRepoId} = ${id}
-          AND NOT EXISTS (
-            SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id}
-          )
-      ) AS task_refs
-    `,
-      { count: 'int' },
-    )
-    let count = Number(rows[0]?.count ?? 0)
+    let count = Number((await this.taskPorts.taskUsage.countTaskReferences([id])).get(id) ?? 0)
     const needle = `"cachedRepoId":${JSON.stringify(id)}`
     for (const row of await this.schedulePayloadRows()) {
       if (row.launch_payload.includes(needle)) count++
@@ -513,45 +409,8 @@ export class RepositoryWorkspaceSqlStore {
   }
 
   async cachedRepoReferenceCounts(ids: readonly string[]): Promise<ReadonlyMap<string, number>> {
-    const persistenceDb = this.database
-    const requestedSource = taskRequestedSourceColumns(persistenceDb)
-
-    const counts = new Map<string, number>()
-    if (ids.length === 0) return counts
-    const idSet = sql.join(
-      ids.map((id) => sql`${id}`),
-      sql`, `,
-    )
-    const { taskRepos, tasks } = tablesOf(persistenceDb)
-    const explicitRows = await this.executor.all<{
-      cached_repo_id: string
-      count: number
-    }>(
-      sql`
-      SELECT ${taskRepos.cachedRepoId} AS cached_repo_id, count(distinct ${taskRepos.taskId}) AS count
-      FROM ${taskRepos}
-      WHERE ${taskRepos.cachedRepoId} IN (${idSet})
-      GROUP BY ${taskRepos.cachedRepoId}
-    `,
-      { count: 'int' },
-    )
-    const legacyRows = await this.executor.all<{
-      cached_repo_id: string
-      count: number
-    }>(
-      sql`
-      SELECT ${requestedSource.cachedRepoId} AS cached_repo_id, count(*) AS count
-      FROM ${tasks}
-      WHERE ${requestedSource.cachedRepoId} IN (${idSet})
-        AND ${tasks.id} NOT IN (SELECT ${taskRepos.taskId} FROM ${taskRepos})
-      GROUP BY ${requestedSource.cachedRepoId}
-    `,
-      { count: 'int' },
-    )
-    for (const row of explicitRows) counts.set(row.cached_repo_id, Number(row.count))
-    for (const row of legacyRows) {
-      counts.set(row.cached_repo_id, (counts.get(row.cached_repo_id) ?? 0) + Number(row.count))
-    }
+    if (ids.length === 0) return new Map()
+    const counts = new Map(await this.taskPorts.taskUsage.countTaskReferences(ids))
     const known = new Set(ids)
     for (const schedule of await this.schedulePayloadRows()) {
       const seen = new Set<string>()
@@ -574,6 +433,29 @@ export class RepositoryWorkspaceSqlStore {
         : null
     const scheduleIds =
       cachedFacets?.scheduleIds ?? scheduledReferenceIds(await this.schedulePayloadRows())
+    const referenceSnapshot = async () => {
+      const { cachedRepos } = tablesOf(persistenceDb)
+      const registry = await this.executor.all<{ id: string }>(sql`
+        SELECT ${cachedRepos.id} AS id FROM ${cachedRepos}
+      `)
+      const usage = await this.taskPorts.taskUsage.referencedAmong(registry.map((row) => row.id))
+      const referencedIds = new Set(
+        registry
+          .filter(
+            (row) =>
+              usage.mounted.has(row.id) ||
+              usage.requestedOnly.has(row.id) ||
+              scheduleIds.has(row.id),
+          )
+          .map((row) => row.id),
+      )
+      return {
+        all: registry.length,
+        referencedIds,
+      }
+    }
+    const snapshot =
+      query.view === 'referenced' || query.view === 'unused' ? await referenceSnapshot() : null
     const conditions: SQLWrapper[] = []
     const term = query.q?.trim() ?? ''
     if (term !== '') {
@@ -596,7 +478,7 @@ export class RepositoryWorkspaceSqlStore {
     if (query.autoRefresh === 'never') {
       conditions.push(sql`${cachedRepos.lastAutoRefreshAt} is null`)
     }
-    const referenced = referencedCondition(persistenceDb, scheduleIds)
+    const referenced = referencedCondition(persistenceDb, snapshot?.referencedIds ?? new Set())
     if (query.view === 'referenced') conditions.push(referenced)
     if (query.view === 'unused') conditions.push(sql`not ${referenced}`)
     if (query.view === 'attention') conditions.push(attentionCondition(persistenceDb))
@@ -629,20 +511,17 @@ export class RepositoryWorkspaceSqlStore {
     const counts = await this.cachedRepoReferenceCounts(page.map((row) => row.id))
     let facets = cachedFacets?.facets
     if (facets === undefined) {
-      const facetRow = await this.executor.cachedRepoFacets({
-        ...referencedFacetCounts(persistenceDb, scheduleIds),
-        attention: attentionCondition(persistenceDb),
-      })
-      const all = Number(facetRow.all_count)
-      // 三格按构造互斥（E / ¬E∧L / ¬E∧¬L∧S），相加即改写前那个 OR 的并集势。
-      const referencedCount =
-        Number(facetRow.explicit_count) +
-        Number(facetRow.legacy_count) +
-        Number(facetRow.scheduled_count)
+      const facts = snapshot ?? (await referenceSnapshot())
+      const all = facts.all
+      const referencedCount = facts.referencedIds.size
+      const [attention] = await this.executor.all<{ count: number }>(
+        sql`SELECT count(*) AS count FROM ${cachedRepos} WHERE ${attentionCondition(persistenceDb)}`,
+        { count: 'int' },
+      )
       facets = {
         all,
         referenced: referencedCount,
-        attention: Number(facetRow.attention_count),
+        attention: Number(attention?.count ?? 0),
         unused: all - referencedCount,
       }
       this.facetsCache = {
@@ -738,8 +617,8 @@ export class RepositoryWorkspaceSqlStore {
   async readCredentialSealingSnapshot(): Promise<RepositoryCredentialSealingSnapshot> {
     const persistenceDb = this.database
 
-    const { cachedRepos, taskRepos, tasks, scheduledTasks } = tablesOf(persistenceDb)
-    const [repoRows, taskRepoRows, taskRows, scheduleRows] = await Promise.all([
+    const { cachedRepos, scheduledTasks } = tablesOf(persistenceDb)
+    const [repoRows, sources, scheduleRows] = await Promise.all([
       this.executor.all<RawCachedRepoRow & Record<string, unknown>>(
         sql`
         SELECT ${cachedRepoSelect(persistenceDb)} FROM ${cachedRepos}
@@ -752,30 +631,7 @@ export class RepositoryWorkspaceSqlStore {
           last_auto_refresh_at: 'int',
         },
       ),
-      this.executor.all<{
-        task_id: string
-        repo_index: number
-        repo_url: string | null
-        cached_repo_id: string | null
-        submodule_init_error: string | null
-      }>(
-        sql`
-        SELECT ${taskRepos.taskId} AS task_id, ${taskRepos.repoIndex} AS repo_index,
-          ${taskRepos.repoUrl} AS repo_url, ${taskRepos.cachedRepoId} AS cached_repo_id,
-          ${taskRepos.submoduleInitError} AS submodule_init_error
-        FROM ${taskRepos}
-      `,
-        { repo_index: 'int' },
-      ),
-      this.executor.all<{
-        id: string
-        repo_url: string | null
-        cached_repo_id: string | null
-      }>(sql`
-        SELECT ${tasks.id} AS id, ${tasks.repoUrl} AS repo_url,
-          ${tasks.cachedRepoId} AS cached_repo_id
-        FROM ${tasks}
-      `),
+      this.taskPorts.sourceSealing.listSources(),
       this.executor.all<{
         id: string
         name: string
@@ -793,18 +649,8 @@ export class RepositoryWorkspaceSqlStore {
     ])
     return {
       cachedRepos: repoRows.map(mapCachedRepository),
-      taskRepos: taskRepoRows.map((row) => ({
-        taskId: row.task_id,
-        repoIndex: Number(row.repo_index),
-        repoUrl: row.repo_url,
-        cachedRepoId: row.cached_repo_id,
-        submoduleInitError: row.submodule_init_error,
-      })),
-      tasks: taskRows.map((row) => ({
-        id: row.id,
-        repoUrl: row.repo_url,
-        cachedRepoId: row.cached_repo_id,
-      })),
+      taskRepos: sources.mounts,
+      tasks: sources.requested.map(({ taskId, ...source }) => ({ id: taskId, ...source })),
       schedules: scheduleRows.map(scheduleOf),
     }
   }
@@ -894,55 +740,6 @@ export class RepositoryWorkspaceSqlStore {
       repoUrls: new Map(repoRows.map((row) => [row.id, row.url_redacted])),
       boundMemoryCounts: new Map(memoryRows.map((row) => [row.scope_id, Number(row.count)])),
       schedules: scheduleRows.map(scheduleOf),
-    }
-  }
-
-  async findWorktreeTask(id: string): Promise<WorktreeTaskRecord | null> {
-    const persistenceDb = this.database
-
-    const { tasks, taskRepos } = tablesOf(persistenceDb)
-    const taskRows = await this.executor.all<{
-      id: string
-      owner_user_id: string | null
-      worktree_path: string
-      base_commit: string | null
-    }>(sql`
-      SELECT ${tasks.id} AS id, ${tasks.ownerUserId} AS owner_user_id,
-        ${tasks.worktreePath} AS worktree_path, ${tasks.baseCommit} AS base_commit
-      FROM ${tasks}
-      WHERE ${tasks.id} = ${id}
-      LIMIT 1
-    `)
-    const task = taskRows[0]
-    if (task === undefined) return null
-    const repos = await this.executor.all<{
-      repo_index: number
-      worktree_path: string
-      base_commit: string | null
-      mount_path: string
-    }>(
-      sql`
-      SELECT ${taskRepos.repoIndex} AS repo_index,
-        ${taskRepos.worktreePath} AS worktree_path,
-        ${taskRepos.baseCommit} AS base_commit,
-        ${taskRepos.mountPath} AS mount_path
-      FROM ${taskRepos}
-      WHERE ${taskRepos.taskId} = ${id}
-      ORDER BY ${taskRepos.repoIndex}
-    `,
-      { repo_index: 'int' },
-    )
-    return {
-      id: task.id,
-      ownerUserId: task.owner_user_id,
-      worktreePath: task.worktree_path,
-      baseCommit: task.base_commit,
-      repos: repos.map((row) => ({
-        repoIndex: Number(row.repo_index),
-        worktreePath: row.worktree_path,
-        baseCommit: row.base_commit,
-        mountPath: row.mount_path,
-      })),
     }
   }
 }

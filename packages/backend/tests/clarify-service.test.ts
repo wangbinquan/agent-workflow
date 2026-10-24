@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-023 PR-B T9 — lock the clarify service contract.
 //
 // Covers, in order:
@@ -163,17 +164,19 @@ describeEachProvider('createClarifyRound', (harness) => {
     const received: TaskWsMessage[] = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
-    const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: sourceRunId,
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion()],
-    })
+    const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: sourceRunId,
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion()],
+      }),
+    )
 
     expect(session.status).toBe('awaiting_human')
     expect(session.intermediaryNodeRunId).toBe(clarifyNodeRunId)
@@ -229,8 +232,8 @@ describeEachProvider('createClarifyRound', (harness) => {
       iteration: 0,
       questions: [makeQuestion()],
     }
-    const first = await createClarifyRound(request)
-    const replay = await createClarifyRound(request)
+    const first = await createClarifyRound(withO2Closure(request))
+    const replay = await createClarifyRound(withO2Closure(request))
     expect(replay.round.id).toBe(first.round.id)
     expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(1)
     expect(
@@ -240,10 +243,12 @@ describeEachProvider('createClarifyRound', (harness) => {
       await db.select().from(taskQuestions).where(eq(taskQuestions.taskId, taskId)),
     ).toHaveLength(1)
 
-    const changed = await createClarifyRound({
-      ...request,
-      questions: [makeQuestion({ title: 'Which durable database?' })],
-    })
+    const changed = await createClarifyRound(
+      withO2Closure({
+        ...request,
+        questions: [makeQuestion({ title: 'Which durable database?' })],
+      }),
+    )
     expect(changed.round.id).not.toBe(first.round.id)
     expect(changed.intermediaryNodeRunId).toBe(first.intermediaryNodeRunId)
     expect(received.filter((message) => message.type === 'clarify.created')).toHaveLength(2)
@@ -281,21 +286,23 @@ describeEachProvider('createClarifyRound', (harness) => {
       parentNodeRunId: 'parent-multi-run',
     })
 
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: sourceRunId,
-      askingShardKey: 'shard-A',
-      intermediaryNodeId: 'clarify1',
-      iteration: 1,
-      questions: [makeQuestion()],
-      parentNodeRunId: 'parent-multi-run',
-      truncationWarnings: [
-        { code: 'clarify-options-too-many', detail: 'fixture warning survives atomic open' },
-      ],
-    })
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: sourceRunId,
+        askingShardKey: 'shard-A',
+        intermediaryNodeId: 'clarify1',
+        iteration: 1,
+        questions: [makeQuestion()],
+        parentNodeRunId: 'parent-multi-run',
+        truncationWarnings: [
+          { code: 'clarify-options-too-many', detail: 'fixture warning survives atomic open' },
+        ],
+      }),
+    )
 
     const nr = (await readNodeRunFixtures(db, { id: clarifyNodeRunId }))[0]
     expect(nr?.shardKey).toBe('shard-A')

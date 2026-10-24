@@ -21,33 +21,6 @@
       "removeWhen": "RFC-395 T11 services/task cached-repo 清理场景：source-control 提供闭合镜像定位 query，替代完整缓存仓库行读取。"
     },
     {
-      "table": "intentSessions",
-      "owner": "intent",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "intent_sessions",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
-    },
-    {
-      "table": "intentTurnEvents",
-      "owner": "intent",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "intent_turn_events",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
-    },
-    {
-      "table": "intentTurns",
-      "owner": "intent",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "intent_turns",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
-    },
-    {
       "table": "maintenanceRuns",
       "owner": "system-operations",
       "file": "platform/persistence/maintenanceRunStore.ts",
@@ -66,69 +39,6 @@
       "removeWhen": "RFC-395 T11 maintenanceState 边界任务：把维护水位存储绑定移入 system-operations，平台通过注入端口访问。"
     },
     {
-      "table": "mcpRuntimeTestEvents",
-      "owner": "resource-catalog",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "mcp_runtime_test_events",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
-    },
-    {
-      "table": "mcpRuntimeTestSessions",
-      "owner": "resource-catalog",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "mcp_runtime_test_sessions",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
-    },
-    {
-      "table": "memoryDistillEvents",
-      "owner": "memory",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "memory_distill_events",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
-    },
-    {
-      "table": "memoryDistillJobs",
-      "owner": "memory",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "memory_distill_jobs",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
-    },
-    {
-      "table": "nodeRunEvents",
-      "owner": "task-execution",
-      "file": "platform/persistence/eventsArchiveStore.ts",
-      "tableId": "node_run_events",
-      "kind": "other",
-      "why": "归档仅面向 Task 事件，联查 run 归属；两个平台 provider wrapper 仍导入该文件，直接移入 owner 会新增 platform → modules 边。",
-      "removeWhen": "RFC-395 T11 eventsArchiveStore 边界任务：bootstrap 注入 Task 事件归档 store 后删除平台 adapter。"
-    },
-    {
-      "table": "nodeRuns",
-      "owner": "task-execution",
-      "file": "platform/persistence/eventsArchiveStore.ts",
-      "tableId": "node_runs",
-      "kind": "reshaped",
-      "why": "归档仅面向 Task 事件，联查 run 归属；两个平台 provider wrapper 仍导入该文件，直接移入 owner 会新增 platform → modules 边。",
-      "removeWhen": "RFC-395 T11 eventsArchiveStore 边界任务：bootstrap 注入 Task 事件归档 store 后删除平台 adapter。 必须在 RFC-395 II-b B2 替换该表 adapter 前完成。"
-    },
-    {
-      "table": "nodeRuns",
-      "owner": "task-execution",
-      "file": "platform/persistence/sqlite/taskLifecycle.ts",
-      "tableId": "node_runs",
-      "kind": "reshaped",
-      "why": "遗留生命周期 writer 被 services/lifecycle 与平台 prune 策略类型引用；整体迁移需同时拆开这些合同，不能新增 platform → modules 边。",
-      "removeWhen": "RFC-395 II-b B2：Task 生命周期 adapter 换到目标表时收回 task-execution，并先解除平台策略对该 writer 的引用。"
-    },
-    {
       "table": "oidcProviders",
       "owner": "identity-access",
       "file": "auth/infrastructure/authPersistence.ts",
@@ -136,69 +46,6 @@
       "kind": "other",
       "why": "身份 adapter 由 auth 组合根及 identity-access 共用；本次禁止身份逻辑改动，不能把它误列为全库机制。",
       "removeWhen": "RFC-395 T11 auth/authPersistence 边界任务：将身份持久化收回 identity-access，由 auth 装配闭合端口。"
-    },
-    {
-      "table": "taskCollaborators",
-      "owner": "collaboration",
-      "file": "db/query.ts",
-      "tableId": "task_collaborators",
-      "kind": "other",
-      "why": "任务可见性条件是 Task/协作者业务访问；预编译模板与同语句 SQL 消费者尚不能以闭合 public DTO 机械替换。",
-      "removeWhen": "RFC-395 T11 db/query 边界任务：按调用场景把可见性联合查询移入 owner，并通过已提供的端口保持单语句语义。"
-    },
-    {
-      "table": "taskRepos",
-      "owner": "task-execution",
-      "file": "platform/persistence/taskCheckpointMountPaths.ts",
-      "tableId": "task_repos",
-      "kind": "reshaped",
-      "why": "code-capability 与 Task 共用挂载查询；development-automation → task-execution 没有 offered edge，迁回 owner 后直接改 import 会扩大 off-DAG。",
-      "removeWhen": "RFC-395 II-b B2：切换 task_repository_mounts adapter 前通过 bootstrap 注入挂载读取端口并收回 Task owner。"
-    },
-    {
-      "table": "taskRepos",
-      "owner": "task-execution",
-      "file": "platform/persistence/taskRepositorySql.ts",
-      "tableId": "task_repos",
-      "kind": "reshaped",
-      "why": "请求来源和无挂载判据被 source-control、Task 与平台备份共用；它是业务 SQL 词汇，闭合需重组同语句查询且不能新增平台反向边。",
-      "removeWhen": "RFC-395 II-b B2：Task/mount adapter 切换前将来源查询改成已装配的 owner 场景端口，删除共享业务 SQL。"
-    },
-    {
-      "table": "tasks",
-      "owner": "task-execution",
-      "file": "db/query.ts",
-      "tableId": "tasks",
-      "kind": "reshaped",
-      "why": "任务可见性条件是 Task/协作者业务访问；预编译模板与同语句 SQL 消费者尚不能以闭合 public DTO 机械替换。",
-      "removeWhen": "RFC-395 T11 db/query 边界任务：按调用场景把可见性联合查询移入 owner，并通过已提供的端口保持单语句语义。 必须在 RFC-395 II-b B2 替换该表 adapter 前完成。"
-    },
-    {
-      "table": "tasks",
-      "owner": "task-execution",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "tasks",
-      "kind": "reshaped",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。 必须在 RFC-395 II-b B2 替换该表 adapter 前完成。"
-    },
-    {
-      "table": "tasks",
-      "owner": "task-execution",
-      "file": "platform/persistence/sqlite/taskLifecycle.ts",
-      "tableId": "tasks",
-      "kind": "reshaped",
-      "why": "遗留生命周期 writer 被 services/lifecycle 与平台 prune 策略类型引用；整体迁移需同时拆开这些合同，不能新增 platform → modules 边。",
-      "removeWhen": "RFC-395 II-b B2：Task 生命周期 adapter 换到目标表时收回 task-execution，并先解除平台策略对该 writer 的引用。"
-    },
-    {
-      "table": "tasks",
-      "owner": "task-execution",
-      "file": "platform/persistence/taskRepositorySql.ts",
-      "tableId": "tasks",
-      "kind": "reshaped",
-      "why": "请求来源和无挂载判据被 source-control、Task 与平台备份共用；它是业务 SQL 词汇，闭合需重组同语句查询且不能新增平台反向边。",
-      "removeWhen": "RFC-395 II-b B2：Task/mount adapter 切换前将来源查询改成已装配的 owner 场景端口，删除共享业务 SQL。"
     },
     {
       "table": "tokenAudit",
@@ -262,15 +109,6 @@
       "kind": "other",
       "why": "身份 adapter 由 auth 组合根及 identity-access 共用；本次禁止身份逻辑改动，不能把它误列为全库机制。",
       "removeWhen": "RFC-395 T11 auth/authPersistence 边界任务：将身份持久化收回 identity-access，由 auth 装配闭合端口。"
-    },
-    {
-      "table": "webhookTriggerFires",
-      "owner": "integration",
-      "file": "platform/persistence/sqlite/systemMaintenanceRetention.ts",
-      "tableId": "webhook_trigger_fires",
-      "kind": "other",
-      "why": "清理器包含宿主终态、归档状态和 webhook Task 关联等领域谓词，并非遍历全库的通用保留期机制；平台调用链禁止新增模块依赖。",
-      "removeWhen": "RFC-395 T11 systemMaintenanceRetention 边界任务：拆成 owner 提供的保留候选/删除参与者，由 bootstrap 组装扫描。"
     }
   ]
 }

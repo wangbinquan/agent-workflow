@@ -1,3 +1,5 @@
+import { deleteAgent, deleteWorkgroup } from './helpers/resourceCatalogDeletion'
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // LOCKS: RFC-165 §9b (D11) — scheduled-task three-subject support
 // (design §11.16/.17/.19).
@@ -32,7 +34,7 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/composition/taskRouteLaunch'
 import {
   createBuildScheduleLaunch,
@@ -104,14 +106,18 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
     workspace: createTaskRouteWorkspaceParticipant({
       db,
       sourceContexts: identityAccess.taskPreparationContext,
-      repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+      repositoryPreparation: composeRepositoryPreparation(
+        withSourceControlTaskPorts({ db, appHome }),
+      ),
       appHome,
     }),
     coordinator: createTestTaskDriveCoordinator({
       deps: { db, schedulerDriver, configPath },
       appHome,
       repositoryPreparation: composeDeferredRepositoryPreparation({
-        repositoryPreparation: composeRepositoryPreparation({ db, appHome }),
+        repositoryPreparation: composeRepositoryPreparation(
+          withSourceControlTaskPorts({ db, appHome }),
+        ),
         db,
         appHome,
       }),
@@ -363,7 +369,8 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { deleteAgent, renameAgent } = await import('../src/services/agent')
+    const { renameAgent } =
+      await import('../src/modules/resource-catalog/infrastructure/legacy/agent')
     expect(await renameAgent(db, solo.id, { newName: 'solo2' })).toMatchObject({
       id: solo.id,
       name: 'solo2',
@@ -397,7 +404,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { deleteWorkgroup, renameWorkgroup } = await import('../src/services/workgroups')
+    const { renameWorkgroup } = await import('../src/services/workgroups')
     const renamed = await renameWorkgroup(
       db,
       squad.id,

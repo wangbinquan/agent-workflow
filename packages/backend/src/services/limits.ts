@@ -12,11 +12,10 @@
 // orphan logic (P-4-07) has already flipped the row to `interrupted`, this
 // tick is a no-op for that task.
 
-import {
-  type ResourceLimitOperations,
-  type ResourceLimitPersistence,
-} from '@/modules/system-operations/public/operations'
-import { composeLegacySqliteResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
+import type { TaskResourceLimitFacts } from '@/modules/task-execution/public/types'
+import { callRowHumanWait } from '@/modules/task-execution/public/queries'
+import type { ResourceLimitAudit } from '@/modules/system-operations/public/operations'
+export { readTaskResourceUsage, parseCallHumanWait } from '@/modules/task-execution/public/queries'
 import { createLogger, type Logger } from '@/util/log'
 
 const log: Logger = createLogger('limits')
@@ -27,32 +26,18 @@ export interface EnforceLimitsResult {
   canceled: string[]
 }
 
-type LegacySqliteResourceLimitSource = Parameters<
-  typeof composeLegacySqliteResourceLimitOperations
->[0]
-type ResourceLimitSource = LegacySqliteResourceLimitSource | ResourceLimitOperations
-
-function isResourceLimitOperations(source: ResourceLimitSource): source is ResourceLimitOperations {
-  return (
-    typeof source === 'object' &&
-    source !== null &&
-    'persistence' in source &&
-    'cancelTask' in source &&
-    typeof source.cancelTask === 'function'
-  )
-}
-
-function operationsFor(source: ResourceLimitSource): ResourceLimitOperations {
-  return isResourceLimitOperations(source)
-    ? source
-    : composeLegacySqliteResourceLimitOperations(source)
+export interface ResourceLimitOperations {
+  readonly persistence: TaskResourceLimitFacts & ResourceLimitAudit
+  readonly cancelTask: (
+    taskId: string,
+    reason: { readonly summary: string; readonly message: string },
+  ) => Promise<void>
 }
 
 export async function enforceLimits(
-  source: ResourceLimitSource,
+  operations: ResourceLimitOperations,
   now: number = Date.now(),
 ): Promise<EnforceLimitsResult> {
-  const operations = operationsFor(source)
   // RFC-311 (audit L1-9): this runs at 1Hz — checkOne consumes exactly five
   // scalar columns, but the former select() decoded every running task's
   // workflow_snapshot / inputs / ref_closure_json JSON once per second,
@@ -96,8 +81,8 @@ export async function enforceLimits(
 }
 
 async function checkOne(
-  persistence: ResourceLimitPersistence,
-  t: Awaited<ReturnType<ResourceLimitPersistence['listRunningTasks']>>[number],
+  persistence: TaskResourceLimitFacts,
+  t: Awaited<ReturnType<TaskResourceLimitFacts['listRunningTasks']>>[number],
   now: number,
 ): Promise<{ summary: string; message: string } | null> {
   if (typeof t.maxDurationMs === 'number' && t.maxDurationMs > 0) {
@@ -149,71 +134,3 @@ async function checkOne(
   }
   return null
 }
-
-/** RFC-243 §4.5 — the call rows' human-wait ledger + live awaiting probe. */
-async function callRowHumanWait(
-  persistence: ResourceLimitPersistence,
-  taskId: string,
-  now: number,
-): Promise<{ waitMs: number; childAwaiting: boolean }> {
-  const callRows = await persistence.listCallRows(taskId)
-  if (callRows.length === 0) return { waitMs: 0, childAwaiting: false }
-  let waitMs = 0
-  const childIds = new Set<string>()
-  for (const r of callRows) {
-    if (r.childTaskId !== null) childIds.add(r.childTaskId)
-    waitMs += parseCallHumanWait(r.wrapperProgressJson, now)
-  }
-  const statuses = await persistence.listTaskStatuses([...childIds])
-  const childAwaiting = statuses.some(
-    (status) => status === 'awaiting_review' || status === 'awaiting_human',
-  )
-  return { waitMs, childAwaiting }
-}
-
-/** Parse `{callHumanWaitMs, callHumanWaitSince}` from a call row's progress JSON. */
-export function parseCallHumanWait(json: string | null, now: number): number {
-  if (json === null || json === '') return 0
-  try {
-    const parsed: unknown = JSON.parse(json)
-    if (typeof parsed !== 'object' || parsed === null) return 0
-    const o = parsed as { callHumanWaitMs?: unknown; callHumanWaitSince?: unknown }
-    const base =
-      typeof o.callHumanWaitMs === 'number' && o.callHumanWaitMs >= 0 ? o.callHumanWaitMs : 0
-    const since =
-      typeof o.callHumanWaitSince === 'number' && o.callHumanWaitSince > 0
-        ? Math.max(0, now - o.callHumanWaitSince)
-        : 0
-    return base + since
-  } catch {
-    return 0
-  }
-}
-
-/**
- * Terminal TaskExecution usage projection consumed by Digital Employee.
- * It intentionally reuses the same accumulated-running and durable human-wait
- * accounting as the live limit enforcer instead of deriving wall-clock time.
- */
-export async function readTaskResourceUsage(
-  source: ResourceLimitSource,
-  taskId: string,
-  now: number = Date.now(),
-): Promise<{ readonly effectiveRunningMs: number; readonly totalTokens: number } | null> {
-  const persistence = operationsFor(source).persistence
-  const task = await persistence.readTaskClock(taskId)
-  if (task === null) return null
-  const elapsed =
-    task.runningMs + (task.runningSince === null ? 0 : Math.max(0, now - task.runningSince))
-  const wait = await callRowHumanWait(persistence, taskId, now)
-  return {
-    effectiveRunningMs: Math.max(0, elapsed - wait.waitMs),
-    totalTokens: await persistence.sumTaskTokens(taskId),
-  }
-}
-
-/**
- * Convenience: start a 1Hz interval running enforceLimits against the given
- * db, returning a stopper. The daemon wires this in main.ts; tests call
- * enforceLimits directly.
- */

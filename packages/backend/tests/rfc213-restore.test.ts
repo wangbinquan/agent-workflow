@@ -1,3 +1,4 @@
+import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackupPreparation'
 // RFC-213 PR-1a — cold restore. Tests are the design-gate corrections
 // (design/RFC-213-disaster-recovery/design.md §7):
 //   - AC-1 roundtrip mutates the LIVE db BETWEEN backup and restore, then asserts
@@ -433,14 +434,20 @@ describe('restore CLI wrapper guard rails', () => {
   test('no tarball → usage error; missing file → error (both before touching state)', async () => {
     const noArg = await restoreCommand(
       [],
-      composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+      composeLocalSystemOperations({
+        repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
+        contract: buildLogicalSchemaContract(),
+      }),
     )
     expect(noArg.status).toBe('error')
     expect(noArg.output).toContain('usage:')
 
     const missing = await restoreCommand(
       [join(tmp('rfc213-cli-'), 'nope.tar.gz')],
-      composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+      composeLocalSystemOperations({
+        repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
+        contract: buildLogicalSchemaContract(),
+      }),
     )
     expect(missing.status).toBe('error')
     expect(missing.output).toContain('no such file')
@@ -595,14 +602,20 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
       writePidFileForTest(join(appHome, '.daemon.lock'), process.pid)
       const res = await restoreCommand(
         [backup.path, '--dry-run'],
-        composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+        composeLocalSystemOperations({
+          repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
+          contract: buildLogicalSchemaContract(),
+        }),
       )
       expect(res.status).toBe('ok')
       expect(res.output).toContain('dry-run')
       // …while an actual apply is still refused
       const apply = await restoreCommand(
         [backup.path, '--yes'],
-        composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+        composeLocalSystemOperations({
+          repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
+          contract: buildLogicalSchemaContract(),
+        }),
       )
       expect(apply.status).toBe('error')
       expect(apply.output).toContain('daemon is running')
@@ -621,7 +634,10 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
       writeFileSync(junk, 'not a tarball')
       const res = await restoreCommand(
         [junk, '--stage'],
-        composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+        composeLocalSystemOperations({
+          repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
+          contract: buildLogicalSchemaContract(),
+        }),
       )
       expect(res.status).toBe('error')
       expect(hasPendingRestore(appHome)).toBe(false)

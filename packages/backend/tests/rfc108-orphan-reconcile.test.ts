@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T17 (AR-10) — periodic post-boot orphan reconciler.
 //
 // 为什么这条测试存在：boot reaper 只跑一次且乐观翻所有 running；周期 reconciler 在活
@@ -87,7 +88,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const taskId = await seedRunningTask(db)
     const runId = await seedRun(db, taskId, 'running', NOW - 50_000) // older than grace
     const res = await reconcileDeadRunningRuns({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -100,7 +103,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     expect(
       (
         await listRecoveryEventsForTask(
-          createTaskExecutionPersistence(db).recoveryAdministration,
+          createTaskExecutionPersistence(db, {
+            recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+          }).recoveryAdministration,
           taskId,
         )
       ).some((e) => e.kind === 'periodic-reap'),
@@ -124,7 +129,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     expect(await markRuntimeSessionResetPending(leaseOperations, lease)).toBe(true)
 
     const res = await reconcileDeadRunningRuns({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -160,7 +167,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     })
 
     const res = await reconcileDeadRunningRuns({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -208,7 +217,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     })
 
     const res = await reconcileDeadRunningRuns({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       // The coarse probe cannot tell a dead process from a recycled/live PID
@@ -250,7 +261,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 100) // newer than grace 1000
     const res = await reconcileDeadRunningRuns({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,
@@ -264,7 +277,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const taskId = await seedRunningTask(db)
     await seedRun(db, taskId, 'running', NOW - 50_000)
     const res = await reconcileDeadRunningRuns({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => true,
@@ -280,7 +295,9 @@ describeEachProvider('RFC-108 T17 — reconcileDeadRunningRuns', (harness) => {
     const goneId = await seedRun(db, taskId, 'running', NOW - 50_000)
     await seedRun(db, taskId, 'pending', NOW - 50_000) // still active
     const res = await reconcileDeadRunningRuns({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       graceMs: 1000,
       now: NOW,
       probeProcessAlive: () => false,

@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -296,7 +297,9 @@ describeEachProvider('RFC-363 real-provider scratch rollback lease', (harness) =
         sourceContexts: () => {
           throw new Error('legacy materializer must not seal a request source')
         },
-        repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: appHome }),
+        repositoryPreparation: composeRepositoryPreparation(
+          withSourceControlTaskPorts({ db: harness.db, appHome: appHome }),
+        ),
         db: harness.db,
         appHome,
       })

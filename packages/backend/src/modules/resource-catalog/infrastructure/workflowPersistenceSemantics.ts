@@ -1,9 +1,9 @@
+import type { SubjectTaskReferencePort } from '../composition/required-ports'
 import { createWorkflowCallReferenceLookup } from './referenceLookup'
 import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   privilegedNodeLensFor,
-  TERMINAL_TASK_STATUSES,
   RESOURCE_DISPLAY_NAME_MAX,
   WorkflowDraftSnapshotSchema,
   WorkflowNameSchema,
@@ -18,7 +18,7 @@ import {
   type WorkflowDefinition,
   type WorkflowDraftSnapshot,
 } from '@agent-workflow/shared'
-import { and, eq, inArray, notInArray } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 
 import { ConflictError, ValidationError } from '@/util/errors'
 import { assertCodeHostAuthorAllowed } from '@/services/codeHostAuthorGate'
@@ -211,14 +211,12 @@ async function assertDefinitionReferences(input: {
 async function assertNoNonTerminalTaskReferences(
   transaction: ResourceCatalogTransaction,
   workflowId: string,
+  taskReferences: SubjectTaskReferencePort,
 ): Promise<void> {
-  const { tasks } = tablesOf(transaction)
-  const rows = await transaction
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(
-      and(eq(tasks.workflowId, workflowId), notInArray(tasks.status, [...TERMINAL_TASK_STATUSES])),
-    )
+  const rows = await taskReferences(transaction).nonTerminalTaskIds({
+    kind: 'workflow',
+    sourceId: workflowId,
+  })
   if (rows.length > 0) {
     throw new ConflictError(
       'workflow-in-use',
@@ -280,6 +278,7 @@ async function assertNotCalledByWorkflow(
 /** Owner-native semantics for the Workflow repository（RFC-359 W4-D15：一份实现，两个 provider 共用）。 */
 export function createWorkflowPersistenceSemantics(input: {
   readonly authorization: ResourceAuthorizationApplication
+  readonly taskReferences: SubjectTaskReferencePort
   readonly events?: WorkflowPersistenceEvents
 }): WorkflowPersistenceSemantics {
   return Object.freeze<WorkflowPersistenceSemantics>({
@@ -362,7 +361,7 @@ export function createWorkflowPersistenceSemantics(input: {
       })
     },
     async assertDeleteInTransaction(transaction, authority, current) {
-      await assertNoNonTerminalTaskReferences(transaction, current.id)
+      await assertNoNonTerminalTaskReferences(transaction, current.id, input.taskReferences)
       await assertNoScheduledReferences(transaction, authority, current.id)
       await assertNotCalledByWorkflow(transaction, current)
     },

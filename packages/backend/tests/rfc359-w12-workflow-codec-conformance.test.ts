@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-359 W12 —— workflow 的 legacy / 中立投影先在旧实现上对拍，再合成一份。
 // 真数据库存量行覆盖 v1–v7、坏行错误、迁移后的详情/修订、普通保存与外层回滚。
 // 两个 hash 入口原来处于不同输入阶段：legacy 先迁移，neutral raw hash 直接编码；
@@ -113,7 +114,10 @@ function repositoryFor(db: PersistenceDb, now: () => number) {
   return createWorkflowRepository({
     db,
     now,
-    semantics: createWorkflowPersistenceSemantics({ authorization: catalog.authorization }),
+    semantics: createWorkflowPersistenceSemantics({
+      taskReferences: composeSubjectTaskReferencePort,
+      authorization: catalog.authorization,
+    }),
   })
 }
 

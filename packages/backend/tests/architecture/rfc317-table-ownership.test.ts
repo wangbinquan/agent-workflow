@@ -371,11 +371,7 @@ const key = (entry: { readonly table: string; readonly file: string }): string =
  *   · code-capability 在 RFC-376 结构门里按物理目录计为独立 context，经 resource-catalog 闭合越出已提交 DAG；
  *   · runtime-management → resource-catalog 的值边会把 runtime-management 拉进存量上下文环。
  */
-const OFFERED_BUT_BLOCKED = new Set([
-  'tasks|collaboration/infrastructure/humanGateOperationJournal.ts',
-  'agents|code-capability/infrastructure/capabilityMatrixRead.ts',
-  'workflows|runtime-management/infrastructure/realtimeStore.ts',
-])
+const OFFERED_BUT_BLOCKED = new Set<string>()
 
 describe('RFC-395 II-a A7 / RFC-317 T41 · R5 —— 一张表只属于一个 bounded context', () => {
   test('语料下限：真的扫到了 backend 的生产源码与 schema', () => {

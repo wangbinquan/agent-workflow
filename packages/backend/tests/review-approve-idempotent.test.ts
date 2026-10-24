@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-052 regression: `submitReviewDecision({ decision: 'approved' })` must
 // upsert (NOT plain-insert) the `approved_doc` + `approval_meta` rows into
 // node_run_outputs. Without that, a second approve on the same node_run
@@ -147,14 +148,16 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
       content: '{"stale":true}',
     })
 
-    const result = await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewRunId,
-      decision: 'approved',
-      expectedReviewIteration: 4,
-      author: 'tester',
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewRunId,
+        decision: 'approved',
+        expectedReviewIteration: 4,
+        author: 'tester',
+      }),
+    )
 
     expect(result.resumeRequired).toBe(true)
     expect(result.taskId).toBe(taskId)

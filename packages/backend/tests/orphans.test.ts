@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // P-4-07: daemon-restart orphan reaper.
 
 import {
@@ -89,13 +90,21 @@ describeEachProvider('reapOrphanRuns', (harness) => {
   afterEach(() => h.cleanup())
 
   test('no-op when no running rows exist', async () => {
-    const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
+    const r = await reapOrphanRuns(
+      createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
+    )
     expect(r).toEqual({ tasks: 0, runs: 0 })
   })
 
   test('flips running tasks + node_runs to interrupted with daemon-restart message', async () => {
     const { taskId, runId } = await seedRunning(h.db)
-    const r = await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration)
+    const r = await reapOrphanRuns(
+      createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
+    )
     expect(r).toEqual({ tasks: 1, runs: 1 })
     const { nodeRuns } = tablesOf(h.db)
     const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
@@ -108,9 +117,14 @@ describeEachProvider('reapOrphanRuns', (harness) => {
   test('a child which survives SIGKILL aborts the barrier and leaves its run live', async () => {
     const { runId } = await seedRunning(h.db)
     await expect(
-      reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
-        killStaleRunProcessTree: async () => 'kill-failed',
-      }),
+      reapOrphanRuns(
+        createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
+        {
+          killStaleRunProcessTree: async () => 'kill-failed',
+        },
+      ),
     ).rejects.toThrow('boot recovery refused')
     const { nodeRuns } = tablesOf(h.db)
     const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
@@ -135,12 +149,17 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     )
     const calls: string[] = []
 
-    await reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
-      killStaleRunProcessTree: async (row) => {
-        calls.push(`kill:${row.pid}`)
-        return 'killed'
+    await reapOrphanRuns(
+      createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      }).recoveryAdministration,
+      {
+        killStaleRunProcessTree: async (row) => {
+          calls.push(`kill:${row.pid}`)
+          return 'killed'
+        },
       },
-    })
+    )
     expect(calls).toEqual(['kill:4242'])
     expect(
       await repairRuntimeSessionLeasesAfterOrphanReap(
@@ -172,9 +191,14 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     await patchNodeRunFixture(h.db, { id: runId }, { status: 'failed', pid: 4343 })
 
     await expect(
-      reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
-        killStaleRunProcessTree: async () => 'kill-failed',
-      }),
+      reapOrphanRuns(
+        createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
+        {
+          killStaleRunProcessTree: async () => 'kill-failed',
+        },
+      ),
     ).rejects.toThrow('boot recovery refused')
     expect(
       await first(
@@ -198,9 +222,14 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     })
 
     await expect(
-      reapOrphanRuns(createTaskExecutionPersistence(h.db).recoveryAdministration, {
-        killStaleRunProcessTree: async () => 'no-pid',
-      }),
+      reapOrphanRuns(
+        createTaskExecutionPersistence(h.db, {
+          recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+        }).recoveryAdministration,
+        {
+          killStaleRunProcessTree: async () => 'no-pid',
+        },
+      ),
     ).rejects.toThrow('reap was unproven')
     const { runtimeSessionLeases } = tablesOf(h.db)
     expect(

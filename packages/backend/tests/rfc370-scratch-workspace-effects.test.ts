@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // Scratch launch and replay must use one selected effect adapter. The real
 // Task journal advances only after its preparation/restoration/cleanup ACK.
@@ -76,11 +77,13 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
       }
       const selected: ScratchWorkspaceEffects =
         receiver === 'prototype' ? Object.create(methods) : methods
-      const binding = composeRepositoryPreparation({
-        db: harness.db,
-        appHome: 'installation:selected',
-        scratchEffects: selected,
-      })
+      const binding = composeRepositoryPreparation(
+        withSourceControlTaskPorts({
+          db: harness.db,
+          appHome: 'installation:selected',
+          scratchEffects: selected,
+        }),
+      )
       const input = {
         db: harness.db,
         binding,
@@ -158,11 +161,13 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
         return { taskId: request.taskId, complete: cleanups > 1, failures: [] }
       },
     }
-    const binding = composeRepositoryPreparation({
-      db: harness.db,
-      appHome: 'installation:selected',
-      scratchEffects: selected,
-    })
+    const binding = composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        appHome: 'installation:selected',
+        scratchEffects: selected,
+      }),
+    )
     const prepared = await prepareScratchWorkspace({
       db: harness.db,
       binding,
@@ -220,11 +225,13 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
         if (releaseFails) throw new Error('platform unavailable')
       },
     }
-    const binding = composeRepositoryPreparation({
-      db: harness.db,
-      appHome: 'installation:selected',
-      scratchEffects: selected,
-    })
+    const binding = composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        appHome: 'installation:selected',
+        scratchEffects: selected,
+      }),
+    )
     const prepared = await prepareScratchWorkspace({
       db: harness.db,
       binding,
@@ -256,23 +263,25 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
     const taskId = ulid()
     const failure = new Error('selected-prepare-failed')
     let cleanups = 0
-    const binding = composeRepositoryPreparation({
-      db: harness.db,
-      appHome: 'installation:selected',
-      scratchEffects: {
-        async prepare() {
-          throw failure
+    const binding = composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        appHome: 'installation:selected',
+        scratchEffects: {
+          async prepare() {
+            throw failure
+          },
+          restore() {
+            throw new Error('must not restore a failed preparation')
+          },
+          async cleanup(input: Parameters<ScratchWorkspaceEffects['cleanup']>[0]) {
+            cleanups += 1
+            await input.assertCurrent()
+            return { taskId: input.taskId, complete: true, failures: [] }
+          },
         },
-        restore() {
-          throw new Error('must not restore a failed preparation')
-        },
-        async cleanup(input) {
-          cleanups += 1
-          await input.assertCurrent()
-          return { taskId: input.taskId, complete: true, failures: [] }
-        },
-      },
-    })
+      }),
+    )
     await expect(
       prepareScratchWorkspace({
         db: harness.db,
@@ -294,22 +303,24 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
     const taskId = ulid()
     const failure = new Error('selected-restore-failed')
     let cleanups = 0
-    const binding = composeRepositoryPreparation({
-      db: harness.db,
-      appHome: 'installation:selected',
-      scratchEffects: {
-        async prepare() {
-          return space(taskId)
+    const binding = composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        appHome: 'installation:selected',
+        scratchEffects: {
+          async prepare() {
+            return space(taskId)
+          },
+          async restore() {
+            throw failure
+          },
+          async cleanup(input: Parameters<ScratchWorkspaceEffects['cleanup']>[0]) {
+            cleanups += 1
+            return { taskId: input.taskId, complete: true, failures: [] }
+          },
         },
-        async restore() {
-          throw failure
-        },
-        async cleanup(input) {
-          cleanups += 1
-          return { taskId: input.taskId, complete: true, failures: [] }
-        },
-      },
-    })
+      }),
+    )
     const input = {
       db: harness.db,
       binding,
@@ -330,22 +341,24 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
   test('the owner validates version, Task and kind before a selected restoration', async () => {
     const taskId = ulid()
     let restorations = 0
-    const binding = composeRepositoryPreparation({
-      db: harness.db,
-      appHome: 'installation:selected',
-      scratchEffects: {
-        async prepare() {
-          return space(taskId)
+    const binding = composeRepositoryPreparation(
+      withSourceControlTaskPorts({
+        db: harness.db,
+        appHome: 'installation:selected',
+        scratchEffects: {
+          async prepare() {
+            return space(taskId)
+          },
+          restore(_taskId: string, saved: MaterializedSpace) {
+            restorations += 1
+            return saved
+          },
+          async cleanup(input: Parameters<ScratchWorkspaceEffects['cleanup']>[0]) {
+            return { taskId: input.taskId, complete: true, failures: [] }
+          },
         },
-        restore(_taskId, saved) {
-          restorations += 1
-          return saved
-        },
-        async cleanup(input) {
-          return { taskId: input.taskId, complete: true, failures: [] }
-        },
-      },
-    })
+      }),
+    )
     for (const artifact of [
       { version: 2, space: space(taskId) },
       { version: 1, space: space('another-task') },

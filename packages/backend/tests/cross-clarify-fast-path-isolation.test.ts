@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-059 C4 (slimmed by RFC-132, migrated by RFC-162) — a RESOLVED sibling that
 // produced no designer entry must not block (or feed) the designer.
 //
@@ -173,17 +174,19 @@ async function spawnSession(
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: args.ccNodeId,
-    askingNodeId: args.questionerNodeId,
-    askingNodeRunId: args.questionerRunId,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions: args.questions,
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: args.ccNodeId,
+      askingNodeId: args.questionerNodeId,
+      askingNodeRunId: args.questionerRunId,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions: args.questions,
+    }),
+  )
   return crossClarifyNodeRunId
 }
 

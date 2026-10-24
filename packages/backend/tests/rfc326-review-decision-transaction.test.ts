@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-326 — the decision path commits in ONE transaction, effects follow the
 // commit, and membership is linearised with the decision
 // (proposal AC-17 / AC-18 / AC-20; design §6.1-§6.4).
@@ -363,14 +364,14 @@ function decisionArgs(
   f: Fixture,
   extra: Partial<SubmitReviewDecisionArgs> = {},
 ): SubmitReviewDecisionArgs {
-  return {
+  return withO2Closure({
     db: f.db,
     appHome: f.appHome,
     nodeRunId: f.reviewRunId,
     decision: 'iterated',
     expectedReviewIteration: 0,
     ...extra,
-  }
+  })
 }
 
 const BATCH_COMMENT = { commentText: 'batched', anchorRequest: { quote: 'export job' } }
@@ -390,11 +391,13 @@ describe('RFC-326 AC-17 — one decision transaction; distill is a later durable
       const recording = recordStatements(f.db.$client)
       try {
         await submitReviewDecision(
-          decisionArgs(f, {
-            decision,
-            ...(decision === 'rejected' ? { rejectReason: 'redo' } : {}),
-            comments: [BATCH_COMMENT],
-          }),
+          withO2Closure(
+            decisionArgs(f, {
+              decision,
+              ...(decision === 'rejected' ? { rejectReason: 'redo' } : {}),
+              comments: [BATCH_COMMENT],
+            }),
+          ),
         )
       } finally {
         recording.stop()
@@ -435,7 +438,7 @@ describe('RFC-326 AC-17 — one decision transaction; distill is a later durable
     const ev = taskEvents(f.taskId)
     try {
       const result = await submitReviewDecision(
-        decisionArgs(f, { decision: 'approved', comments: [BATCH_COMMENT] }),
+        withO2Closure(decisionArgs(f, { decision: 'approved', comments: [BATCH_COMMENT] })),
       )
       expect(result.batch?.commentsAdded).toBe(1)
       await f.committedEvents.drain()
@@ -487,13 +490,15 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
       `CREATE TRIGGER inject_done BEFORE UPDATE OF status ON node_runs FOR EACH ROW WHEN NEW.status = 'done' BEGIN SELECT RAISE(ABORT, 'injected after archive'); END;`,
     )
     const err = await expectRolledBack(before, () =>
-      submitReviewDecision(decisionArgs(f, { decision: 'approved', comments: [BATCH_COMMENT] })),
+      submitReviewDecision(
+        withO2Closure(decisionArgs(f, { decision: 'approved', comments: [BATCH_COMMENT] })),
+      ),
     )
     expect(err.message).toContain('injected after archive')
     // Repairable: drop the fault and the same request lands.
     f.db.$client.exec('DROP TRIGGER inject_done')
     const ok = await submitReviewDecision(
-      decisionArgs(f, { decision: 'approved', comments: [BATCH_COMMENT] }),
+      withO2Closure(decisionArgs(f, { decision: 'approved', comments: [BATCH_COMMENT] })),
     )
     expect(ok.batch?.commentsAdded).toBe(1)
     expect(ev.types.at(-1)).toBe('review.decision_made')
@@ -510,7 +515,9 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
       "CREATE TRIGGER inject_mint BEFORE INSERT ON node_runs BEGIN SELECT RAISE(ABORT, 'injected after rollback'); END;",
     )
     const err = await expectRolledBack(before, () =>
-      submitReviewDecision(decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] })),
+      submitReviewDecision(
+        withO2Closure(decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] })),
+      ),
     )
     expect(err.message).toContain('injected after rollback')
     const { nodeRuns } = tablesOf(f.db)
@@ -522,7 +529,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     expect(worktreeState(f.repo)).toEqual(DIRTY)
     f.db.$client.exec('DROP TRIGGER inject_mint')
     const ok = await submitReviewDecision(
-      decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] }),
+      withO2Closure(decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] })),
     )
     await settleDecisionContinuation(f, ok)
     expect(ok.reviewIteration).toBe(1)
@@ -539,7 +546,9 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     await patchTaskFixture(f.db, { id: f.taskId }, { workflowSnapshot: '{not json' })
     const before = await snapshot(f.db)
     const err = await expectRolledBack(before, () =>
-      submitReviewDecision(decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] })),
+      submitReviewDecision(
+        withO2Closure(decisionArgs(f, { decision: 'iterated', comments: [BATCH_COMMENT] })),
+      ),
     )
     expect(err).toBeInstanceOf(DomainError)
     expect((err as DomainError).code).toBe('workflow-snapshot-corrupt')
@@ -585,13 +594,15 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     unlinkSync(join(f.appHome, `doc_versions/${ids[1]}.md`))
     const before = await snapshot(f.db)
     const err = await failureOf(() =>
-      submitReviewDecision({
-        db: f.db,
-        appHome: f.appHome,
-        nodeRunId: runId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-      }),
+      submitReviewDecision(
+        withO2Closure({
+          db: f.db,
+          appHome: f.appHome,
+          nodeRunId: runId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+        }),
+      ),
     )
     expect((err as DomainError).code).toBe('doc-version-body-missing')
     expect(await snapshot(f.db)).toEqual(before)
@@ -626,7 +637,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
       { members: [] },
     )
     const decide = submitReviewDecision(
-      decisionArgs(f, { decision: 'iterated', actor: actorFor(f.member) }),
+      withO2Closure(decisionArgs(f, { decision: 'iterated', actor: actorFor(f.member) })),
     )
     await revoke
     const err = await failureOf(() => decide)
@@ -643,7 +654,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     f = await buildFixture({ rollbackOnIterate: true })
     ev = taskEvents(f.taskId)
     const decide = submitReviewDecision(
-      decisionArgs(f, { decision: 'iterated', actor: actorFor(f.member) }),
+      withO2Closure(decisionArgs(f, { decision: 'iterated', actor: actorFor(f.member) })),
     )
     const revoke = updateTaskMembers(
       f.db,
@@ -668,7 +679,9 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     ev = taskEvents(f.taskId)
     const before = await snapshot(f.db)
     const err = await failureOf(() =>
-      submitReviewDecision(decisionArgs(f, { decision: 'iterated', actor: actorFor(f.member) })),
+      submitReviewDecision(
+        withO2Closure(decisionArgs(f, { decision: 'iterated', actor: actorFor(f.member) })),
+      ),
     )
     expect((err as DomainError).code).toBe('task-source-terminal-closed')
     expect((err as DomainError).status).toBe(409)
@@ -677,14 +690,16 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     expect(worktreeState(f.repo)).toEqual(DIRTY)
     // approve moves the review row to `done`, which the fence allows.
     const ok = await submitReviewDecision(
-      decisionArgs(f, { decision: 'approved', actor: actorFor(f.member) }),
+      withO2Closure(decisionArgs(f, { decision: 'approved', actor: actorFor(f.member) })),
     )
     expect(ok.resumeRequired).toBe(true)
   })
 
   test('the actor is optional (trusted internal caller) — the route contract passes it', async () => {
     f = await buildFixture({ rollbackOnIterate: false })
-    const result = await submitReviewDecision(decisionArgs(f, { decision: 'approved' }))
+    const result = await submitReviewDecision(
+      withO2Closure(decisionArgs(f, { decision: 'approved' })),
+    )
     expect(result.taskId).toBe(f.taskId)
   })
 
@@ -755,26 +770,28 @@ describe('RFC-326 AC-17 (multi-document) — one transaction, and the second arc
       const round = await addMultiInlineRound(f)
       const recording = recordStatements(f.db.$client)
       try {
-        await submitReviewDecision({
-          db: f.db,
-          appHome: f.appHome,
-          nodeRunId: round.runId,
-          decision,
-          expectedReviewIteration: 0,
-          ...(decision === 'rejected' ? { rejectReason: 'redo' } : {}),
-          comments: [
-            {
-              docVersionId: round.ids[0],
-              commentText: 'on item 0',
-              anchorRequest: { quote: 'export job' },
-            },
-            {
-              docVersionId: round.ids[1],
-              commentText: 'on item 1',
-              anchorRequest: { quote: 'export job' },
-            },
-          ],
-        })
+        await submitReviewDecision(
+          withO2Closure({
+            db: f.db,
+            appHome: f.appHome,
+            nodeRunId: round.runId,
+            decision,
+            expectedReviewIteration: 0,
+            ...(decision === 'rejected' ? { rejectReason: 'redo' } : {}),
+            comments: [
+              {
+                docVersionId: round.ids[0],
+                commentText: 'on item 0',
+                anchorRequest: { quote: 'export job' },
+              },
+              {
+                docVersionId: round.ids[1],
+                commentText: 'on item 1',
+                anchorRequest: { quote: 'export job' },
+              },
+            ],
+          }),
+        )
       } finally {
         recording.stop()
       }
@@ -817,14 +834,16 @@ describe('RFC-326 AC-17 (multi-document) — one transaction, and the second arc
       },
     ]
     const err = await failureOf(() =>
-      submitReviewDecision({
-        db: f.db,
-        appHome: f.appHome,
-        nodeRunId: round.runId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        comments: batch,
-      }),
+      submitReviewDecision(
+        withO2Closure({
+          db: f.db,
+          appHome: f.appHome,
+          nodeRunId: round.runId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          comments: batch,
+        }),
+      ),
     )
     expect(err.message).toContain('injected after first archive')
     expect(await snapshot(f.db)).toEqual(before)
@@ -838,14 +857,16 @@ describe('RFC-326 AC-17 (multi-document) — one transaction, and the second arc
     const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, round.runId)))[0]!
     expect(run.status).toBe('awaiting_review')
     f.db.$client.exec('DROP TRIGGER inject_second_archive')
-    const ok = await submitReviewDecision({
-      db: f.db,
-      appHome: f.appHome,
-      nodeRunId: round.runId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-      comments: batch,
-    })
+    const ok = await submitReviewDecision(
+      withO2Closure({
+        db: f.db,
+        appHome: f.appHome,
+        nodeRunId: round.runId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+        comments: batch,
+      }),
+    )
     expect(ok.batch?.commentsAdded).toBe(1)
   })
 })
@@ -868,13 +889,15 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
       { ownerUserId: f.extraUser },
     )
     const decide = submitReviewDecision(
-      decisionArgs(f, {
-        decision: 'approved',
-        actor: actorFor(f.owner),
-        author: f.owner,
-        authorRole: 'owner',
-        comments: [BATCH_COMMENT],
-      }),
+      withO2Closure(
+        decisionArgs(f, {
+          decision: 'approved',
+          actor: actorFor(f.owner),
+          author: f.owner,
+          authorRole: 'owner',
+          comments: [BATCH_COMMENT],
+        }),
+      ),
     )
     await transfer
     const result = await decide
@@ -890,7 +913,7 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
   test("no actor (trusted internal caller): the caller's role snapshot is written as before", async () => {
     f = await buildFixture({ rollbackOnIterate: false })
     await submitReviewDecision(
-      decisionArgs(f, { decision: 'approved', author: 'sys', authorRole: 'admin' }),
+      withO2Closure(decisionArgs(f, { decision: 'approved', author: 'sys', authorRole: 'admin' })),
     )
     const { docVersions } = tablesOf(f.db)
     const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!

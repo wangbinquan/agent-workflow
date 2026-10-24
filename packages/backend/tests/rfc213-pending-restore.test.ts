@@ -1,3 +1,4 @@
+import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackupPreparation'
 // RFC-213 PR-1b — staged ("hot") restore applied on boot.
 //
 // design/RFC-213-disaster-recovery/design.md §4.2 / §7 #6: applyPendingRestoreIfAny
@@ -276,7 +277,10 @@ describe('restore --stage CLI', () => {
 
     const r = await restoreCommand(
       [backup.path, '--stage'],
-      composeLocalSystemOperations({ contract: buildLogicalSchemaContract() }),
+      composeLocalSystemOperations({
+        repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
+        contract: buildLogicalSchemaContract(),
+      }),
     )
     expect(r.status).toBe('ok')
     expect(r.output).toContain('STAGED')

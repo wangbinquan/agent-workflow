@@ -1,3 +1,4 @@
+import { deleteAgent } from './helpers/resourceCatalogDeletion'
 // Service + HTTP coverage for Agents CRUD (P-1-08).
 // In-memory SQLite via createInMemoryDb — no daemon spawn needed.
 
@@ -15,11 +16,10 @@ import {
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import {
   createAgent,
-  deleteAgent,
   listAgents,
   renameAgent,
   updateAgent,
-} from '../src/services/agent'
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { createRuntime } from './helpers/runtimeRegistryApplication'

@@ -71,10 +71,7 @@ export interface MaintenanceDiskOperations {
   cleanupRetiredStores(): Promise<{ readonly removedBytes: number }>
 }
 
-export type {
-  ResourceLimitOperations,
-  ResourceLimitPersistence,
-} from '../application/ports/resourceLimitPersistence'
+export type { ResourceLimitAudit } from '../application/ports/resourceLimitAudit'
 
 const emptyInputSchema = z.object({}).strict()
 const PUBLIC_ERRORS = Object.freeze(['validation-failed', 'internal-error'] as const)

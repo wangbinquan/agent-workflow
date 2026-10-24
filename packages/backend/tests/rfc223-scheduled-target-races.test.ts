@@ -1,3 +1,4 @@
+import { deleteAgent, deleteWorkflow, deleteWorkgroup } from './helpers/resourceCatalogDeletion'
 // RFC-223 final implementation gate — scheduled writes must re-check their
 // canonical target in the SAME dbTxSync as INSERT/UPDATE. The hooks below
 // deterministically open the former async target-gate→write window.
@@ -23,13 +24,12 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent, deleteAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
 } from './helpers/integrationTriggerResourceBinding'
-import { createWorkflow, deleteWorkflow } from '../src/services/workflow'
-import { deleteWorkgroup } from '../src/services/workgroups'
+import { createWorkflow } from '../src/services/workflow'
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 

@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // Regression: when a review's upstream agent has a clarify-rerun row
 // (clarifyIteration=N>0, retryIndex=0, done) as its freshest node_run,
 // submitReviewDecision('iterated' | 'rejected') must
@@ -247,13 +248,15 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     test('iterate: new pending row carries clarifyIteration=N and retry_index=latest+1; supersede marker lands on the clarify-rerun row', async () => {
       const f = await buildFixture({ db, appHome, worktree })
 
-      await submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: f.reviewNodeRunId,
-        decision: 'iterated',
-        expectedReviewIteration: 0,
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db,
+          appHome,
+          nodeRunId: f.reviewNodeRunId,
+          decision: 'iterated',
+          expectedReviewIteration: 0,
+        }),
+      )
 
       const { docVersions } = tablesOf(db)
       const upRuns = await readNodeRunFixtures(db, {
@@ -305,14 +308,16 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
     test('reject: same lineage — supersede marker lands on the clarify-rerun row and new pending inherits clarifyIteration=1', async () => {
       const f = await buildFixture({ db, appHome, worktree })
 
-      await submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: f.reviewNodeRunId,
-        decision: 'rejected',
-        rejectReason: 'wrong direction',
-        expectedReviewIteration: 0,
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db,
+          appHome,
+          nodeRunId: f.reviewNodeRunId,
+          decision: 'rejected',
+          rejectReason: 'wrong direction',
+          expectedReviewIteration: 0,
+        }),
+      )
 
       const upRuns = await readNodeRunFixtures(db, {
         $and: [{ taskId: f.taskId }, { nodeId: 'doc' }],

@@ -5,7 +5,11 @@ import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import { taskVisibilityCondition, taskVisibilitySubjectOf, visibleTaskIdsFor } from '@/db/query'
+import {
+  taskVisibilityCondition,
+  taskVisibilitySubjectOf,
+  visibleTaskIdsFor,
+} from './taskAuthorization'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type {
@@ -78,7 +82,7 @@ export function createTaskObservationFacts(db: PersistenceDb): ObservationTaskFa
     async visibleTaskIds(actor, ids) {
       const unique = bounded(ids)
       if (!unique.length || !canRead(actor)) return []
-      // The single task authorization predicate (db/query.ts).
+      // The single task authorization predicate (taskAuthorization.ts).
       return [...(await visibleTaskIdsFor(db, taskVisibilitySubjectOf(actor), unique))]
     },
 

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T20 (AR-05a) — heartbeat stalled-child auto-kill (default OFF).
 //
 // 为什么这条测试存在：heartbeat-kill 一旦开启，只能杀「事件静默超阈值」的活子进程、且穿
@@ -64,7 +65,9 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const db = harness.db
     const taskId = await seedTask(db)
     const run = stalled(taskId)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const res = await runHeartbeatKillOnce({
       operations,
       enabled: true,
@@ -82,7 +85,9 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
 
   test('disabled → no-op (never queries or kills)', async () => {
     const db = harness.db
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     let queried = false
     const res = await runHeartbeatKillOnce({
       operations,
@@ -101,7 +106,9 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
   test('quarantined task → skipped', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     for (let i = 0; i < 4; i++) {
       await recordAutoRecoveryAttempt(operations, taskId, BREAKER, 1000)
     }
@@ -119,7 +126,9 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
   test('kill outcome other than killed → skipped (window-expired / command-mismatch)', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
-    const operations = createTaskExecutionPersistence(db).recoveryAdministration
+    const operations = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).recoveryAdministration
     const res = await runHeartbeatKillOnce({
       operations,
       enabled: true,
@@ -161,7 +170,9 @@ describeEachProvider('RFC-108 T20 — findStalledRunningChildren query', (harnes
     await seedRun(db, taskId, { status: 'running', pid: null, startedAt: now - 5000 }) // no pid → excluded
 
     const found = await findStalledRunningChildren(
-      createTaskExecutionPersistence(db).recoveryAdministration,
+      createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       stallMs,
       now,
     )

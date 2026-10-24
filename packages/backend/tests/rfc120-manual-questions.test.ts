@@ -1,3 +1,4 @@
+import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-120 §15 — manual questions (自主新增/复制). A manual question = a human authors a
 // title + instruction and assigns an agent node; dispatching reruns that node with the
 // instruction injected as External Feedback (NO human-answer step). It is a
@@ -183,6 +184,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           targetNodeId: DESIGNER,
         },
         actor,
+        o2Ports(db).taskLock,
       )
       let dto = await listOne(db, taskId)
       expect(dto).toBeDefined()
@@ -247,6 +249,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 'Add a smoke test', body: 'Cover the happy path.', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const dto = await listOne(db, taskId)
       expect(dto?.phase).toBe('staged')
@@ -267,12 +270,14 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 'dupe', body: 'same', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const b = await createManualTaskQuestion(
         db,
         taskId,
         { title: 'dupe', body: 'same', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       expect(a.id).not.toBe(b.id)
       const { taskQuestions } = tablesOf(db)
@@ -292,6 +297,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 'visible?', body: 'yes', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       await dispatchTaskQuestions(db, taskId, [id], actor)
       const list = await listTaskQuestions(db, taskId)
@@ -308,6 +314,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const filtered = await listTaskQuestions(db, taskId, { sourceNodeId: FIXER })
       expect(filtered.length).toBe(0)
@@ -331,6 +338,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const result = await dispatchTaskQuestions(db, taskId, [id], actor)
       expect(result.reruns.length).toBe(1)
@@ -355,12 +363,14 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 'a', body: 'aa', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const b = await createManualTaskQuestion(
         db,
         taskId,
         { title: 'b', body: 'bb', targetNodeId: DESIGNER },
         actor,
+        o2Ports(db).taskLock,
       )
       // Each manual row is its own (synthetic) origin → the per-origin single-target guard
       // never trips even though the two go to different handlers.
@@ -381,6 +391,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           taskId,
           { title: 't', body: 'b', targetNodeId: QUESTIONER },
           actor,
+          o2Ports(db).taskLock,
         )
       } catch (e) {
         threw = e
@@ -405,10 +416,17 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           taskId,
           { title: '  ', body: 'b', targetNodeId: FIXER },
           actor,
+          o2Ports(db).taskLock,
         ),
       ).rejects.toThrow()
       await expect(
-        createManualTaskQuestion(db, taskId, { title: 't', body: ' ', targetNodeId: FIXER }, actor),
+        createManualTaskQuestion(
+          db,
+          taskId,
+          { title: 't', body: ' ', targetNodeId: FIXER },
+          actor,
+          o2Ports(db).taskLock,
+        ),
       ).rejects.toThrow()
     })
 
@@ -417,7 +435,13 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       let threw: unknown = null
       try {
-        await createManualTaskQuestion(db, taskId, { title: 't', body: 'b' }, actor)
+        await createManualTaskQuestion(
+          db,
+          taskId,
+          { title: 't', body: 'b' },
+          actor,
+          o2Ports(db).taskLock,
+        )
       } catch (e) {
         threw = e
       }
@@ -432,7 +456,13 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const taskId = await seedTask(db)
       // CC is a clarify-cross-agent (NOT kind=agent) → rejected.
       await expect(
-        createManualTaskQuestion(db, taskId, { title: 't', body: 'b', targetNodeId: CC }, actor),
+        createManualTaskQuestion(
+          db,
+          taskId,
+          { title: 't', body: 'b', targetNodeId: CC },
+          actor,
+          o2Ports(db).taskLock,
+        ),
       ).rejects.toThrow()
       await expect(
         createManualTaskQuestion(
@@ -440,6 +470,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           taskId,
           { title: 't', body: 'b', targetNodeId: 'ghost' },
           actor,
+          o2Ports(db).taskLock,
         ),
       ).rejects.toThrow()
     })
@@ -453,6 +484,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 'T', body: 'B', targetNodeId: FIXER },
         secretActor,
+        o2Ports(db).taskLock,
       )
       const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
@@ -486,6 +518,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       // undispatched manual WITH a handler → parks FIXER (was INVISIBLE before the H1 fix:
       // the synthetic origin has no clarify round so the INNER JOIN dropped it).
@@ -503,6 +536,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
       const scopeIds = new Set(scopeNodes.map((n) => n.id))
@@ -567,6 +601,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       expect(id).toBeTruthy()
       const { taskQuestions } = tablesOf(db)
@@ -582,6 +617,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       expect(id).toBeTruthy()
     })
@@ -605,6 +641,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
             taskId,
             { title: 't', body: 'b', targetNodeId: FIXER },
             actor,
+            o2Ports(db).taskLock,
           )
         } catch (e) {
           threw = e
@@ -623,6 +660,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           taskId,
           { title: 't', body: 'b', targetNodeId: FIXER },
           actor,
+          o2Ports(db).taskLock,
         )
         const { nodeRuns, taskQuestions } = tablesOf(db)
         const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
@@ -654,6 +692,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const result = await dispatchTaskQuestions(db, taskId, [id], actor)
       expect(result.reruns.length).toBe(1)
@@ -688,17 +727,19 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         iteration: 0,
         startedAt: Date.now() - 700,
       })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: CC,
-        askingNodeId: QUESTIONER,
-        askingNodeRunId: qRunId,
-        targetConsumerNodeId: DESIGNER,
-        loopIter: 0,
-        questions: [mkQ('q1', 'CLARIFY-Q-MARKER?')],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: CC,
+          askingNodeId: QUESTIONER,
+          askingNodeRunId: qRunId,
+          targetConsumerNodeId: DESIGNER,
+          loopIter: 0,
+          questions: [mkQ('q1', 'CLARIFY-Q-MARKER?')],
+        }),
+      )
       // RFC-162 (designer-by-default deleted): the quick channel seals the round + AUTO-dispatches the
       // QUESTIONER only. To exercise a DESIGNER per-node queue, reassign the questioner entry → DESIGNER
       // (ADDS a designer handler) then dispatch it through the SAME board flow — dispatch backfills
@@ -782,6 +823,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       // never-run QUESTIONER → rejected (no park-but-undispatchable).
       let threw: unknown = null
@@ -845,6 +887,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           taskId,
           { title: 't', body: 'b', targetNodeId: FIXER },
           actor,
+          o2Ports(racingDb).taskLock,
         )
       } catch (e) {
         threw = e
@@ -864,6 +907,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         taskId,
         { title: 't', body: 'b', targetNodeId: FIXER },
         actor,
+        o2Ports(db).taskLock,
       )
       const { nodeRuns, taskQuestions } = tablesOf(db)
       const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))

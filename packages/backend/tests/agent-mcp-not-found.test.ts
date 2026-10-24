@@ -8,7 +8,10 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createAgent, updateAgent } from '../src/services/agent'
+import {
+  createAgent,
+  updateAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { ValidationError } from '../src/util/errors'
 import {
   composeMcpServiceBindingForTest,

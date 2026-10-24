@@ -13,7 +13,7 @@ import type {
 // RFC-328 — the daemon-owned task-execution composition root.
 
 import { ulid } from 'ulid'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { TaskClaimGate } from './application/taskClaimGate'
 import { DrizzleTaskOwnershipPersistence } from './infrastructure/taskOwnershipPersistence'
@@ -243,3 +243,63 @@ export function createTaskExecutionShutdownController(
 export { createEmployeeExecutionArtifactQueries } from './infrastructure/employeeExecutionArtifacts'
 
 export { schemaContribution } from './composition/schema'
+
+import { composeRealtimeTaskFactsPort } from './application/adapters/runtime-management-adapter'
+import { createRealtimeTaskFacts } from './infrastructure/realtimeTaskFacts'
+
+export function composeRealtimeTaskFacts(db: PersistenceDb) {
+  return composeRealtimeTaskFactsPort(createRealtimeTaskFacts(db))
+}
+
+import { composeSubjectTaskReferenceParticipant } from './application/adapters/resource-catalog-adapter'
+import { createSubjectTaskReferences } from './infrastructure/subjectTaskReferences'
+
+export function composeSubjectTaskReferencePort(tx: PersistenceTx) {
+  return composeSubjectTaskReferenceParticipant(createSubjectTaskReferences(tx))
+}
+
+import { TaskWorkspaceMaintenanceStore } from './infrastructure/taskWorkspaceMaintenanceStore'
+import {
+  composeWorkspaceGcTaskPort,
+  composeTaskWorkspacePruneParticipant,
+  composeCachedRepositoryTaskUsagePort,
+  composeTaskRepositorySourceSealingPort,
+} from './application/adapters/source-control-adapter'
+
+export function composeSourceControlTaskPorts(db: PersistenceDb) {
+  const workspace = new TaskWorkspaceMaintenanceStore(db)
+  return {
+    taskUsage: composeCachedRepositoryTaskUsagePort(createTaskRepositoryUsageQueries(db)),
+    sourceSealing: composeTaskRepositorySourceSealingPort(createTaskRepositorySourceStore(db)),
+    workspaceGc: composeWorkspaceGcTaskPort(workspace),
+    workspacePrune: composeTaskWorkspacePruneParticipant(workspace),
+  }
+}
+
+export { existingTaskIds } from './infrastructure/existingTaskIds'
+
+import {
+  createTaskRepositoryUsageQueries,
+  createTaskRepositorySourceStore,
+} from './infrastructure/taskRepositoryUsage'
+
+export { createTaskWorktreeLocator } from './infrastructure/taskWorktreeLocator'
+
+import { composeHumanGateTaskLockParticipant } from './application/adapters/collaboration-adapter'
+import { createHumanGatePersistenceParticipantInTx } from './infrastructure/humanGatePersistenceParticipant'
+
+export function composeHumanGateTaskLockPort(tx: PersistenceTx) {
+  return composeHumanGateTaskLockParticipant(createHumanGatePersistenceParticipantInTx(tx))
+}
+
+export { createTaskCodeWorkspaceQueries } from './infrastructure/taskCodeWorkspaceQueries'
+export { createTaskNodeEventArchiveStore } from './infrastructure/taskNodeEventArchiveStore'
+export { createTaskResourceLimitFacts } from './infrastructure/taskResourceLimitFacts'
+
+import { composeDoctorTaskLifecyclePort } from './application/adapters/system-operations-adapter'
+import { createTaskLifecycleCounts } from './infrastructure/taskStatusCounts'
+export { createTaskStatusCounts } from './infrastructure/taskStatusCounts'
+
+export function composeSystemOperationsTaskPorts() {
+  return composeDoctorTaskLifecyclePort(createTaskLifecycleCounts())
+}

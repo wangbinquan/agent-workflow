@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 patch 2026-05-26 — review dispatch must respect clarifyIteration.
 //
 // Symptom (live task 01KS86DPCSERV7S41GQA5Y81RN, fifth visit on the same
@@ -289,15 +290,17 @@ describeEachProvider(
         finishedAt: Date.now(),
       })
 
-      const result = await dispatchReviewNode({
-        db,
-        taskId,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(result.kind).toBe('ok')
       const reviewRows = await db
         .select()
@@ -364,15 +367,17 @@ describeEachProvider(
         finishedAt: Date.now() - 4000,
       })
 
-      const result = await dispatchReviewNode({
-        db,
-        taskId,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       // Upstream advanced past what the review consumed → fresh re-review opens.
       expect(result.kind).toBe('awaiting_review')
       const reviewRows = await readNodeRunFixtures(db, {
@@ -431,15 +436,17 @@ describeEachProvider(
         iteration: 0,
       })
 
-      const result = await dispatchReviewNode({
-        db,
-        taskId,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(result.kind).toBe('ok')
       const stuck = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, stuckId)).limit(1))[0]
       expect(stuck?.status).toBe('pending')
@@ -466,15 +473,17 @@ describeEachProvider(
       })
       // No prior review rows.
 
-      const result = await dispatchReviewNode({
-        db,
-        taskId,
-        scopeRoot: task.worktreePath,
-        appHome,
-        definition,
-        node: reviewNode,
-        iteration: 0,
-      })
+      const result = await dispatchReviewNode(
+        withO2Closure({
+          db,
+          taskId,
+          scopeRoot: task.worktreePath,
+          appHome,
+          definition,
+          node: reviewNode,
+          iteration: 0,
+        }),
+      )
       expect(result.kind).toBe('awaiting_review')
       const reviewRows = await db
         .select()

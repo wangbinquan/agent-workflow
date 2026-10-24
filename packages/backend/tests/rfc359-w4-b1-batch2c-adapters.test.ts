@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2c —— 四对适配器合一，两个引擎各跑一遍：wrapper run 持久化 / node run 冻结运行时 /
 // 调度器收尾读写（三者此前 SQLite 走 dbTxSync + withOwnedTaskTx、PG 走 SERIALIZABLE + assertPostgresqlTaskOwnerTx，
 // 现在同走 `ownedTaskExecution.ts` 的统一写事务 + 围栏）与不活跃超时持久化（两个具名工厂退为别名）。
@@ -105,7 +106,9 @@ async function seedClaimedOwner(
   const context = createTaskExecutionContext({
     intentId: `intent_${ulid()}`,
     token,
-    persistence: createTaskExecutionPersistence(db),
+    persistence: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }),
   })
   return { token, context }
 }

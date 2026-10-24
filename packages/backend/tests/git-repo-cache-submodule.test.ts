@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-034 T5 — locks gitRepoCache behavior on repos with submodules.
 //
 // Builds a parent bare repo whose worktree references a child bare repo as a
@@ -201,7 +202,7 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
     test('cold clone with submoduleMode=auto populates child working dir', async () => {
       const result = await resolveCachedRepo(
         {
-          store: composeSqliteRepositoryWorkspaceStore(db),
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           appHome,
           submoduleMode: 'auto',
           submoduleJobs: 4,
@@ -226,7 +227,7 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
     test('cold clone with submoduleMode=never leaves submodule dir empty', async () => {
       const result = await resolveCachedRepo(
         {
-          store: composeSqliteRepositoryWorkspaceStore(db),
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           appHome,
           submoduleMode: 'never',
           submoduleJobs: 4,
@@ -246,7 +247,7 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
       // First call: cold clone populates everything.
       await resolveCachedRepo(
         {
-          store: composeSqliteRepositoryWorkspaceStore(db),
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           appHome,
           submoduleMode: 'auto',
           submoduleJobs: 1,
@@ -256,7 +257,7 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
       // Second call: warm hit. Should re-run sync/update without erroring.
       const second = await resolveCachedRepo(
         {
-          store: composeSqliteRepositoryWorkspaceStore(db),
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           appHome,
           submoduleMode: 'auto',
           submoduleJobs: 1,
@@ -273,7 +274,7 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
     test('refreshCachedRepo re-runs submodule sync and updates DB telemetry', async () => {
       const first = await resolveCachedRepo(
         {
-          store: composeSqliteRepositoryWorkspaceStore(db),
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           appHome,
           submoduleMode: 'auto',
           submoduleJobs: 2,
@@ -282,7 +283,7 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
       )
       const refresh = await refreshCachedRepo(
         {
-          store: composeSqliteRepositoryWorkspaceStore(db),
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           appHome,
           submoduleMode: 'auto',
           submoduleJobs: 2,
@@ -299,7 +300,7 @@ describeEachProvider('RFC-359 submodule repository store', (harness) => {
       const childUrl = `file://${fix.childBare}`
       const result = await resolveCachedRepo(
         {
-          store: composeSqliteRepositoryWorkspaceStore(db),
+          store: composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
           appHome,
           submoduleMode: 'auto',
           submoduleJobs: 4,

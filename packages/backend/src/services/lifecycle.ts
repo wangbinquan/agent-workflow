@@ -19,10 +19,10 @@ export {
   type NodeRunStatusUpdateExtra,
   type TaskStatusUpdateExtra,
   type WorkspacePruneCause,
-} from '@/platform/persistence/sqlite/taskLifecycle'
+} from '@/modules/task-execution/public/operations'
 export {
   registerTerminalWorkspacePrunePolicy,
   resolveTerminalWorkspacePruneDecision,
   type TerminalWorkspacePruneDecision,
   type TerminalWorkspacePrunePolicy,
-} from '@/platform/persistence/terminalWorkspacePrune'
+} from '@/modules/task-execution/public/operations'

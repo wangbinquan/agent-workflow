@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-075 T9/T10 — the commit&push executor against real git + a bare remote.
 // Covers: happy push, skipped-empty, fallback message, auth-fail degrade
 // (injected push stderr), server-hook rejection → repair → success, repair
@@ -709,7 +710,9 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
         : 'close ACK precedes actual persisted node and repository-effect receipts',
       async () => {
         const f = await build(harness)
-        const persistence = createTaskExecutionPersistence(f.db)
+        const persistence = createTaskExecutionPersistence(f.db, {
+          recoveryHumanGates: o2Ports(f.db).collaborationReads.recovery,
+        })
         const module = createProviderTaskExecutionModule({
           daemonGeneration: 'rfc370-publication-close',
           persistence,

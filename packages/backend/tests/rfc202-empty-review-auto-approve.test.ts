@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-202 T1 — empty-list multi-doc review rounds auto-approve at dispatch.
 //
 // WHY THIS FILE EXISTS (regression intent): the 2026-07-16 UX audit's single
@@ -148,15 +149,17 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
   test('path-kind empty list → run done, empty accepted list<path<md>>, meta auto-marked, audit event, zero doc_versions', async () => {
     const { taskId, task, definition, reviewNode } = await seed('list<path<md>>')
     await seedEmptySrc(taskId, '01SRC')
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(result.kind).toBe('ok')
     expect(result.message).toBe('review-auto-approved')
 
@@ -188,15 +191,17 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
   test('inline-kind (list<markdown>) empty list → empty accepted list<markdown>', async () => {
     const { taskId, task, definition, reviewNode } = await seed('list<markdown>')
     await seedEmptySrc(taskId, '01SRC')
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(result.kind).toBe('ok')
     const rev = await reviewRun(taskId)
     expect(rev.status).toBe('done')
@@ -254,15 +259,17 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       createdAt: Date.now(),
     })
 
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(result.kind).toBe('ok')
     expect((await readNodeRunFixtures(db, { id: reviewRunId }))[0]).toMatchObject({
       status: 'done',
@@ -293,15 +300,17 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
       reviewIteration: 0,
       startedAt: Date.now(),
     })
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(result.kind).toBe('ok')
     const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, wedgedId)))[0]!
     expect(after.status).toBe('done')

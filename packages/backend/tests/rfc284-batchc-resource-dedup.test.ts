@@ -216,13 +216,16 @@ describe('rfc284 批C T9 §2.2 — scheduled 引用扫描单点', () => {
     expect(leaf).not.toContain("from '@/services")
     expect(leaf).not.toContain("from './")
     for (const f of [
-      'modules/resource-catalog/infrastructure/legacy/agent.ts',
-      'modules/resource-catalog/infrastructure/legacy/workflow.ts',
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
+      'modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts',
+      'modules/resource-catalog/infrastructure/workflowPersistenceSemantics.ts',
+      'modules/resource-catalog/composition/workgroupOperations.ts',
     ]) {
       expect(SRC(f)).toContain('scheduledRowsReferencing(')
       expect(SRC(f)).toContain("from '@/services/scheduledTaskRefs'")
     }
+    expect(SRC('modules/resource-catalog/infrastructure/workgroupRepository.ts')).toContain(
+      'deps.scheduledReferences(scheduledRows, input.id)',
+    )
     // scheduledTasks.ts 保留 design 命名的导出面（薄再导出）
     expect(SRC('services/scheduledTasks.ts')).toContain(
       "export { scheduledRowsReferencing } from './scheduledTaskRefs'",

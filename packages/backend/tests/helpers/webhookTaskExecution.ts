@@ -1,3 +1,5 @@
+import { o2Ports } from './o2Closure'
+import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 // RFC-359 AC-1（plan §5hn 批次二 ⑦）—— webhook 触发的 TaskExecution 参与者，**照生产装配**。
@@ -47,7 +49,9 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
     db: input.db,
     authorization: resourceCatalog.authorization,
   }).launch
-  const persistence = createTaskExecutionPersistence(input.db)
+  const persistence = createTaskExecutionPersistence(input.db, {
+    recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,
+  })
   const launchRuntime = resolveLaunchRuntimeConfig(input.configPath)
   const launchRuntimeKnobs = Object.freeze({
     ...(launchRuntime.cloneTimeoutMs === undefined
@@ -69,11 +73,13 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
     workspace: createTaskRouteWorkspaceParticipant({
       db: input.db,
       sourceContexts: input.identityAccess.taskPreparationContext,
-      repositoryPreparation: composeRepositoryPreparation({
-        db: input.db,
-        appHome: appHome,
-        secretBox: input.secretBox,
-      }),
+      repositoryPreparation: composeRepositoryPreparation(
+        withSourceControlTaskPorts({
+          db: input.db,
+          appHome: appHome,
+          secretBox: input.secretBox,
+        }),
+      ),
       appHome,
       secretBox: input.secretBox,
     }),
@@ -115,11 +121,13 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       },
       // RFC-287 G7：webhook 触发延后仓库准备，第 0 步由这台协调器推进。
       repositoryPreparation: composeDeferredRepositoryPreparation({
-        repositoryPreparation: composeRepositoryPreparation({
-          db: input.db,
-          appHome: appHome,
-          secretBox: input.secretBox,
-        }),
+        repositoryPreparation: composeRepositoryPreparation(
+          withSourceControlTaskPorts({
+            db: input.db,
+            appHome: appHome,
+            secretBox: input.secretBox,
+          }),
+        ),
         db: input.db,
         appHome,
 

@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-023 PR-B T14 — verifies clarify.* events flow through the WS
 // broadcaster on the /ws/tasks/{taskId} channel.
 //
@@ -109,17 +110,19 @@ describeEachProvider('RFC-359 ws-clarify database behavior', (harness) => {
       const received: TaskWsMessage[] = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
-      await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: 'designer',
-        askingNodeRunId: sourceRunId,
-        askingShardKey: 'shard-A',
-        intermediaryNodeId: 'c1',
-        iteration: 0,
-        questions: [QUESTION],
-      })
+      await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: 'designer',
+          askingNodeRunId: sourceRunId,
+          askingShardKey: 'shard-A',
+          intermediaryNodeId: 'c1',
+          iteration: 0,
+          questions: [QUESTION],
+        }),
+      )
 
       const created = received.find((m) => m.type === 'clarify.created')
       expect(created).toBeDefined()
@@ -135,35 +138,39 @@ describeEachProvider('RFC-359 ws-clarify database behavior', (harness) => {
       const db = harness.db
       installCleanup = await installCommittedEventProjectionHarness(db)
       const { taskId, sourceRunId } = await seedTask(db)
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: 'designer',
-        askingNodeRunId: sourceRunId,
-        askingShardKey: null,
-        intermediaryNodeId: 'c1',
-        iteration: 0,
-        questions: [QUESTION],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: 'designer',
+          askingNodeRunId: sourceRunId,
+          askingShardKey: null,
+          intermediaryNodeId: 'c1',
+          iteration: 0,
+          questions: [QUESTION],
+        }),
+      )
 
       const received: TaskWsMessage[] = []
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
-      const res = await autoDispatchClarifyRoundWithDecision({
-        db,
-        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-        originNodeRunId: clarifyNodeRunId,
-        answers: [
-          {
-            questionId: 'q1',
-            selectedOptionIndices: [0],
-            selectedOptionLabels: [],
-            customText: '',
-          },
-        ],
-        actor: { userId: 'u1', role: 'owner' },
-      })
+      const res = await autoDispatchClarifyRoundWithDecision(
+        withO2Closure({
+          db,
+          memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+          originNodeRunId: clarifyNodeRunId,
+          answers: [
+            {
+              questionId: 'q1',
+              selectedOptionIndices: [0],
+              selectedOptionLabels: [],
+              customText: '',
+            },
+          ],
+          actor: { userId: 'u1', role: 'owner' },
+        }),
+      )
       expect(res.dispatch.reruns).toHaveLength(1)
       const rerunNodeRunId = res.dispatch.reruns[0]!.nodeRunId
       const answered = received.find((m) => m.type === 'clarify.answered')

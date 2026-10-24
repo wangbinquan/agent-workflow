@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T14 (AR-06) — S6 member-deadlock detection (detect-only, decision D4).
 //
 // 为什么这条测试存在：一个 awaiting_* 任务若所有成员（属主+协作者）都非活跃，就没人能
@@ -69,7 +70,9 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const owner = await seedUser(db, 'disabled')
     const taskId = await seedAwaitingTask(db, owner)
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(true)
@@ -80,7 +83,9 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const owner = await seedUser(db, 'active')
     const taskId = await seedAwaitingTask(db, owner)
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(false)
@@ -90,7 +95,9 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const db = harness.db
     const taskId = await seedAwaitingTask(db, '__system__')
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(false)
@@ -110,7 +117,9 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
       addedAt: Date.now(),
     })
     const r = await runStuckTaskDetector({
-      operations: createTaskExecutionPersistence(db).recoveryAdministration,
+      operations: createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).recoveryAdministration,
       now: () => Date.now(),
     })
     expect(s6(r, taskId)).toBe(false)

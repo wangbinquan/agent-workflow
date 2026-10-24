@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-074 (was RFC-056 patch 2026-05-22 "Layer A sibling cascade").
 //
 // HISTORY: RFC-056 made the designer-rerun mint eagerly insert a fresh pending
@@ -219,17 +220,19 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       const qRun = await seedDoneRun(db, taskId, 'questioner')
       // rev2 / out haven't run yet — exercise the "node never ran" branch.
 
-      const sess = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1')],
-      })
+      const sess = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1')],
+        }),
+      )
 
       await autoDispatchClarifyRound({
         db,
@@ -300,17 +303,19 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       await seedDoneRun(db, taskId, 'rev1')
       const qRun = await seedDoneRun(db, taskId, 'questioner')
 
-      const sess = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1')],
-      })
+      const sess = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1')],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -337,17 +342,19 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
       await seedDoneRun(db, taskId, 'designer')
       const qRun = await seedDoneRun(db, taskId, 'questioner')
 
-      const sess = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1')],
-      })
+      const sess = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1')],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -382,17 +389,19 @@ describeEachProvider('RFC-359 cross-clarify-downstream-cascade database behavior
         checkpoints: [{ mountPath: '', preSnapshot: 'snap-q-final' }],
       })
 
-      const sess = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1')],
-      })
+      const sess = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1')],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370 §9.2 V1 — hosted boot recovery never waits on the platform. A remote
 // execution outlives the service process that started it: boot hands its open
 // process effect off, interrupts orphans exactly as standalone does, and puts
@@ -99,7 +100,9 @@ describeEachProvider('RFC-370 hosted boot recovery hands remote work off', (harn
       leaseNonceDigest: 'b'.repeat(64),
       leasedAt: 1,
     })
-    const persistence = createTaskExecutionPersistence(db)
+    const persistence = createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    })
     await persistence.intents.submit({
       intentId: 'intent',
       request: {

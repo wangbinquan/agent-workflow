@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
   readNodeRunOutputFixtures,
@@ -151,7 +152,9 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         inputs: {},
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime: 'opencode',
-        persistence: createTaskExecutionPersistence(db),
+        persistence: createTaskExecutionPersistence(db, {
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }),
         observationInvocations: composeRunObservationCalls(db),
         memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
         runtimeRegistry: composeRuntimeRegistryOperations(db),
@@ -407,7 +410,9 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         inputs: {},
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime,
-        persistence: createTaskExecutionPersistence(db),
+        persistence: createTaskExecutionPersistence(db, {
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }),
         observationInvocations: composeRunObservationCalls(db),
         memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
         runtimeRegistry: composeRuntimeRegistryOperations(db),

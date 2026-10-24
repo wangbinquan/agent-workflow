@@ -1,3 +1,4 @@
+import { deleteAgent } from './helpers/resourceCatalogDeletion'
 // RFC-223 (PR-3a) — frozen-snapshot id producers + consumer-matrix + task
 // guards resolve agents BY canonical id (name only for display / transitional).
 //
@@ -16,7 +17,10 @@ import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
-import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
+import {
+  createAgent,
+  renameAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkgroup } from '../src/services/workgroups'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupRuntimeConfig } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'

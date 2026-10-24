@@ -41,7 +41,7 @@ import {
   type WorkgroupTurnsOutcome,
 } from '@/modules/task-execution/public/commands'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createAgent } from '@/services/agent'
+import { createAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const log: WorkgroupTurnLogger = {

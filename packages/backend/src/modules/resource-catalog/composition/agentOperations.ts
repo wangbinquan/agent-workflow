@@ -1,3 +1,4 @@
+import type { SubjectTaskReferencePort } from './required-ports'
 import type { Agent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
@@ -110,6 +111,7 @@ export function composeAgentCatalog(
  * （RFC-294 §3.1 的 offered 边只允许 bootstrap → composition）。
  */
 export function composeDatabaseAgentCatalog(input: {
+  readonly taskReferences: SubjectTaskReferencePort
   readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly resourceInventory: AgentResourceInventorySource
@@ -120,6 +122,7 @@ export function composeDatabaseAgentCatalog(input: {
   return composeAgentCatalog({
     db: input.db,
     persistence: createAgentPersistenceSemantics({
+      taskReferences: input.taskReferences,
       db: input.db,
       authorization: input.resourceCatalog.authorization,
       resourceInventory: input.resourceInventory,

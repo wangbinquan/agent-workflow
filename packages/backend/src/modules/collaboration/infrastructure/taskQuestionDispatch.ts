@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-120 / RFC-349 SQLite §18 — one-click batch-dispatch of deferred designer
 // questions via UPSTREAM-FRONTIER mint + per-node queue (NOT the old mint-all-upfront).
 //
@@ -167,6 +168,7 @@ export interface DispatchTaskQuestionsDecisionResult extends DispatchTaskQuestio
 }
 
 interface PreparedQuestionDispatchDecision {
+  readonly taskLock: HumanGateTaskLockPort
   readonly operationId: string
   readonly request: CanonicalHumanGateRequest
   readonly idempotencyKey: string
@@ -559,7 +561,8 @@ export async function dispatchTaskQuestionsWithDecision(
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
-  decision: DispatchTaskQuestionsDecisionArgs = {},
+  decision: DispatchTaskQuestionsDecisionArgs,
+  taskLock: HumanGateTaskLockPort,
 ): Promise<DispatchTaskQuestionsDecisionResult> {
   if (entryIds.length === 0) {
     throw new ValidationError(
@@ -572,7 +575,7 @@ export async function dispatchTaskQuestionsWithDecision(
 
   const capture: PreparedQuestionDispatchDecision['capture'] = {}
   await getTaskQuestionWriteSem(taskId).run(() =>
-    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, { args: decision, capture }),
+    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, { args: decision, capture, taskLock }),
   )
   if (capture.envelope === undefined) {
     throw new ConflictError(
@@ -840,6 +843,7 @@ async function dispatchTaskQuestionsLocked(
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
   decision?: {
+    readonly taskLock: HumanGateTaskLockPort
     readonly args: DispatchTaskQuestionsDecisionArgs
     readonly capture: PreparedQuestionDispatchDecision['capture']
   },
@@ -905,6 +909,7 @@ async function dispatchTaskQuestionsLocked(
       rerunNodeRunIds: [],
       args: decision.args,
       capture: decision.capture,
+      taskLock: decision.taskLock,
     })
     return commitDispatchPlan(
       db,
@@ -1018,6 +1023,7 @@ async function dispatchTaskQuestionsLocked(
       rerunNodeRunIds: [],
       args: decision.args,
       capture: decision.capture,
+      taskLock: decision.taskLock,
     })
     return commitDispatchPlan(
       db,
@@ -1052,6 +1058,7 @@ async function dispatchTaskQuestionsLocked(
           rerunNodeRunIds: mintPlans.map((plan) => plan.preId),
           args: decision.args,
           capture: decision.capture,
+          taskLock: decision.taskLock,
         })
   return commitDispatchPlan(
     db,
@@ -1072,6 +1079,7 @@ async function dispatchTaskQuestionsLocked(
 }
 
 async function prepareQuestionDispatchDecision(input: {
+  taskLock: HumanGateTaskLockPort
   db: PersistenceDb
   taskId: string
   entryIds: readonly string[]
@@ -1127,6 +1135,7 @@ async function prepareQuestionDispatchDecision(input: {
     gateRef,
     capturedGateRevision,
     capture: input.capture,
+    taskLock: input.taskLock,
   }
 }
 
@@ -1247,7 +1256,9 @@ async function commitDispatchPlan(
         }
         let begun: Awaited<ReturnType<HumanGateOperationJournal['beginTx']>> | undefined
         const operations =
-          decision === undefined ? undefined : new DatabaseHumanGateOperationJournal()
+          decision === undefined
+            ? undefined
+            : new DatabaseHumanGateOperationJournal(decision.taskLock)
         if (decision !== undefined && operations !== undefined) {
           const currentGateRevision = await ensureLegacyQuestionGateRevisionTx({
             tx,

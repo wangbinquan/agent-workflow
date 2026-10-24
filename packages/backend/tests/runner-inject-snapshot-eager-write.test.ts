@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-047 — locks the runner's EAGER write path for
 // `node_runs.injected_memories_json`:
 //   - Normal agent run with approved memories present → column populated AND
@@ -345,7 +346,9 @@ describeEachProvider(
       // 一次也拦不到，`eagerWriteIntercepted` 永远是 false（本次双引擎对拍照出的）。
       // 改成包一层 `TaskExecutionPersistence`：只让「载荷恰好只有
       // injectedMemoriesJson」的第一次 patch 抛，其余原样转发。两个引擎同一形状。
-      const realPersistence = createTaskExecutionPersistence(h.db)
+      const realPersistence = createTaskExecutionPersistence(h.db, {
+        recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
+      })
       let eagerWriteIntercepted = false
       const patch: TaskExecutionPersistence['nodeExecution']['patch'] = async (request) => {
         // RFC-395 II-a: the same eager write is now the configuration group.

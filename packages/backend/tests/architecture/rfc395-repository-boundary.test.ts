@@ -7,7 +7,7 @@ import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
 
 const root = resolve(import.meta.dir, '../../../..')
 const source = (path: string) => readFileSync(resolve(root, 'packages/backend/src', path), 'utf8')
-const sqlAdapter = 'packages/backend/src/platform/persistence/taskRepositorySql.ts'
+const sqlAdapter = 'packages/backend/src/modules/task-execution/infrastructure/taskRepositorySql.ts'
 const retiredProjections = new Set([
   'mapTaskRepoRow',
   'synthesizeRepoFromTaskRow',

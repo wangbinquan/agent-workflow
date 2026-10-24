@@ -176,7 +176,7 @@ import {
   setNodeRunStatusTx,
   transitionNodeRunStatusTx,
 } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
-import { snapshotNodeAgentWhere } from '@/services/agent'
+import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
 import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
 import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
 import {
@@ -569,6 +569,8 @@ async function upstreamPortArchiveJson(
 }
 
 export interface DispatchReviewArgs {
+  taskLock: HumanGateTaskLockPort
+  upstreamAgents: ReviewUpstreamAgentPort
   reviewArtifacts?: ReviewArtifactSelection
   /** Selected by the collaboration factory, outside the public dispatch business input. */
   portArtifactReader?: PortArtifactReader
@@ -769,8 +771,13 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
 
   const upstreamKind =
     portRow.kind ??
-    (await loadUpstreamPortKind(db, definition, sourceNodeId, sourcePortName)) ??
-    (await loadUpstreamPortKind(db, definition, inputSource.nodeId, inputSource.portName))
+    (await loadUpstreamPortKind(args.upstreamAgents, definition, sourceNodeId, sourcePortName)) ??
+    (await loadUpstreamPortKind(
+      args.upstreamAgents,
+      definition,
+      inputSource.nodeId,
+      inputSource.portName,
+    ))
   // RFC-079: a list<markdownish> upstream puts this review in MULTI-DOCUMENT
   // mode — each list item is archived as its own doc_version below.
   const isMultiDoc = isMultiDocReviewInput(upstreamKind ?? '')
@@ -902,6 +909,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     const drafts: ReviewGateOpenDocumentDraft[] = []
     if (isMultiDoc) {
       const prior = await loadPriorRound(db, appHome, {
+        taskLock: args.taskLock,
         reviewArtifacts: args.reviewArtifacts,
         taskId,
         reviewNodeId: node.id,
@@ -1123,6 +1131,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     )
     const collaboration = humanGateComposition.createCollaborationCommandContext({
       db,
+      taskLock: args.taskLock,
       appHome,
       reviewArtifacts: args.reviewArtifacts,
     })
@@ -1276,6 +1285,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       // is the single injection point — iterate / reject / refresh / US-2 all
       // re-mint here (design §5). Empty on the first round → all unselected.
       const prior = await loadPriorRound(db, appHome, {
+        taskLock: args.taskLock,
         reviewArtifacts: args.reviewArtifacts,
         taskId,
         reviewNodeId: node.id,
@@ -1613,6 +1623,7 @@ async function loadPriorRound(
   db: PersistenceDb,
   appHome: string,
   args: {
+    taskLock: HumanGateTaskLockPort
     taskId: string
     reviewNodeId: string
     iteration: number
@@ -1660,6 +1671,7 @@ async function loadPriorRound(
   const members: PriorRoundMember[] = []
   const collaboration = humanGateComposition.createCollaborationCommandContext({
     db,
+    taskLock: args.taskLock,
     appHome,
     reviewArtifacts: args.reviewArtifacts,
   })
@@ -2969,6 +2981,8 @@ export const REVIEW_DECISION_POLICY = {
 } as const satisfies { [K in ReviewDecisionKind]: ReviewDecisionPolicyOf<K> }
 
 export interface SubmitReviewDecisionArgs {
+  upstreamAgents: ReviewUpstreamAgentPort
+  taskLock: HumanGateTaskLockPort
   reviewReader?: CommittedReviewArtifactReader
   rollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   db: PersistenceDb
@@ -3596,7 +3610,7 @@ async function submitReviewDecisionUnlocked(
     workspaceRollbackPlan,
   }
   const decisionManifestJson = encodeReviewDecisionManifest(decisionManifest)
-  const operations = new DatabaseHumanGateOperationJournal()
+  const operations = new DatabaseHumanGateOperationJournal(args.taskLock)
 
   // ── commit: one transaction ───────────────────────────────────────────────
   const nextIter =
@@ -4314,7 +4328,7 @@ async function planRerun(
     cascadeReason = rerunPolicy.supersededByReview
   } else if (rerunPolicy.cascade === 'sibling-sync-conditional') {
     const triggered = await iterateSiblingCascadeApplies({
-      db,
+      upstreamAgents: args.upstreamAgents,
       upstreamNodeId: dv.sourceNodeId,
       definition,
     })
@@ -4439,7 +4453,7 @@ async function setDocumentSelectionUnlocked(args: {
 }
 
 async function iterateSiblingCascadeApplies(args: {
-  db: PersistenceDb
+  upstreamAgents: ReviewUpstreamAgentPort
   upstreamNodeId: string
   definition: WorkflowDefinition
 }): Promise<boolean> {
@@ -4447,12 +4461,10 @@ async function iterateSiblingCascadeApplies(args: {
   if (upstreamNode === undefined) return false
   // RFC-223 (PR-3a): resolve the upstream agent by the frozen CANONICAL id first
   // (rename/ABA-safe); fall back to name only for legacy / unstamped snapshots.
-  const where = snapshotNodeAgentWhere(args.db, upstreamNode)
-  if (where === null) return false
-  const { agents } = tablesOf(args.db)
-  const agentRows = await args.db.select().from(agents).where(where).limit(1)
-  const agentRow = agentRows[0]
-  if (agentRow === undefined) return false
+  const agentId = (upstreamNode as { agentId?: unknown }).agentId
+  if (typeof agentId !== 'string' || agentId.length === 0) return false
+  const agentRow = await args.upstreamAgents.outputProfile(agentId)
+  if (agentRow === null) return false
   if (!agentRow.syncOutputsOnIterate) return false
   let outputKinds: Record<string, AgentOutputKind> = {}
   try {
@@ -4544,6 +4556,7 @@ export function renderCommentsForPrompt(
  * main table). `null` = the decision contributes no re-run context.
  */
 type ReviewPromptCtxBuilder = (args: {
+  upstreamAgents: ReviewUpstreamAgentPort
   db: PersistenceDb
   appHome: string
   taskId: string
@@ -4556,7 +4569,7 @@ const REVIEW_PROMPT_CTX_BUILDERS: Record<DocVersionDecision, ReviewPromptCtxBuil
   approved: null,
   superseded: null,
   rejected: async ({ dv }) => ({ rejection: dv.decisionReason ?? '' }),
-  iterated: async ({ db, appHome, taskId, upstreamNodeId, dv }) => {
+  iterated: async ({ db, appHome, taskId, upstreamNodeId, dv, upstreamAgents }) => {
     // RFC-079: multi-document iterate. The latest decided row is just ONE item
     // of the round; aggregate EVERY iterated item's feedback for this upstream
     // at the same reviewIteration so the re-run prompt sees all per-document
@@ -4595,6 +4608,7 @@ const REVIEW_PROMPT_CTX_BUILDERS: Record<DocVersionDecision, ReviewPromptCtxBuil
     }
     const siblingOutputs = await buildSiblingOutputsBlock({
       db,
+      upstreamAgents,
       appHome,
       taskId,
       upstreamNodeId,
@@ -4621,6 +4635,7 @@ export async function buildReviewPromptContext(
   upstreamNodeId: string,
   taskId: string,
   iteration: number,
+  upstreamAgents: ReviewUpstreamAgentPort,
 ): Promise<ReviewPromptContext | undefined> {
   const { docVersions } = tablesOf(db)
   // Find the most recently USER-decided doc_version where sourceNodeId =
@@ -4652,7 +4667,7 @@ export async function buildReviewPromptContext(
   void iteration
   const builder = REVIEW_PROMPT_CTX_BUILDERS[dv.decision as DocVersionDecision] ?? null
   if (builder === null) return undefined
-  const context = await builder({ db, appHome, taskId, upstreamNodeId, dv })
+  const context = await builder({ db, appHome, taskId, upstreamNodeId, dv, upstreamAgents })
   if (context === undefined || dv.decision !== 'iterated') return context
 
   // RFC-292: the custom review-comment template belongs to the review node,
@@ -4686,6 +4701,7 @@ export async function buildReviewPromptContext(
 // ---------------------------------------------------------------------------
 
 interface BuildSiblingOutputsArgs {
+  upstreamAgents: ReviewUpstreamAgentPort
   db: PersistenceDb
   appHome: string
   taskId: string
@@ -4710,7 +4726,7 @@ export async function buildSiblingOutputsBlock(
 ): Promise<string | undefined> {
   const { db, appHome, taskId, upstreamNodeId, targetPortName } = args
 
-  const { agents, docVersions } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   const taskRow = (await createTaskGateQueries(db).listDefinitionContexts([taskId]))[0]
   if (taskRow === undefined) return undefined
   let definition: WorkflowDefinition
@@ -4726,11 +4742,10 @@ export async function buildSiblingOutputsBlock(
   // RFC-223 (PR-3a): resolve the upstream agent by the frozen CANONICAL id first
   // (rename/ABA-safe); fall back to name only for legacy / unstamped snapshots.
   const agentName = (upstreamNode as Record<string, unknown>).agentName
-  const where = snapshotNodeAgentWhere(args.db, upstreamNode)
-  if (where === null) return undefined
-  const agentRows = await db.select().from(agents).where(where).limit(1)
-  const agentRow = agentRows[0]
-  if (agentRow === undefined) {
+  const agentId = (upstreamNode as { agentId?: unknown }).agentId
+  if (typeof agentId !== 'string' || agentId.length === 0) return undefined
+  const agentRow = await args.upstreamAgents.outputProfile(agentId)
+  if (agentRow === null) {
     log.warn('sibling-outputs: upstream agent row not found; skipping', { agentName, taskId })
     return undefined
   }
@@ -4871,7 +4886,7 @@ function readBool(node: WorkflowNode, key: string, fallback: boolean): boolean {
 
 // Exported for the regression test that locks the path<md> recognition fix.
 export async function loadUpstreamPortKind(
-  db: PersistenceDb,
+  upstreamAgents: ReviewUpstreamAgentPort,
   definition: WorkflowDefinition,
   nodeId: string,
   portName: string,
@@ -4880,12 +4895,10 @@ export async function loadUpstreamPortKind(
   if (node === undefined) return undefined
   if (node.kind !== 'agent-single') return undefined
   // RFC-223 (PR-3a): resolve by the frozen CANONICAL id first (rename/ABA-safe).
-  const where = snapshotNodeAgentWhere(db, node)
-  if (where === null) return undefined
-  const { agents } = tablesOf(db)
-  const rows = await db.select().from(agents).where(where).limit(1)
-  const row = rows[0]
-  if (row === undefined) return undefined
+  const agentId = (node as { agentId?: unknown }).agentId
+  if (typeof agentId !== 'string' || agentId.length === 0) return undefined
+  const row = await upstreamAgents.outputProfile(agentId)
+  if (row === null) return undefined
   try {
     const parsed = JSON.parse(row.frontmatterExtra) as Record<string, unknown>
     const kinds = parsed.outputKinds

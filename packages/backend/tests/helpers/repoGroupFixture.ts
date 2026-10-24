@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-248 T32 —— 多仓测试夹具：把「N 个本地源仓」变成一个可启动的仓库组。
 //
 // `repos[]` 退役后，多仓启动的**唯一**入口是 `repoGroupId`。既有的多仓测试
@@ -137,7 +138,7 @@ export async function seedRepoGroup(
   // 在这里 await 而不是要求每个调用方自己起——本夹具有 13 个下游，漏一个就红。
   await startGitHttpRemote()
   const readonlySet = new Set(options.readonlyIndexes ?? [])
-  const store = composeSqliteRepositoryWorkspaceStore(db)
+  const store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
   const group = await createRepoGroup(
     { store, cache: { store, appHome } },
     {

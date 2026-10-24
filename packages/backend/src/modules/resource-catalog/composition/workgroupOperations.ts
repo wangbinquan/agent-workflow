@@ -1,3 +1,4 @@
+import type { SubjectTaskReferencePort } from './required-ports'
 import type { SaveWorkgroupReceipt, Workgroup, WorkgroupDetail } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -55,9 +56,10 @@ export interface WorkgroupCatalogCompositionDependencies extends Omit<
 > {
   readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
+  readonly taskReferences: SubjectTaskReferencePort
 }
 
-function createWorkgroupEvents(): WorkgroupEventsPort {
+export function createWorkgroupEvents(): WorkgroupEventsPort {
   return Object.freeze({
     created(workgroup: WorkgroupDetail) {
       workgroupsBroadcaster.broadcast(WORKGROUPS_CHANNEL, {
@@ -121,6 +123,7 @@ export function composeWorkgroupCatalogFromAdapters(
 
 /** 仓库依赖一份：引用可用性 / 访问解析 / 授权用户清单 / 定时任务引用 / 复制命名（测试也从这里拿）。 */
 export function workgroupRepositoryDependencies(input: {
+  readonly taskReferences: SubjectTaskReferencePort
   readonly db: PersistenceDb
   readonly id?: () => string
   readonly now?: () => number
@@ -129,6 +132,7 @@ export function workgroupRepositoryDependencies(input: {
   const assertUsable = (missing: readonly string[]): void =>
     assertNoMissingResourceRefs(missing.map((name) => ({ type: 'agent' as const, name })))
   const dependencies: WorkgroupRepositoryDependencies = {
+    taskReferences: input.taskReferences,
     canViewInTransaction: async (transaction, authority, row) =>
       canViewAccess(await resolveAccessInTransaction(transaction, authority, 'workgroup', row)),
     resolveAccessInTransaction: (transaction, authority, row) =>
@@ -162,7 +166,12 @@ export function composeWorkgroupCatalog(
   const now = input.now ?? Date.now
   const { repository, projection } = createWorkgroupRepository(
     input.db,
-    workgroupRepositoryDependencies({ db: input.db, id: input.id, now }),
+    workgroupRepositoryDependencies({
+      taskReferences: input.taskReferences,
+      db: input.db,
+      id: input.id,
+      now,
+    }),
   )
   const access = Object.freeze({
     filterVisible: (authority, rows) =>

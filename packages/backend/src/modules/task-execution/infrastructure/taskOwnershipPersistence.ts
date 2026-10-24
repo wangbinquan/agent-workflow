@@ -12,7 +12,7 @@
 //
 // 同步事务面：`sqliteTaskOwnership.ts` 仍留着 bun:sqlite 专属的同步 store，但只为那些**签名
 // 钉死在 `DbTxSync` 上**的参与者（`withOwnedTaskTx` 的回调、`revokeExactTx`）与它们的调用方
-// （`services/task.ts` 的 `onTransitionTx`、`platform/persistence/sqlite/taskLifecycle.ts`、
+// （`services/task.ts` 的 `onTransitionTx`、`modules/task-execution/infrastructure/taskLifecycle.ts`、
 // `taskDriverLifecycle.ts` 的同步认领）服务。端口这一侧不再经它——`releaseAfterStop` /
 // `releaseRecovered` / `revokeOldDaemon` 已从同步 store 删除（W8），`revokeExact` 的事务包装也在
 // W10 去掉（单语句 CAS 本就原子），同步事务面因此 5 → 3 → 2

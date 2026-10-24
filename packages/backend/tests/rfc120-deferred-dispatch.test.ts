@@ -1,3 +1,5 @@
+import { withO2Closure } from './helpers/o2Closure'
+import { o2Ports } from './helpers/o2Closure'
 // RFC-120 T9 (model A) — deferred question dispatch backend foundation.
 //
 // Locks the four foundation behaviors (design §14 / §16 C1-H4 / §17):
@@ -182,17 +184,19 @@ async function seedTask(
     iteration: 0,
     startedAt: Date.now(),
   })
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: CC,
-    askingNodeId: QUESTIONER,
-    askingNodeRunId: questionerRunId,
-    targetConsumerNodeId: DESIGNER,
-    loopIter: 0,
-    questions: opts.questions ?? [mkQ('q1', 'designer-scoped?')],
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: CC,
+      askingNodeId: QUESTIONER,
+      askingNodeRunId: questionerRunId,
+      targetConsumerNodeId: DESIGNER,
+      loopIter: 0,
+      questions: opts.questions ?? [mkQ('q1', 'designer-scoped?')],
+    }),
+  )
   return { taskId, intermediaryNodeRunId: crossClarifyNodeRunId }
 }
 
@@ -281,17 +285,19 @@ async function seedTwoSource(
       retryIndex: 0,
       iteration: 0,
     })
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: cc,
-      askingNodeId: q,
-      askingNodeRunId: runId,
-      targetConsumerNodeId: DESIGNER,
-      loopIter: 0,
-      questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
-    })
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: cc,
+        askingNodeId: q,
+        askingNodeRunId: runId,
+        targetConsumerNodeId: DESIGNER,
+        loopIter: 0,
+        questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
+      }),
+    )
     return crossClarifyNodeRunId
   }
   const ccA = await open('q_a', 'cc_a')
@@ -656,6 +662,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       command.entryIds,
       command.actor,
       command.decision,
+      o2Ports(command.db).taskLock,
     )
     expect(decided.receipt).toMatchObject({
       gate: { kind: 'questions', ref: `questions:${taskId}` },
@@ -684,6 +691,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       command.entryIds,
       command.actor,
       command.decision,
+      o2Ports(command.db).taskLock,
     )
     expect(replay.receipt).toEqual({ ...decided.receipt, replayed: true })
     expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
@@ -691,10 +699,17 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       runCount,
     )
     await expect(
-      dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
-        idempotencyKey: 'question-dispatch-1',
-        expectedTaskRevision: 999,
-      }),
+      dispatchTaskQuestionsWithDecision(
+        db,
+        taskId,
+        [entryId],
+        actor,
+        {
+          idempotencyKey: 'question-dispatch-1',
+          expectedTaskRevision: 999,
+        },
+        o2Ports(db).taskLock,
+      ),
     ).rejects.toMatchObject({ code: 'human-gate-idempotency-conflict' })
   })
 
@@ -734,9 +749,16 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     try {
       await expectDatabaseFailure(
         () =>
-          dispatchTaskQuestionsWithDecision(db, taskId, [entryId], actor, {
-            idempotencyKey: 'question-dispatch-fault',
-          }),
+          dispatchTaskQuestionsWithDecision(
+            db,
+            taskId,
+            [entryId],
+            actor,
+            {
+              idempotencyKey: 'question-dispatch-fault',
+            },
+            o2Ports(db).taskLock,
+          ),
         'rfc333-question-intent-fault',
       )
 
@@ -1821,17 +1843,19 @@ describeEachProviderHttpApplication(
           retryIndex: 0,
           iteration: 0,
         })
-        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-          kind: 'cross',
-          db,
-          taskId,
-          intermediaryNodeId: cc,
-          askingNodeId: q,
-          askingNodeRunId: runId,
-          targetConsumerNodeId: d,
-          loopIter: 0,
-          questions: [mkQ(qid, 'designer-scoped?')],
-        })
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+          withO2Closure({
+            kind: 'cross',
+            db,
+            taskId,
+            intermediaryNodeId: cc,
+            askingNodeId: q,
+            askingNodeRunId: runId,
+            targetConsumerNodeId: d,
+            loopIter: 0,
+            questions: [mkQ(qid, 'designer-scoped?')],
+          }),
+        )
         return crossClarifyNodeRunId
       }
       const ccA = await openSession('q_a', 'cc_a', D, 'a1')
@@ -1973,17 +1997,19 @@ describeEachProviderHttpApplication(
           retryIndex: 0,
           iteration: 0,
         })
-        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-          kind: 'cross',
-          db,
-          taskId,
-          intermediaryNodeId: cc,
-          askingNodeId: q,
-          askingNodeRunId: runId,
-          targetConsumerNodeId: d,
-          loopIter: 0,
-          questions: [mkQ(qid, 'designer-scoped?')],
-        })
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+          withO2Closure({
+            kind: 'cross',
+            db,
+            taskId,
+            intermediaryNodeId: cc,
+            askingNodeId: q,
+            askingNodeRunId: runId,
+            targetConsumerNodeId: d,
+            loopIter: 0,
+            questions: [mkQ(qid, 'designer-scoped?')],
+          }),
+        )
         return crossClarifyNodeRunId
       }
       const ccA = await openSession('q_a', 'cc_a', A, 'a1')
@@ -2203,17 +2229,19 @@ describeEachProviderHttpApplication(
           retryIndex: 0,
           iteration: 0,
         })
-        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-          kind: 'cross',
-          db,
-          taskId,
-          intermediaryNodeId: cc,
-          askingNodeId: q,
-          askingNodeRunId: runId,
-          targetConsumerNodeId: d,
-          loopIter: 0,
-          questions: [mkQ(qid, 'designer-scoped?')],
-        })
+        const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+          withO2Closure({
+            kind: 'cross',
+            db,
+            taskId,
+            intermediaryNodeId: cc,
+            askingNodeId: q,
+            askingNodeRunId: runId,
+            targetConsumerNodeId: d,
+            loopIter: 0,
+            questions: [mkQ(qid, 'designer-scoped?')],
+          }),
+        )
         return crossClarifyNodeRunId
       }
       const ccA = await open('q_a', 'cc_a', D1, 'a1')
@@ -2400,17 +2428,19 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
         retryIndex: 0,
         iteration: 0,
       })
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: cc,
-        askingNodeId: q,
-        askingNodeRunId: runId,
-        targetConsumerNodeId: d,
-        loopIter: 0,
-        questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: cc,
+          askingNodeId: q,
+          askingNodeRunId: runId,
+          targetConsumerNodeId: d,
+          loopIter: 0,
+          questions: [mkQ(cc === 'cc_a' ? 'a1' : 'b1', 'designer-scoped?')],
+        }),
+      )
       return crossClarifyNodeRunId
     }
     const ccA = await open('q_a', 'cc_a', DESIGNER)

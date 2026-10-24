@@ -65,11 +65,11 @@ const KNOWN_KEYS = new Set<string>([
   // RFC-028: list of MCP server names this agent needs at runtime. Same
   // shape policy as dependsOn — must be string[] of valid mcp names; bad
   // shapes demote to frontmatterExtra. Existence check happens server-side
-  // at save time (services/agent.ts `validateMcpReferences`).
+  // at save time (modules/resource-catalog/infrastructure/legacy/agent.ts `validateMcpReferences`).
   'mcp',
   // RFC-031: list of opencode plugin names this agent needs at runtime.
   // Same shape policy as dependsOn / mcp. Existence + enabled check happens
-  // server-side at save time (services/agent.ts `validatePluginReferences`).
+  // server-side at save time (modules/resource-catalog/infrastructure/legacy/agent.ts `validatePluginReferences`).
   'plugins',
   // RFC-194: the existing agent port contract must enter the form as typed
   // fields. Keeping these keys out of frontmatterExtra also prevents reserved
@@ -83,7 +83,7 @@ const KNOWN_KEYS = new Set<string>([
   'outputWrapperPortNames',
   // RFC-111 (Codex audit F6): runtime name this agent dispatches to. String
   // shape; the named runtime's existence is checked server-side at save time
-  // (services/agent.ts), same policy as mcp / plugins.
+  // (modules/resource-catalog/infrastructure/legacy/agent.ts), same policy as mcp / plugins.
   'runtime',
   // RFC-276: retained only so legacy input receives an explicit deprecation
   // warning instead of being copied into frontmatterExtra and re-emitted.
@@ -239,7 +239,7 @@ export function parseAgentMarkdown(
   // RFC-111 (Codex audit F6): runtime — the runtime name this agent dispatches
   // to. Like description, a non-string / empty shape demotes to frontmatterExtra;
   // the named runtime's existence is validated server-side at save time
-  // (services/agent.ts), same policy as mcp / plugins. Before this, `runtime`
+  // (modules/resource-catalog/infrastructure/legacy/agent.ts), same policy as mcp / plugins. Before this, `runtime`
   // wasn't in KNOWN_KEYS, so an authored `runtime:` silently fell through to
   // frontmatterExtra and never applied on import.
   if (data.runtime !== undefined) {
@@ -349,7 +349,7 @@ export function parseAgentMarkdown(
 
   // RFC-028: mcp — string[] of MCP server names. Same shape rules as
   // dependsOn. Existence/closure validation belongs to the save-time guard
-  // in services/agent.ts (`validateMcpReferences`).
+  // in modules/resource-catalog/infrastructure/legacy/agent.ts (`validateMcpReferences`).
   if (data.mcp !== undefined) {
     if (Array.isArray(data.mcp)) {
       const cleaned: string[] = []
@@ -382,7 +382,7 @@ export function parseAgentMarkdown(
 
   // RFC-031: plugins — string[] of opencode plugin names. Same shape rules
   // as dependsOn / mcp. Existence + enabled validation belongs to the save-
-  // time guard in services/agent.ts (`validatePluginReferences`).
+  // time guard in modules/resource-catalog/infrastructure/legacy/agent.ts (`validatePluginReferences`).
   if (data.plugins !== undefined) {
     if (Array.isArray(data.plugins)) {
       const cleaned: string[] = []

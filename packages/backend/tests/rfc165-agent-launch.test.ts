@@ -1,3 +1,4 @@
+import { deleteAgent } from './helpers/resourceCatalogDeletion'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-395 II-pre：A5 改接生产 agent 启动臂的两次资源读取；保留并发删除不铸任务的断言。
 // LOCKS: RFC-165 §4 — single-agent launch path (design §11.8/.9/.11/.12).
@@ -72,9 +73,12 @@ import {
   isAgentLaunching,
   releaseAgentLaunch,
 } from '../src/services/agentLaunchReservation'
-import { getAgentById } from '../src/services/agent'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 
-import { createAgent, deleteAgent, renameAgent } from '../src/services/agent'
+import {
+  createAgent,
+  renameAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   AGENT_HOST_AGENT_NODE_ID,
   AGENT_HOST_CLARIFY_NODE_ID,

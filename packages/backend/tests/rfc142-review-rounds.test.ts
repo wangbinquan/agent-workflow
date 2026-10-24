@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-142 — 评审历史信息全量回显：多文档分轮（rounds）+ G4 混代修复。
 //
@@ -343,15 +344,17 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
   test('iterate 两轮：轮全字段 + 已决策成员 commentCount 计冻结评论（原实现恒 0）', async () => {
     const { taskId, task, definition, reviewNode } = await seed()
     await seedSrc(taskId, '01A_SRC', 'v1')
-    const r1 = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const r1 = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(r1.kind).toBe('awaiting_review')
     const round1Docs = await pendingDocs(taskId)
     expect(round1Docs.length).toBe(3)
@@ -359,15 +362,17 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
 
     // 第 0 篇挂一条评论后 iterate —— 决策会删 live 行、冻结进 commentsJson。
     await insertComment(round1Docs[0]!.id, 'tighten the steps')
-    const firstDecision = await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-      author: 'alice',
-      authorRole: 'owner',
-    })
+    const firstDecision = await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+        author: 'alice',
+        authorRole: 'owner',
+      }),
+    )
     await wakeHumanGateContinuation(firstDecision.taskId, firstDecision.continuationRef, {
       db,
       appHome,
@@ -400,15 +405,17 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     // TaskEngine's pending → running claim used by this direct service fixture.
     await patchTaskFixture(db, { id: taskId }, { status: 'running' })
 
-    const r2 = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const r2 = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(r2.kind).toBe('awaiting_review')
 
     const rounds = await listReviewRounds(db, appHome, reviewNodeRunId)
@@ -439,13 +446,15 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     // 首篇「徽标有数、正文无评论」）。
     const round2Docs = await pendingDocs(taskId)
     await insertComment(round2Docs[0]!.id, 'still too loose')
-    await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 1,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 1,
+      }),
+    )
     const detail = await getReviewDetail(db, appHome, reviewNodeRunId)
     expect(detail.documents).toBeDefined()
     expect(detail.documents!.length).toBe(3)
@@ -462,43 +471,49 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
   test('G4 回归：refresh 同 iteration 两代，getReviewDetail 只取最高代（旧实现混代翻倍）', async () => {
     const { taskId, task, definition, reviewNode } = await seed()
     await seedSrc(taskId, '01A_SRC', 'old')
-    const r1 = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const r1 = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(r1.kind).toBe('awaiting_review')
     const gen1 = await pendingDocs(taskId)
     const reviewNodeRunId = gen1[0]!.reviewNodeRunId
 
     // 审中上游出了更新的 done run（RFC-074 refresh）→ 旧代 superseded + 新代重铸。
     await seedSrc(taskId, '01B_SRC', 'new')
-    const r2 = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const r2 = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(r2.kind).toBe('awaiting_review')
     const gen2 = await pendingDocs(taskId)
     expect(gen2.length).toBe(3)
     expect(gen2[0]!.roundGeneration).toBe(2)
 
     // 决掉新代（iterate）→ 同一 reviewIteration 0 下：3 行 superseded(g1) + 3 行 iterated(g2)。
-    await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
 
     const detail = await getReviewDetail(db, appHome, reviewNodeRunId)
     // G4：只允许最高代成员——旧实现按 max reviewIteration 过滤会给出 6 条（itemIndex 重复）。

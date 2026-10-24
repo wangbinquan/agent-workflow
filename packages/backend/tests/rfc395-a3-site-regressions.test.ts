@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { REPO_PREP_NODE_ID, isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { taskRequestedSourceColumns } from '@/platform/persistence/taskRepositorySql'
+import { taskRequestedSourceColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import {
   createNodeRunQueries,

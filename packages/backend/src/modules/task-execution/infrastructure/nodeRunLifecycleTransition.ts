@@ -1,6 +1,6 @@
 // RFC-359 W1-T2c —— node_run 状态 CAS 的**一份**事务内实现，两个引擎共用。
 //
-// 此前 SQLite 侧是 `platform/persistence/sqlite/taskLifecycle.ts` 的同步
+// 此前 SQLite 侧是 `modules/task-execution/infrastructure/taskLifecycle.ts` 的同步
 // `setNodeRunStatusTx` / `transitionNodeRunStatusTx`（dbTxSync），PostgreSQL 侧是
 // `postgresqlNodeRunLifecyclePersistence.ts` 里另一份 CAS。同一张转移表、同一个 MR/PR 围栏
 // 判定、同一个终态覆写闸——这里只写一次：PG participant 的 `set` 委托到这里，SQLite 的同步

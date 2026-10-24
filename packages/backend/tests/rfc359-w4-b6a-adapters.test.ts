@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W4-B6 批 a —— source-control / event-center 四对适配器合一，两个引擎各跑一遍：工作区维护存储、仓库工作区存储
 // （仓库组图版本核对走统一事务 + 能力矩阵 advisory lock，聚合索引提示与凭据擦除后的存储回收走能力矩阵）、
 // 事件响应规则存储、自定义事件源存储（发布事务末尾的 CAS）。
@@ -20,7 +21,7 @@ import type {
   EventTypeDescriptor,
 } from '@/modules/event-center/domain/model'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
-import { DrizzleWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
+import { PortWorkspaceMaintenanceStore } from '@/modules/source-control/infrastructure/workspaceMaintenanceStore'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
@@ -131,13 +132,13 @@ describeEachProvider('RFC-359 W4-B6a —— 工作区维护与仓库工作区存
       finishedAt: 2,
       workspacePruningAt: 200,
     })
-    const maintenance = new DrizzleWorkspaceMaintenanceStore(db)
+    const maintenance = new PortWorkspaceMaintenanceStore(composeSourceControlTaskPorts(db))
     expect((await maintenance.listGcCandidates()).map((row) => row.id)).toContain(terminal)
     expect(await maintenance.releaseIsoClaim(terminal, 100)).toBe(false)
     expect(await maintenance.releaseIsoClaim(terminal, 200)).toBe(true)
     expect((await maintenance.listTasks([terminal]))[0]?.workspacePruningAt).toBeNull()
 
-    const store = new DrizzleRepositoryWorkspaceStore(db)
+    const store = new DrizzleRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     const repoA = await seedCachedRepo(db)
     const repoB = await seedCachedRepo(db)
     const a = group(`alpha-${ulid().toLowerCase()}`)

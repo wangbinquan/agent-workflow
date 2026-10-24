@@ -1,3 +1,4 @@
+import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/composition'
 // Only the configuration entry points are exercised; other doctor checks are unchanged.
 import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -106,12 +107,14 @@ describe('RFC-370 doctor configuration selection', () => {
     selected.release = release.promise
     selected.error = new Error('selected database configuration offline')
     let finished = false
-    const pending = checkConfiguredDatabase(buildLogicalSchemaContract(), selected).then(
-      (result) => {
-        finished = true
-        return result
-      },
-    )
+    const pending = checkConfiguredDatabase(
+      buildLogicalSchemaContract(),
+      composeSystemOperationsTaskPorts(),
+      selected,
+    ).then((result) => {
+      finished = true
+      return result
+    })
     try {
       await selected.entered.promise
       expect(finished).toBe(false)
@@ -143,7 +146,13 @@ describe('RFC-370 doctor configuration selection', () => {
       ok: false,
       message: 'synchronous selected source failed',
     })
-    expect(await checkConfiguredDatabase(buildLogicalSchemaContract(), selected)).toEqual([
+    expect(
+      await checkConfiguredDatabase(
+        buildLogicalSchemaContract(),
+        composeSystemOperationsTaskPorts(),
+        selected,
+      ),
+    ).toEqual([
       {
         name: 'database provider',
         ok: false,
@@ -166,7 +175,13 @@ describe('RFC-370 doctor configuration selection', () => {
         ok: false,
         message: String(reason),
       })
-      expect(await checkConfiguredDatabase(buildLogicalSchemaContract(), selected)).toEqual([
+      expect(
+        await checkConfiguredDatabase(
+          buildLogicalSchemaContract(),
+          composeSystemOperationsTaskPorts(),
+          selected,
+        ),
+      ).toEqual([
         {
           name: 'database provider',
           ok: false,
@@ -233,7 +248,7 @@ describe('RFC-370 doctor configuration selection', () => {
     for (const expected of [
       'configuration.read()',
       'checkConfig(configuration,selected===undefined)',
-      'checkConfiguredDatabase(input.contract,configuration)',
+      'checkConfiguredDatabase(input.contract,input.tasks,configuration)',
     ]) {
       expect(calls.filter((node) => compact(node) === expected)).toHaveLength(1)
     }

@@ -16,7 +16,10 @@
 import { type AgentFixtureSpec, agentFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { expect, test, beforeEach } from 'bun:test'
-import { createAgent, updateAgent } from '../src/services/agent'
+import {
+  createAgent,
+  updateAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ulid } from 'ulid'

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // LOCKS: RFC-359 W6-T28 —— 事务内「读—改—写、中间不锁」丢更新的**用户可见后果**。
 //
 // 这些用例锁的是什么
@@ -533,7 +534,11 @@ const NO_OP_RECOVERY_MUTATIONS: TaskRecoveryMutationOperations = {
 }
 
 function recoveryOperations(db: PersistenceDb): TaskRecoveryOperations {
-  return createTaskRecoveryOperations(db, NO_OP_RECOVERY_MUTATIONS)
+  return createTaskRecoveryOperations(
+    db,
+    NO_OP_RECOVERY_MUTATIONS,
+    o2Ports(db).collaborationReads.recovery,
+  )
 }
 
 async function seedWorkflow(db: PersistenceDb): Promise<string> {

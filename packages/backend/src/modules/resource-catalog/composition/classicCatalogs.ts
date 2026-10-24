@@ -1,3 +1,4 @@
+import type { SubjectTaskReferencePort } from './required-ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import type {
@@ -54,6 +55,7 @@ export interface ClassicCatalogCompositionDependencies extends Omit<
   readonly db: PersistenceDb
   readonly appHome: string
   readonly restoreMembership: SkillRestoreMembershipPort
+  readonly taskReferences: SubjectTaskReferencePort
   readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly versionPresence?: SkillVersionPresenceQueries
@@ -74,6 +76,7 @@ export function composeClassicCatalogs(
   const agent = composeAgentCatalog({
     db: input.db,
     persistence: createAgentPersistenceSemantics({
+      taskReferences: input.taskReferences,
       db: input.db,
       authorization: input.resourceCatalog.authorization,
       resourceInventory: agentResourceInventory,
@@ -95,6 +98,7 @@ export function composeClassicCatalogs(
     creationContent: input.creationContent,
   })
   const workflow = composeDatabaseWorkflowCatalog({
+    taskReferences: input.taskReferences,
     db: input.db,
     resourceCatalog: input.resourceCatalog,
     skillContent,

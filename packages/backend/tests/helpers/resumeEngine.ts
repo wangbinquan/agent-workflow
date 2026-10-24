@@ -1,3 +1,4 @@
+import { o2Ports } from './o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // RFC-359 AC-1（第 10 刀）—— `resume` 的**唯一**测试装配点。
 //
@@ -64,7 +65,9 @@ export function createResumeEngine(db: PersistenceDb, options: ResumeEngineOptio
         {
           db,
           workspacePresence: options.workspacePresence ?? createFileWorkspacePresenceQueries(),
-          persistence: createTaskExecutionPersistence(db),
+          persistence: createTaskExecutionPersistence(db, {
+            recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+          }),
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
           log,
           activity:

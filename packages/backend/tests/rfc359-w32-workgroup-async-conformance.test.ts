@@ -7,7 +7,7 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createAgent } from '@/services/agent'
+import { createAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { ConflictError } from '@/util/errors'
 import {
   createWorkgroup,

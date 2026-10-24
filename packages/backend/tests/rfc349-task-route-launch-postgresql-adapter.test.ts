@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-349 — direct Agent/Workgroup launch keeps the existing route contract
 // while the selected PostgreSQL provider owns the task row, collaborators,
 // launch intent, frozen resource closure and committed lifecycle event.
@@ -256,7 +257,9 @@ async function workspaceParticipant(input: {
       : createTaskRouteWorkspaceParticipant({
           db: input.db,
           appHome: root,
-          repositoryPreparation: composeRepositoryPreparation({ db: input.db, appHome: root }),
+          repositoryPreparation: composeRepositoryPreparation(
+            withSourceControlTaskPorts({ db: input.db, appHome: root }),
+          ),
           sourceContexts: () => {
             throw new Error('scratch launch has no source seal')
           },

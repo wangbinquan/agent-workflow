@@ -1,5 +1,5 @@
 // RFC-359 W4-B1 批 2g —— node run 生命周期（mint / transition / set + 事务内参与者）：一份实现，两个 provider 共用。
-// 此前 SQLite 侧薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 的同步内核；现在端口两侧都走统一写事务 + owner 围栏。
+// 此前 SQLite 侧薄壳套 `modules/task-execution/infrastructure/taskLifecycle.ts` 的同步内核；现在端口两侧都走统一写事务 + owner 围栏。
 
 import { createRunSelectionParticipantInTx } from './runSelection/oracle/participant'
 import { tablesOf } from '@/platform/persistence/sessionTables'

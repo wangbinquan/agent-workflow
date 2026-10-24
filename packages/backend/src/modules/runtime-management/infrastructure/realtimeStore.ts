@@ -15,7 +15,8 @@
 
 import { isTaskDefinitionHostId } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, asc, eq, gt } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
+import type { RealtimeTaskFactsPort, RealtimeResourceAclPort } from '../composition/required-ports'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
@@ -25,55 +26,22 @@ import type {
 } from '../application/ports/realtimeStore'
 
 export class DrizzleRealtimeStore implements RealtimeStore {
-  constructor(private readonly db: PersistenceDb) {}
+  constructor(
+    private readonly db: PersistenceDb,
+    private readonly taskFacts: RealtimeTaskFactsPort,
+    private readonly resources: RealtimeResourceAclPort,
+  ) {}
 
-  async findTaskAudience(taskId: string, userId: string) {
-    const { tasks, taskCollaborators } = tablesOf(this.db)
-    const taskRows = await this.db
-      .select({ ownerUserId: tasks.ownerUserId })
-      .from(tasks)
-      .where(eq(tasks.id, taskId))
-      .limit(1)
-    const task = taskRows[0]
-    if (task === undefined) return null
-    const memberships = await this.db
-      .select({ userId: taskCollaborators.userId })
-      .from(taskCollaborators)
-      .where(and(eq(taskCollaborators.taskId, taskId), eq(taskCollaborators.userId, userId)))
-      .limit(1)
-    return { ownerUserId: task.ownerUserId, member: memberships.length > 0 }
+  findTaskAudience(taskId: string, userId: string) {
+    return this.taskFacts.taskAudience(taskId, userId)
   }
 
   async findResource(
     type: RealtimeAclResourceType,
     resourceId: string,
   ): Promise<RealtimeResourceRow | null> {
-    if (type === 'workflow') {
-      if (isTaskDefinitionHostId(resourceId)) return null
-
-      const { workflows } = tablesOf(this.db)
-      const rows = await this.db
-        .select({
-          id: workflows.id,
-          ownerUserId: workflows.ownerUserId,
-          visibility: workflows.visibility,
-        })
-        .from(workflows)
-        .where(eq(workflows.id, resourceId))
-        .limit(1)
-      return rows[0] ?? null
-    }
-    const { workgroups } = tablesOf(this.db)
-    const rows = await this.db
-      .select({
-        id: workgroups.id,
-        ownerUserId: workgroups.ownerUserId,
-        visibility: workgroups.visibility,
-      })
-      .from(workgroups)
-      .where(eq(workgroups.id, resourceId))
-      .limit(1)
-    return rows[0] ?? null
+    if (type === 'workflow' && isTaskDefinitionHostId(resourceId)) return null
+    return this.resources.find(type, resourceId)
   }
 
   async findMemoryScope(memoryId: string) {
@@ -86,19 +54,7 @@ export class DrizzleRealtimeStore implements RealtimeStore {
     return rows[0] ?? null
   }
 
-  async listTaskEvents(taskId: string, since: number) {
-    const { nodeRunEvents, nodeRuns } = tablesOf(this.db)
-    return await this.db
-      .select({
-        id: nodeRunEvents.id,
-        nodeRunId: nodeRunEvents.nodeRunId,
-        ts: nodeRunEvents.ts,
-        kind: nodeRunEvents.kind,
-        payload: nodeRunEvents.payload,
-      })
-      .from(nodeRunEvents)
-      .innerJoin(nodeRuns, eq(nodeRunEvents.nodeRunId, nodeRuns.id))
-      .where(and(eq(nodeRuns.taskId, taskId), gt(nodeRunEvents.id, since)))
-      .orderBy(asc(nodeRunEvents.id))
+  listTaskEvents(taskId: string, since: number) {
+    return this.taskFacts.taskEventsSince(taskId, since)
   }
 }

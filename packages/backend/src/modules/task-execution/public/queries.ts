@@ -228,3 +228,12 @@ export { createTaskDetailQueries } from '../infrastructure/taskDetailQueries'
 export type { TaskDetailQueries } from '../application/ports/taskDetailQueries'
 export { createTaskPreparationQueries } from '../infrastructure/taskPreparationQueries'
 export type { TaskPreparationQueries } from '../application/ports/taskPreparation'
+
+export type {
+  TaskWorktreeLocator,
+  TaskWorktreeLocation,
+} from '../application/ports/taskWorktreeLocator'
+
+export { nonTerminalTaskExists } from '../infrastructure/nonTerminalTaskExists'
+export { callRowHumanWait, readTaskResourceUsage } from '../application/taskResourceUsage'
+export { parseCallHumanWait } from '../domain/resourceLimitUsage'

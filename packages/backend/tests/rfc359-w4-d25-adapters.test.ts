@@ -1,3 +1,4 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-359 W4-D25 —— human-gate 停靠原子合一：此前 `sqliteHumanGateOpenParticipant.ts` /
 // `postgresqlHumanGateOpenParticipant.ts`（695 / 820 行）与 `sqlite|postgresqlHumanGateTaskLifecyclePersistence.ts`
 // （194 / 181 行）各一份，另有一条只给 SQLite 用的 legacy 同步停靠路（`sqliteTaskParkTransaction.ts` +
@@ -59,7 +60,7 @@ async function seedRunningTask(db: PersistenceDb): Promise<string> {
 /** 走生产那条准备路（`ClarifyGateOpenPreparation`），拿到一个可停靠的 prepared 门。 */
 async function prepareClarifyGate(db: PersistenceDb, taskId: string) {
   const result = await new ClarifyGateOpenPreparation(
-    new DatabaseHumanGateOperationPersistence(databaseSessionFor(db)),
+    new DatabaseHumanGateOperationPersistence(databaseSessionFor(db), composeHumanGateTaskLockPort),
     new DatabaseClarifyQuestionSnapshotReader(db),
   ).prepare({
     taskId,

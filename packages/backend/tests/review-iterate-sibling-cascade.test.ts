@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-014 §2.1 #1 + #3 + C1 — multi-markdown upstream + iterate path locks.
 //
@@ -36,7 +37,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
   buildReviewPromptContext,
@@ -282,13 +283,15 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     }
 
     // Iterate on design.
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunIds.design,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunIds.design,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     // Siblings (proposal + plan) should be reset to pending with reviewIteration++.
     const proposalAfter = (
       await h.db
@@ -323,13 +326,15 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     cleanupHarness = h.cleanup
 
     // First approve proposal so it goes to status=done.
-    const approval = await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunIds.proposal,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    const approval = await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunIds.proposal,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
       db: h.db,
       appHome: h.appHome,
@@ -347,13 +352,15 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     expect(proposalDone.status).toBe('done')
 
     // Then iterate on design — proposal review must go back to pending.
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunIds.design,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunIds.design,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
 
     const proposalAfter = (
       await h.db
@@ -369,13 +376,15 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     h = await buildHarness({ agentSyncOutputsOnIterate: false })
     cleanupHarness = h.cleanup
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunIds.design,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunIds.design,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
 
     const { nodeRuns } = tablesOf(h.db)
     // Siblings remain awaiting_review (no cascade).
@@ -416,13 +425,15 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
       .set({ sourceFilePath: 'design/plan.md' })
       .where(eq(docVersions.sourcePortName, 'plan'))
 
-    const block = await buildSiblingOutputsBlock({
-      db: h.db,
-      appHome: h.appHome,
-      taskId: h.taskId,
-      upstreamNodeId: 'designer',
-      targetPortName: 'design',
-    })
+    const block = await buildSiblingOutputsBlock(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        taskId: h.taskId,
+        upstreamNodeId: 'designer',
+        targetPortName: 'design',
+      }),
+    )
     expect(block).toBeDefined()
     expect(block!).toContain('You also produced the following sibling documents.')
     expect(block!).toContain('- proposal: design/proposal.md')
@@ -445,13 +456,15 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     // null on every doc_version. With RFC-014 §3.2 (updated) "skip inline"
     // policy, the block has nothing to list and returns undefined; downstream
     // the `{{__sibling_outputs__}}` token resolves to empty + no auto-append.
-    const block = await buildSiblingOutputsBlock({
-      db: h.db,
-      appHome: h.appHome,
-      taskId: h.taskId,
-      upstreamNodeId: 'designer',
-      targetPortName: 'design',
-    })
+    const block = await buildSiblingOutputsBlock(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        taskId: h.taskId,
+        upstreamNodeId: 'designer',
+        targetPortName: 'design',
+      }),
+    )
     expect(block).toBeUndefined()
   })
 
@@ -459,13 +472,15 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     h = await buildHarness({ agentSyncOutputsOnIterate: false })
     cleanupHarness = h.cleanup
 
-    const block = await buildSiblingOutputsBlock({
-      db: h.db,
-      appHome: h.appHome,
-      taskId: h.taskId,
-      upstreamNodeId: 'designer',
-      targetPortName: 'design',
-    })
+    const block = await buildSiblingOutputsBlock(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        taskId: h.taskId,
+        upstreamNodeId: 'designer',
+        targetPortName: 'design',
+      }),
+    )
     expect(block).toBeUndefined()
   })
 
@@ -487,15 +502,24 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
       .where(eq(docVersions.sourcePortName, 'plan'))
 
     // Iterate on design so a user-decided doc_version exists.
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunIds.design,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunIds.design,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
 
-    const ctx = await buildReviewPromptContext(h.db, h.appHome, 'designer', h.taskId, 0)
+    const ctx = await buildReviewPromptContext(
+      h.db,
+      h.appHome,
+      'designer',
+      h.taskId,
+      0,
+      o2Ports(h.db).upstreamAgents,
+    )
     expect(ctx).toBeDefined()
     expect(ctx!.iterateTargetPort).toBe('design')
     expect(ctx!.siblingOutputs).toBeDefined()
@@ -507,15 +531,24 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     h = await buildHarness({ agentSyncOutputsOnIterate: false })
     cleanupHarness = h.cleanup
 
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunIds.design,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunIds.design,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
 
-    const ctx = await buildReviewPromptContext(h.db, h.appHome, 'designer', h.taskId, 0)
+    const ctx = await buildReviewPromptContext(
+      h.db,
+      h.appHome,
+      'designer',
+      h.taskId,
+      0,
+      o2Ports(h.db).upstreamAgents,
+    )
     expect(ctx).toBeDefined()
     expect(ctx!.iterateTargetPort).toBe('design')
     expect(ctx!.siblingOutputs).toBeUndefined()

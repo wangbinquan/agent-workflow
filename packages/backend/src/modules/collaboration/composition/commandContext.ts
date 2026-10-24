@@ -1,3 +1,4 @@
+import type { HumanGateTaskLockPort } from './required-ports'
 // RFC-333 — composition-owned dependencies for exact collaboration commands.
 // Public callers carry only an opaque object reference; the live DB and app
 // home never become part of a public command/query contract.
@@ -81,6 +82,7 @@ export type CollaborationCommandContextInput = Omit<
   'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
 > & {
   readonly db: PersistenceDb
+  readonly taskLock: HumanGateTaskLockPort
   readonly appHome?: string
   readonly reviewArtifacts?: ReviewArtifactSelection
 }
@@ -118,11 +120,14 @@ export function createCollaborationCommandContext(
     taskAccess: createCollaborationTaskAccessPort(input.db),
     reviewTaskAccess: createReviewTaskAccessPort(input.db),
     persistence: {
-      operations: new DatabaseHumanGateOperationPersistence(databaseSessionFor(input.db)),
+      operations: new DatabaseHumanGateOperationPersistence(
+        databaseSessionFor(input.db),
+        new DatabaseHumanGateOperationJournal(input.taskLock),
+      ),
       clarifyQuestions: new DatabaseClarifyQuestionSnapshotReader(input.db),
       manualQuestions: new DatabaseManualQuestionOpenWriter(
         input.db,
-        new DatabaseHumanGateOperationJournal(),
+        new DatabaseHumanGateOperationJournal(input.taskLock),
       ),
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
       feedback: new DrizzleTaskFeedbackStore(input.db),

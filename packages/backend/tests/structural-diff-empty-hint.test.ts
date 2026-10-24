@@ -13,7 +13,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { runGit } from '../src/util/git'
 import { getTaskStructuralDiff as getTaskStructuralDiffWithPort } from '../src/services/structuralDiff/service'
-import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
+import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 
 describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) => {
   const getTaskStructuralDiff = (
@@ -21,7 +21,7 @@ describeEachProvider('RFC-359 W25 structural empty-state providers', (harness) =
     ...args: Parameters<typeof getTaskStructuralDiffWithPort> extends [unknown, ...infer Rest]
       ? Rest
       : never
-  ) => getTaskStructuralDiffWithPort(createCodeWorkspaceRead(db), ...args)
+  ) => getTaskStructuralDiffWithPort(createTaskCodeWorkspaceQueries(db), ...args)
 
   const dirs: string[] = []
   afterAll(() => {

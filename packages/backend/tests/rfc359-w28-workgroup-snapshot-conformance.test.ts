@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // The pure controls execute the three exact pre-W28 projection bodies. Private
 // source exposure is not a provider execution; DB cases call the selected real
 // package composition, and the existing W26 Intent controls run separately.
@@ -644,7 +645,11 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
     expect(await physical(harness, id)).toEqual(after)
     const { repository, projection } = createWorkgroupRepository(
       harness.db,
-      workgroupRepositoryDependencies({ db: harness.db, now: () => T0 }),
+      workgroupRepositoryDependencies({
+        taskReferences: composeSubjectTaskReferencePort,
+        db: harness.db,
+        now: () => T0,
+      }),
     )
     const group = await repository.get(id)
     if (group === null) throw new Error('real repository group missing')

@@ -1,3 +1,4 @@
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-359 W8 / W12 —— 能力矩阵与代码度量的双引擎行为对拍。
 // W8 钉住的页面内容在 W12 合一后仍须成立：两个真实数据库通过同一个
 // code-history 组合层返回相同的 readiness、issues、repairActions 和度量计数。
@@ -27,11 +28,17 @@ async function renderMatrix(
   harness: ProviderHarness,
   repoId: string,
 ): Promise<readonly CodeMatrixRow[]> {
-  return composeCodeHistoryQueries(harness.db).matrix.forRepo(repoId)
+  return composeCodeHistoryQueries(
+    harness.db,
+    createAgentExecutionQueries(harness.db),
+  ).matrix.forRepo(repoId)
 }
 
 async function renderMetrics(harness: ProviderHarness): Promise<CodeMetricsSummary> {
-  return composeCodeHistoryQueries(harness.db).metrics.summary({ now: NOW })
+  return composeCodeHistoryQueries(
+    harness.db,
+    createAgentExecutionQueries(harness.db),
+  ).metrics.summary({ now: NOW })
 }
 
 /** 页面按能力名读这张表；比较前按能力名排定，免得「顺序」把「内容」的红盖住。 */

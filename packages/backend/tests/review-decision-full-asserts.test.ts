@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1g — full-field assertions for review decision paths.
 //
 // Each decision path (approve / iterate / reject) lays down a specific set
@@ -368,14 +369,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
     test('A1 approve full delta — node_run / doc_version / outputs / distill enqueue', async () => {
       h = await buildHarness()
       const before = Date.now()
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        author: 'tester-123',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          author: 'tester-123',
+        }),
+      )
       await h.committedEvents.drain()
 
       const { nodeRuns, docVersions, memoryDistillJobs } = tablesOf(h.db)
@@ -434,14 +437,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         { content: 'docs/design.md' },
       )
 
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
 
       const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
       const approved = outs.find((o) => o.portName === 'approved_doc')!
@@ -455,14 +460,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     test('A3 iterate full delta — node_run pending + reviewIteration bumped + comments archived + upstream re-mint', async () => {
       h = await buildHarness({ withInlineComments: true })
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'iterated',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'iterated',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
 
       const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
       const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
@@ -500,15 +507,17 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     test('A4 reject full delta — decisionReason=rejectReason verbatim + upstream re-mint', async () => {
       h = await buildHarness({ withInlineComments: true })
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'rejected',
-        expectedReviewIteration: 0,
-        author: 'tester',
-        rejectReason: 'this is not what I asked for',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'rejected',
+          expectedReviewIteration: 0,
+          author: 'tester',
+          rejectReason: 'this is not what I asked for',
+        }),
+      )
 
       const { docVersions, nodeRuns } = tablesOf(h.db)
       const dv = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
@@ -532,14 +541,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     test('A5 iterate with no comments: decisionReason gracefully nonempty (or empty string)', async () => {
       h = await buildHarness({ withInlineComments: false })
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'iterated',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'iterated',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
       const { docVersions } = tablesOf(h.db)
       const dv = (await h.db.select().from(docVersions).where(eq(docVersions.id, h.dvId)))[0]!
       expect(dv.decision).toBe('iterated')
@@ -550,25 +561,29 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     test('A6 same approve retry replays its durable receipt + no-op on outputs', async () => {
       h = await buildHarness()
-      const first = await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      const first = await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
       const { memoryDistillJobs } = tablesOf(h.db)
       const outsBefore = await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })
 
-      const replay = await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      const replay = await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
       await h.committedEvents.drain()
       expect(first.receipt.replayed).toBe(false)
       expect(replay.receipt).toMatchObject({
@@ -583,14 +598,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     test('A7 approve sets distill job sourceKind=review + status pending-ish', async () => {
       h = await buildHarness()
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
       await h.committedEvents.drain()
 
       const { memoryDistillJobs } = tablesOf(h.db)
@@ -609,14 +626,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
     test('A8 iterate enqueues a distill job too (best-effort)', async () => {
       h = await buildHarness({ withInlineComments: true })
-      await submitReviewDecision({
-        db: h.db,
-        appHome: h.appHome,
-        nodeRunId: h.reviewRunId,
-        decision: 'iterated',
-        expectedReviewIteration: 0,
-        author: 'tester',
-      })
+      await submitReviewDecision(
+        withO2Closure({
+          db: h.db,
+          appHome: h.appHome,
+          nodeRunId: h.reviewRunId,
+          decision: 'iterated',
+          expectedReviewIteration: 0,
+          author: 'tester',
+        }),
+      )
       await h.committedEvents.drain()
       const { memoryDistillJobs } = tablesOf(h.db)
       const jobs = await h.db
@@ -652,24 +671,28 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const results = await concurrentReviewMutations(
         h,
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'approver',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'approver',
+            }),
+          ),
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'rejected',
-            rejectReason: 'reject must lose',
-            expectedReviewIteration: 0,
-            author: 'rejecter',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'rejected',
+              rejectReason: 'reject must lose',
+              expectedReviewIteration: 0,
+              author: 'rejecter',
+            }),
+          ),
       )
 
       expect(results[0]!.status).toBe('fulfilled')
@@ -705,24 +728,28 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const results = await concurrentReviewMutations(
         h,
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'rejected',
-            rejectReason: 'redo the document',
-            expectedReviewIteration: 0,
-            author: 'rejecter',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'rejected',
+              rejectReason: 'redo the document',
+              expectedReviewIteration: 0,
+              author: 'rejecter',
+            }),
+          ),
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'approver',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'approver',
+            }),
+          ),
       )
 
       expect(results[0]!.status).toBe('fulfilled')
@@ -757,24 +784,28 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const results = await concurrentReviewMutations(
         h,
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'iterated',
-            expectedReviewIteration: 0,
-            author: 'iterator',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'iterated',
+              expectedReviewIteration: 0,
+              author: 'iterator',
+            }),
+          ),
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'rejected',
-            rejectReason: 'reject must lose',
-            expectedReviewIteration: 0,
-            author: 'rejecter',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'rejected',
+              rejectReason: 'reject must lose',
+              expectedReviewIteration: 0,
+              author: 'rejecter',
+            }),
+          ),
       )
 
       expect(results[0]!.status).toBe('fulfilled')
@@ -802,23 +833,27 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const results = await concurrentReviewMutations(
         h,
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'first',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'first',
+            }),
+          ),
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'second',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'second',
+            }),
+          ),
       )
 
       expect(results[0]!.status).toBe('fulfilled')
@@ -845,23 +880,27 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const results = await concurrentReviewMutationsAtCallback(
         h,
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 99,
-            author: 'stale-client',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 99,
+              author: 'stale-client',
+            }),
+          ),
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'valid-client',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'valid-client',
+            }),
+          ),
       )
 
       expectRejectedWithCode(results[0]!, 'review-iteration-mismatch')
@@ -877,14 +916,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const results = await concurrentReviewMutations(
         h,
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'approver',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'approver',
+            }),
+          ),
         () =>
           addReviewComment({
             db: h.db,
@@ -937,14 +978,16 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
             author: 'commenter',
           }),
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'approver',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'approver',
+            }),
+          ),
       )
 
       expect(results[0]!.status).toBe('fulfilled')
@@ -1009,24 +1052,28 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       const results = await concurrentReviewMutations(
         h,
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: h.reviewRunId,
-            decision: 'rejected',
-            rejectReason: 'invalidate every sibling',
-            expectedReviewIteration: 0,
-            author: 'rejecter',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: h.reviewRunId,
+              decision: 'rejected',
+              rejectReason: 'invalidate every sibling',
+              expectedReviewIteration: 0,
+              author: 'rejecter',
+            }),
+          ),
         () =>
-          submitReviewDecision({
-            db: h.db,
-            appHome: h.appHome,
-            nodeRunId: siblingRunId,
-            decision: 'approved',
-            expectedReviewIteration: 0,
-            author: 'sibling-approver',
-          }),
+          submitReviewDecision(
+            withO2Closure({
+              db: h.db,
+              appHome: h.appHome,
+              nodeRunId: siblingRunId,
+              decision: 'approved',
+              expectedReviewIteration: 0,
+              author: 'sibling-approver',
+            }),
+          ),
       )
 
       expect(results[0]!.status).toBe('fulfilled')

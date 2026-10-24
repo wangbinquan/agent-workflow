@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-128 P5-D — quick-channel seal + AUTODISPATCH (the FINAL P5 phase).
 //
 // §5.2.7 P5b single-path: the quick channel (defer=false) does NOT mint an immediate
@@ -91,18 +92,20 @@ async function commitClarifyDecisionThenInterrupt(input: {
     )
   )[0]!
   const directive = input.directive ?? 'continue'
-  const prepared = await prepareClarifyDecision({
-    db: input.db,
-    taskId: input.taskId,
-    originNodeRunId: input.originNodeRunId,
-    roundId: round.id,
-    actorUserId: actor.userId,
-    actorRole: actor.role,
-    answers: input.answers,
-    directive,
-    taskRevision: task.lifecycleEventRevision,
-    decision: { idempotencyKey: input.idempotencyKey },
-  })
+  const prepared = await prepareClarifyDecision(
+    withO2Closure({
+      db: input.db,
+      taskId: input.taskId,
+      originNodeRunId: input.originNodeRunId,
+      roundId: round.id,
+      actorUserId: actor.userId,
+      actorRole: actor.role,
+      answers: input.answers,
+      directive,
+      taskRevision: task.lifecycleEventRevision,
+      decision: { idempotencyKey: input.idempotencyKey },
+    }),
+  )
 
   await autoDispatchClarifyRound({
     db: input.db,
@@ -192,7 +195,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       decision: { idempotencyKey: 'replay' },
     }
 
-    const decided = await autoDispatchClarifyRoundWithDecision(command)
+    const decided = await autoDispatchClarifyRoundWithDecision(withO2Closure(command))
     expect(decided.receipt).toMatchObject({
       operationId: expect.any(String),
       gate: { kind: 'clarify', ref: `clarify:${intermediaryNodeRunId}` },
@@ -218,7 +221,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     })
     const runCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
 
-    const replay = await autoDispatchClarifyRoundWithDecision(command)
+    const replay = await autoDispatchClarifyRoundWithDecision(withO2Closure(command))
     expect(replay.receipt).toEqual({ ...decided.receipt, replayed: true })
     expect(replay.dispatch).toEqual(decided.dispatch)
     expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
@@ -227,10 +230,12 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     )
 
     await expect(
-      autoDispatchClarifyRoundWithDecision({
-        ...command,
-        directive: 'stop',
-      }),
+      autoDispatchClarifyRoundWithDecision(
+        withO2Closure({
+          ...command,
+          directive: 'stop',
+        }),
+      ),
     ).rejects.toMatchObject({ code: 'human-gate-idempotency-conflict' })
   })
 
@@ -315,7 +320,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       expectedOriginNodeRunId: intermediaryNodeRunId,
       expectedContinuationRef: intent.id,
     })
-    const replay = await autoDispatchClarifyRoundWithDecision(command)
+    const replay = await autoDispatchClarifyRoundWithDecision(withO2Closure(command))
     expect(replay.dispatch).toEqual(finished.dispatch)
     expect(replay.dispatch.reruns).toHaveLength(1)
     expect(replay.dispatch.dispatchedEntryIds).toHaveLength(1)
@@ -399,14 +404,16 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     try {
       await expectDatabaseFailure(
         () =>
-          autoDispatchClarifyRoundWithDecision({
-            db,
-            memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-            originNodeRunId: intermediaryNodeRunId,
-            answers: [ans('q1')],
-            actor,
-            decision: { idempotencyKey: 'clarify-decision-fault' },
-          }),
+          autoDispatchClarifyRoundWithDecision(
+            withO2Closure({
+              db,
+              memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+              originNodeRunId: intermediaryNodeRunId,
+              answers: [ans('q1')],
+              actor,
+              decision: { idempotencyKey: 'clarify-decision-fault' },
+            }),
+          ),
         'rfc333-clarify-intent-fault',
       )
 
@@ -481,17 +488,19 @@ async function seedSealableSelfRound(
   questions: ClarifyQuestion[],
 ): Promise<{ intermediaryNodeRunId: string; askingRunId: string }> {
   const askingRunId = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: P,
-    askingNodeRunId: askingRunId,
-    askingShardKey: null,
-    intermediaryNodeId: CL,
-    iteration: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: P,
+      askingNodeRunId: askingRunId,
+      askingShardKey: null,
+      intermediaryNodeId: CL,
+      iteration: 0,
+      questions,
+    }),
+  )
   return { intermediaryNodeRunId: clarifyNodeRunId, askingRunId }
 }
 
@@ -1476,13 +1485,15 @@ describeEachProvider('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 
     ])
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await autoDispatchClarifyRoundWithDecision({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: clarifyNodeRunId,
-      answers: [ans('q1')],
-      actor,
-    })
+    await autoDispatchClarifyRoundWithDecision(
+      withO2Closure({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: clarifyNodeRunId,
+        answers: [ans('q1')],
+        actor,
+      }),
+    )
     expect(received.find((m) => m.type === 'clarify.answered')).toBeDefined()
   })
 
@@ -1494,14 +1505,16 @@ describeEachProvider('RFC-128 P5-D answered WS broadcast (Codex round-6 finding 
     await patchTaskFixture(db, { id: taskId }, { status: 'awaiting_human' })
     const received: Array<{ type: string }> = []
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
-    await autoDispatchClarifyRoundWithDecision({
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-      originNodeRunId: crossNodeRunId,
-      answers: [ans('q1')],
-      directive: 'stop',
-      actor,
-    })
+    await autoDispatchClarifyRoundWithDecision(
+      withO2Closure({
+        db,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+        originNodeRunId: crossNodeRunId,
+        answers: [ans('q1')],
+        directive: 'stop',
+        actor,
+      }),
+    )
     expect(received.find((m) => m.type === 'cross-clarify.answered')).toBeDefined()
     expect(received.find((m) => m.type === 'cross-clarify.rejected')).toBeDefined()
   })
@@ -1541,13 +1554,15 @@ describeEachProvider(
       taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m as { type: string }))
       let caught: unknown
       try {
-        await autoDispatchClarifyRoundWithDecision({
-          db,
-          memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
-          originNodeRunId: clarifyNodeRunId,
-          answers: [ans('q1')],
-          actor,
-        })
+        await autoDispatchClarifyRoundWithDecision(
+          withO2Closure({
+            db,
+            memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+            originNodeRunId: clarifyNodeRunId,
+            answers: [ans('q1')],
+            actor,
+          }),
+        )
       } catch (e) {
         caught = e
       }

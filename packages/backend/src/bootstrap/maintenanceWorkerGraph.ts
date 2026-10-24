@@ -1,3 +1,5 @@
+import { composeCrossContextClosure } from './crossContextClosure'
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-389 — one passive in-thread graph; provider differences live in the adapter table.
 import { join } from 'node:path'
 import {
@@ -22,8 +24,8 @@ import { composeIntegrationMaintenanceCommands } from '@/modules/integration/com
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createMaintenanceExecutionFence } from '@/modules/task-execution/composition/maintenanceExecutionFence'
-import { createPostgresqlEventsArchiveStore } from '@/platform/persistence/postgresqlEventsArchive'
-import { createEventsArchiveStore } from '@/platform/persistence/eventsArchiveStore'
+import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
+import { composeRetentionSweepPhases } from './retentionSweepPhases'
 import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persistence/databaseOperationalAdapter'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -84,7 +86,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     return {
       db,
       close,
-      eventsArchiveStore: createPostgresqlEventsArchiveStore(db),
+      eventsArchiveStore: createTaskNodeEventArchiveStore(db),
       storage: Object.freeze({
         async run() {
           return (await operational.runStorageMaintenance()).counters
@@ -132,7 +134,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     return {
       db,
       close,
-      eventsArchiveStore: createEventsArchiveStore(db),
+      eventsArchiveStore: createTaskNodeEventArchiveStore(db),
       storage: Object.freeze({
         async run() {
           checkpointSqliteWal(db)
@@ -155,15 +157,19 @@ function selectMaintenanceWorkerAdapter(input: GraphInput): MaintenanceWorkerAda
 export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = async (input) => {
   const adapter = selectMaintenanceWorkerAdapter(input)
   const { db: client, resourcePackageRecoveryScene } = adapter
+  const closure = composeCrossContextClosure(client)
   const { appHome, effects: workerEffects } = input
   const store = createMaintenanceRunStore(client)
   const integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(
     composeWebhookDeliveryPersistenceFor(client),
   )
-  const taskExecution = createTaskExecutionPersistence(client)
+  const taskExecution = createTaskExecutionPersistence(client, {
+    recoveryHumanGates: closure.collaborationReads.recovery,
+  })
   const taskRecoveryOperations = taskExecution.recoveryAdministration
   const taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(
     client,
+    closure.collaborationReads.archive,
     workerEffects?.taskArchive,
   )
   const workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand(
@@ -172,14 +178,15 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
         db: client,
         appHome,
         repositoryPreparation: composeRepositoryPreparation({
+          taskPorts: composeSourceControlTaskPorts(client),
           db: client,
           appHome,
           preparationEffects: workerEffects?.workspaceMaintenance?.preparation,
           scratchEffects: workerEffects?.workspaceMaintenance?.scratch,
         }),
         maintenance: composeWorkspaceMaintenanceCommand({
+          ...composeSourceControlTaskPorts(client),
           filesystem: workerEffects?.workspaceMaintenance?.filesystem(isMaterializingTask),
-          db: client,
           appHome,
           terminalMaintenance: taskExecution.terminalMaintenance,
           isMaterializingTask,
@@ -197,7 +204,7 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
   const developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(client)
   const digitalEmployeeMaintenance = composeDigitalEmployeeMaintenanceCommands(client)
   const systemOperations = composeMaintenanceSystemOperations({
-    db: client,
+    retentionPhases: composeRetentionSweepPhases(client),
     eventsArchiveStore: adapter.eventsArchiveStore,
     eventsArchiveContent: workerEffects?.eventsArchive,
     storage: adapter.storage,

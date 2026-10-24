@@ -1,4 +1,4 @@
-// RFC-395 I-a: schema-only entry; this context's composition root contains only schema exports.
+// RFC-395 II-b O3: schema-only entry stays independent of runtime phase composition.
 export {
   schemaContribution,
   agents,
@@ -20,4 +20,4 @@ export {
   workflows,
   workgroupMembers,
   workgroups,
-} from '../composition'
+} from '../infrastructure/persistence/schema'

@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
 import {
   nodeRunFixture,
@@ -109,7 +110,11 @@ function canonRepos(worktreePath: string): CanonRepo[] {
 }
 
 function isolatedRunBinding(db: PersistenceDb): IsolatedAgentRunBinding {
-  return Object.freeze({ persistence: createTaskExecutionPersistence(db) })
+  return Object.freeze({
+    persistence: createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }),
+  })
 }
 
 async function mintedRow(db: PersistenceDb, taskId: string): Promise<string> {

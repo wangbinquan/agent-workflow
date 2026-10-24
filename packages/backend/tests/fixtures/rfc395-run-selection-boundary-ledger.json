@@ -3,13 +3,6 @@
   "policy": "Exact epoch-1 exceptions; remove an entry when its code retires, never add to the initial fingerprints.",
   "entries": [
     {
-      "path": "src/modules/task-execution/domain/legacyMigration/frameBackfill.ts",
-      "rule": "legacy-selection",
-      "source": "[...input.rows].sort(compareNodeRunMintOrder)",
-      "why": "Epoch-1 boot frame backfill must replay the historical mint order until II-b removes this migration.",
-      "removeBy": "II-b"
-    },
-    {
       "path": "src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
       "rule": "legacy-selection",
       "source": "structurallySupersededCondition(db)",
@@ -66,7 +59,7 @@
       "removeBy": "II-b"
     },
     {
-      "path": "src/modules/code-capability/infrastructure/codeWorkspaceRead.ts",
+      "path": "src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries.ts",
       "rule": "display-order-call",
       "source": "runHistoryOrder(db, nodeRuns, 'api-timeline')",
       "why": "Code workspace timeline retains the old API startedAt/seq/ID display order until the epoch-1 adapter retires in II-b.",

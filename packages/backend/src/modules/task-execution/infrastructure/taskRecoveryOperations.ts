@@ -1,3 +1,4 @@
+import type { TaskRecoveryHumanGateFactsPort } from '../composition/required-ports'
 // RFC-359 W4-B1 批 2e —— 任务恢复读 / 写：一份实现，两个 provider 共用。
 //
 // 此前 sqlite / postgresql 两份约千行只差客户端类型、同步 / 异步形态，以及「四条状态迁移」的来源：
@@ -10,7 +11,7 @@ import { decodeTaskSubject } from '../domain/taskSubject'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, ne, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -148,43 +149,11 @@ async function latestEventTsForTask(db: PersistenceDb, taskId: string): Promise<
 
 async function hasUndispatchedDesignerQuestions(
   db: PersistenceDb,
+  humanGates: TaskRecoveryHumanGateFactsPort,
   taskId: string,
 ): Promise<boolean> {
-  const { taskQuestions, clarifyRounds, nodeRuns, nodeRunOutputs } = tablesOf(db)
-  const projection = {
-    dispatchedAt: taskQuestions.dispatchedAt,
-    triggerRunId: taskQuestions.triggerRunId,
-    defaultTargetNodeId: taskQuestions.defaultTargetNodeId,
-    overrideTargetNodeId: taskQuestions.overrideTargetNodeId,
-  }
-  const clarifyDesigner = await db
-    .select(projection)
-    .from(taskQuestions)
-    .innerJoin(
-      clarifyRounds,
-      eq(taskQuestions.originNodeRunId, clarifyRounds.intermediaryNodeRunId),
-    )
-    .where(
-      and(
-        eq(taskQuestions.taskId, taskId),
-        eq(taskQuestions.roleKind, 'designer'),
-        ne(taskQuestions.confirmation, 'confirmed'),
-        eq(clarifyRounds.status, 'answered'),
-        eq(clarifyRounds.directive, 'continue'),
-      ),
-    )
-  const manualDesigner = await db
-    .select(projection)
-    .from(taskQuestions)
-    .where(
-      and(
-        eq(taskQuestions.taskId, taskId),
-        eq(taskQuestions.roleKind, 'designer'),
-        eq(taskQuestions.sourceKind, 'manual'),
-        ne(taskQuestions.confirmation, 'confirmed'),
-      ),
-    )
-  const entries: readonly TaskRecoveryQuestionParkEntry[] = [...clarifyDesigner, ...manualDesigner]
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+  const entries = await humanGates.designerParkEntries(taskId)
   if (entries.length === 0) return false
   const runs = await db
     .select({
@@ -231,10 +200,10 @@ async function hasUndispatchedDesignerQuestions(
 
 async function loadLifecycleInvariantSnapshots(
   db: PersistenceDb,
+  humanGates: TaskRecoveryHumanGateFactsPort,
   scope: TaskLifecycleInvariantScope,
 ): Promise<readonly TaskLifecycleInvariantSnapshot[]> {
-  const { tasks, docVersions, clarifyRounds, nodeRuns, taskQuestions, nodeRunOutputs } =
-    tablesOf(db)
+  const { tasks, docVersions, nodeRuns, taskQuestions, nodeRunOutputs } = tablesOf(db)
   const taskRows =
     'taskId' in scope
       ? await db
@@ -279,18 +248,7 @@ async function loadLifecycleInvariantSnapshots(
         })
         .from(docVersions)
         .where(inArray(docVersions.taskId, taskIds)),
-      db
-        .select({
-          taskId: clarifyRounds.taskId,
-          id: clarifyRounds.id,
-          kind: clarifyRounds.kind,
-          status: clarifyRounds.status,
-          directive: clarifyRounds.directive,
-          clarifyNodeRunId: clarifyRounds.intermediaryNodeRunId,
-          clarifyNodeId: clarifyRounds.intermediaryNodeId,
-        })
-        .from(clarifyRounds)
-        .where(inArray(clarifyRounds.taskId, taskIds)),
+      humanGates.lifecycleClarifyRounds(taskIds),
       db
         .select({
           taskId: nodeRuns.taskId,
@@ -453,9 +411,10 @@ async function hasNoActiveHumanMember(
 
 async function loadStuckTaskSnapshots(
   db: PersistenceDb,
+  humanGates: TaskRecoveryHumanGateFactsPort,
   taskIdFilter?: readonly string[],
 ): Promise<readonly TaskRecoveryStuckTaskSnapshot[]> {
-  const { tasks, nodeRuns, docVersions, clarifyRounds } = tablesOf(db)
+  const { tasks, nodeRuns, docVersions } = tablesOf(db)
   const base = and(isNull(tasks.deletedAt), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]))
   const rows = await db
     .select({
@@ -547,16 +506,8 @@ async function loadStuckTaskSnapshots(
           .where(and(eq(docVersions.taskId, row.taskId), eq(docVersions.decision, 'pending')))
           .limit(1),
       ),
-      first(
-        db
-          .select({ id: clarifyRounds.id })
-          .from(clarifyRounds)
-          .where(
-            and(eq(clarifyRounds.taskId, row.taskId), eq(clarifyRounds.status, 'awaiting_human')),
-          )
-          .limit(1),
-      ),
-      hasUndispatchedDesignerQuestions(db, row.taskId),
+      humanGates.hasOpenClarifyRound(row.taskId),
+      hasUndispatchedDesignerQuestions(db, humanGates, row.taskId),
       hasNoActiveHumanMember(db, row.taskId, row.ownerUserId),
     ])
     snapshots.push(
@@ -566,7 +517,7 @@ async function loadStuckTaskSnapshots(
         hasRepoPrepRow: prepIds.has(row.taskId),
         latestEventTs: latestTaskEventTs,
         hasPendingDocVersion: pendingDoc !== undefined,
-        hasOpenClarifySession: openClarify !== undefined,
+        hasOpenClarifySession: openClarify,
         hasUndispatchedDesignerQuestions: undispatchedDesigner,
         hasNoActiveHumanMember: noActiveMember,
         runs: Object.freeze(stuckRuns),
@@ -593,7 +544,12 @@ export type TaskRecoveryMutationOperations = Pick<
 export function createTaskRecoveryOperations(
   db: PersistenceDb,
   mutations: TaskRecoveryMutationOperations,
+  humanGates?: TaskRecoveryHumanGateFactsPort,
 ): TaskRecoveryOperations {
+  const requireHumanGates = (): TaskRecoveryHumanGateFactsPort => {
+    if (humanGates === undefined) throw new Error('task recovery human-gate facts are not composed')
+    return humanGates
+  }
   const operations: TaskRecoveryOperations = {
     async recordEvent(input: RecordTaskRecoveryEventInput): Promise<void> {
       const { recoveryEvents } = tablesOf(db)
@@ -978,8 +934,10 @@ export function createTaskRecoveryOperations(
       return mutations.interruptPeriodicTaskIfIdle(input)
     },
 
-    loadStuckTaskSnapshots: (taskIdFilter) => loadStuckTaskSnapshots(db, taskIdFilter),
-    loadLifecycleInvariantSnapshots: (scope) => loadLifecycleInvariantSnapshots(db, scope),
+    loadStuckTaskSnapshots: (taskIdFilter) =>
+      loadStuckTaskSnapshots(db, requireHumanGates(), taskIdFilter),
+    loadLifecycleInvariantSnapshots: (scope) =>
+      loadLifecycleInvariantSnapshots(db, requireHumanGates(), scope),
 
     async reconcileStuckAlerts(input): Promise<TaskLifecycleAlertReconciliation> {
       const openRows = []

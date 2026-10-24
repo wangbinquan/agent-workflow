@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-387: test-only legacy launch configuration fixture; production uses the daemon session bundle.
 // RFC-159 — assemble TestTaskLaunchOptions from LIVE config, per-call.
@@ -51,7 +52,8 @@ export function buildStartTaskDeps(
     db,
     schedulerDriver,
     repositoryWorkspace:
-      moduleMembers?.repositoryWorkspace ?? composeSqliteRepositoryWorkspaceStore(db),
+      moduleMembers?.repositoryWorkspace ??
+      composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
     runtimeSessionLeases:
       moduleMembers?.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
     actorUserId,

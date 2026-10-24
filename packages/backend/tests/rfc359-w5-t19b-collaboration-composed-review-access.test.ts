@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-359 W5-T19b —— 协作组合根的 `reviewTaskAccess` 由「可为空的装配槽」改成**必填字段**之后的行为回归。
 //
 // # 为什么这条测试存在
@@ -117,7 +118,7 @@ describeEachProvider('RFC-359 W5-T19b —— 协作上下文必带活的评审�
     })
 
     // 只给 `db`——不传 `reviewTaskAccess`（改必填后它已不是工厂的入参）。
-    const access = requireReviewTaskAccess(createCollaborationCommandContext({ db }))
+    const access = requireReviewTaskAccess(createCollaborationCommandContext(withO2Closure({ db })))
 
     expect((await access.resolveRelationship(actorFor(owner), taskId, owner)).taskVisible).toBe(
       true,
@@ -136,10 +137,12 @@ describeEachProvider('RFC-359 W5-T19b —— 协作上下文必带活的评审�
 
   test('评审人依赖读的是组合根那一份端口本身（复辟一份私藏副本即红），read models 原样透传', async () => {
     const db = harness.db
-    const context = createCollaborationCommandContext({
-      db,
-      taskExecutionReadModels: READ_MODELS_MARKER,
-    })
+    const context = createCollaborationCommandContext(
+      withO2Closure({
+        db,
+        taskExecutionReadModels: READ_MODELS_MARKER,
+      }),
+    )
 
     const composed = requireReviewTaskAccess(context)
     const dependencies = reviewNodeReviewerDependencies(context)

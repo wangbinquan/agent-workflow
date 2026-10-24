@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -84,7 +85,14 @@ async function codeOf(fn: () => Promise<unknown>): Promise<string> {
 }
 
 function repositoryFor(db: PersistenceDb) {
-  return createWorkgroupRepository(db, workgroupRepositoryDependencies({ db, now: () => T0 + 10 }))
+  return createWorkgroupRepository(
+    db,
+    workgroupRepositoryDependencies({
+      taskReferences: composeSubjectTaskReferencePort,
+      db,
+      now: () => T0 + 10,
+    }),
+  )
 }
 
 describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {

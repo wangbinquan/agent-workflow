@@ -1,3 +1,5 @@
+import { withO2Closure } from './helpers/o2Closure'
+import { o2Ports } from './helpers/o2Closure'
 // RFC-056 PR-B T5 — lock the cross-clarify service contract (RFC-132: answers
 // drive the unified quick channel, autoDispatchClarifyRound).
 //
@@ -242,17 +244,19 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
     taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => received.push(m))
 
     const { round: session, intermediaryNodeRunId: crossClarifyNodeRunId } =
-      await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRunId,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 'Why Redis?'), makeQ('q2', 'Sharding?')],
-      })
+      await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRunId,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 'Why Redis?'), makeQ('q2', 'Sharding?')],
+        }),
+      )
 
     expect(session.status).toBe('awaiting_human')
     expect(session.iteration).toBe(0)
@@ -301,30 +305,34 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
     const qRunId1 = await seedQuestionerRun(db, taskId)
     const qRunId2 = await seedQuestionerRun(db, taskId)
 
-    const r1 = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId1,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 't')],
-    })
+    const r1 = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId1,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 't')],
+      }),
+    )
     expect(r1.round.iteration).toBe(0)
 
-    const r2 = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId2,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 't')],
-    })
+    const r2 = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId2,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 't')],
+      }),
+    )
     expect(r2.round.iteration).toBe(1)
   })
 })
@@ -343,17 +351,19 @@ describeEachProvider(
       const { taskId } = await seedTask(db, { definition: def })
       const qRunId = await seedQuestionerRun(db, taskId)
       await seedDesignerRun(db, taskId)
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRunId,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 't')],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRunId,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 't')],
+        }),
+      )
       await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -366,17 +376,19 @@ describeEachProvider(
       // Insert a SECOND awaiting session to verify the readiness scan
       // correctly handles the "fresh source after a prior consumed batch" case.
       const qRunId2 = await seedQuestionerRun(db, taskId)
-      await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRunId2,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 't2')],
-      })
+      await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRunId2,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 't2')],
+        }),
+      )
       const readiness = await evaluateDesignerRerunReadiness({
         db,
         taskId,
@@ -449,28 +461,32 @@ describeEachProvider(
       const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
       const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
       await seedDesignerRun(db, taskId)
-      await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'crossSec',
-        askingNodeId: 'qSec',
-        askingNodeRunId: qSecRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 'sec')],
-      })
-      const ux = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'crossUx',
-        askingNodeId: 'qUx',
-        askingNodeRunId: qUxRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 'ux')],
-      })
+      await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'crossSec',
+          askingNodeId: 'qSec',
+          askingNodeRunId: qSecRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 'sec')],
+        }),
+      )
+      const ux = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'crossUx',
+          askingNodeId: 'qUx',
+          askingNodeRunId: qUxRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 'ux')],
+        }),
+      )
 
       // Answer only crossUx; crossSec still awaiting → the designer dispatch parks
       // (no designer rerun) and the readiness scan lists crossSec pending.
@@ -533,28 +549,32 @@ describeEachProvider(
       const qSecRun = await seedQuestionerRun(db, taskId, { nodeId: 'qSec' })
       const qUxRun = await seedQuestionerRun(db, taskId, { nodeId: 'qUx' })
       await seedDesignerRun(db, taskId)
-      const sec = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'crossSec',
-        askingNodeId: 'qSec',
-        askingNodeRunId: qSecRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 'sec')],
-      })
-      const ux = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'crossUx',
-        askingNodeId: 'qUx',
-        askingNodeRunId: qUxRun,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 'ux')],
-      })
+      const sec = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'crossSec',
+          askingNodeId: 'qSec',
+          askingNodeRunId: qSecRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 'sec')],
+        }),
+      )
+      const ux = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'crossUx',
+          askingNodeId: 'qUx',
+          askingNodeRunId: qUxRun,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 'ux')],
+        }),
+      )
 
       // Reject sec first (does NOT trigger designer; a stop round produces no
       // designer entries at all).
@@ -647,17 +667,19 @@ describeEachProvider(
       const { taskId } = await seedTask(db, { definition: def })
       const qRunId = await seedQuestionerRun(db, taskId)
       await seedDesignerRun(db, taskId)
-      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cross1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: qRunId,
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQ('q1', 'Why Redis?')],
-      })
+      const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cross1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: qRunId,
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQ('q1', 'Why Redis?')],
+        }),
+      )
       // Human answers; directive=continue dispatches the designer rerun, but it never
       // completes-with-output (the task fails) → the round stays answered+UNCONSUMED.
       await autoDispatchClarifyRound({
@@ -674,7 +696,9 @@ describeEachProvider(
       // so the human's answer is preserved (the deferred queue re-injects it on resume).
       await patchTaskFixture(db, { id: taskId }, { status: 'failed' })
       await runLifecycleInvariants({
-        operations: createTaskExecutionPersistence(db).recoveryAdministration,
+        operations: createTaskExecutionPersistence(db, {
+          recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+        }).recoveryAdministration,
       })
       const sess = (
         await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -710,17 +734,19 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 't'), makeQ('q2', 't')],
-    })
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 't'), makeQ('q2', 't')],
+      }),
+    )
     // RFC-162: cross rounds unify with self — the questioner continuation is the default (scope
     // deleted); its entries are materialized, sealed and consumed by the unified dispatch.
     await autoDispatchClarifyRound({
@@ -765,17 +791,19 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 't')],
-    })
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 't')],
+      }),
+    )
     const results = await Promise.allSettled([
       autoDispatchClarifyRound({
         db,
@@ -817,17 +845,19 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     const db = harness.db
     const { taskId } = await seedTask(db, { deferred: true })
     const qRunId = await seedQuestionerRun(db, taskId)
-    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1', 't')],
-    })
+    const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1', 't')],
+      }),
+    )
     // The concurrent dispatch that won: a pending cross-clarify-questioner-rerun on the questioner
     // home + a DISPATCHED questioner task_question whose home (default) is 'questioner', bound to it
     // (in-flight / unconsumed).

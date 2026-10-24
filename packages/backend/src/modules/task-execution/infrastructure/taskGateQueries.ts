@@ -11,7 +11,7 @@ import {
   type AnyColumn,
   type SQL,
 } from 'drizzle-orm'
-import { taskVisibilityCondition } from '@/db/query'
+import { taskVisibilityCondition, visibleTaskIdsFor } from './taskAuthorization'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -34,6 +34,9 @@ export function createTaskGateQueries(db: PersistenceDb): TaskGateQueries {
     worktreePath: tasks.worktreePath,
   }
   return {
+    visibleTaskIds(subject, taskIds) {
+      return visibleTaskIdsFor(db, subject, taskIds)
+    },
     async listContexts(taskIds) {
       if (taskIds.length === 0) return []
       return db

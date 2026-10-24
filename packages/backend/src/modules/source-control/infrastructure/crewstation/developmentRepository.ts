@@ -1,3 +1,4 @@
+import type { RepositoryWorkspaceTaskPorts } from '../../composition/required-ports'
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -13,12 +14,13 @@ import { assertHostedRepositoryUrl } from './repositoryUrl'
 /** Canonical development baselines and employee scenes share an owner volume;
  * task runs still materialize their own task-scoped repository copies. */
 export function createHostedDevelopmentRepositoryPreparation(input: {
+  readonly taskPorts: RepositoryWorkspaceTaskPorts
   readonly db: PersistenceDb
   readonly helper: WorkspaceHelper
   readonly secretBox: SecretBox
   readonly taskId: string
 }) {
-  const store = composeRepositoryWorkspaceStore(input.db)
+  const store = composeRepositoryWorkspaceStore(input.db, input.taskPorts)
   const writers = new Map<string, Promise<unknown>>()
   const pending = new Map<
     string,

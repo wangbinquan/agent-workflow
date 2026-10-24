@@ -247,7 +247,7 @@ export async function ensureCredentialsSealed(
     if (id === null) continue
     taskRepoUpdates.push({
       taskId: row.taskId,
-      repoIndex: row.repoIndex,
+      ordinal: row.ordinal,
       patch: { cachedRepoId: id },
     })
     result.linked++
@@ -331,7 +331,7 @@ export async function ensureCredentialsSealed(
       const next = redactSensitiveString(value)
       if (next === value) continue
       const patch: Partial<Pick<typeof row, 'repoUrl' | 'submoduleInitError'>> = { [col]: next }
-      taskRepoUpdates.push({ taskId: row.taskId, repoIndex: row.repoIndex, patch })
+      taskRepoUpdates.push({ taskId: row.taskId, ordinal: row.ordinal, patch })
       result.scrubbed++
     }
   }

@@ -1,3 +1,5 @@
+import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/composition'
+import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
 // RFC-359 W7 —— realtime 持久化端口的双引擎对拍。
 //
 // 为什么存在：合一前 `sqliteRealtimeStore.ts` / `postgresqlRealtimeStore.ts` 是 body 逐字节
@@ -78,7 +80,11 @@ async function seedRun(db: PersistenceDb, taskId: string): Promise<string> {
 describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎上同形', (harness) => {
   test('findTaskAudience：成员 / 非成员 / 任务不存在三态可区分', async () => {
     const db = harness.db
-    const store = new DrizzleRealtimeStore(db)
+    const store = new DrizzleRealtimeStore(
+      db,
+      composeRealtimeTaskFacts(db),
+      composeRealtimeResourceAcl(db),
+    )
     const owner = await seedUser(db, `owner-${ulid()}`)
     const member = await seedUser(db, `member-${ulid()}`)
     const stranger = await seedUser(db, `stranger-${ulid()}`)
@@ -107,7 +113,11 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
 
   test('findTaskAudience：无 owner 的任务带回 null owner 而不是整行 null', async () => {
     const db = harness.db
-    const store = new DrizzleRealtimeStore(db)
+    const store = new DrizzleRealtimeStore(
+      db,
+      composeRealtimeTaskFacts(db),
+      composeRealtimeResourceAcl(db),
+    )
     const taskId = await seedTask(db, { ownerUserId: null })
 
     expect(await store.findTaskAudience(taskId, `user-${ulid()}`)).toEqual({
@@ -118,7 +128,11 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
 
   test('findResource：workflow 与 workgroup 各查各的表，同名 id 不串台', async () => {
     const db = harness.db
-    const store = new DrizzleRealtimeStore(db)
+    const store = new DrizzleRealtimeStore(
+      db,
+      composeRealtimeTaskFacts(db),
+      composeRealtimeResourceAcl(db),
+    )
     const owner = await seedUser(db, `owner-${ulid()}`)
     // 故意让两类资源用**同一个** id：只有真的按 type 分表查，两边结果才会不同。
     const sharedId = `res-${ulid()}`
@@ -158,7 +172,11 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
 
   test('findMemoryScope：资源域带 scopeId，global 域的 scopeId 是 NULL', async () => {
     const db = harness.db
-    const store = new DrizzleRealtimeStore(db)
+    const store = new DrizzleRealtimeStore(
+      db,
+      composeRealtimeTaskFacts(db),
+      composeRealtimeResourceAcl(db),
+    )
     const repoMemory = `mem-${ulid()}`
     const globalMemory = `mem-${ulid()}`
     const { memories } = tablesOf(db)
@@ -198,7 +216,11 @@ describeEachProvider('RFC-359 W7 —— realtime 持久化端口在两个引擎�
 
   test('listTaskEvents：跨 run 汇总、id 升序、since 严格大于、别的任务不混入', async () => {
     const db = harness.db
-    const store = new DrizzleRealtimeStore(db)
+    const store = new DrizzleRealtimeStore(
+      db,
+      composeRealtimeTaskFacts(db),
+      composeRealtimeResourceAcl(db),
+    )
     const taskId = await seedTask(db, { ownerUserId: null })
     const otherTaskId = await seedTask(db, { ownerUserId: null })
     const runA = await seedRun(db, taskId)

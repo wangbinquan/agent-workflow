@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W17 / AC-10: boot-orphan 的真实装配，两个引擎逐字同一条。
 //
 // 开这个文件时它锁的是「各自保留各自的历史形状」——SQLite 与 PostgreSQL 在**三件事**上不同：
@@ -233,9 +234,9 @@ describeEachProvider(
       await withWriteTrigger(harness, 'observe-order', async () => {
         const clock = spyOn(Date, 'now').mockReturnValue(WALL_NOW)
         try {
-          const won = await createTaskExecutionPersistence(
-            harness.db,
-          ).recoveryAdministration.interruptBootOrphanTask(bootInput)
+          const won = await createTaskExecutionPersistence(harness.db, {
+            recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+          }).recoveryAdministration.interruptBootOrphanTask(bootInput)
           expect(won).toBe(true)
         } finally {
           clock.mockRestore()
@@ -286,9 +287,9 @@ describeEachProvider(
         nudge() {},
       })
       expect(
-        await createTaskExecutionPersistence(
-          harness.db,
-        ).recoveryAdministration.interruptBootOrphanTask({ ...bootInput, from: 'pending' }),
+        await createTaskExecutionPersistence(harness.db, {
+          recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+        }).recoveryAdministration.interruptBootOrphanTask({ ...bootInput, from: 'pending' }),
       ).toBe(false)
       expect(await snapshot(harness.db)).toEqual(before)
       expect(published).toBe(false)
@@ -303,9 +304,9 @@ describeEachProvider(
         const before = await snapshot(harness.db)
         await withWriteTrigger(harness, mode, async () => {
           await expect(
-            createTaskExecutionPersistence(
-              harness.db,
-            ).recoveryAdministration.interruptBootOrphanTask(bootInput),
+            createTaskExecutionPersistence(harness.db, {
+              recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+            }).recoveryAdministration.interruptBootOrphanTask(bootInput),
           ).rejects.toMatchObject({
             code: 'task-continuation-stale',
             message:

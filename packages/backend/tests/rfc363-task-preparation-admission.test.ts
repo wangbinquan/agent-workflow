@@ -1,3 +1,4 @@
+import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-363: exercise the production Task kernel, real provider transactions and Git adapter.
 // These cases protect the gap between source freezing, a durable SC receipt and Task acceptance.
@@ -111,7 +112,9 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       name: workflowId,
       definition: JSON.stringify(definition),
     })
-    const binding = composeRepositoryPreparation({ db: harness.db, appHome })
+    const binding = composeRepositoryPreparation(
+      withSourceControlTaskPorts({ db: harness.db, appHome }),
+    )
     const workspace = createTaskRouteWorkspaceParticipant({
       sourceContexts: identityAccess.taskPreparationContext,
       db: harness.db,
@@ -177,7 +180,9 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     function effect(taskId: string, signal = new AbortController().signal) {
       return {
         db: harness.db,
-        binding: composeRepositoryPreparation({ db: harness.db, appHome }),
+        binding: composeRepositoryPreparation(
+          withSourceControlTaskPorts({ db: harness.db, appHome }),
+        ),
         taskId,
         gitCommitIdentity: null,
         signal,
@@ -407,7 +412,9 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       sourceContexts: f.identityAccess.taskPreparationContext,
       db: harness.db,
       appHome: f.appHome,
-      repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: f.appHome }),
+      repositoryPreparation: composeRepositoryPreparation(
+        withSourceControlTaskPorts({ db: harness.db, appHome: f.appHome }),
+      ),
     })
     const replay = await rebound.prepare(input)
     expect(replay.worktreePath).toBe(first.worktreePath)
@@ -426,7 +433,9 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
     const maintenance = composeWorkspacePreparationMaintenance({
       db: harness.db,
       appHome: f.appHome,
-      repositoryPreparation: composeRepositoryPreparation({ db: harness.db, appHome: f.appHome }),
+      repositoryPreparation: composeRepositoryPreparation(
+        withSourceControlTaskPorts({ db: harness.db, appHome: f.appHome }),
+      ),
       maintenance: {
         async runGcPhase(request) {
           gcInputs.push([...request.activeTaskIds])
@@ -646,7 +655,9 @@ describeEachProvider('RFC-363 Task preparation admission', (harness) => {
       assertCurrent: async () => {},
     })
     writeFileSync(join(first.worktreePath, 'upload.txt'), 'retained')
-    const rebound = composeRepositoryPreparation({ db: harness.db, appHome: f.appHome })
+    const rebound = composeRepositoryPreparation(
+      withSourceControlTaskPorts({ db: harness.db, appHome: f.appHome }),
+    )
     const second = await rebound.prepareScratch({
       taskId,
       gitCommitIdentity: null,

@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { schemaFixtureDb } from './helpers/schemaFixture'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -163,7 +164,7 @@ describe('RFC-279 migration 0147', () => {
     expect(escrow.urlEnc?.startsWith('aw-legacy-url-hex-v1:')).toBe(true)
     expect(unsealRepoUrl(escrow, box)).toBeNull()
 
-    const store = composeSqliteRepositoryWorkspaceStore(db)
+    const store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     const sealed = await ensureCredentialsSealed(store, box)
     expect(sealed.sealed).toBe(1)
     const current = first(db.select().from(cachedRepos))!
@@ -239,7 +240,10 @@ describe('RFC-279 migration 0147', () => {
       )
       .run()
     await expect(
-      ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), box),
+      ensureCredentialsSealed(
+        composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        box,
+      ),
     ).rejects.toThrow(/cached repo legacy URL escrow is malformed/)
   })
 
@@ -254,7 +258,10 @@ describe('RFC-279 migration 0147', () => {
     apply0147()
 
     await expect(
-      ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), undefined),
+      ensureCredentialsSealed(
+        composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+        undefined,
+      ),
     ).rejects.toThrow(/legacy URL escrow requires SecretBox sealing/)
     const { cachedRepos } = tablesOf(db)
     expect(first(db.select().from(cachedRepos))?.urlEnc).toStartWith('aw-legacy-url-hex-v1:')
@@ -280,7 +287,12 @@ describe('RFC-279 migration 0147', () => {
     expect(row.urlEnc).toBe(sealed)
     expect(unsealRepoUrl(row, box)).toBe(LEGACY_URL)
     expect(
-      (await ensureCredentialsSealed(composeSqliteRepositoryWorkspaceStore(db), box)).sealed,
+      (
+        await ensureCredentialsSealed(
+          composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
+          box,
+        )
+      ).sealed,
     ).toBe(0)
   })
 })

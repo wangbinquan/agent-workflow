@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-098 B1 REGRESSION LOCK — per-task write-lock registry (audit S-9 / ⑥-10,
 // design/RFC-098-scheduler-closeout/design.md §B1 + 对抗检视修订 #1).
 //
@@ -288,18 +289,20 @@ async function seedClarifyTask(
     finishedAt: Date.now(),
     checkpoints: opts.checkpoints,
   })
-  const sess = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'agent_x',
-    askingNodeRunId: agentRunId,
-    askingShardKey: null,
-    intermediaryNodeId: 'clarify_x',
-    iteration: 0,
-    questions: [makeQ('q1')],
-    truncationWarnings: [],
-  })
+  const sess = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'agent_x',
+      askingNodeRunId: agentRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'clarify_x',
+      iteration: 0,
+      questions: [makeQ('q1')],
+      truncationWarnings: [],
+    }),
+  )
   return { taskId, agentRunId, clarifyNodeRunId: sess.intermediaryNodeRunId }
 }
 

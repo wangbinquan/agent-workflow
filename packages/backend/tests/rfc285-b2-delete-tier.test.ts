@@ -1,3 +1,4 @@
+import { deleteWorkgroup } from './helpers/resourceCatalogDeletion'
 // RFC-285 T5（B2/D5）—— 删除引用中档统一的删除矩阵（E2/E3）。
 //
 // 为什么这条测试存在：三类资源对「被任务引用时能否删除」曾三个答案——
@@ -18,7 +19,6 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { deleteWorkgroup } from '../src/services/workgroups'
 
 function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({

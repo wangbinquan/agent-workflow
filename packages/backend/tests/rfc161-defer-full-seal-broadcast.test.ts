@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-161 — the defer control channel (centralized answer pane) seals a clarify
 // round WITHOUT the quick channel's emitAutoAnswered WS event. On a FULL seal the
@@ -124,17 +125,19 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'designer',
-    askingNodeRunId: sourceRunId,
-    askingShardKey: null,
-    intermediaryNodeId: 'c1',
-    iteration: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'c1',
+      iteration: 0,
+      questions,
+    }),
+  )
   return { taskId, nodeRunId: clarifyNodeRunId }
 }
 

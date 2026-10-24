@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   agentFixture,
@@ -76,7 +77,10 @@ const isTaskClarifySuppressed = (
   nodeId?: string,
   shardKey?: string | null,
 ): Promise<boolean> =>
-  createCollaborationRuntimeMechanics(db).isTaskClarifySuppressed({
+  createCollaborationRuntimeMechanics(db, {
+    taskLock: o2Ports(db).taskLock,
+    ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+  }).isTaskClarifySuppressed({
     taskId,
     ...(nodeId === undefined ? {} : { nodeId }),
     ...(shardKey === undefined ? {} : { shardKey }),
@@ -89,7 +93,10 @@ const dismissOpenClarifyParksForAutonomous = (
 ): ReturnType<
   ReturnType<typeof createCollaborationRuntimeMechanics>['dismissOpenClarifyParksForAutonomous']
 > =>
-  createCollaborationRuntimeMechanics(db).dismissOpenClarifyParksForAutonomous({
+  createCollaborationRuntimeMechanics(db, {
+    taskLock: o2Ports(db).taskLock,
+    ...{ upstreamAgents: o2Ports(db).upstreamAgents },
+  }).dismissOpenClarifyParksForAutonomous({
     taskId,
     mode,
   })

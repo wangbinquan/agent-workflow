@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 patch 2026-05-23 — designer's own pending row uses max(existing)+1.
 //
 // The 2026-05-22 cascade patch correctly bumped retry_index on every
@@ -235,17 +236,19 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 2 })
 
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const sess = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
 
     await autoDispatchClarifyRound({
       db,
@@ -283,17 +286,19 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     })
     const qRun = await seedRun(db, taskId, 'questioner', { retryIndex: 0 })
 
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const sess = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -333,17 +338,19 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
       startedAt: 400,
     })
 
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRun,
-      targetConsumerNodeId: 'designer',
-      loopIter: 1,
-      questions: [makeQ('q1')],
-    })
+    const sess = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRun,
+        targetConsumerNodeId: 'designer',
+        loopIter: 1,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

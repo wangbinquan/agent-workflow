@@ -10,7 +10,7 @@ import type { DirectAuthenticatedAuthority } from '../../src/modules/identity-ac
 import { createResourceCatalogQuery } from '../../src/modules/resource-catalog/infrastructure/catalogQuery'
 import { createMcpRepository } from '../../src/modules/resource-catalog/infrastructure/mcpRepository'
 import { createPluginRepository } from '../../src/modules/resource-catalog/infrastructure/pluginRepository'
-import { getAgentById } from '../../src/services/agent'
+import { getAgentById } from '../../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { withMcpOperationConfigHash } from '../../src/services/mcpOperationRevision'
 import { withPluginOperationConfigHash } from '../../src/services/pluginOperationRevision'
 import {

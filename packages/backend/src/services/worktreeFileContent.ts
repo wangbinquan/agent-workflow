@@ -17,7 +17,7 @@
 import { basename } from 'node:path'
 import { isSingleRootRepository, parseRepoKeyWire } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
+import type { TaskWorktreeLocator } from '@/modules/task-execution/public/queries'
 import {
   composeLocalRepositoryRevisionContent,
   openContainedFileWithin,
@@ -67,7 +67,7 @@ export interface FileContentDeps {
  * carry); single-root tasks may omit `repo`.
  */
 export async function getTaskFileContent(
-  store: RepositoryWorkspaceStore,
+  locator: TaskWorktreeLocator,
   taskId: string,
   q: { path: string; side: 'base' | 'worktree'; basePath?: string; repo?: string },
   deps: FileContentDeps = {},
@@ -75,7 +75,7 @@ export async function getTaskFileContent(
   if (q.path === '') {
     throw new ValidationError('file-content-missing-path', 'path query param required')
   }
-  const task = await store.findWorktreeTask(taskId)
+  const task = await locator.find(taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }

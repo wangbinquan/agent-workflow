@@ -1,3 +1,4 @@
+import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 // Service + HTTP coverage for Workflow CRUD (P-1-11).
 // In-memory SQLite; CRUD round-trips and references checks only — full
 // topology/port validation lands in P-2-01.
@@ -15,7 +16,6 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import {
   createWorkflow,
-  deleteWorkflow,
   getWorkflow,
   listWorkflows,
   updateWorkflow,

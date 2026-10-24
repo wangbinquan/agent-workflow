@@ -5,10 +5,8 @@ import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-wo
 import { and, eq, inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  ConcurrentTaskTransition,
-  resolveTerminalWorkspacePruneDecision,
-} from '@/services/lifecycle'
+import { ConcurrentTaskTransition } from './taskLifecycle'
+import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
 import { ConflictError } from '@/util/errors'
 import type {
   TaskSourceTerminationEffectInput,

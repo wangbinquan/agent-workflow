@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-B T6 — scheduler / runner integration for the cross-clarify path.
 //
 // LOCKS:
@@ -628,28 +629,30 @@ function registerProviderCases1(provider: ProviderHarness) {
       retryIndex: 0,
       iteration: 0,
     })
-    const { round: session } = await createClarifyRound({
-      kind: 'cross',
-      db: h.db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [
-        {
-          id: 'q1',
-          title: 'Why?',
-          kind: 'single',
-          recommended: false,
-          options: [
-            { label: 'A', description: '', recommended: false, recommendationReason: '' },
-            { label: 'B', description: '', recommended: false, recommendationReason: '' },
-          ],
-        },
-      ],
-    })
+    const { round: session } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db: h.db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [
+          {
+            id: 'q1',
+            title: 'Why?',
+            kind: 'single',
+            recommended: false,
+            options: [
+              { label: 'A', description: '', recommended: false, recommendationReason: '' },
+              { label: 'B', description: '', recommended: false, recommendationReason: '' },
+            ],
+          },
+        ],
+      }),
+    )
     // RFC-132 PR-B: the unified driver seals + auto-dispatches BOTH the questioner and designer
     // entries and mints both reruns (§6 delta 1 — the questioner now ALWAYS reruns on a cross
     // answer). The 'questioner' node is intentionally absent from this def's nodes, so its minted
@@ -754,28 +757,30 @@ function registerProviderCases1(provider: ProviderHarness) {
     })
 
     // The questioner asked a cross-clarify question (target = designer); answered.
-    const { round: session } = await createClarifyRound({
-      kind: 'cross',
-      db: h.db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: qRunId,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [
-        {
-          id: 'q1',
-          title: 'CCQ_TITLE_MARKER_为何',
-          kind: 'single',
-          recommended: false,
-          options: [
-            { label: 'OPT_ALPHA', description: '', recommended: false, recommendationReason: '' },
-            { label: 'OPT_BETA', description: '', recommended: false, recommendationReason: '' },
-          ],
-        },
-      ],
-    })
+    const { round: session } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db: h.db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: qRunId,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [
+          {
+            id: 'q1',
+            title: 'CCQ_TITLE_MARKER_为何',
+            kind: 'single',
+            recommended: false,
+            options: [
+              { label: 'OPT_ALPHA', description: '', recommended: false, recommendationReason: '' },
+              { label: 'OPT_BETA', description: '', recommended: false, recommendationReason: '' },
+            ],
+          },
+        ],
+      }),
+    )
     // RFC-132 PR-B (§6 delta 1): the unified driver seals + dispatches the QUESTIONER entry AND the
     // designer entry, minting BOTH reruns — the questioner rerun is now eager (a pending row) rather
     // than the old lazy freshness demote, but the behavioral lock is unchanged: whichever fresh

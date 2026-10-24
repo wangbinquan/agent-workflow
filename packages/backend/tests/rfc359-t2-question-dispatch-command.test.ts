@@ -1,3 +1,4 @@
+import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-359 W1-T2a（F-H2-1 之一）—— 问题派发命令端口在两个引擎上各跑一遍。
 //
 // 此前 PostgreSQL daemon 从未注入 `questionDispatches`，路由一到 `requireQuestionDispatchCommand`
@@ -44,8 +45,10 @@ describeEachProvider('RFC-359 T2a —— 问题派发命令端口', (harness) =>
       defaultTargetNodeId: DESIGNER,
       stagedAt: Date.now(),
     })
-    const command = createQuestionDispatchCommand(db)
-    const context = createCollaborationCommandContext({ db, questionDispatches: command })
+    const command = createQuestionDispatchCommand(db, o2Ports(db).taskLock)
+    const context = createCollaborationCommandContext(
+      withO2Closure({ db, questionDispatches: command }),
+    )
     const first = await dispatchTaskQuestions(context, {
       actor,
       actorRole: 'owner',

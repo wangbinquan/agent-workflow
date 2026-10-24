@@ -1,3 +1,4 @@
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-079 PR-A — review multi-document mode (dispatch + selection + the three
 // decisions) integration locks.
 //
@@ -293,15 +294,17 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   }> {
     const { taskId, task, definition, reviewNode } = await seed()
     await seedSrc(taskId, '01SRC', PATHS)
-    const result = await dispatchReviewNode({
-      db,
-      taskId,
-      scopeRoot: task.worktreePath,
-      appHome,
-      definition,
-      node: reviewNode,
-      iteration: 0,
-    })
+    const result = await dispatchReviewNode(
+      withO2Closure({
+        db,
+        taskId,
+        scopeRoot: task.worktreePath,
+        appHome,
+        definition,
+        node: reviewNode,
+        iteration: 0,
+      }),
+    )
     expect(result.kind).toBe('awaiting_review')
     const { docVersions } = tablesOf(db)
     const docs = await db
@@ -373,13 +376,15 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       selection: 'accepted',
     })
 
-    const result = await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewNodeRunId,
-      decision: 'approved',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'approved',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.taskId).toBe(taskId)
     expect(result.resumeRequired).toBe(true)
 
@@ -417,13 +422,15 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       taskId,
       docs[0]!.id,
       () =>
-        submitReviewDecision({
-          db,
-          appHome,
-          nodeRunId: reviewNodeRunId,
-          decision: 'approved',
-          expectedReviewIteration: 0,
-        }),
+        submitReviewDecision(
+          withO2Closure({
+            db,
+            appHome,
+            nodeRunId: reviewNodeRunId,
+            decision: 'approved',
+            expectedReviewIteration: 0,
+          }),
+        ),
       () =>
         setDocumentSelection({
           db,
@@ -469,13 +476,15 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
           selection: 'not_accepted',
         }),
       () =>
-        submitReviewDecision({
-          db,
-          appHome,
-          nodeRunId: reviewNodeRunId,
-          decision: 'approved',
-          expectedReviewIteration: 0,
-        }),
+        submitReviewDecision(
+          withO2Closure({
+            db,
+            appHome,
+            nodeRunId: reviewNodeRunId,
+            decision: 'approved',
+            expectedReviewIteration: 0,
+          }),
+        ),
     )
     expect(results.every((result) => result.status === 'fulfilled')).toBe(true)
 
@@ -498,13 +507,15 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     })
     // docs[1], docs[2] left 'unselected'
     await expect(
-      submitReviewDecision({
-        db,
-        appHome,
-        nodeRunId: reviewNodeRunId,
-        decision: 'approved',
-        expectedReviewIteration: 0,
-      }),
+      submitReviewDecision(
+        withO2Closure({
+          db,
+          appHome,
+          nodeRunId: reviewNodeRunId,
+          decision: 'approved',
+          expectedReviewIteration: 0,
+        }),
+      ),
     ).rejects.toMatchObject({ code: 'review-selection-incomplete' })
     expect(ConflictError).toBeDefined()
   })
@@ -532,13 +543,15 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     await addComment(docs[0]!.id, 'tighten case a')
     await addComment(docs[2]!.id, 'expand case c')
 
-    const result = await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.reviewIteration).toBe(1) // bumped
 
     const { docVersions } = tablesOf(db)
@@ -549,7 +562,14 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       .where(eq(docVersions.reviewNodeRunId, reviewNodeRunId))
     expect(after.every((d) => d.decision === 'iterated')).toBe(true)
 
-    const ctx = await buildReviewPromptContext(db, appHome, 'src', taskId, 0)
+    const ctx = await buildReviewPromptContext(
+      db,
+      appHome,
+      'src',
+      taskId,
+      0,
+      o2Ports(db).upstreamAgents,
+    )
     expect(ctx).toBeDefined()
     const comments = ctx?.comments ?? ''
     expect(comments).toContain('cases/a.md')
@@ -562,14 +582,16 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
   test('reject drives the upstream-rerun path (cancel + mint fresh pending) — C4', async () => {
     const { taskId, reviewNodeRunId, docs } = await dispatchRound()
-    const result = await submitReviewDecision({
-      db,
-      appHome,
-      nodeRunId: reviewNodeRunId,
-      decision: 'rejected',
-      rejectReason: 'cases too coarse',
-      expectedReviewIteration: 0,
-    })
+    const result = await submitReviewDecision(
+      withO2Closure({
+        db,
+        appHome,
+        nodeRunId: reviewNodeRunId,
+        decision: 'rejected',
+        rejectReason: 'cases too coarse',
+        expectedReviewIteration: 0,
+      }),
+    )
     expect(result.reviewIteration).toBe(1)
 
     const { docVersions } = tablesOf(db)

@@ -1,3 +1,5 @@
+import { o2Ports } from './helpers/o2Closure'
+import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 // RFC-359 W3-T15-B —— 终态维护恢复的其余四步（archive / workspace-gc / webhook prune / legacy pruned），
 // 两个引擎各跑一遍。
 //
@@ -100,7 +102,10 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       mkdirSync(join(dirs.archiveDir, `.tmp-${gone}`, 'db'), { recursive: true })
       writeFileSync(join(dirs.archiveDir, `.tmp-${gone}`, 'manifest.json'), '{}', 'utf-8')
 
-      const recovered = await createTaskArchiveMaintenanceCommand(db).recover(dirs)
+      const recovered = await createTaskArchiveMaintenanceCommand(
+        db,
+        o2Ports(db).collaborationReads.archive,
+      ).recover(dirs)
       expect(recovered.promoted).toEqual([gone])
       expect(recovered.discarded).toEqual([stillHere])
       expect(existsSync(join(dirs.archiveDir, gone, 'manifest.json'))).toBe(true)
@@ -118,7 +123,9 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       const dirs = archiveDirs(root)
       const taskId = `t15b_${ulid()}`
       await seedTask(db, taskId)
-      const maintenance = createTaskExecutionPersistence(db).terminalMaintenance
+      const maintenance = createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }).terminalMaintenance
       const members = await maintenance.snapshotTree(taskId)
       let claim = await maintenance.claim({
         rootTaskId: taskId,
@@ -137,7 +144,10 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       mkdirSync(join(dirs.archiveDir, `.tmp-${taskId}`, 'db'), { recursive: true })
       writeFileSync(join(dirs.archiveDir, `.tmp-${taskId}`, 'manifest.json'), '{}', 'utf-8')
 
-      const recovered = await createTaskArchiveMaintenanceCommand(db).recover(dirs)
+      const recovered = await createTaskArchiveMaintenanceCommand(
+        db,
+        o2Ports(db).collaborationReads.archive,
+      ).recover(dirs)
       expect(recovered.promoted).toEqual([taskId])
       expect(existsSync(join(dirs.archiveDir, taskId, 'manifest.json'))).toBe(true)
       expect(await taskExists(db, taskId)).toBe(false)
@@ -159,13 +169,17 @@ describeEachProvider(
   'RFC-359 W3-T15-B —— 工作区恢复（workspaceMaintenance.recover）',
   (harness) => {
     function command(db: PersistenceDb, appHome: string) {
-      return composeWorkspaceMaintenanceCommand({
-        db,
-        appHome,
-        terminalMaintenance: createTaskExecutionPersistence(db).terminalMaintenance,
-        isMaterializingTask: () => false,
-        invalidateWorkspacePath() {},
-      })
+      return composeWorkspaceMaintenanceCommand(
+        withWorkspaceMaintenancePorts({
+          db,
+          appHome,
+          terminalMaintenance: createTaskExecutionPersistence(db, {
+            recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+          }).terminalMaintenance,
+          isMaterializingTask: () => false,
+          invalidateWorkspacePath() {},
+        }),
+      )
     }
 
     test('webhook-terminal 认领：ticker 只接管过期租约，boot（webhookClaims: all）接管全部', async () => {

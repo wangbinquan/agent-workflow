@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-372 review follow-up O8 (design/RFC-372-mindmap-clarify/review-followups-20261014.md §4.7).
 //
 // WHY THIS EXISTS: a follow-up used to hold its HTTP request open for the whole model
@@ -104,25 +105,27 @@ async function seed(h: ProviderHarness) {
     status: 'done',
     iteration: 0,
   })
-  const round = await createClarifyRound({
-    db: h.db,
-    taskId,
-    askingNodeId: 'asking',
-    askingNodeRunId,
-    intermediaryNodeId: 'gate',
-    kind: 'self',
-    askingShardKey: null,
-    iteration: 0,
-    questions: [
-      ClarifyQuestionSchema.parse({
-        id: 'a',
-        title: 'Question a',
-        kind: 'single',
-        options: ['A', 'B'],
-        mindmap: { categoryPath: ['Scope'] },
-      }),
-    ],
-  })
+  const round = await createClarifyRound(
+    withO2Closure({
+      db: h.db,
+      taskId,
+      askingNodeId: 'asking',
+      askingNodeRunId,
+      intermediaryNodeId: 'gate',
+      kind: 'self',
+      askingShardKey: null,
+      iteration: 0,
+      questions: [
+        ClarifyQuestionSchema.parse({
+          id: 'a',
+          title: 'Question a',
+          kind: 'single',
+          options: ['A', 'B'],
+          mindmap: { categoryPath: ['Scope'] },
+        }),
+      ],
+    }),
+  )
   const store = createClarifyFollowupStore(h.db, { publish: async () => {} })
   const request = async (basis?: string): Promise<ClarifyFollowup> => {
     const snapshot = await store.read(round.intermediaryNodeRunId, 'a')
@@ -321,11 +324,13 @@ describeEachProvider('RFC-372 O8: follow-ups generate in the background', (h) =>
   test('the round detail carries the follow-up state and the task channel announces it', async () => {
     const fixture = await seed(h)
     const model = controlledGenerator()
-    const composed = composeCollaborationRouteOperations({
-      db: h.db,
-      context: {} as never,
-      followupGenerator: model.generator,
-    })
+    const composed = composeCollaborationRouteOperations(
+      withO2Closure({
+        db: h.db,
+        context: {} as never,
+        followupGenerator: model.generator,
+      }),
+    )
     const frames: unknown[] = []
     const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(fixture.taskId), (frame) =>
       frames.push(frame),

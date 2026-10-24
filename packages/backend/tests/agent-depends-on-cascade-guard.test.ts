@@ -1,3 +1,4 @@
+import { deleteAgent } from './helpers/resourceCatalogDeletion'
 // Locks RFC-022 §2.1 #5 delete reverse-dep guard and RFC-223 rename stability.
 // Delete still refuses while an id is referenced; rename succeeds because the
 // reference remains bound to the same canonical row.
@@ -10,7 +11,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createAgent, deleteAgent, renameAgent, updateAgent } from '../src/services/agent'
+import {
+  createAgent,
+  renameAgent,
+  updateAgent,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { ConflictError } from '../src/util/errors'
 import type { Agent } from '@agent-workflow/shared'
 

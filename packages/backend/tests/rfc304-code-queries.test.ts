@@ -1,3 +1,4 @@
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-304 T31b — the read side of `/code`, and the command that flips a cell.
 //
 // What these pin is the part a page cannot work around:
@@ -35,7 +36,7 @@ const REPO = 'group/project'
 const ENDPOINT = 'ep-1'
 
 const createCodeMatrixQuery = (db: PersistenceDb) =>
-  createCodeMatrixQueryFromPort(createCapabilityMatrixRead(db))
+  createCodeMatrixQueryFromPort(createCapabilityMatrixRead(db, createAgentExecutionQueries(db)))
 const createCodeWorkItemProjectionQuery = (db: PersistenceDb) =>
   createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(db))
 const createCodeRoundAttemptsQuery = (db: PersistenceDb) =>

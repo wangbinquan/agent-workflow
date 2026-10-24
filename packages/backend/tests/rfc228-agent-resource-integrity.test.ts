@@ -17,7 +17,7 @@ import {
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgentResourceStatus } from '../src/modules/resource-catalog/application/agents/agentResourceIntegrity'
 import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { createRuntime } from './helpers/runtimeRegistryApplication'

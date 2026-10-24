@@ -1,3 +1,4 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-a A2: repository DTO bytes, RequestedSource and unbound SQL retain epoch-1 behavior on both providers.
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
@@ -416,7 +417,10 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
       definition,
     })
     await taskFixture(harness.db, [cases[0]!, cases[6]!, cases[7]!])
-    const store = composeRepositoryWorkspaceStore(harness.db)
+    const store = composeRepositoryWorkspaceStore(
+      harness.db,
+      composeSourceControlTaskPorts(harness.db),
+    )
     // RFC-395 II-a: only cases[7] has no mounts; cases[0] and cases[6] both reference cache-0.
     expect(await store.cachedRepoReferenceCount('cache-primary')).toBe(1)
     expect(await store.cachedRepoReferenceCount('cache-0')).toBe(2)

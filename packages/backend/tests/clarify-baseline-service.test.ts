@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-058 PR-A baseline (T2/T3) — merged & parameterized by RFC-217 T9.
 //
 // One suite locks the unified clarify service (services/clarify/service.ts)
@@ -260,17 +261,19 @@ for (const kind of ['self', 'cross'] as const) {
             iteration: 0,
           })
           taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => events.push(m as { type: string }))
-          const { round, intermediaryNodeRunId } = await createClarifyRound({
-            kind: 'self',
-            db,
-            taskId,
-            askingNodeId: 'designer',
-            askingNodeRunId: 'nr_sym_src',
-            askingShardKey: null,
-            intermediaryNodeId: 'clarify1',
-            iteration: 0,
-            questions: [makeQuestion()],
-          })
+          const { round, intermediaryNodeRunId } = await createClarifyRound(
+            withO2Closure({
+              kind: 'self',
+              db,
+              taskId,
+              askingNodeId: 'designer',
+              askingNodeRunId: 'nr_sym_src',
+              askingShardKey: null,
+              intermediaryNodeId: 'clarify1',
+              iteration: 0,
+              questions: [makeQuestion()],
+            }),
+          )
           return { taskId, round, intermediaryNodeRunId, events }
         }
         const { taskId } = await seedCrossClarifyTask(db)
@@ -283,17 +286,19 @@ for (const kind of ['self', 'cross'] as const) {
           iteration: 0,
         })
         taskBroadcaster.subscribe(TASK_CHANNEL(taskId), (m) => events.push(m as { type: string }))
-        const { round, intermediaryNodeRunId } = await createClarifyRound({
-          kind: 'cross',
-          db,
-          taskId,
-          intermediaryNodeId: 'cc1',
-          askingNodeId: 'questioner',
-          askingNodeRunId: 'nr_sym_src',
-          targetConsumerNodeId: 'designer',
-          loopIter: 0,
-          questions: [makeQuestion()],
-        })
+        const { round, intermediaryNodeRunId } = await createClarifyRound(
+          withO2Closure({
+            kind: 'cross',
+            db,
+            taskId,
+            intermediaryNodeId: 'cc1',
+            askingNodeId: 'questioner',
+            askingNodeRunId: 'nr_sym_src',
+            targetConsumerNodeId: 'designer',
+            loopIter: 0,
+            questions: [makeQuestion()],
+          }),
+        )
         return { taskId, round, intermediaryNodeRunId, events }
       }
 
@@ -342,17 +347,19 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
       retryIndex: 0,
       iteration: 0,
     })
-    const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_source_1',
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [makeQuestion()],
-    })
+    const { round: session, intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_source_1',
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [makeQuestion()],
+      }),
+    )
     expect(session.status).toBe('awaiting_human')
     expect(session.askingNodeId).toBe('designer')
     expect(session.askingShardKey).toBeNull()
@@ -376,18 +383,20 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
       shardKey: 'shard-A',
       parentNodeRunId: 'parent-multi',
     })
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: 'nr_multi',
-      askingShardKey: 'shard-A',
-      intermediaryNodeId: 'clarify1',
-      iteration: 1,
-      questions: [makeQuestion()],
-      parentNodeRunId: 'parent-multi',
-    })
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: 'nr_multi',
+        askingShardKey: 'shard-A',
+        intermediaryNodeId: 'clarify1',
+        iteration: 1,
+        questions: [makeQuestion()],
+        parentNodeRunId: 'parent-multi',
+      }),
+    )
     const sess = (
       await db
         .select()
@@ -441,17 +450,19 @@ describeEachProvider(
         retryIndex: 0,
         iteration: 0,
       })
-      const { round: session } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: 'designer',
-        askingNodeRunId: 'nr_cleanup_src',
-        askingShardKey: null,
-        intermediaryNodeId: 'clarify1',
-        iteration: 0,
-        questions: [makeQuestion()],
-      })
+      const { round: session } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: 'designer',
+          askingNodeRunId: 'nr_cleanup_src',
+          askingShardKey: null,
+          intermediaryNodeId: 'clarify1',
+          iteration: 0,
+          questions: [makeQuestion()],
+        }),
+      )
       expect(session.status).toBe('awaiting_human')
       // RFC-341 committed lifecycle facts have no restrictive task FK and
       // intentionally survive as Event Center audit evidence.
@@ -510,17 +521,19 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
       iteration: 0,
     })
     const { round: session, intermediaryNodeRunId: crossClarifyNodeRunId } =
-      await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc1',
-        askingNodeId: 'questioner',
-        askingNodeRunId: 'nr_q_1',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
+      await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cc1',
+          askingNodeId: 'questioner',
+          askingNodeRunId: 'nr_q_1',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        }),
+      )
     expect(session.iteration).toBe(0)
     expect(session.status).toBe('awaiting_human')
     expect(session.targetConsumerNodeId).toBe('designer')
@@ -540,28 +553,32 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
       retryIndex: 0,
       iteration: 0,
     })
-    await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q_1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    const { round: s2 } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q_1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
+    await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q_1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      }),
+    )
+    const { round: s2 } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q_1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      }),
+    )
     expect(s2.iteration).toBe(1)
   })
 
@@ -576,28 +593,32 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
       retryIndex: 0,
       iteration: 0,
     })
-    const { round: i0 } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q_1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    const { round: i1 } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc1',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q_1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 1,
-      questions: [makeQuestion()],
-    })
+    const { round: i0 } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q_1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      }),
+    )
+    const { round: i1 } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc1',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q_1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 1,
+        questions: [makeQuestion()],
+      }),
+    )
     expect(i0.iteration).toBe(0)
     expect(i1.iteration).toBe(0)
   })
@@ -616,28 +637,32 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
       retryIndex: 0,
       iteration: 0,
     })
-    const { round: a } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc_a',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q_1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
-    const { round: b } = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cc_b',
-      askingNodeId: 'questioner',
-      askingNodeRunId: 'nr_q_1',
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQuestion()],
-    })
+    const { round: a } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc_a',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q_1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      }),
+    )
+    const { round: b } = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cc_b',
+        askingNodeId: 'questioner',
+        askingNodeRunId: 'nr_q_1',
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQuestion()],
+      }),
+    )
     expect(a.iteration).toBe(0)
     expect(b.iteration).toBe(0)
   })
@@ -679,17 +704,19 @@ describeEachProvider(
           retryIndex: 0,
           iteration: 0,
         })
-        await createClarifyRound({
-          kind: 'cross',
-          db,
-          taskId,
-          intermediaryNodeId: ccid,
-          askingNodeId: qid,
-          askingNodeRunId: runId,
-          targetConsumerNodeId: 'designer',
-          loopIter: 0,
-          questions: [makeQuestion()],
-        })
+        await createClarifyRound(
+          withO2Closure({
+            kind: 'cross',
+            db,
+            taskId,
+            intermediaryNodeId: ccid,
+            askingNodeId: qid,
+            askingNodeRunId: runId,
+            targetConsumerNodeId: 'designer',
+            loopIter: 0,
+            questions: [makeQuestion()],
+          }),
+        )
       }
       const { clarifyRounds } = tablesOf(db)
       // Answer only cc_alpha (unified quick channel; the designer auto-dispatch parks on the
@@ -753,17 +780,19 @@ describeEachProvider(
           iteration: 0,
         },
       ])
-      const { intermediaryNodeRunId: cnrStop } = await createClarifyRound({
-        kind: 'cross',
-        db,
-        taskId,
-        intermediaryNodeId: 'cc_stop',
-        askingNodeId: 'questioner_a',
-        askingNodeRunId: 'nr_qa',
-        targetConsumerNodeId: 'designer',
-        loopIter: 0,
-        questions: [makeQuestion()],
-      })
+      const { intermediaryNodeRunId: cnrStop } = await createClarifyRound(
+        withO2Closure({
+          kind: 'cross',
+          db,
+          taskId,
+          intermediaryNodeId: 'cc_stop',
+          askingNodeId: 'questioner_a',
+          askingNodeRunId: 'nr_qa',
+          targetConsumerNodeId: 'designer',
+          loopIter: 0,
+          questions: [makeQuestion()],
+        }),
+      )
       // RFC-132: the stop answer (unified quick channel) writes the questioner's node-level
       // directive; resolveCrossNodeStopped reads it (RFC-132 T7 single source).
       await autoDispatchClarifyRound({

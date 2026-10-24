@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-D C4 — reject persistence cross-cascade 守门.
 //
 // `directive='stop'` (Reject) on a cross-clarify session sets a row that
@@ -182,17 +183,19 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const sess = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'qA',
-      askingNodeRunId: qA,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const sess = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'qA',
+        askingNodeRunId: qA,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -212,17 +215,19 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     const qA = await seedQRun(db, taskId, 'qA')
     const qB = await seedQRun(db, taskId, 'qB')
     // Reject on cross1.
-    const a = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'qA',
-      askingNodeRunId: qA,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const a = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'qA',
+        askingNodeRunId: qA,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -232,17 +237,19 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       actor,
     })
     // Sibling cross2 submits continue — unrelated.
-    const b = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross2',
-      askingNodeId: 'qB',
-      askingNodeRunId: qB,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const b = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross2',
+        askingNodeId: 'qB',
+        askingNodeRunId: qB,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -258,17 +265,19 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const a = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'qA',
-      askingNodeRunId: qA,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const a = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'qA',
+        askingNodeRunId: qA,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -310,17 +319,19 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const a = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'qA',
-      askingNodeRunId: qA,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const a = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'qA',
+        askingNodeRunId: qA,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -338,17 +349,19 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
     const taskId = await seedTask(db)
     await seedDesignerRun(db, taskId)
     const qA = await seedQRun(db, taskId, 'qA')
-    const a = await createClarifyRound({
-      kind: 'cross',
-      db,
-      taskId,
-      intermediaryNodeId: 'cross1',
-      askingNodeId: 'qA',
-      askingNodeRunId: qA,
-      targetConsumerNodeId: 'designer',
-      loopIter: 0,
-      questions: [makeQ('q1')],
-    })
+    const a = await createClarifyRound(
+      withO2Closure({
+        kind: 'cross',
+        db,
+        taskId,
+        intermediaryNodeId: 'cross1',
+        askingNodeId: 'qA',
+        askingNodeRunId: qA,
+        targetConsumerNodeId: 'designer',
+        loopIter: 0,
+        questions: [makeQ('q1')],
+      }),
+    )
     await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),

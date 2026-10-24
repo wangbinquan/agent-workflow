@@ -1,3 +1,4 @@
+import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 import { agentFixture, patchAgentFixture, readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -49,6 +50,7 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
       { ...actor, userId: owner },
     )
     const catalog = composeClassicCatalogs({
+      taskReferences: composeSubjectTaskReferencePort,
       db: harness.db,
       appHome: home,
       resourceCatalog: composeResourceCatalogFor({ db: harness.db }),
@@ -152,6 +154,7 @@ describeEachProvider('RFC-359 W12 complete classic catalog composition', (harnes
     const resourceCatalog = composeResourceCatalogFor({ db: harness.db })
     const compose = (appHome: string) =>
       composeClassicCatalogs({
+        taskReferences: composeSubjectTaskReferencePort,
         db: harness.db,
         appHome,
         runtimeProfiles: { get: async () => ({ enabled: true }) },

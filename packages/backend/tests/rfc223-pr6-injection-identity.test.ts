@@ -16,7 +16,10 @@ import { eq } from 'drizzle-orm'
 import type { Logger } from '@/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createAgent, getAgentById } from '../src/services/agent'
+import {
+  createAgent,
+  getAgentById,
+} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,

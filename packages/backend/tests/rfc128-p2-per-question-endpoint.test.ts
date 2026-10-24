@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-128 P2 — 逐题 seal 端点 + defer 意图 + 待下发 gate（先红后绿，route 层）。
 //
@@ -185,17 +186,19 @@ async function seedSelfRound(
     iteration: 0,
     checkpoints: [{ mountPath: '', preSnapshot: '' }],
   })
-  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-    kind: 'self',
-    db,
-    taskId,
-    askingNodeId: 'designer',
-    askingNodeRunId: sourceRunId,
-    askingShardKey: null,
-    intermediaryNodeId: 'c1',
-    iteration: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'self',
+      db,
+      taskId,
+      askingNodeId: 'designer',
+      askingNodeRunId: sourceRunId,
+      askingShardKey: null,
+      intermediaryNodeId: 'c1',
+      iteration: 0,
+      questions,
+    }),
+  )
   return { taskId, nodeRunId: clarifyNodeRunId }
 }
 
@@ -219,17 +222,19 @@ async function seedCrossRound(
       checkpoints: [{ mountPath: '', preSnapshot: 'stub' }],
     },
   ])
-  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound({
-    kind: 'cross',
-    db,
-    taskId,
-    intermediaryNodeId: 'cross1',
-    askingNodeId: 'questioner',
-    askingNodeRunId: questionerRunId,
-    targetConsumerNodeId: 'designer',
-    loopIter: 0,
-    questions,
-  })
+  const { intermediaryNodeRunId: crossClarifyNodeRunId } = await createClarifyRound(
+    withO2Closure({
+      kind: 'cross',
+      db,
+      taskId,
+      intermediaryNodeId: 'cross1',
+      askingNodeId: 'questioner',
+      askingNodeRunId: questionerRunId,
+      targetConsumerNodeId: 'designer',
+      loopIter: 0,
+      questions,
+    }),
+  )
   return { taskId, nodeRunId: crossClarifyNodeRunId }
 }
 

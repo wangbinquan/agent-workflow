@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-023 PR-B C4 — when clarify session activity happens on a task that
 // also has an in-flight review (awaiting_review on a different node), the
 // clarify path MUST NOT touch the review's node_run state, doc_versions, or
@@ -158,17 +159,19 @@ describeEachProvider('clarify activity does not perturb in-flight reviews', (har
     expect(reviewBefore?.status).toBe('awaiting_review')
     expect(dvBefore?.decision).toBe('pending')
 
-    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-      kind: 'self',
-      db,
-      taskId,
-      askingNodeId: 'designer',
-      askingNodeRunId: sourceRunId,
-      askingShardKey: null,
-      intermediaryNodeId: 'clarify1',
-      iteration: 0,
-      questions: [QUESTION],
-    })
+    const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+      withO2Closure({
+        kind: 'self',
+        db,
+        taskId,
+        askingNodeId: 'designer',
+        askingNodeRunId: sourceRunId,
+        askingShardKey: null,
+        intermediaryNodeId: 'clarify1',
+        iteration: 0,
+        questions: [QUESTION],
+      }),
+    )
 
     // After createClarifyRound: review row + doc_version unchanged.
     const reviewMid = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]

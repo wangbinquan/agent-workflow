@@ -80,16 +80,11 @@ import { prepareDatabaseInstallation } from './application/prepareDatabaseInstal
 import { createFileDatabaseInstallation } from './infrastructure/local/fileDatabaseInstallation'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { createFileDatabaseConfiguration } from './infrastructure/local/fileDatabaseConfiguration'
-import { createSecretBox, type SecretBox } from '@/auth/secretBox'
+import { type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
 import type { RepositoryBackupPreparationParticipant } from '@/modules/source-control/public/participants'
-import {
-  composePostgresqlRepositoryWorkspaceStore,
-  composeRepositoryWorkspaceOperations,
-  composeSqliteRepositoryWorkspaceStore,
-} from '@/modules/source-control/composition'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import {
   resolveDatabaseProviderRuntime,
@@ -145,7 +140,6 @@ import {
 import type { PlanLocalRestoreQuery } from './public/queries'
 import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
 
-export { createHealthDatabaseReadModel } from './infrastructure/healthReadModel'
 export { readDatabaseSchemaUpgradeGeneration } from './infrastructure/databaseMigrationCoordinator'
 export {
   createDatabaseMigrationDaemonAdmission,
@@ -428,6 +422,9 @@ interface LocalSystemOperationsComposeInput {
   readonly databaseConfig: DatabaseConfig
   readonly appHome: string
   readonly contract: LogicalSchemaContract
+  readonly repositoryBackupPreparationFactory: (
+    db: PersistenceDb,
+  ) => RepositoryBackupPreparationParticipant
   readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant | undefined
 }
 
@@ -442,6 +439,7 @@ function composePostgresqlLocalSystemOperations({
   appHome,
   contract,
   repositoryBackupPreparation: injectedBackupPreparation,
+  repositoryBackupPreparationFactory,
 }: LocalSystemOperationsComposeInput): ComposedLocalSystemOperations {
   // RFC-359 AC-10：「运行时选了这一支、配置也必须是这一支」的收窄，与紧挨着的
   // `requireDatabaseProviderRuntime` 同一层、同一个名字家族（§5fd 把它从 `cli/start.ts`
@@ -450,11 +448,7 @@ function composePostgresqlLocalSystemOperations({
   const runtime = requireDatabaseProviderRuntime(provider, 'postgresql')
   const database = runtime.openClient()
   const repositoryBackupPreparation =
-    injectedBackupPreparation ??
-    composeRepositoryWorkspaceOperations(
-      composePostgresqlRepositoryWorkspaceStore(database),
-      createSecretBox(Paths.secretKeyFile),
-    ).backupPreparation
+    injectedBackupPreparation ?? repositoryBackupPreparationFactory(database)
   const module = composePostgresqlSystemOperations({
     headContract: contract,
     runtime: runtime.runtime,
@@ -474,6 +468,7 @@ function composeSqliteLocalSystemOperations({
   provider,
   appHome,
   repositoryBackupPreparation: injectedBackupPreparation,
+  repositoryBackupPreparationFactory,
 }: LocalSystemOperationsComposeInput): ComposedLocalSystemOperations {
   const artifacts = createRestoreArtifactIngress({
     uploadRoot: join(appHome, '.restore-upload'),
@@ -492,10 +487,7 @@ function composeSqliteLocalSystemOperations({
     }))
   const resolveBackupPreparation = async (): Promise<RepositoryBackupPreparationParticipant> => {
     if (composedBackupPreparation !== null) return composedBackupPreparation
-    composedBackupPreparation = composeRepositoryWorkspaceOperations(
-      composeSqliteRepositoryWorkspaceStore(await resolveDatabase()),
-      createSecretBox(Paths.secretKeyFile),
-    ).backupPreparation
+    composedBackupPreparation = repositoryBackupPreparationFactory(await resolveDatabase())
     return composedBackupPreparation
   }
   const repositoryBackupPreparation =
@@ -536,6 +528,9 @@ const LOCAL_SYSTEM_OPERATIONS_COMPOSERS = {
 >
 
 export function composeLocalSystemOperations(deps: {
+  readonly repositoryBackupPreparationFactory: (
+    db: PersistenceDb,
+  ) => RepositoryBackupPreparationParticipant
   readonly contract: LogicalSchemaContract
   readonly repositoryBackupPreparation?: RepositoryBackupPreparationParticipant
   readonly databaseConfig?: DatabaseConfig
@@ -559,6 +554,7 @@ export function composeLocalSystemOperations(deps: {
     appHome,
     contract,
     repositoryBackupPreparation: deps.repositoryBackupPreparation,
+    repositoryBackupPreparationFactory: deps.repositoryBackupPreparationFactory,
   })
   const context = Object.freeze({}) as LocalSystemOperationContext
 
@@ -640,3 +636,5 @@ export function composeFileApplicationConfigurationQueries(
 }
 
 export { schemaContribution } from './composition/schema'
+
+export { createResourceLimitAudit } from './infrastructure/resourceLimitAudit'

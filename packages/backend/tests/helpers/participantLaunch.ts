@@ -1,3 +1,5 @@
+import { o2Ports } from './o2Closure'
+import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-359 AC-1（plan §5hn 批次二 ⑧）—— 测试侧的**启动参与者**装配，和生产同形。
 //
@@ -85,7 +87,9 @@ export function createTestTaskExecutionLaunchParticipant(
     db: input.db,
     authorization: resourceCatalog.authorization,
   }).launch
-  const persistence = createTaskExecutionPersistence(input.db)
+  const persistence = createTaskExecutionPersistence(input.db, {
+    recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,
+  })
   const completionMode = input.completionMode ?? 'await-settle'
   const drive = createTestTaskDriveCoordinator({
     deps: {
@@ -124,11 +128,13 @@ export function createTestTaskExecutionLaunchParticipant(
     workspace: createTaskRouteWorkspaceParticipant({
       db: input.db,
       sourceContexts: composeIdentityAccess(input.db).taskPreparationContext,
-      repositoryPreparation: composeRepositoryPreparation({
-        db: input.db,
-        appHome: input.appHome,
-        ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
-      }),
+      repositoryPreparation: composeRepositoryPreparation(
+        withSourceControlTaskPorts({
+          db: input.db,
+          appHome: input.appHome,
+          ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
+        }),
+      ),
       appHome: input.appHome,
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
     }),

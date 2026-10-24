@@ -1,3 +1,4 @@
+import type { RepositoryWorkspaceTaskPorts } from './required-ports'
 import {
   reclaimLegacyWorkspaceArtifacts,
   type LegacyWorkspaceRecoveryLog,
@@ -41,6 +42,7 @@ import type {
 
 /** Root-only bridge. No Task rows, Task lease or autonomous worker are owned here. */
 export function composeRepositoryPreparation(input: {
+  taskPorts: RepositoryWorkspaceTaskPorts
   db: PersistenceDb
   appHome: string
   secretBox?: SecretBox | undefined
@@ -65,7 +67,7 @@ export function composeRepositoryPreparation(input: {
       return createFileRepositoryPreparationEffects({
         taskId: request.taskId,
         appHome: input.appHome,
-        repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
+        repositoryWorkspace: composeRepositoryWorkspaceStore(input.db, input.taskPorts),
         ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
         ...(cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs }),
         ...(request.workingBranch === undefined ? {} : { workingBranch: request.workingBranch }),
@@ -80,8 +82,12 @@ export function composeRepositoryPreparation(input: {
   }
   return {
     async groupName(groupId: string): Promise<string> {
-      return (await resolveRepoGroupLayout(composeRepositoryWorkspaceStore(input.db), groupId))
-        .groupName
+      return (
+        await resolveRepoGroupLayout(
+          composeRepositoryWorkspaceStore(input.db, input.taskPorts),
+          groupId,
+        )
+      ).groupName
     },
     legacy: {
       reclaim(
@@ -89,7 +95,11 @@ export function composeRepositoryPreparation(input: {
         log: LegacyWorkspaceRecoveryLog,
       ) {
         return reclaimLegacyWorkspaceArtifacts(
-          { appHome: input.appHome, store: composeRepositoryWorkspaceStore(input.db), log },
+          {
+            appHome: input.appHome,
+            store: composeRepositoryWorkspaceStore(input.db, input.taskPorts),
+            log,
+          },
           task,
         )
       },
@@ -111,7 +121,7 @@ export function composeRepositoryPreparation(input: {
           request.task,
           {
             appHome: input.appHome,
-            repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
+            repositoryWorkspace: composeRepositoryWorkspaceStore(input.db, input.taskPorts),
             loadFrozenSpaceLayout: request.loadFrozenSpaceLayout,
             gitCommitIdentity: request.gitCommitIdentity,
             ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
@@ -171,6 +181,7 @@ export function composeRepositoryPreparation(input: {
       await scratch.releaseUnadmitted?.(taskId)
     },
     sourceSeal: createPublicRepositorySourceSeal({
+      taskPorts: input.taskPorts,
       db: input.db,
       appHome: input.appHome,
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
@@ -183,6 +194,7 @@ export function composeRepositoryPreparation(input: {
     snapshot(request: { transaction: PersistenceDb; authority: RequestAuthority; now: number }) {
       let active = true
       const scope = createRepositoryLaunchSnapshotInTx({
+        taskPorts: input.taskPorts,
         ...request,
         assertLive: () => {
           if (!active) throw new Error('repository-launch-scope-ended')

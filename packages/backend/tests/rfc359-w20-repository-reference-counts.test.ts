@@ -1,3 +1,5 @@
+import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import { createTaskRepositoryUsageQueries } from '@/modules/task-execution/infrastructure/taskRepositoryUsage'
 // RFC-359 W20: the page's legacy reference count changes only its exclusion
 // expression. Real catalogs prove the non-null premise; the old SQL remains
 // the data oracle. These tiny cases make no PostgreSQL performance claim.
@@ -106,22 +108,23 @@ interface ObservedRead {
 }
 
 function observedStore(db: PersistenceDb, reads: ObservedRead[]) {
+  const all = async <T extends Record<string, unknown>>(
+    query: SQLWrapper,
+  ): Promise<readonly T[]> => {
+    const rows = await rawRows<T>(db, query)
+    reads.push({ rows })
+    return rows
+  }
   return new RepositoryWorkspaceSqlStore(
     {
       db,
-      async all<T extends Record<string, unknown>>(query: SQLWrapper): Promise<readonly T[]> {
-        const rows = await rawRows<T>(db, query)
-        reads.push({ rows })
-        return rows
-      },
+      all,
       async run() {
         throw new Error('reference-count-unexpected-write')
       },
-      async cachedRepoFacets() {
-        throw new Error('reference-count-unexpected-facets')
-      },
     },
     engineOf(db),
+    { ...composeSourceControlTaskPorts(db), taskUsage: createTaskRepositoryUsageQueries(db, all) },
   )
 }
 
@@ -217,7 +220,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
     ])
   })
 
-  test('42 distributions preserve the original counts, three reads and rollback', async () => {
+  test('42 distributions preserve the original counts, bounded owner probes, schedule read and rollback', async () => {
     await seed(harness)
     let comparisons = 0
     async function compare(
@@ -246,13 +249,13 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
         }
         const expected = new Map(expectedForAllIds.filter(([id]) => ids.includes(id)))
         expect(sortedCounts(counts)).toEqual(sortedCounts(expected))
-        expect(reads).toHaveLength(ids.length === 0 ? 0 : 3)
-        expect(currentStatements).toHaveLength(ids.length === 0 ? 0 : 3)
+        expect(reads).toHaveLength(ids.length === 0 ? 0 : 2)
+        expect(currentStatements).toHaveLength(ids.length === 0 ? 0 : 2)
         if (ids.length > 0) {
           const originalReads: (readonly Record<string, unknown>[])[] = []
           const originalRecording = harness.recordStatements()
           try {
-            for (const query of originalCountQueries(db, ids)) {
+            for (const query of originalCountQueries(db, [...new Set(ids)])) {
               originalReads.push(await rawRows<Record<string, unknown>>(db, query))
             }
           } finally {
@@ -260,15 +263,32 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
           }
           const originals = originalRecording.statements
           expect(originals).toHaveLength(3)
-          for (let index = 0; index < 3; index += 1) {
-            expect(sortedRows(reads[index]!.rows)).toEqual(sortedRows(originalReads[index]!))
+          const originalTaskCounts = new Map<string, number>()
+          for (const row of [...originalReads[0]!, ...originalReads[1]!]) {
+            const id = String(row.cached_repo_id)
+            originalTaskCounts.set(id, (originalTaskCounts.get(id) ?? 0) + Number(row.count))
           }
-          // Preserve the first/last SQL bytes, bindings, counts and serial slots.
-          expect(statementContract(currentStatements[0]!)).toEqual(statementContract(originals[0]!))
-          expect(statementContract(currentStatements[2]!)).toEqual(statementContract(originals[2]!))
-          expect(currentStatements[1]!.params).toBe(originals[1]!.params)
-          expect(currentStatements[1]!.values).toEqual(originals[1]!.values)
-          expect(currentStatements[1]!.rows).toBe(originals[1]!.rows)
+          expect(
+            sortedRows(
+              reads[0]!.rows
+                .filter((row) => Number(row.count) > 0)
+                .map((row) => ({ cached_repo_id: row.cached_repo_id, count: Number(row.count) })),
+            ),
+          ).toEqual(
+            sortedRows(
+              [...originalTaskCounts].map(([cached_repo_id, count]) => ({ cached_repo_id, count })),
+            ),
+          )
+          expect(sortedRows(reads[1]!.rows)).toEqual(sortedRows(originalReads[2]!))
+          // RFC-395 II-b O1: candidate-bounded scalar probes use the owner indexes.
+          const probe = currentStatements[0]!
+          expect(probe.sql).toMatch(/WITH candidates\(id\) AS \(VALUES/i)
+          expect(probe.sql).toMatch(/count\(distinct/i)
+          expect(probe.sql).toMatch(/NOT EXISTS/i)
+          expect(probe.sql).not.toContain('cached_repos')
+          expect(probe.values).toEqual([...new Set(ids)])
+          expect(probe.rows).toBe(new Set(ids).size)
+          expect(statementContract(currentStatements[1]!)).toEqual(statementContract(originals[2]!))
         }
         comparisons += 1
       }

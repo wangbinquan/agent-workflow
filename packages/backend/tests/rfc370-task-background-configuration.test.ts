@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-370: provider-session writers await their selected settings, keep each
 // tick live, and include pending startup reads/recovery in pause/stop drains.
 // The real provider persistence and TaskExecutionModule are used; timers are
@@ -43,7 +44,9 @@ function fixture(
 ) {
   const module = new TaskExecutionModule('rfc370-background')
   const scheduled = scheduledTaskRuntime(db)
-  const recovery = createTaskExecutionPersistence(db).recoveryAdministration
+  const recovery = createTaskExecutionPersistence(db, {
+    recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  }).recoveryAdministration
   const identity = composeIdentityAccess(db)
   const calls = {
     resumed: [] as Array<{ readonly maxPerWindow: number; readonly windowMs: number }>,

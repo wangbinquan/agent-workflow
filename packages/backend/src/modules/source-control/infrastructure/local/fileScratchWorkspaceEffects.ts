@@ -1,3 +1,4 @@
+import type { RepositoryWorkspaceTaskPorts } from '../../composition/required-ports'
 import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -11,6 +12,7 @@ import {
 } from '../workspaceMaterializer'
 
 export function createFileScratchWorkspaceEffects(input: {
+  readonly taskPorts: RepositoryWorkspaceTaskPorts
   readonly db: PersistenceDb
   readonly appHome: string
   readonly workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
@@ -21,7 +23,7 @@ export function createFileScratchWorkspaceEffects(input: {
         { scratch: true },
         {
           appHome: input.appHome,
-          repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
+          repositoryWorkspace: composeRepositoryWorkspaceStore(input.db, input.taskPorts),
           gitCommitIdentity: request.gitCommitIdentity,
           sourceTerminationLaunchSignal: request.signal,
           resumeExistingScratch: true,

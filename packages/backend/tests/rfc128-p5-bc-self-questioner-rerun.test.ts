@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-128 P5-BC — self/questioner per-question rerun (深度重构核心；最高风险段)。
 //
 // This locks the P5-BC clean-path (design.md §5.2): the self/questioner MIRROR of the designer
@@ -855,17 +856,19 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: P,
-        askingNodeRunId: pRun,
-        askingShardKey: null,
-        intermediaryNodeId: CL,
-        iteration: 0,
-        questions: [mkQ('q1', 't'), mkQ('q2', 't')],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: P,
+          askingNodeRunId: pRun,
+          askingShardKey: null,
+          intermediaryNodeId: CL,
+          iteration: 0,
+          questions: [mkQ('q1', 't'), mkQ('q2', 't')],
+        }),
+      )
       // Virgin: no listTaskQuestions / no seal before the quick finalize.
       await autoDispatchClarifyRound({
         db,
@@ -916,17 +919,19 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: P,
-        askingNodeRunId: pRun,
-        askingShardKey: null,
-        intermediaryNodeId: CL,
-        iteration: 0,
-        questions: [mkQ('q1', 't')],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: P,
+          askingNodeRunId: pRun,
+          askingShardKey: null,
+          intermediaryNodeId: CL,
+          iteration: 0,
+          questions: [mkQ('q1', 't')],
+        }),
+      )
       const res = await autoDispatchClarifyRound({
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -965,17 +970,19 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: P,
-        askingNodeRunId: pRun,
-        askingShardKey: null,
-        intermediaryNodeId: CL,
-        iteration: 0,
-        questions: [mkQ('q1', 't')],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: P,
+          askingNodeRunId: pRun,
+          askingShardKey: null,
+          intermediaryNodeId: CL,
+          iteration: 0,
+          questions: [mkQ('q1', 't')],
+        }),
+      )
       const results = await Promise.allSettled([
         autoDispatchClarifyRound({
           db,
@@ -1021,17 +1028,19 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const pRun = await seedRun(db, taskId, P, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: P,
-        askingNodeRunId: pRun,
-        askingShardKey: null,
-        intermediaryNodeId: CL,
-        iteration: 0,
-        questions: [mkQ('q1', 't'), mkQ('q2', 't')],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: P,
+          askingNodeRunId: pRun,
+          askingShardKey: null,
+          intermediaryNodeId: CL,
+          iteration: 0,
+          questions: [mkQ('q1', 't'), mkQ('q2', 't')],
+        }),
+      )
       // q1 control-sealed-undispatched → dispatchable; the round is still awaiting (quick-finalizable).
       await sealRoundQuestions({ db, originNodeRunId: clarifyNodeRunId, answers: [ans('q1')] })
       const { taskQuestions, nodeRuns } = tablesOf(db)
@@ -1080,17 +1089,19 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const taskId = `t_${ulid()}`
       await seedTask(db, taskId)
       const dRun = await seedRun(db, taskId, D, { status: 'awaiting_human', iteration: 0 })
-      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound({
-        kind: 'self',
-        db,
-        taskId,
-        askingNodeId: D,
-        askingNodeRunId: dRun,
-        askingShardKey: null,
-        intermediaryNodeId: CL,
-        iteration: 0,
-        questions: [mkQ('q1', 't'), mkQ('q2', 't')],
-      })
+      const { intermediaryNodeRunId: clarifyNodeRunId } = await createClarifyRound(
+        withO2Closure({
+          kind: 'self',
+          db,
+          taskId,
+          askingNodeId: D,
+          askingNodeRunId: dRun,
+          askingShardKey: null,
+          intermediaryNodeId: CL,
+          iteration: 0,
+          questions: [mkQ('q1', 't'), mkQ('q2', 't')],
+        }),
+      )
       // control-seal q1 = option A.
       await sealRoundQuestions({ db, originNodeRunId: clarifyNodeRunId, answers: [ans('q1')] })
       // quick-finalize (unified autodispatch), posting a DIFFERENT q1 (option B) + q2 (option A).

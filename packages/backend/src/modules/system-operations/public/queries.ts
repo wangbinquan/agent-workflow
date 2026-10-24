@@ -34,12 +34,6 @@ export interface SystemOverviewQuery {
   execute(authority: SystemOverviewAuthority): Promise<OverviewResponse>
 }
 
-/** Database facts used by the public liveness route. Provider adapters own
- * dialect/query mechanics; the transport consumes only the closed count. */
-export interface HealthDatabaseReadModel {
-  countRunningTasks(): Promise<number>
-}
-
 export interface PlanLocalRestoreQuery {
   execute(
     context: LocalSystemOperationContext,

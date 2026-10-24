@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-a A2: list ports must round-trip every mount shape on both physical providers.
 import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { expect, test } from 'bun:test'
@@ -152,7 +153,11 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
       })
       const beforeEmpty = await readStoredCheckpointFixture(harness.db, emptyTreeRun)
       await persistIsoNodeTree(
-        { persistence: createTaskExecutionPersistence(harness.db) },
+        {
+          persistence: createTaskExecutionPersistence(harness.db, {
+            recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
+          }),
+        },
         emptyTreeRun,
         {},
       )

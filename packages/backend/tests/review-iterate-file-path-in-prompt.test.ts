@@ -1,3 +1,4 @@
+import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Regression for the file-path follow-up to "review comments in iterate
 // prompt": when the upstream port is `markdown_file`, the rendered
@@ -31,7 +32,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import type { DbClient } from '../src/db/client'
 import { createInMemoryDb } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/services/agent'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
 import {
   addReviewComment,
@@ -294,13 +295,15 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       },
       commentText: COMMENT,
     })
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
 
     const { docVersions } = tablesOf(h.db)
     const dvs = await h.db
@@ -334,13 +337,15 @@ describe('RFC-005 followup — markdown_file source path lands in iterate prompt
       },
       commentText: COMMENT,
     })
-    await submitReviewDecision({
-      db: h.db,
-      appHome: h.appHome,
-      nodeRunId: h.reviewNodeRunId,
-      decision: 'iterated',
-      expectedReviewIteration: 0,
-    })
+    await submitReviewDecision(
+      withO2Closure({
+        db: h.db,
+        appHome: h.appHome,
+        nodeRunId: h.reviewNodeRunId,
+        decision: 'iterated',
+        expectedReviewIteration: 0,
+      }),
+    )
     // RFC-097: runTask's entry CAS only claims pending tasks — reset first
     // (test stand-in for resumeTask).
     await reenterScheduler(h.db, h.taskId)

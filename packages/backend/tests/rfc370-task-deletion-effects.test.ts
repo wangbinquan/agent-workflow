@@ -1,3 +1,4 @@
+import { o2Ports } from './helpers/o2Closure'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -313,7 +314,9 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     })
     const pending = deleteTask(db, taskId, { activity, effects: chosen })
     await entered.promise
-    const claims = await createTaskExecutionPersistence(db).terminalMaintenance.listRecoverable({
+    const claims = await createTaskExecutionPersistence(db, {
+      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+    }).terminalMaintenance.listRecoverable({
       operation: 'delete',
     })
     const item = claims.find((x) => x.rootTaskId === taskId)
@@ -358,7 +361,9 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
       release = gate()
     await seed(db, taskId)
     await seed(db, childId, taskId)
-    const persistence = createTaskExecutionPersistence(db),
+    const persistence = createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
       members = await persistence.terminalMaintenance.snapshotTree(taskId)
     const claim = await persistence.terminalMaintenance.claim({
       rootTaskId: taskId,
@@ -408,7 +413,9 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
         }),
       }),
     ).toEqual({ taskId, cleanup: 'pending' })
-    const persistence = createTaskExecutionPersistence(db),
+    const persistence = createTaskExecutionPersistence(db, {
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
       item = (await persistence.terminalMaintenance.listRecoverable({ operation: 'delete' })).find(
         (x) => x.rootTaskId === taskId,
       )!
