@@ -231,7 +231,11 @@ interface Seeded {
   childWorkflowId: string
 }
 
-async function seedParentTask(h: Harness, workerId: string): Promise<Seeded> {
+async function seedParentTask(
+  h: Harness,
+  workerId: string,
+  workspace?: { repoPath: string; worktreePath: string; mountPath: string; baseCommit: string },
+): Promise<Seeded> {
   const childDef = childDefinition(workerId)
   const childWorkflowId = ulid()
   await workflowFixture(h.db, {
@@ -255,14 +259,30 @@ async function seedParentTask(h: Harness, workerId: string): Promise<Seeded> {
     name: 'rfc243-parent',
     workflowId: parentWorkflowId,
     workflowSnapshot: JSON.stringify(parentDef),
-    repoPath: h.repoPath,
-    worktreePath: h.worktreePath,
+    repoPath: workspace?.repoPath ?? h.repoPath,
+    worktreePath: workspace?.worktreePath ?? h.worktreePath,
     baseBranch: 'main',
     branch: `agent-workflow/${parentTaskId}`,
     status: 'pending',
     inputs: JSON.stringify({ req: 'go' }),
     startedAt: Date.now(),
     refClosureJson: closure,
+    ...(workspace === undefined
+      ? {}
+      : {
+          baseCommit: workspace.baseCommit,
+          repos: [
+            {
+              repoIndex: 0,
+              repoPath: workspace.repoPath,
+              worktreePath: workspace.repoPath,
+              mountPath: workspace.mountPath,
+              baseBranch: 'main',
+              branch: `agent-workflow/${parentTaskId}`,
+              baseCommit: workspace.baseCommit,
+            },
+          ],
+        }),
   })
   return { parentTaskId, childWorkflowId }
 }
@@ -274,69 +294,91 @@ describe('RFC-243 e2e — call-workflow 全链', () => {
   })
   afterEach(() => h?.cleanup())
 
-  test('D→L→W→F→M：继承派生、子任务独立行、输出回填、合并回父、父任务 done', async () => {
-    const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
-    // 父 canonical 的未提交文件 —— 子 agent 用 __FILE__ 读它证明继承可见。
-    writeFileSync(join(h.worktreePath, 'parent-seed.txt'), 'UNCOMMITTED PARENT STATE')
-    writeFileSync(
-      h.planFile,
-      JSON.stringify({
-        worker: {
-          files: { 'src/child-artifact.txt': 'WRITTEN BY CHILD' },
-          output: { out: 'CHILD SAYS HI', echo: '__FILE__:parent-seed.txt' },
-        },
-      }),
-    )
-    const { parentTaskId } = await seedParentTask(h, workerId)
-    await runTask({
-      db: h.db,
-      taskId: parentTaskId,
-      appHome: h.appHome,
-      binaryOverride: ['bun', 'run', h.mockPath],
+  for (const mountPath of ['', 'svc']) {
+    test(`D→L→W→F→M：继承派生、子任务独立行、输出回填、合并回父、父任务 done (${mountPath || 'root'})`, async () => {
+      // single non-root member，site 1：子任务根必须等于 call iso 容器，挂载行仍指向成员。
+      let workspace: Parameters<typeof seedParentTask>[2]
+      if (mountPath !== '') {
+        const container = join(h.appHome, 'group')
+        const member = join(container, mountPath)
+        mkdirSync(member, { recursive: true })
+        await runGit(member, ['init', '-b', 'main'])
+        await runGit(member, ['config', 'user.email', 't@t.test'])
+        await runGit(member, ['config', 'user.name', 't'])
+        writeFileSync(join(member, 'README.md'), '# member\n')
+        await runGit(member, ['add', '.'])
+        await runGit(member, ['commit', '-m', 'init'])
+        const baseCommit = (await runGit(member, ['rev-parse', 'HEAD'])).stdout.trim()
+        workspace = { repoPath: member, worktreePath: container, mountPath, baseCommit }
+      }
+      const parentWorktreePath = workspace?.repoPath ?? h.worktreePath
+      const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])
+      // 父 canonical 的未提交文件 —— 子 agent 用 __FILE__ 读它证明继承可见。
+      writeFileSync(join(parentWorktreePath, 'parent-seed.txt'), 'UNCOMMITTED PARENT STATE')
+      writeFileSync(
+        h.planFile,
+        JSON.stringify({
+          worker: {
+            files: { 'src/child-artifact.txt': 'WRITTEN BY CHILD' },
+            output: { out: 'CHILD SAYS HI', echo: '__FILE__:parent-seed.txt' },
+          },
+        }),
+      )
+      const { parentTaskId } = await seedParentTask(h, workerId, workspace)
+      await runTask({
+        db: h.db,
+        taskId: parentTaskId,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', h.mockPath],
+      })
+
+      const { nodeRuns } = tablesOf(h.db)
+      const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
+      expect(parent.status).toBe('done')
+
+      // 子任务独立行：父链接 + inherited 空间 + done。
+      const children = await readTaskFixtures(h.db, { parentTaskId })
+      expect(children.length).toBe(1)
+      const child = children[0]!
+      expect(child.status).toBe('done')
+      expect(child.spaceKind).toBe('inherited')
+      expect(child.invocationDepth).toBe(1)
+      expect(child.name).toContain('rfc243-parent')
+
+      // 调用行：childTaskId / done / merged / 输出回填（F）。
+      const callRow = (
+        await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'call1' }] })
+      ).find((r) => r.parentNodeRunId === null)!
+      expect(child.worktreePath).toBe(callRow.isoWorktreePath!)
+      expect(child.repos.map((repo) => [repo.mountPath, repo.worktreePath])).toEqual([
+        [mountPath, join(child.worktreePath, mountPath)],
+      ])
+      expect(callRow.childTaskId).toBe(child.id)
+      expect(callRow.status).toBe('done')
+      expect(callRow.mergeState).toBe('merged')
+      expect(child.parentNodeRunId).toBe(callRow.id)
+      const callOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: callRow.id })
+      const byPort = new Map(callOutputs.map((o) => [o.portName, o.content]))
+      expect(byPort.get('report')).toBe('CHILD SAYS HI')
+      // D5 继承：子 agent 在自己的工作区读到了父 canonical 的未提交文件。
+      expect(byPort.get('echo')).toBe('UNCOMMITTED PARENT STATE')
+
+      // M 合并回：子任务写盘的文件出现在父 canonical。
+      const merged = join(parentWorktreePath, 'src', 'child-artifact.txt')
+      expect(existsSync(merged)).toBe(true)
+      expect(readFileSync(merged, 'utf8')).toBe('WRITTEN BY CHILD')
+
+      // 父 output 节点消费 call 端口。
+      const outRow = (
+        await h.db
+          .select()
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'pout')))
+      )[0]!
+      const outPorts = await readNodeRunOutputFixtures(h.db, { nodeRunId: outRow.id })
+      expect(outPorts.find((o) => o.portName === 'report')?.content).toBe('CHILD SAYS HI')
     })
-
-    const { nodeRuns } = tablesOf(h.db)
-    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
-    expect(parent.status).toBe('done')
-
-    // 子任务独立行：父链接 + inherited 空间 + done。
-    const children = await readTaskFixtures(h.db, { parentTaskId })
-    expect(children.length).toBe(1)
-    const child = children[0]!
-    expect(child.status).toBe('done')
-    expect(child.spaceKind).toBe('inherited')
-    expect(child.invocationDepth).toBe(1)
-    expect(child.name).toContain('rfc243-parent')
-
-    // 调用行：childTaskId / done / merged / 输出回填（F）。
-    const callRow = (
-      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'call1' }] })
-    ).find((r) => r.parentNodeRunId === null)!
-    expect(callRow.childTaskId).toBe(child.id)
-    expect(callRow.status).toBe('done')
-    expect(callRow.mergeState).toBe('merged')
-    expect(child.parentNodeRunId).toBe(callRow.id)
-    const callOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: callRow.id })
-    const byPort = new Map(callOutputs.map((o) => [o.portName, o.content]))
-    expect(byPort.get('report')).toBe('CHILD SAYS HI')
-    // D5 继承：子 agent 在自己的工作区读到了父 canonical 的未提交文件。
-    expect(byPort.get('echo')).toBe('UNCOMMITTED PARENT STATE')
-
-    // M 合并回：子任务写盘的文件出现在父 canonical。
-    const merged = join(h.worktreePath, 'src', 'child-artifact.txt')
-    expect(existsSync(merged)).toBe(true)
-    expect(readFileSync(merged, 'utf8')).toBe('WRITTEN BY CHILD')
-
-    // 父 output 节点消费 call 端口。
-    const outRow = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'pout')))
-    )[0]!
-    const outPorts = await readNodeRunOutputFixtures(h.db, { nodeRunId: outRow.id })
-    expect(outPorts.find((o) => o.portName === 'report')?.content).toBe('CHILD SAYS HI')
-  })
+  }
 
   test('RFC-292: child task atomically inherits nested context and expands it in child agent prompt', async () => {
     const workerId = await seedAgent(h.db, 'worker', ['out', 'echo'])

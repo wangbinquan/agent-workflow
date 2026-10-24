@@ -8,7 +8,7 @@
 // RFC-370 §10 V16 — the index and the file reads come from the selected
 // revision content (the native worktree, or a hosted task volume).
 
-import type { CallTarget } from '@agent-workflow/shared'
+import { isSingleRootRepository, type CallTarget } from '@agent-workflow/shared'
 import type { TaskCallGraphWorkspaceReadModel } from '@/modules/task-execution/public/types'
 import {
   composeLocalRepositoryRevisionContent,
@@ -117,18 +117,16 @@ export async function getCallTargets(
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
 
-  // Single-repo: expand against the task worktree with the ref as-is. Multi-repo
-  // (RFC-089 P4): the ref is `${mountPath}/…`, so pick that repo's worktree
+  // Single root: expand against the task worktree with the ref as-is. Other
+  // layouts (RFC-089 P4): the ref is `${mountPath}/…`, so pick that repo's worktree
   // and strip the prefix before expanding, then re-prefix the results so the
   // chain keeps resolving within the same repo on the next click.
   let worktreePath = workspace.worktreePath
   let innerRef = methodRef
   let label: string | null = null
-  if (workspace.repos.length > 1) {
-    const split = splitRepoRef(
-      workspace.repos.map((repo) => repo.mountPath),
-      methodRef,
-    )
+  const mounts = workspace.repos.length === 0 ? [''] : workspace.repos.map((repo) => repo.mountPath)
+  if (!isSingleRootRepository(mounts)) {
+    const split = splitRepoRef(mounts, methodRef)
     if (split.dir === null) {
       throw new NotFoundError(
         'call-target-repo-unresolved',

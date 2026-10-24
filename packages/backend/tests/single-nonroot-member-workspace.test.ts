@@ -2,6 +2,8 @@
 // repoCount=1 does not mean the task root is a Git worktree. A lone member
 // mounted at svc must use its persisted repository path/key for diff, code
 // intelligence, artifacts, rollback, resume and workspace reclamation.
+// Remaining sites 1–4: call-child roots, call-chain expansion and file content
+// follow the same layout, including the legacy zero-row root fallback.
 // The shared real-launch fixture comes from iso-single-nonroot-member-replay.
 // Both providers exercise production operations; root and multi-member controls
 // also cover root sparse/explicit-directory layouts materialized as groups.
@@ -16,6 +18,7 @@ import {
   readTaskFixtures,
   readNodeRunFixtures,
   checkpointValues,
+  taskFixture,
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeAll, beforeEach, expect, test } from 'bun:test'
@@ -24,14 +27,16 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { computeSummary, type StructuralDiff } from '@agent-workflow/shared'
+import { computeSummary, repoKeyWire, type StructuralDiff } from '@agent-workflow/shared'
 
 import { createCodeWorkspaceRead } from '@/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { composeLocalCodeReviewArtifacts } from '@/modules/code-capability/public/participants'
+import { composeRepositoryWorkspaceStore } from '@/modules/source-control/composition'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/application/worktreeResumePreflight'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import { inheritedCallSpace } from '@/modules/task-execution/composition/nodeMechanics'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createOrRebuildWrapperIso } from '@/modules/task-execution/composition/wrapperMechanics'
 import { prepareResumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
@@ -50,6 +55,11 @@ import {
   rollbackNodeRunWorktrees,
 } from '@/services/nodeRollback'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
+import {
+  getCallTargets,
+  invalidateCallGraphIndex,
+} from '@/services/structuralDiff/callGraph/expandService'
+import { getTaskFileContent } from '@/services/worktreeFileContent'
 import { createLogger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -106,6 +116,18 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
       writeFileSync(join(repo.worktreePath, 'notes.md'), 'workspace result\n')
     }
   }
+  function writeCallChain(worktreePath: string) {
+    writeFileSync(
+      join(worktreePath, 'src/A.java'),
+      'class A {\n  private OrderService svc;\n  void run() {\n    svc.charge();\n  }\n}\n',
+    )
+    writeFileSync(
+      join(worktreePath, 'src/OrderService.java'),
+      'class OrderService {\n  void charge() {}\n}\n',
+    )
+    invalidateCallGraphIndex(worktreePath)
+    cleanup.push(() => invalidateCallGraphIndex(worktreePath))
+  }
   function storedDiff(taskId: string): StructuralDiff {
     return {
       taskId,
@@ -122,7 +144,243 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
     }
   }
 
+  test(
+    'zero task_repos rows: legacy file content and call chains keep the task root',
+    async () => {
+      // Single non-root member, sites 3–4: zero rows still mean a legacy root, not a group.
+      const { task, definition } = await fixture(shapes[1])
+      const legacyId = ulid()
+      await taskFixture(harness.db, {
+        id: legacyId,
+        workflowId: task.workflowId,
+        workflowSnapshot: definition,
+        repoPath: task.repoPath,
+        worktreePath: task.worktreePath,
+        baseBranch: task.baseBranch,
+        branch: task.branch,
+        baseCommit: task.baseCommit,
+        status: 'done',
+        inputs: '{}',
+        startedAt: 1,
+      })
+      expect((await readTaskFixtures(harness.db, { id: legacyId }))[0]!.repos).toEqual([])
+      change(task)
+      const store = composeRepositoryWorkspaceStore(harness.db)
+      expect((await store.findWorktreeTask(legacyId))!.repos).toEqual([])
+      for (const side of ['base', 'worktree'] as const) {
+        for (const repo of [undefined, 'ignored-for-root']) {
+          expect(
+            await getTaskFileContent(store, legacyId, { path: 'src/a.ts', side, repo }),
+          ).toMatchObject({
+            exists: true,
+            content: `export function value() { return ${side === 'base' ? 1 : 2} }\n`,
+          })
+        }
+        expect(await getTaskFileContent(store, legacyId, { path: 'missing.ts', side })).toEqual({
+          exists: false,
+        })
+      }
+      writeCallChain(task.worktreePath)
+      const readModel = createTaskExecutionReadModels(harness.db).callGraphWorkspace
+      const workspace = (await readModel.find(legacyId))!
+      expect(workspace.repos.map((repo) => repo.mountPath)).toEqual([''])
+      // The port also allows repos: []; retain the same fallback for such callers.
+      for (const reads of [readModel, { find: async () => ({ ...workspace, repos: [] }) }]) {
+        const targets = await getCallTargets(reads, legacyId, 'src/A.java#A.run')
+        expect(targets).toHaveLength(1)
+        expect(targets[0]).toMatchObject({
+          label: 'charge()',
+          resolution: 'resolved',
+          ref: 'src/OrderService.java#OrderService.charge',
+        })
+      }
+      for (const worktreePath of [tmp, join(tmp, 'missing-worktree')]) {
+        await expect(
+          getCallTargets(
+            { find: async () => ({ ...workspace, worktreePath, repos: [] }) },
+            legacyId,
+            'src/A.java#A.run',
+          ),
+        ).rejects.toMatchObject({ code: 'task-worktree-missing', status: 410 })
+      }
+    },
+    TIMEOUT,
+  )
+
+  test(
+    'zero task_repos rows: deferred preparation keeps missing-file and no-base answers',
+    async () => {
+      // Single non-root member, site 4: deferred preparation must not start requiring repo.
+      const { task, definition } = await fixture(shapes[1])
+      const deferredId = ulid()
+      await taskFixture(harness.db, {
+        id: deferredId,
+        workflowId: task.workflowId,
+        workflowSnapshot: definition,
+        repoPath: '',
+        worktreePath: '',
+        baseBranch: task.baseBranch,
+        branch: task.branch,
+        baseCommit: null,
+        status: 'pending',
+        inputs: '{}',
+        startedAt: 1,
+      })
+      const store = composeRepositoryWorkspaceStore(harness.db)
+      expect((await store.findWorktreeTask(deferredId))!.repos).toEqual([])
+      const path = `not-materialized-${deferredId}.ts`
+      expect(await getTaskFileContent(store, deferredId, { path, side: 'worktree' })).toEqual({
+        exists: false,
+      })
+      await expect(
+        getTaskFileContent(store, deferredId, { path, side: 'base' }),
+      ).rejects.toMatchObject({ code: 'task-no-base-commit', status: 409 })
+    },
+    TIMEOUT,
+  )
+
   for (const shape of shapes) {
+    test(
+      `${shape.name}: inherited call space preserves the container and member layout`,
+      async () => {
+        // Single non-root member, sites 1–2: both call launchers must inherit the iso container.
+        const { task } = await fixture(shape)
+        const runId = ulid()
+        await nodeRunFixture(harness.db, {
+          id: runId,
+          taskId: task.id,
+          nodeId: 'call',
+          status: 'running',
+        })
+        const handle = await createIsoUnderLock({
+          binding: { persistence: createTaskExecutionPersistence(harness.db) },
+          writeSem: new Semaphore(1),
+          appHome,
+          taskId: task.id,
+          isoKeyRunId: runId,
+          canonRepos: task.repos,
+        })
+        cleanup.push(() => discardNodeIso(handle))
+        const childId = ulid()
+        const space = inheritedCallSpace({
+          parentMounts: task.repos.map((repo) => repo.mountPath),
+          parentWorktreePath: task.worktreePath,
+          branch: task.branch,
+          iso: handle,
+          childId,
+        })
+        expect(space.worktreePath).toBe(handle.containerPath)
+        expect(space.kind).toBe(shape.scalar ? 'single' : 'multi')
+        expect(space.spaceKind).toBe('inherited')
+        expect(space.taskId).toBe(childId)
+        expect(space.branch).toBe(task.branch)
+        expect(space.baseCommit).toBe(handle.repos[0]!.baseSnapshot)
+        expect(space.repos.map((repo) => repo.mountPath)).toEqual([...shape.mounts])
+        for (const [index, repo] of space.repos.entries()) {
+          expect(repo.worktreePath).toBe(join(space.worktreePath, repo.mountPath))
+          expect(repo.worktreePath).toBe(handle.repos[index]!.isoWorktreePath)
+          expect(repo.baseCommit).toBe(handle.repos[index]!.baseSnapshot)
+        }
+        expect(space.cleanup).toEqual({
+          taskId: childId,
+          ownedRoot: null,
+          worktrees: [],
+          state: 'owned',
+          report: null,
+        })
+      },
+      TIMEOUT,
+    )
+
+    for (const side of ['base', 'worktree'] as const) {
+      test(
+        `${shape.name}: ${side} file content reads the selected member`,
+        async () => {
+          // Single non-root member, site 4: read the member path and its own baseline.
+          const { task } = await fixture(shape)
+          change(task)
+          const store = composeRepositoryWorkspaceStore(harness.db)
+          for (const mount of shape.mounts) {
+            const answer = await getTaskFileContent(store, task.id, {
+              path: 'src/a.ts',
+              side,
+              repo: repoKeyWire(mount),
+            })
+            expect(answer).toMatchObject({
+              exists: true,
+              content: `export function value() { return ${side === 'base' ? 1 : 2} }\n`,
+            })
+          }
+          if (shape.scalar) {
+            expect(
+              await getTaskFileContent(store, task.id, { path: 'src/a.ts', side }),
+            ).toMatchObject({ exists: true })
+          }
+        },
+        TIMEOUT,
+      )
+
+      if (!shape.scalar) {
+        test(
+          `${shape.name}: ${side} file content requires the repo key`,
+          async () => {
+            // Single non-root member, site 4: omission must reject just as for multiple members.
+            const { task } = await fixture(shape)
+            const store = composeRepositoryWorkspaceStore(harness.db)
+            for (const repo of [undefined, '']) {
+              await expect(
+                getTaskFileContent(store, task.id, { path: 'src/a.ts', side, repo }),
+              ).rejects.toMatchObject({ code: 'file-content-repo-required', status: 422 })
+            }
+            await expect(
+              getTaskFileContent(store, task.id, { path: 'src/a.ts', side, repo: 'missing' }),
+            ).rejects.toMatchObject({ code: 'file-content-repo-not-found', status: 404 })
+          },
+          TIMEOUT,
+        )
+      }
+    }
+
+    test(
+      `${shape.name}: call-chain expansion runs in the member named by the ref`,
+      async () => {
+        // Single non-root member, site 3: strip the mount before expanding, then restore it.
+        const { task } = await fixture(shape)
+        for (const repo of task.repos) writeCallChain(repo.worktreePath)
+        const readModel = createTaskExecutionReadModels(harness.db).callGraphWorkspace
+        for (const mount of shape.mounts) {
+          const prefix = shape.scalar ? '' : `${mount}/`
+          const targets = await getCallTargets(readModel, task.id, `${prefix}src/A.java#A.run`)
+          expect(targets).toHaveLength(1)
+          expect(targets[0]).toMatchObject({
+            label: 'charge()',
+            resolution: 'resolved',
+            ref: `${prefix}src/OrderService.java#OrderService.charge`,
+            ownerClass: `${prefix}src/OrderService.java::OrderService`,
+          })
+        }
+      },
+      TIMEOUT,
+    )
+
+    if (!shape.scalar) {
+      test(
+        `${shape.name}: call-chain expansion requires the mount prefix`,
+        async () => {
+          // Single non-root member, site 3: an unprefixed ref must not fall through to the container.
+          const { task } = await fixture(shape)
+          await expect(
+            getCallTargets(
+              createTaskExecutionReadModels(harness.db).callGraphWorkspace,
+              task.id,
+              'src/A.java#A.run',
+            ),
+          ).rejects.toMatchObject({ code: 'call-target-repo-unresolved', status: 404 })
+        },
+        TIMEOUT,
+      )
+    }
+
     test(
       `${shape.name}: materialized root and member paths agree with checkpoint layout`,
       async () => {

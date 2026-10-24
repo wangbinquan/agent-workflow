@@ -158,6 +158,7 @@ import {
   findQuestionerNodeForCrossClarify,
   followupPolicyForFailure,
   isCodeHostAction,
+  isSingleRootRepository,
   IsoSubmodulesSchema,
   maskScriptEnvValues,
   readScriptDependencies,
@@ -1991,6 +1992,61 @@ function buildChildRuntime(state: SchedulerState) {
   }
 }
 
+export function inheritedCallSpace({
+  parentMounts,
+  parentWorktreePath,
+  branch,
+  iso,
+  childId,
+}: {
+  parentMounts: readonly string[]
+  parentWorktreePath: string
+  branch: string | null
+  iso: IsoHandle
+  childId: string
+}) {
+  // The synthesized 'inherited' space: the child's canonical IS this call
+  // node's iso worktree(s); cleanup carries ZERO worktrees + no owned root
+  // (borrowed semantics — the iso lifecycle stays with the parent).
+  const primary = iso.repos[0]
+  const singleRoot = isSingleRootRepository(parentMounts)
+  return {
+    kind: singleRoot ? ('single' as const) : ('multi' as const),
+    spaceKind: 'inherited' as const,
+    taskId: childId,
+    worktreePath: singleRoot ? (primary?.isoWorktreePath ?? parentWorktreePath) : iso.containerPath,
+    branch: branch ?? `agent-workflow/${childId}`,
+    baseCommit: primary?.baseSnapshot ?? null,
+    earlyError: null,
+    resolvedSources: [],
+    nodePaths: [],
+    cleanup: {
+      taskId: childId,
+      ownedRoot: null,
+      worktrees: [],
+      state: 'owned' as const,
+      report: null,
+    },
+    repos: iso.repos.map((r, i) => ({
+      repoIndex: i,
+      repoPath: r.repoPath,
+      repoUrl: null,
+      cachedRepoId: null,
+      baseBranch: r.baseBranch,
+      branch: branch ?? `agent-workflow/${childId}`,
+      baseCommit: r.baseSnapshot ?? null,
+      worktreePath: r.isoWorktreePath,
+      worktreeDirName: r.mountPath,
+      mountPath: r.mountPath,
+      subdir: '',
+      readonly: false,
+      submoduleInitOk: true,
+      submoduleInitError: null,
+      hasSubmodules: false,
+    })),
+  }
+}
+
 /** L — assemble and fire the child launch through the executor facade. */
 async function launchCallChild(
   state: SchedulerState,
@@ -2025,46 +2081,13 @@ async function launchCallChild(
   const nodeTitle = pickString(node, 'title') ?? node.id
   const childName = `${task.name} › ${nodeTitle}`.slice(0, 255)
 
-  // The synthesized 'inherited' space: the child's canonical IS this call
-  // node's iso worktree(s); cleanup carries ZERO worktrees + no owned root
-  // (borrowed semantics — the iso lifecycle stays with the parent).
-  const primary = iso.repos[0]
-  const space = {
-    kind: state.repos.length > 1 ? ('multi' as const) : ('single' as const),
-    spaceKind: 'inherited' as const,
-    taskId: childId,
-    worktreePath:
-      state.repos.length > 1 ? iso.containerPath : (primary?.isoWorktreePath ?? task.worktreePath),
-    branch: task.branch ?? `agent-workflow/${childId}`,
-    baseCommit: primary?.baseSnapshot ?? null,
-    earlyError: null,
-    resolvedSources: [],
-    nodePaths: [],
-    cleanup: {
-      taskId: childId,
-      ownedRoot: null,
-      worktrees: [],
-      state: 'owned' as const,
-      report: null,
-    },
-    repos: iso.repos.map((r, i) => ({
-      repoIndex: i,
-      repoPath: r.repoPath,
-      repoUrl: null,
-      cachedRepoId: null,
-      baseBranch: r.baseBranch,
-      branch: task.branch ?? `agent-workflow/${childId}`,
-      baseCommit: r.baseSnapshot ?? null,
-      worktreePath: r.isoWorktreePath,
-      worktreeDirName: r.mountPath,
-      mountPath: r.mountPath,
-      subdir: '',
-      readonly: false,
-      submoduleInitOk: true,
-      submoduleInitError: null,
-      hasSubmodules: false,
-    })),
-  }
+  const space = inheritedCallSpace({
+    parentMounts: state.repos.map((repo) => repo.mountPath),
+    parentWorktreePath: task.worktreePath,
+    branch: task.branch,
+    iso,
+    childId,
+  })
 
   const payload: StartTask = {
     workflowId: frozen.id,
@@ -2212,43 +2235,13 @@ async function launchCallWorkgroupChild(
   })()
   const nodeTitle = pickString(node, 'title') ?? node.id
   const childName = `${task.name} › ${nodeTitle}`.slice(0, 255)
-  const primary = iso.repos[0]
-  const space = {
-    kind: state.repos.length > 1 ? ('multi' as const) : ('single' as const),
-    spaceKind: 'inherited' as const,
-    taskId: childId,
-    worktreePath:
-      state.repos.length > 1 ? iso.containerPath : (primary?.isoWorktreePath ?? task.worktreePath),
-    branch: task.branch ?? `agent-workflow/${childId}`,
-    baseCommit: primary?.baseSnapshot ?? null,
-    earlyError: null,
-    resolvedSources: [],
-    nodePaths: [],
-    cleanup: {
-      taskId: childId,
-      ownedRoot: null,
-      worktrees: [],
-      state: 'owned' as const,
-      report: null,
-    },
-    repos: iso.repos.map((r, i) => ({
-      repoIndex: i,
-      repoPath: r.repoPath,
-      repoUrl: null,
-      cachedRepoId: null,
-      baseBranch: r.baseBranch,
-      branch: task.branch ?? `agent-workflow/${childId}`,
-      baseCommit: r.baseSnapshot ?? null,
-      worktreePath: r.isoWorktreePath,
-      worktreeDirName: r.mountPath,
-      mountPath: r.mountPath,
-      subdir: '',
-      readonly: false,
-      submoduleInitOk: true,
-      submoduleInitError: null,
-      hasSubmodules: false,
-    })),
-  }
+  const space = inheritedCallSpace({
+    parentMounts: state.repos.map((repo) => repo.mountPath),
+    parentWorktreePath: task.worktreePath,
+    branch: task.branch,
+    iso,
+    childId,
+  })
 
   // RFC-285 B3 + RFC-347：本臂不消费 legacy projection，但同经 closed
   // delegated factory 做 owner preflight；失败经外层 catch 落

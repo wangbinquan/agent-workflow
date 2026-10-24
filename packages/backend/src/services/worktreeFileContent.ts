@@ -15,7 +15,7 @@
 //     file handle and read from that same handle.
 
 import { basename } from 'node:path'
-import { parseRepoKeyWire } from '@agent-workflow/shared'
+import { isSingleRootRepository, parseRepoKeyWire } from '@agent-workflow/shared'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import {
@@ -62,9 +62,9 @@ export interface FileContentDeps {
 }
 
 /**
- * One side of a task file for the rendered diff. Multi-repo tasks select the
+ * One side of a task file for the rendered diff. Non-single-root layouts select the
  * repo by canonical label (same labels the diff markers / structural prefixes
- * carry); single-repo tasks may omit `repo`.
+ * carry); single-root tasks may omit `repo`.
  */
 export async function getTaskFileContent(
   store: RepositoryWorkspaceStore,
@@ -82,7 +82,8 @@ export async function getTaskFileContent(
 
   let worktreePath = task.worktreePath
   let baseCommit = task.baseCommit
-  if (task.repos.length > 1) {
+  const mounts = task.repos.length === 0 ? [''] : task.repos.map((repo) => repo.mountPath)
+  if (!isSingleRootRepository(mounts)) {
     if (q.repo === undefined || q.repo === '') {
       throw new ValidationError(
         'file-content-repo-required',

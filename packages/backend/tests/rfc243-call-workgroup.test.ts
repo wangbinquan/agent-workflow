@@ -133,150 +133,185 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
     h?.cleanup()
   })
 
-  test('冻结闭包起工作组子任务 → leader/worker 真实回合 → result 锚回填父端口', async () => {
-    const leadId = await seedAgent(h.db, 'wg-lead')
-    const writerId = await seedAgent(h.db, 'wg-writer')
-    const group = await createWorkgroup(
-      h.db,
-      {
-        name: 'e2e-wg',
-        description: '',
-        instructions: '章程：小步快跑',
-        mode: 'leader_worker',
-        leaderDisplayName: 'lead',
-        autonomous: true,
-        switches: { shareOutputs: true, directMessages: false, blackboard: false },
-        maxRounds: 8,
-        completionGate: false,
-        members: [
-          { memberType: 'agent', agentId: leadId, displayName: 'lead', roleDesc: '协调' },
-          { memberType: 'agent', agentId: writerId, displayName: 'writer', roleDesc: '产出' },
-        ],
-      } as Parameters<typeof createWorkgroup>[1],
-      { ownerUserId: actor.user.id, actor },
-    )
+  for (const mountPath of ['', 'svc']) {
+    test(`冻结闭包起工作组子任务 → leader/worker 真实回合 → result 锚回填父端口 (${mountPath || 'root'})`, async () => {
+      // single non-root member，site 2：工作组子任务也必须记录 call iso 容器及其成员挂载。
+      const parentWorktreePath = mountPath === '' ? h.worktreePath : join(h.appHome, 'group')
+      const memberPath = join(parentWorktreePath, mountPath)
+      if (mountPath !== '') {
+        mkdirSync(memberPath, { recursive: true })
+        await runGit(memberPath, ['init', '-b', 'main'])
+        await runGit(memberPath, ['config', 'user.email', 't@t.test'])
+        await runGit(memberPath, ['config', 'user.name', 't'])
+        writeFileSync(join(memberPath, 'README.md'), '# member\n')
+        await runGit(memberPath, ['add', '.'])
+        await runGit(memberPath, ['commit', '-m', 'init'])
+      }
+      const baseCommit = (await runGit(memberPath, ['rev-parse', 'HEAD'])).stdout.trim()
+      const leadId = await seedAgent(h.db, 'wg-lead')
+      const writerId = await seedAgent(h.db, 'wg-writer')
+      const group = await createWorkgroup(
+        h.db,
+        {
+          name: 'e2e-wg',
+          description: '',
+          instructions: '章程：小步快跑',
+          mode: 'leader_worker',
+          leaderDisplayName: 'lead',
+          autonomous: true,
+          switches: { shareOutputs: true, directMessages: false, blackboard: false },
+          maxRounds: 8,
+          completionGate: false,
+          members: [
+            { memberType: 'agent', agentId: leadId, displayName: 'lead', roleDesc: '协调' },
+            { memberType: 'agent', agentId: writerId, displayName: 'writer', roleDesc: '产出' },
+          ],
+        } as Parameters<typeof createWorkgroup>[1],
+        { ownerUserId: actor.user.id, actor },
+      )
 
-    // leader 第 1 轮派单、第 2 轮 declare done；worker 交付一张卡。
-    writeFileSync(
-      h.planFile,
-      JSON.stringify({
-        'wg-lead': [
-          {
-            output: {
-              wg_assignments: JSON.stringify([
-                { member: 'writer', title: 'write alpha', brief: 'create alpha.txt' },
-              ]),
-              wg_decision: JSON.stringify({ action: 'continue' }),
+      // leader 第 1 轮派单、第 2 轮 declare done；worker 交付一张卡。
+      writeFileSync(
+        h.planFile,
+        JSON.stringify({
+          'wg-lead': [
+            {
+              output: {
+                wg_assignments: JSON.stringify([
+                  { member: 'writer', title: 'write alpha', brief: 'create alpha.txt' },
+                ]),
+                wg_decision: JSON.stringify({ action: 'continue' }),
+              },
             },
-          },
-          {
-            output: {
-              wg_decision: JSON.stringify({ action: 'done', summary: 'ALPHA DELIVERED' }),
+            {
+              output: {
+                wg_decision: JSON.stringify({ action: 'done', summary: 'ALPHA DELIVERED' }),
+              },
             },
+          ],
+          'wg-writer': [{ output: { wg_result: JSON.stringify({ summary: 'wrote alpha.txt' }) } }],
+        }),
+      )
+
+      // 父工作流：input → call-workgroup(goalTemplate 渲染 {{req}}) → output。
+      const parentDef = {
+        $schema_version: 4,
+        inputs: [{ kind: 'text', key: 'req', label: 'r' }],
+        nodes: [
+          { id: 'pin', kind: 'input', inputKey: 'req' } as WorkflowNode,
+          {
+            id: 'callwg',
+            kind: 'call-workgroup',
+            workgroupName: 'e2e-wg',
+            goalTemplate: '目标：{{req}}',
+          } as WorkflowNode,
+          {
+            id: 'pout',
+            kind: 'output',
+            ports: [{ name: 'report', bind: { nodeId: 'callwg', portName: 'result' } }],
+          } as WorkflowNode,
+        ],
+        edges: [
+          {
+            id: 'pe1',
+            source: { nodeId: 'pin', portName: 'req' },
+            target: { nodeId: 'callwg', portName: 'req' },
           },
         ],
-        'wg-writer': [{ output: { wg_result: JSON.stringify({ summary: 'wrote alpha.txt' }) } }],
-      }),
-    )
+      } as unknown as WorkflowDefinition
+      const parentWorkflowId = ulid()
+      const { workgroupTaskState, nodeRuns } = tablesOf(h.db)
+      await workflowFixture(h.db, {
+        id: parentWorkflowId,
+        name: 'parent-wg-wf',
+        definition: JSON.stringify(parentDef),
+      })
+      const closure = JSON.stringify({
+        workflows: {},
+        workgroups: { 'e2e-wg': { id: group.id, version: group.version, group } },
+      })
+      const parentTaskId = ulid()
+      await taskFixture(h.db, {
+        id: parentTaskId,
+        name: 'rfc243-wg-parent',
+        workflowId: parentWorkflowId,
+        workflowSnapshot: JSON.stringify(parentDef),
+        repoPath: mountPath === '' ? h.repoPath : memberPath,
+        worktreePath: parentWorktreePath,
+        baseBranch: 'main',
+        branch: `agent-workflow/${parentTaskId}`,
+        status: 'pending',
+        inputs: JSON.stringify({ req: '产出 alpha' }),
+        startedAt: Date.now(),
+        launchOrigin: 'webhook',
+        refClosureJson: closure,
+        ...(mountPath === ''
+          ? {}
+          : {
+              baseCommit,
+              repos: [
+                {
+                  repoIndex: 0,
+                  repoPath: memberPath,
+                  worktreePath: memberPath,
+                  mountPath,
+                  baseBranch: 'main',
+                  branch: `agent-workflow/${parentTaskId}`,
+                  baseCommit,
+                },
+              ],
+            }),
+      })
 
-    // 父工作流：input → call-workgroup(goalTemplate 渲染 {{req}}) → output。
-    const parentDef = {
-      $schema_version: 4,
-      inputs: [{ kind: 'text', key: 'req', label: 'r' }],
-      nodes: [
-        { id: 'pin', kind: 'input', inputKey: 'req' } as WorkflowNode,
-        {
-          id: 'callwg',
-          kind: 'call-workgroup',
-          workgroupName: 'e2e-wg',
-          goalTemplate: '目标：{{req}}',
-        } as WorkflowNode,
-        {
-          id: 'pout',
-          kind: 'output',
-          ports: [{ name: 'report', bind: { nodeId: 'callwg', portName: 'result' } }],
-        } as WorkflowNode,
-      ],
-      edges: [
-        {
-          id: 'pe1',
-          source: { nodeId: 'pin', portName: 'req' },
-          target: { nodeId: 'callwg', portName: 'req' },
-        },
-      ],
-    } as unknown as WorkflowDefinition
-    const parentWorkflowId = ulid()
-    const { workgroupTaskState, nodeRuns } = tablesOf(h.db)
-    await workflowFixture(h.db, {
-      id: parentWorkflowId,
-      name: 'parent-wg-wf',
-      definition: JSON.stringify(parentDef),
+      await runTask({
+        db: h.db,
+        taskId: parentTaskId,
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', SCENARIO_STUB],
+        defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
+        defaultPerNodeTimeoutMs: 10_000,
+      })
+
+      const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
+      expect(parent.status).toBe('done')
+
+      const children = await readTaskFixtures(h.db, { parentTaskId })
+      expect(children.length).toBe(1)
+      const child = children[0]!
+      expect(child.status).toBe('done')
+      expect(child.spaceKind).toBe('inherited')
+      expect(child.workgroupId).toBe(group.id)
+      expect(child.launchOrigin).toBe(parent.launchOrigin)
+      // goalTemplate 渲染进冻结 config（{{req}} → 上游端口值）。
+      expect(child.workgroupConfigJson ?? '').toContain('目标：产出 alpha')
+
+      // 结果锚已 stamp 且指向 leader done decision。
+      const state = (
+        await h.db.select().from(workgroupTaskState).where(eq(workgroupTaskState.taskId, child.id))
+      )[0]!
+      expect(state.resultMessageId).not.toBeNull()
+
+      const callRow = (
+        await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'callwg' }] })
+      ).find((r) => r.parentNodeRunId === null)!
+      expect(child.worktreePath).toBe(callRow.isoWorktreePath!)
+      expect(child.repos.map((repo) => [repo.mountPath, repo.worktreePath])).toEqual([
+        [mountPath, join(child.worktreePath, mountPath)],
+      ])
+      expect(callRow.status).toBe('done')
+      expect(callRow.childTaskId).toBe(child.id)
+      const callOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: callRow.id })
+      expect(callOutputs.find((o) => o.portName === 'result')?.content).toBe('ALPHA DELIVERED')
+
+      // 父 output 节点消费 result。
+      const outRow = (
+        await h.db
+          .select()
+          .from(nodeRuns)
+          .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'pout')))
+      )[0]!
+      const outPorts = await readNodeRunOutputFixtures(h.db, { nodeRunId: outRow.id })
+      expect(outPorts.find((o) => o.portName === 'report')?.content).toBe('ALPHA DELIVERED')
     })
-    const closure = JSON.stringify({
-      workflows: {},
-      workgroups: { 'e2e-wg': { id: group.id, version: group.version, group } },
-    })
-    const parentTaskId = ulid()
-    await taskFixture(h.db, {
-      id: parentTaskId,
-      name: 'rfc243-wg-parent',
-      workflowId: parentWorkflowId,
-      workflowSnapshot: JSON.stringify(parentDef),
-      repoPath: h.repoPath,
-      worktreePath: h.worktreePath,
-      baseBranch: 'main',
-      branch: `agent-workflow/${parentTaskId}`,
-      status: 'pending',
-      inputs: JSON.stringify({ req: '产出 alpha' }),
-      startedAt: Date.now(),
-      launchOrigin: 'webhook',
-      refClosureJson: closure,
-    })
-
-    await runTask({
-      db: h.db,
-      taskId: parentTaskId,
-      appHome: h.appHome,
-      binaryOverride: ['bun', 'run', SCENARIO_STUB],
-      defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-      defaultPerNodeTimeoutMs: 10_000,
-    })
-
-    const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
-    expect(parent.status).toBe('done')
-
-    const children = await readTaskFixtures(h.db, { parentTaskId })
-    expect(children.length).toBe(1)
-    const child = children[0]!
-    expect(child.status).toBe('done')
-    expect(child.spaceKind).toBe('inherited')
-    expect(child.workgroupId).toBe(group.id)
-    expect(child.launchOrigin).toBe(parent.launchOrigin)
-    // goalTemplate 渲染进冻结 config（{{req}} → 上游端口值）。
-    expect(child.workgroupConfigJson ?? '').toContain('目标：产出 alpha')
-
-    // 结果锚已 stamp 且指向 leader done decision。
-    const state = (
-      await h.db.select().from(workgroupTaskState).where(eq(workgroupTaskState.taskId, child.id))
-    )[0]!
-    expect(state.resultMessageId).not.toBeNull()
-
-    const callRow = (
-      await readNodeRunFixtures(h.db, { $and: [{ taskId: parentTaskId }, { nodeId: 'callwg' }] })
-    ).find((r) => r.parentNodeRunId === null)!
-    expect(callRow.status).toBe('done')
-    expect(callRow.childTaskId).toBe(child.id)
-    const callOutputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: callRow.id })
-    expect(callOutputs.find((o) => o.portName === 'result')?.content).toBe('ALPHA DELIVERED')
-
-    // 父 output 节点消费 result。
-    const outRow = (
-      await h.db
-        .select()
-        .from(nodeRuns)
-        .where(and(eq(nodeRuns.taskId, parentTaskId), eq(nodeRuns.nodeId, 'pout')))
-    )[0]!
-    const outPorts = await readNodeRunOutputFixtures(h.db, { nodeRunId: outRow.id })
-    expect(outPorts.find((o) => o.portName === 'report')?.content).toBe('ALPHA DELIVERED')
-  })
+  }
 })
