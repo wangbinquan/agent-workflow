@@ -3,6 +3,7 @@
 // public APIs; native review, Task workspaces, material hydration, Git, profiles and care run
 // through the artifact daemon. No store writes or replacement verification resolver are used.
 import { createHash } from 'node:crypto'
+import { writeFile } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
 import {
   SYSTEM_MOCK_CODE_HOST_TOKEN,
@@ -18,6 +19,14 @@ import type {
   GraphEvidenceBinding,
   GraphImplementationBasis,
 } from '../packages/shared/src/schemas/graphDesign'
+
+async function retainProfileDiagnostic(name: string, data: { body: Buffer; contentType: string }) {
+  // CI records traces only on retry. Keep first-attempt JSON in the uploaded
+  // output directory even when no reporter serializes in-memory attachments.
+  const path = test.info().outputPath(name)
+  await writeFile(path, data.body)
+  await test.info().attach(name, { path, contentType: data.contentType })
+}
 
 test.setTimeout(300_000)
 const typeRef = 'graph-development@2'
@@ -570,15 +579,13 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
     )
     // Node fetch is not captured in the browser trace. Retain the exact receipt
     // and output files before assertions so platform failures remain diagnosable.
-    await test
-      .info()
-      .attach(
-        `graph-profile-${createHash('sha256').update(binding.id).digest('hex').slice(0, 12)}.json`,
-        {
-          body: Buffer.from(JSON.stringify({ binding, baselineSha, artifact }, null, 2)),
-          contentType: 'application/json',
-        },
-      )
+    await retainProfileDiagnostic(
+      `graph-profile-${createHash('sha256').update(binding.id).digest('hex').slice(0, 12)}.json`,
+      {
+        body: Buffer.from(JSON.stringify({ binding, baselineSha, artifact }, null, 2)),
+        contentType: 'application/json',
+      },
+    )
     const retained = JSON.parse(
       artifact.files.find((file) => file.path === 'execution.json')!.content,
     ) as {
@@ -606,9 +613,7 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
       // Keep the failed attempt's evidence; do not repeat this probe on retry.
       // This extra time is only for diagnosis: the original assertion still fails.
       test.setTimeout(test.info().timeout + 75_000)
-      await attachWindowsProfileDiagnostic(generatedFiles, (name, data) =>
-        test.info().attach(name, data),
-      )
+      await attachWindowsProfileDiagnostic(generatedFiles, retainProfileDiagnostic)
     }
     expect(
       line,
