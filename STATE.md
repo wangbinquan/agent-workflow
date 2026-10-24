@@ -66,6 +66,8 @@
 
 ## 2026-10-21 RFC-396 In Progress：自适应图驱动研发数字人
 
+**2026-10-23 图交互验收发现本人缺陷并完成修复候选**：`abcacb` 的固定大图测量在可交互节点处失败；真实 DOM 证明宽泛 render ID 匹配把200元素视图的199条连线全部标成按钮，首节点失去入口。约478ms即可见 SVG，跨两次轮询没有替换，不能归为慢机器或脚本误判。现已改为精确节点/参与者容器映射，组件回归10/0、前端类型检查和相关ESLint通过；四类真实 Mermaid 图的鼠标、键盘和镜像同步E2E已写齐，等待新准确artifact执行。[诊断](design/RFC-396-adaptive-graph-development/graph-interaction-diagnostic-2026-10-23.json)保留原失败。类型夹具修复 `338babd1f` 已进入远端，后继 `9a900aaa5` / CI `40054322444` 待终态。大图测量、真实企业MR/CI与最新托管验收仍未完成，不标Done。
+
 **2026-10-23 无变化重验修复已发布**：`abcacb0166fc` 已推送12个准确路径；首轮CI `40053286328` 的Typecheck暴露本会话新增fixture `publication` 字段同名冲突（3处TS2345），现已更名，后端类型复验退出0，生产未变。该SHA GitHub macOS artifact的新增通知MR恢复旅程 **1/0、无重试、96.7s**，直接证明关闭全部页面、daemon崩溃、离线外部状态变化、同home恢复原MR且无重复、无页面时观察closed；模型/codehost仍为受控fixture。新候选hosted结果与性能测量继续记录，真实企业MR/CI和新版托管仍受下述满盘前提阻塞，RFC保持In Progress。
 
 **2026-10-23 接续与环境核对**：文档候选 `5912ec43b94a` 的 CI `39978754925` 已完成47成功/2失败，所有功能作业成功，Static scans及派生汇总失败；不覆盖原 `ae210` 的Mac20分钟取消。新一轮已修无变化重验的 `candidate-empty` / 重复提交问题，并在通知MR旅程加入关闭浏览器、daemon崩溃及同数据目录恢复。集中SQLite覆盖77用例，首轮74/3、受影响两文件32/1、末次单项1/0，测试夹具/期望错误已修，生产未因其改动；准确范围见验收记录。新候选PG/三平台/恢复旅程与性能实测仍待CI及准确artifact。旧托管服务明确报 `ENOSPC`，节点 `desktop-control-plane` 的可用磁盘字节为0；CS/GitLab/registry的HTTP500分别保留，未推断共同根因。实际task parent仍旧镜像，不能代签graph@2接受；[只读就绪证据](design/RFC-396-adaptive-graph-development/hosted-readiness-2026-10-23.json)记录范围。此前遗漏的三个本RFC `tail -F` 跟随进程已关闭，日志保留。

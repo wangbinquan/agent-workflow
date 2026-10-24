@@ -1,5 +1,17 @@
 # RFC-396 实现候选验收记录
 
+## 2026-10-23 大图测量发现的真实节点交互缺陷
+
+对 `abcacb0166fc2434d406ef59b43bddf45e4f0b01` 的准确 GitHub macOS artifact 进行固定大图测量，三个场景均在首个局部 SVG 的可交互节点等待处失败，未记录为性能通过。独立有界 DOM 诊断确认 200 元素视图的生产缺陷：`GraphModelView` 在所有 `[id],[data-id]` 上用 `id.includes(renderId)` 取首个匹配，而 Mermaid 连线 ID 同时包含两个端点 ID。两个语义节点因此命中同一 `path`，后者覆盖前者的可访问名称，真实 `g.node` 没有点击或键盘入口。
+
+直接观察到 **199 个 `role=button` 全部为连线 `path`，首节点的普通/含隐藏可访问查询及 CSS 标签查询均为 0**。SVG 在约 **478.33 ms** 出现；随后 **12 秒**内经过两次约5秒轮询，SVG ID 未改变，没有有效 SVG 替换。因此本次不是超过60秒的绘图耗时，也不是轮询不断销毁图。原测量仍保留完整失败；直接 DOM 因果证据限于200元素视图，不能从它声称另外两种规模已完成验收。诊断退出码0，浏览器、daemon和fixture服务均清理。[机器可读诊断](./graph-interaction-diagnostic-2026-10-23.json)包含准确产物身份、两端误映射、轮询和原始记录摘要。
+
+修复已精确识别 flow/state/data 节点容器及 sequence 参与者容器，让点击、Enter/空格与 `aria-pressed` 使用同一映射；连线、生命线和标签不能成为语义节点的替身。绑定按完整 ID 查表，保留时序图上下镜像，更新选择不重绘，并在重绘/卸载时清理监听。组件回归 **10 passed / 0 failed，1.85s**，覆盖真实 DOM 顺序、render ID 前缀碰撞、每次操作只触发目标、镜像同步、监听清理、过时异步结果和 Markdown 切换；前端 `tsc --noEmit` 与相关 ESLint 均退出0。证据：`/tmp/rfc396-graph-model-view-tests.log`、`/tmp/rfc396-graph-model-view-types.log`、`/tmp/rfc396-graph-model-view-lint.log`。
+
+新增独立 E2E 通过普通 `/changes` 接口创建四种有连线的图，验证目标节点独立选择、语义列表同步以及时序图上下镜像同步，原三条 MR 旅程保持。E2E 静态语法、格式与 ESLint 检查通过；准确新 artifact 的四类真实 SVG 验收和大图测量仍待执行，组件 fixture 不代签真实渲染结果。
+
+类型夹具修复提交 `338babd1f08aa281c7d2a532431ca1dcc1fd2a6a` 已随共享 `main` 发布。包含它的后继 `9a900aaa5709b147838f3ea64420050e28468895` 已核对祖先关系及三个修复路径内容保留；[CI 40054322444](https://github.com/wangbinquan/agent-workflow/actions/runs/40054322444)仍待终态。原 `abcacb` 的 Typecheck 失败保留，不能以本地类型复验替代后继 hosted 结果。
+
 ## 2026-10-23 无变化重验候选发布与直接恢复旅程
 
 候选 `abcacb0166fc2434d406ef59b43bddf45e4f0b01` 已按12个准确路径发布。[CI 40053286328](https://github.com/wangbinquan/agent-workflow/actions/runs/40053286328) 的功能检查job `120750501934` 在Typecheck失败：新增测试 `publishedFixture()` 的 `publication` 回执字段被 `...f` 传入应用工厂，与其同名 `publication.remoteUrl` 依赖冲突，出现三处 `TS2345`。这是本会话测试配套问题，不能归为环境或其他会话。现已只将该fixture字段改名 `publishedDelivery` 并更新引用，未加类型断言/抑制、未改生产；后端 `NODE_OPTIONS=--max-old-space-size=8192 bun run typecheck` 退出0。原失败日志 `/tmp/rfc396-abcacb-functional-lint-job.log` 与修后 `/tmp/rfc396-noop-backend-types-repair.log` 保留，hosted修复结果等待后继准确SHA。Static scans失败仅记录状态。

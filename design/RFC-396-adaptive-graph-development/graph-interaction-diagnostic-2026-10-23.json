@@ -1,0 +1,188 @@
+{
+  "status": "confirmed-production-defect",
+  "observedAt": "2026-10-24T02:33:18.141Z",
+  "artifactSha": "abcacb0166fc2434d406ef59b43bddf45e4f0b01",
+  "artifactProvenance": {
+    "headSha": "abcacb0166fc2434d406ef59b43bddf45e4f0b01",
+    "runId": 40053286328,
+    "artifactId": 12544371859,
+    "artifactName": "agent-workflow-e2e-macos-latest",
+    "artifactDigest": "sha256:1aedd2d339a625ab30afb4180ae08e2b059e725da54b29e2b0ab9887735fd49d",
+    "binaries": [
+      {
+        "file": "agent-workflow-e2e-macos-arm64",
+        "sha256": "3a9463e3fd4e842aeaf623037d472b6b05e015e0f2fcf12eb1bba654eadba056"
+      },
+      {
+        "file": "stub-opencode-macos-arm64",
+        "sha256": "bb86312319d9e40b3660e938468b2006224aa159eff7a7ca97748b43bfbd4f66"
+      },
+      {
+        "file": "system-mock-tool-macos-arm64",
+        "sha256": "49416d45bd1f4192fab1bb3f73ccec60c1ed7c8f7a5e77f5c0c8f3a692497bab"
+      }
+    ]
+  },
+  "scenario": {
+    "elementsInDesign": 1000,
+    "elementsInView": 200,
+    "relationsInView": 199,
+    "caseId": "01M5NVMYM14YAGRBH2W8NHJDVZ",
+    "viewId": "multi-view-1"
+  },
+  "evidence": {
+    "firstSvgWallMs": 478.33,
+    "interactiveElements": 199,
+    "interactiveElementTags": {
+      "path": 199
+    },
+    "locatorCounts": {
+      "roleButtonFirst": 0,
+      "roleButtonFirstIncludingHidden": 0,
+      "cssFirstLabel": 0,
+      "roleButtonSecond": 1
+    },
+    "firstTwoSemanticMappings": [
+      {
+        "item": {
+          "renderId": "g42d2e55356e11067",
+          "elementId": "multi-node-0000",
+          "label": "multi node 0000"
+        },
+        "matches": [
+          {
+            "tag": "path",
+            "id": "mermaid-rjp6z5nu-L_g42d2e55356e11067_g9a9e918f632408bf_0",
+            "dataId": "L_g42d2e55356e11067_g9a9e918f632408bf_0",
+            "role": "button",
+            "ariaLabel": "multi node 0001",
+            "ariaHidden": null,
+            "className": "edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link",
+            "rect": {
+              "width": 0,
+              "height": 116.771240234375
+            }
+          },
+          {
+            "tag": "g",
+            "id": "mermaid-rjp6z5nu-flowchart-g42d2e55356e11067-0",
+            "dataId": null,
+            "role": null,
+            "ariaLabel": null,
+            "ariaHidden": null,
+            "className": "node default",
+            "rect": {
+              "width": 293.3094482421875,
+              "height": 90.08062744140625
+            }
+          }
+        ]
+      },
+      {
+        "item": {
+          "renderId": "g9a9e918f632408bf",
+          "elementId": "multi-node-0001",
+          "label": "multi node 0001"
+        },
+        "matches": [
+          {
+            "tag": "path",
+            "id": "mermaid-rjp6z5nu-L_g42d2e55356e11067_g9a9e918f632408bf_0",
+            "dataId": "L_g42d2e55356e11067_g9a9e918f632408bf_0",
+            "role": "button",
+            "ariaLabel": "multi node 0001",
+            "ariaHidden": null,
+            "className": "edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link",
+            "rect": {
+              "width": 0,
+              "height": 116.771240234375
+            }
+          },
+          {
+            "tag": "path",
+            "id": "mermaid-rjp6z5nu-L_g9a9e918f632408bf_g2ad260c424ef2816_0",
+            "dataId": "L_g9a9e918f632408bf_g2ad260c424ef2816_0",
+            "role": "button",
+            "ariaLabel": "multi node 0002",
+            "ariaHidden": null,
+            "className": "edge-thickness-normal edge-pattern-solid edge-thickness-normal edge-pattern-solid flowchart-link",
+            "rect": {
+              "width": 0,
+              "height": 116.7711181640625
+            }
+          },
+          {
+            "tag": "g",
+            "id": "mermaid-rjp6z5nu-flowchart-g9a9e918f632408bf-1",
+            "dataId": null,
+            "role": null,
+            "ariaLabel": null,
+            "ariaHidden": null,
+            "className": "node default",
+            "rect": {
+              "width": 293.3094482421875,
+              "height": 90.0806884765625
+            }
+          }
+        ]
+      }
+    ],
+    "svgIdsBefore": ["mermaid-rjp6z5nu"],
+    "svgIdsAfter": ["mermaid-rjp6z5nu"],
+    "observationWindowMs": 12041.4,
+    "svgEvents": [
+      {
+        "at": 368.8999996185303,
+        "action": "remove",
+        "ids": [""],
+        "nodeTag": "DIV"
+      },
+      {
+        "at": 369,
+        "action": "remove",
+        "ids": [""],
+        "nodeTag": "DIV"
+      },
+      {
+        "at": 807,
+        "action": "add",
+        "ids": ["mermaid-rjp6z5nu"],
+        "nodeTag": "svg"
+      }
+    ],
+    "workspaceReads": [
+      {
+        "at": 1792809185507,
+        "path": "/api/development-designs/design%3A01M5NVMYM14YAGRBH2W8NHJDVZ",
+        "query": "",
+        "status": 200
+      },
+      {
+        "at": 1792809190524,
+        "path": "/api/development-designs/design%3A01M5NVMYM14YAGRBH2W8NHJDVZ",
+        "query": "",
+        "status": 200
+      },
+      {
+        "at": 1792809195542,
+        "path": "/api/development-designs/design%3A01M5NVMYM14YAGRBH2W8NHJDVZ",
+        "query": "",
+        "status": 200
+      }
+    ],
+    "pageErrors": [],
+    "cleanedUp": true
+  },
+  "rootCause": {
+    "path": "packages/frontend/src/features/development-automation/graph-development/GraphModelView.tsx",
+    "selection": "querySelectorAll([id], [data-id]) then id.includes(renderId)",
+    "result": "Both endpoint render IDs match the preceding edge path. The second endpoint overwrites its label; semantic node groups remain inert and the path receives both handlers."
+  },
+  "scope": "Direct DOM evidence covers the 200-element flow view. The original 50- and 80-element measurements have the same failure signature but were not directly inspected again. No complete performance result is claimed.",
+  "rawEvidence": {
+    "path": "/tmp/rfc396-large-graph-abcacb-dom-diagnostic.json",
+    "sha256": "59cfb97e68ab87b6f9086447383c40332e2e5381aec116092e7cc4fc6a010088",
+    "screenshot": "/tmp/rfc396-large-graph-abcacb-dom-diagnostic.png",
+    "failedMeasurement": "/tmp/rfc396-large-graph-abcacb-results/report.json"
+  }
+}

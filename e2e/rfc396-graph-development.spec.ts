@@ -8,6 +8,7 @@ import { SYSTEM_MOCK_CODE_HOST_TOKEN, SystemMockClient } from '@agent-workflow/s
 import { startDaemon, type DaemonHandle } from './harness'
 import { clarifyQuestionSetKey, clarifyAnswerBasis } from '../packages/shared/src/clarifyMindmap'
 import type { ClarifyAnswer, ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
+import type { GraphDesignDocument } from '../packages/shared/src/schemas/graphDesign'
 
 test.setTimeout(300_000)
 let daemon: DaemonHandle
@@ -859,4 +860,184 @@ test('RFC-396 existing-module journey preserves the interface and adds exception
     'Existing module: preserve the public interface',
     'Add an exception for incompatible responses',
   )
+})
+
+// RFC-396: Mermaid edge IDs contain both endpoint render IDs. Matching any ID
+// substring bound both actions to a path, overwrote labels and left nodes inert.
+// Use actual connected renders for all four SVG adapters, including sequence mirrors.
+test('RFC-396 connected diagrams select only their semantic nodes by mouse and keyboard', async ({
+  page,
+}) => {
+  const caseId = (
+    await api<{ case: { id: string } }>(`/api/digital-employees/${employeeId}/cases`, {
+      name: 'Connected graph interaction',
+      kind: 'body',
+      body: 'Inspect connected diagrams while the original questions remain open.',
+      externalId: null,
+      target: { repositoryId },
+      uploads: [],
+      executionOptions: {},
+      advanced: { typeOptions: {} },
+      idempotencyKey: `${tag}:connected-diagrams`,
+    })
+  ).case.id
+  let designId = ''
+  await expect
+    .poll(
+      async () => {
+        designId =
+          (await api<{ id: string } | null>(`/api/employee-cases/${caseId}/design`))?.id ?? ''
+        return designId
+      },
+      { timeout: 60_000 },
+    )
+    .not.toBe('')
+  const base = `/api/development-designs/${encodeURIComponent(designId)}`
+  await expect
+    .poll(async () => (await api<Workspace>(base)).host.editableClarify, { timeout: 90_000 })
+    .toBeTruthy()
+  const original = (await api<{ document: GraphDesignDocument }>(base)).document
+  const sourceIds = original.sources.filter((source) => source.kind === 'material').map((s) => s.id)
+  const document: GraphDesignDocument = {
+    ...original,
+    concerns: [],
+    obligations: [],
+    elements: [],
+    relations: [],
+    models: [],
+    views: [],
+  }
+  for (const kind of ['flow', 'state', 'sequence', 'data'] as const) {
+    const ids = [`${kind}-first`, `${kind}-second`]
+    const relationId = `${kind}-edge`
+    document.elements.push(
+      ...ids.map((id, index) => {
+        const common = {
+          id,
+          revision: 1,
+          label: `${kind} node ${index + 1}`,
+          description: 'Connected diagram interaction fixture',
+          sourceIds,
+        }
+        return kind === 'data'
+          ? { ...common, kind: 'entity' as const, fields: [] }
+          : {
+              ...common,
+              kind: 'behavior' as const,
+              role:
+                kind === 'state'
+                  ? ('state' as const)
+                  : kind === 'sequence'
+                    ? ('actor' as const)
+                    : ('step' as const),
+            }
+      }),
+    )
+    document.relations.push({
+      id: relationId,
+      revision: 1,
+      from: ids[0]!,
+      to: ids[1]!,
+      kind:
+        kind === 'state'
+          ? 'transition'
+          : kind === 'sequence'
+            ? 'message'
+            : kind === 'data'
+              ? 'data-reference'
+              : 'flow',
+      label: 'next',
+      sourceIds,
+    })
+    const model = { id: `${kind}-model`, revision: 1, label: `Connected ${kind}`, sourceIds }
+    if (kind === 'flow') {
+      document.models.push({ ...model, kind, elementIds: ids, relationIds: [relationId] })
+    } else if (kind === 'state') {
+      document.models.push({
+        ...model,
+        kind,
+        stateIds: ids,
+        initialStateId: ids[0]!,
+        terminalStateIds: [ids[1]!],
+        transitions: [
+          { relationId, event: 'advance', guards: [], actionRef: null, assertionRefs: [] },
+        ],
+      })
+    } else if (kind === 'sequence') {
+      document.models.push({
+        ...model,
+        kind,
+        participantIds: ids,
+        messageIds: [relationId],
+        fragments: [],
+      })
+    } else {
+      document.models.push({
+        ...model,
+        kind,
+        entityIds: ids,
+        relationships: [{ relationId, cardinality: 'one-many', required: true }],
+      })
+    }
+    document.views.push({
+      id: `${kind}-view`,
+      revision: 1,
+      title: `Connected ${kind}`,
+      purpose: 'Inspect connected node interactions',
+      concernIds: [],
+      capabilityRef: { id: kind, version: 1 },
+      modelIds: [model.id],
+      elementIds: ids,
+      relationIds: [relationId],
+      sourceIds,
+      status: 'current',
+      pinned: false,
+      explanation: 'Exercise real SVG containers without starting implementation.',
+      limitations: ['Deterministic UI regression fixture'],
+    })
+  }
+  await api(`${base}/changes`, {
+    expectedRevision: original.revision,
+    requestId: `${tag}:connected-diagrams`,
+    document,
+  })
+  await open(page, caseId)
+  for (const kind of ['flow', 'state', 'sequence', 'data'] as const) {
+    await page
+      .getByRole('button', { name: `Connected ${kind}`, exact: true })
+      .first()
+      .click()
+    const graph = page.getByRole('region', { name: `${kind}-model`, exact: true })
+    const first = graph.getByRole('button', { name: `${kind} node 1`, exact: true })
+    const second = graph.getByRole('button', { name: `${kind} node 2`, exact: true })
+    const copies = kind === 'sequence' ? 2 : 1
+    await expect(first).toHaveCount(copies)
+    await expect(second).toHaveCount(copies)
+    await expect(graph.locator('path[role="button"], line[role="button"]')).toHaveCount(0)
+    const pressed = async (firstPressed: boolean, secondPressed: boolean) => {
+      for (let index = 0; index < copies; index++) {
+        await expect(first.nth(index)).toHaveAttribute('aria-pressed', String(firstPressed))
+        await expect(second.nth(index)).toHaveAttribute('aria-pressed', String(secondPressed))
+      }
+    }
+    await pressed(false, false)
+    await first.first().click()
+    await pressed(true, false)
+    await expect(
+      page
+        .locator('.graph-design__list')
+        .getByRole('button', { name: `✓ ${kind} node 1`, exact: true }),
+    ).toBeVisible()
+    await first.first().press('Enter')
+    await pressed(false, false)
+    await second.last().press('Space')
+    await pressed(false, true)
+    await expect(
+      page
+        .locator('.graph-design__list')
+        .getByRole('button', { name: `✓ ${kind} node 2`, exact: true }),
+    ).toBeVisible()
+    await page.getByRole('button', { name: 'Clear selection', exact: true }).click()
+    await pressed(false, false)
+  }
 })
