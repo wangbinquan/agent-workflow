@@ -1,3 +1,21 @@
+## 2026-10-24 RFC-395 In Progress：II-b 跨域收口（O）已单独上库，休眠包并行修复中
+
+**O 已上库**：用户 2026-10-23 批准把 O 作为不激活的前置交付单独提交，见 `5ffdbace7`。39 处被重塑表的跨域访问已在现有表结构上收口，运行行为、API 与持久化字节不变。CI 收口两笔：`00e355174` 把守卫与账本改指新结构，`407a7a943` 删除 provider 分叉账本的过期条目。进度与例外说明见 [RFC plan §6.13](design/RFC-395-database-target-schema-rebuild/plan.md)。
+
+**同期 CI 修复**（与 RFC-395 无关）：
+
+- `ad59fdd39`：依赖审计门转绿。全仓从 zod 3 迁到 zod 4.6.6（根 `overrides` 钉住），同时升级 body-parser 2.4.0、dompurify 3.4.17、happy-dom 21.0.4。新代码按 zod 4 API 编写；部分 zod 默认错误文案随之变化，变更清单见该提交说明。
+- `8f624ab74`：gitleaks 把 `9a900aaa5` 两条测试里的幂等键字面量误报为密钥。按仓内定式处理：行内加 `gitleaks:allow`，并在 `.gitleaksignore` 中按指纹钉住历史提交。
+
+**进行中**（未提交，休眠，不接线）：
+
+- R1 目标 registry、R2 合同历史已完成，并各修复过一轮；V1 源识别与读者已开发完成。
+- 2026-10-24 起并行三项：V1 修复轮、R1 / R2 第二轮修复、N 的 K1 / K3 / K6 纯领域规则。
+- 之后依次是 V2（转换规则）和 V3（迁移运行与切换），然后与用户约定换表窗口（T / N / C / F / X / P / M / A，加 T18 集中验证）。
+- 休眠包不改共享账本，所需条目在 T18 统一登记（plan §6.13「休眠包与共享账本」）。本地全量运行有 23 条失败来自这些未提交文件（守卫账本差异，加上两处正在修的缺陷）；CI 不含这些文件，看不到它们。
+
+**对其他会话的影响**同 2026-10-23 条目：激活之前，新增 epoch-1 表或列时须同步修改目标 contribution，并登记为转换器支持的源版本。table-mapping 已更正：源表数为 222（含 RFC-396 的 5 张 `development_design*` 表），迁移元数据位于目标库的 meta 区。
+
 ## 2026-10-24 RFC-396 In Progress：取证修复已在 CI 接受，Windows 输出差异已实证
 
 准确 `ac5c96bf760472d78b7cbc93ac3a00b30fd5f878` 的主 CI `40069434115` 已终态 **46 success / 3 failure**：Windows care、Static scans 及派生 CI required 仍失败。本会话新增诊断的两处缺陷已确认修复：原 Node 守卫全部 9 项实际通过，所在分片 **1129 pass / 0 fail**；首次 profile 与 A/B JSON 均真实上传，原文件和附件副本 hash 一致。[结构化证据](design/RFC-396-adaptive-graph-development/windows-profile-acceptance-2026-10-24.json)保留原始来源、生产回执和接受边界。

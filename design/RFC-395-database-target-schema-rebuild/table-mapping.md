@@ -10,6 +10,8 @@
 
 处置数量：保留 179、关系化 1、投影索引 1、内容引用 12、共用机制 4、拆分 3、替换 1、归档 6、历史化 7、退役迁移态 1、收缩迁移态 1、中立化 1。表总数不设下降目标；目标物理表总数在 schema contribution 编译后精确产生，不以本清单推算作为上线约束。
 
+**2026-10-24 更正（源表数）**：本清单定稿后，RFC-396 新增 5 张表：`development_designs`、`development_design_revisions`、`development_design_proposals`、`development_design_baselines`、`development_design_links`。II-b 的源合同因此是 **222 张**（plan §6.7「规模」）。这 5 张按实际写入方归 development-automation，处置为保留：R1 的目标 registry 原样复用，V1 冻结的 epoch-1 roster 也逐张列出。处置数量相应为保留 184，其余不变；本文其余各处的「217」指定稿时的基线。之后再有 RFC 新增 epoch-1 表，按 migration §3 同步登记目标 contribution 与转换器支持的源版本。
+
 ## 2. 全部源表
 
 | 源表 | 旧 owner / disposition；列数 | 目标 owner | 处置 | 目标与理由 |
@@ -246,6 +248,8 @@
 | 内容机制 | `content_objects`、`content_bytes`、`content_publications`（替代现有 publication 表） | platform/content 提供机制，system-operations 维护其持久生命周期；design §7 |
 | 迁移元数据 | `migration_runs`、`migration_chunk_receipts`、`migration_table_receipts`、`migration_row_dispositions`、`migration_artifact_receipts`、`activation_receipts`（由 logical-copy 与 generation 元数据泛化） | system-operations；migration §3；复用现有 logical-copy 与 generation 概念，扩展到 transform 而不是另建第二套激活事实 |
 | 旧代码历史 | versioned archive + 原 ID 查找索引 | code-capability 历史查询；不回流当前业务写模型 |
+
+**2026-10-24 更正（迁移元数据的位置）**：上表「迁移元数据」一行不是业务目标表。按 migration §3，这些记录存放在目标库的迁移元数据区：SQLite 目标文件内的 `aw_meta_*` 表，PostgreSQL 的 `agent_workflow_meta` schema。它们由迁移机制创建和写入（R2 的 meta 表机制、V3 的迁移运行），归 system-operations，不进入 R1 的目标 registry 与业务表编译产物。`employee_os_writer_state` 的 drain 状态写入的是这里的激活回执，不是某张业务目标表；转换合同对迁移回执去向与业务表去向分别校验。
 
 ## 4. 不属于 217 张源码业务表的存储
 
