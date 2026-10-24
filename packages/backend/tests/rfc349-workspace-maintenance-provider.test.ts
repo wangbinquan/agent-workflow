@@ -56,13 +56,20 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
       'utf8',
     )
     expect(composition).toContain('composeWorkspaceMaintenanceCommand')
-    expect(composition).toContain('composeWorkspaceMaintenanceCommand')
+    expect(composition).toContain('store: new PortWorkspaceMaintenanceStore(input)')
     // RFC-359 W4-B6：只有一份中立 store，两个 provider 共用；它不得把中立句柄断言成 SQLite 客户端。
     const neutral = readFileSync(
       resolve(sourceRoot, 'infrastructure/workspaceMaintenanceStore.ts'),
       'utf8',
     )
-    expect(neutral).toContain('PersistenceDb')
+    // RFC-395 O1: the Source Control store delegates to Task-owned ports.
+    expect(neutral).toContain('readonly workspaceGc: WorkspaceGcTaskPort')
+    expect(neutral).toContain('readonly workspacePrune: TaskWorkspacePruneParticipant')
+    expect(neutral).not.toMatch(/PersistenceDb|sessionTables|drizzle-orm|bun:sqlite/)
+    expect(neutral).toContain('this.ports.workspaceGc.listGcCandidates()')
+    expect(neutral).toContain(
+      'this.ports.workspacePrune.claim(taskId, now, now - WORKSPACE_PRUNING_LEASE_MS)',
+    )
     expect(neutral).not.toMatch(/as\s+(?:unknown\s+as\s+)?DbClient|createInMemoryDb|deasync/)
   })
 

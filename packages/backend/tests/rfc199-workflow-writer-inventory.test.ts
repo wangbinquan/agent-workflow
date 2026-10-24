@@ -42,7 +42,7 @@ const EXPECTED_WRITERS = {
   },
   updateMetadata: {},
   delete: {
-    'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
+    // RFC-395 O2 retired the unused legacy deletion authority.
     'modules/resource-catalog/infrastructure/workflowRepository.ts': 1,
   },
 } as const

@@ -72,6 +72,12 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 
 /** 只有 bootstrap 可以指向模块的 `composition` 入口（RFC-294 §G1）。 */
 export const BOOTSTRAP_FILES = [
+  // RFC-395 II-b O: exact owner-adapter assembly roots, not legacy consumers.
+  'packages/backend/src/bootstrap/crossContextClosure.ts',
+  'packages/backend/src/bootstrap/doctorDiagnostics.ts',
+  'packages/backend/src/bootstrap/repositoryBackupPreparation.ts',
+  'packages/backend/src/bootstrap/resourceLimits.ts',
+  'packages/backend/src/bootstrap/retentionSweepPhases.ts',
   'packages/backend/src/bootstrap/persistenceSchema.ts',
   'packages/backend/src/bootstrap/daemonModules/adapters.ts',
   'packages/backend/src/bootstrap/daemonModules/providerCore.ts',

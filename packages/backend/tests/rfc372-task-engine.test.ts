@@ -38,7 +38,7 @@ test('both daemon bootstraps bind follow-up generation into the original clarify
   for (const path of ['../src/bootstrap/daemonHttpComposition.ts']) {
     const source = await Bun.file(new URL(path, import.meta.url)).text()
     expect(source).toMatch(
-      /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?binding: narrativeSystemAgentBinding,/,
+      /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*taskLock: composeHumanGateTaskLockPort,\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?binding: narrativeSystemAgentBinding,/,
     )
     const fileName = fileURLToPath(new URL(path, import.meta.url))
     const parse = (text: string) =>

@@ -546,7 +546,7 @@ describe('RFC-359 W5-T19d —— 成对适配器的覆盖对等（高水位，�
       scan().providerNamed,
       '全树一个 provider 命名的实现文件都没扫到——前缀匹配器已经不咬人了。' +
         '账本清空后这条守卫会变成永久假绿，先修匹配器再说。',
-    ).toBeGreaterThanOrEqual(37) // RFC-391 deletes postgresqlDaemonApplication.ts; the measured provider-named file corpus is 38 -> 37.
+    ).toBeGreaterThanOrEqual(36) // RFC-395 O3 deletes postgresqlEventsArchive.ts; the measured corpus converges 37 -> 36.
   }, 30_000)
 
   test('客户端机制对仍被识别（配对判据失效不能让账本静默变空）', () => {

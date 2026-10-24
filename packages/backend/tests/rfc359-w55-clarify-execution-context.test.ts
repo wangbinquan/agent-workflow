@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
@@ -95,7 +96,11 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
         return ambient
       },
       humanGateComposition: {
-        createCollaborationCommandContext: () => ({}),
+        createCollaborationCommandContext: (input: RecordValue) => {
+          expect(input.db).toBe(db)
+          expect(input.taskLock).toBe(composeHumanGateTaskLockPort)
+          return {}
+        },
         async parkPreparedHumanGate(input: RecordValue) {
           parks.push(input)
           if (parkFailure !== undefined) throw parkFailure
@@ -114,7 +119,14 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
       log: { warn() {} },
     },
   )
-  const compose = extract<(database: object) => { openAgentClarify: Open }>(
+  const compose = extract<
+    (
+      database: object,
+      dependencies: { taskLock: typeof composeHumanGateTaskLockPort },
+    ) => {
+      openAgentClarify: Open
+    }
+  >(
     'modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts',
     'createCollaborationRuntimeMechanics',
     {
@@ -129,7 +141,8 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
     },
   )
   return {
-    open: compose(db).openAgentClarify,
+    // RFC-395 O2: use the same required-port factory as crossContextClosure.ts.
+    open: compose(db, { taskLock: composeHumanGateTaskLockPort }).openAgentClarify,
     parks,
     prepared,
     received,
@@ -161,6 +174,7 @@ for (const kind of ['self', 'cross'] as const) {
       const context = Object.freeze({ task: 'current-execution' })
       const h = fixture(ambient)
       const result = await h.open(input(kind, context))
+      expect(h.received[0]?.taskLock).toBe(composeHumanGateTaskLockPort)
       expect(h.received[0]?.executionContext).toBe(context)
       expect(h.parks[0]?.executionContext).toBe(context)
       expect(h.parks[0]?.db).toBe(h.db)

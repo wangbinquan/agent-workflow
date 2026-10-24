@@ -1,5 +1,6 @@
 // RFC-395 II-b O3 — the shared owner of /health and Doctor task counts.
 import { count, eq } from 'drizzle-orm'
+import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
@@ -25,7 +26,9 @@ function safeDoctorCount(value: unknown): number {
 export function createTaskLifecycleCounts(): TaskLifecycleCounts {
   return {
     async countLifecycleStates(source) {
-      if (source.provider === 'sqlite') {
+      // Dispatch on the native handle; each branch retains an exhaustive provider fence.
+      if ('db' in source) {
+        if (source.provider !== 'sqlite') return unhandledDatabaseProvider(source)
         const taskCount = (status: string): number =>
           (
             source.db.query('SELECT count(*) AS n FROM tasks WHERE status = ?').get(status) as {
@@ -44,6 +47,7 @@ export function createTaskLifecycleCounts(): TaskLifecycleCounts {
           ).n,
         }
       }
+      if (source.provider !== 'postgresql') return unhandledDatabaseProvider(source)
       const rows = await source.pool.unsafe(
         'SELECT ' +
           "count(*) FILTER (WHERE status = 'interrupted') AS interrupted, " +

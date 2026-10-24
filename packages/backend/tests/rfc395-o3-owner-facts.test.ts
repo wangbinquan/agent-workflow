@@ -1,6 +1,7 @@
 // RFC-395 II-b package O3: real-engine compatibility for Task-owned workspace, usage and Doctor facts.
 import { expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { NativeDatabaseReadSource } from '@/platform/persistence/nativeReadSource'
 import {
   createTaskCodeWorkspaceQueries,
   createTaskResourceLimitFacts,
@@ -187,4 +188,32 @@ describeEachProvider('RFC-395 II-b O3 owner facts', (harness) => {
     })
     expect(await createTaskStatusCounts(db).countRunningTasks()).toBe(1)
   })
+})
+
+// O's native-handle dispatch must reject future providers before touching their handles.
+test('Doctor lifecycle counts reject unsupported providers for either native handle shape', async () => {
+  for (const source of [
+    {
+      provider: 'unsupported',
+      db: {
+        query: () => {
+          throw new Error('unexpected query')
+        },
+      },
+    },
+    {
+      provider: 'unsupported',
+      pool: {
+        unsafe: () => {
+          throw new Error('unexpected query')
+        },
+      },
+    },
+  ]) {
+    await expect(
+      composeSystemOperationsTaskPorts().countLifecycleStates(
+        source as unknown as NativeDatabaseReadSource,
+      ),
+    ).rejects.toThrow('unhandled database provider: unsupported')
+  }
 })

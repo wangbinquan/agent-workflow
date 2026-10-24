@@ -942,7 +942,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "id": "rfc294-architecture-preflight",
-      "lines": 570,
+      "lines": 614,
       "mechanism": "ast",
       "minCorpusFiles": 120,
       "negativeFixture": true,

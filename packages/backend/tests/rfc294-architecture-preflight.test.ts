@@ -337,7 +337,6 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/system-operations/composition.ts -> packages/backend/src/modules/knowledge-evolution/composition/fusion.ts',
   'packages/backend/src/modules/system-operations/composition.ts -> packages/backend/src/modules/memory/composition.ts',
   'packages/backend/src/modules/system-operations/composition.ts -> packages/backend/src/modules/resource-catalog/composition/skillVersionCommit.ts',
-  'packages/backend/src/modules/system-operations/composition.ts -> packages/backend/src/modules/source-control/composition.ts',
   'packages/backend/src/modules/task-execution/composition/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts',
   'packages/backend/src/modules/task-execution/composition/agentInvocation.ts -> packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts',
   'packages/backend/src/modules/task-execution/composition/crewstationRuntimeManagement.ts -> packages/backend/src/modules/runtime-management/composition/crewstationRuntimeManagement.ts',

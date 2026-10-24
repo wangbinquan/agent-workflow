@@ -47,9 +47,9 @@ describe('RFC-225 workgroup writer inventory', () => {
       'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
+    // RFC-395 O2 retired the unused legacy deletion authority.
     expect(inventory(/\.delete\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
   })
 

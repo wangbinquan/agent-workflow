@@ -386,6 +386,13 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 - 写「固定时间点」时先想清楚下游按本地还是 UTC 解释它。交给按本地字段编码的库（zip 的 DOS 时间等）用本地构造 `new Date(1980, 0, 1)`。
 - 时区相关的回归测试要在子进程里显式设 `TZ` 跑，进程内断言看不见：见 `packages/backend/tests/zip-fixed-mtime-timezone.test.ts`。
 
+## 本地 `bun run test:backend` 的总日志只含每个失败分片输出的最后 300 行：漏看失败就会带红上库（2026-10-24 实撞）
+
+`scripts/test-backend-sharded.ts` 对失败分片只把输出的末尾（`outputTail`，默认 300 行）打进总日志，完整输出留在 `diagnostics kept at <runRoot>` 下的 `shard-N.log`。RFC-395 II-b 的 O 前置交付按总日志列出了 26 个失败文件，修完就提交了；实际上分片 2～4 的完整日志里还有 19 个文件失败，CI 上 7 个后端分片随即变红。
+
+- 判断本地全量结果时，从每个 `shard-N.log` 汇总 `(fail)` 行，不要只看总日志。
+- 修复后的复验要覆盖完整失败清单，而不是总日志里看得到的那一部分。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。
