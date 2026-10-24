@@ -154,6 +154,10 @@ Agent / Workgroup / 数字员工 / code-round 允许由引擎编译出内部图�
 | `worktree_path, worktree_dir_name, mount_path, subdir` | 工作区内容 root 引用 + 唯一 mount 相对路径 + subdir；删除 `worktree_dir_name` 重复身份 |
 | `readonly, readonly_dirty_count, workspace_profile_version, workspace_profile_digest, has_submodules, submodule_init_ok, submodule_init_error, schema_version` | 原功能保留，区分冻结挂载配置、准备结果与可变运行状态 |
 
+**2026-10-24 更正（`requested_source` 的精确性）**：上文 II-0 补充中的 `requestedSource@v1` 是 II-a 的内存兼容视图，从未落库，而且有损：local 并入 internal；经缓存解析的 URL 与 cached repo 请求无法区分；请求 ref 实为解析后的 `base_branch`（plan §6.11「留给 II-b 的事项」第 3 条）。落库的 `requested_source` 改用 V2-T 定义的新版本 codec，无损记录今天的全部请求事实：种类含 `local` 及其仓库路径，URL 按存储值保留，另有 cached repo id、仓库组 id / 名称，以及标明来源为「解析后的 base_branch」的请求 ref。II-a 的视图由它映射得到，投影结果与今天的 DTO 逐字段相等。
+
+**2026-10-24 更正（detached 挂载的 `base_branch`）**：`detached` 状态的 `base_branch` 允许为 NULL 或等于 `base_commit`。今天 internal 工作区把基线 sha 记作起点 ref（`modules/task-execution/composition/actionExecutionEnvironment.ts:46-48`），投影原样透传 `baseBranch`；空串转为 NULL。状态判定：分支名非空为 `branch`；分支名为空且有基线提交为 `detached`；无 git 状态为 `none`；epoch 1 的数据不会产生 `unborn`。其他组合按 migration §4.2「未解释冲突」处理。
+
 `node_run_repo_checkpoints`：PK `(node_run_id, repo_key)`，FK 到同任务挂载；保存 `pre_snapshot, isolation_base, node_tree, submodules`。每个字段三态：NULL（未记录）、`''`（干净树标记）、提交 / 树 id。行存在性区分「该运行没有记录任何仓」与「只记录了部分仓」。一仓一行、多仓多行；`merge_state` 与运行级 `isolation_root_ref` 不在本表（见 §5.1）。每仓 iso 目录由 `(appHome, taskId, isoKey, mount_path)` 推导。`pre_snapshot` 在目标模型只承载迁移写入的值，铸行继承时复制被继承运行的 checkpoint 行（§10 D3）。
 
 工作区 preparation、source-control 的 source / snapshot / preparation operation 保留各自职责：准入准备可以发生在 Task 创建前，不能强制 FK 到尚不存在的任务。`task_workspace_preparations`、托管工作区命令与回执和新的挂载通过稳定身份关联，复用现有租约 / effect 恢复协议。
@@ -260,6 +264,8 @@ nonce 对所有角色生成的今日行为保持（工作组 host 账本等跨�
 - `clarify_answers`：PK `(round_id,question_id)`；最终答案 value、attribution、revision、更新时间。
 - `clarify_answer_drafts`：PK `(round_id,question_id)`；草稿 value、编辑者 attribution、revision、更新时间。保持当前一份共享草稿的语义，不擅自变成每用户隔离草稿。
 
+**2026-10-24 更正（重复题目）**：两表主键改为 `(round_id, question_id, occurrence)`，与 agent 引用表同法，唯一 ordinal 保留。新写入的题集 question ID 唯一，`occurrence` 恒为 0；它只承接存量数据中的重复题目与重复答案。理由：migration §4.4 不允许截断或合并重复项，而今天的数组投影保留每一次出现（`modules/collaboration/domain/clarifyAnswers.ts`）。等待中的轮次若有无法消歧的重复，迁移阻塞。
+
 questions snapshot 内 question ID 唯一，稳定顺序保留。脑图 follow-up 只在当前题集末尾追加，以 `questions_revision` CAS 推进；既有题目不可改写或删除。答案与草稿写入时校验题目存在于当前题集；封口冻结 `sealed_question_set_key`。答案值维持现有类型合同；引用 question 必须在该版本快照中。修改以 row revision CAS 进行；round 封口在同事务中冻结有效答案集合、记录 submitted/answered 元数据并调用现有协作 participant。单题更新不再锁 Task 聚合或整体重写答案 map；封口与编辑的竞态由 round 状态 / revision 与事务合同决定。API 可继续返回 JSON map 投影。
 
 `task_questions` 是人工交互 / 分发 / 续跑账本，不与 clarify answer 合表；`doc_versions` 归 collaboration，保留文档版本与内容；不复活已经删除的脑图物化表。
@@ -320,6 +326,8 @@ Agent 的传递依赖、必选项与闭包顺序沿用当前语义；需要不�
 | Clarify `answers / draftAnswers / answerAttributions` | 由逐题表投影为今天的 map / 数组；部分封口时 `answers` 含已封子集、归属仍为草稿编辑者；草稿保存仍逐题 LWW、不新增客户端令牌 |
 | Agent `skills / dependsOn / mcp / plugins` | 关系表按 ordinal 原样回放，含 kind、仅名称的项目技能、悬空 id |
 | `TaskCatalogListItem` | 键集合不变（strict） |
+
+**2026-10-24 更正（seq 历史回填）**：上表 `NodeRun.seq` 一行的「历史回填复刻『NULL 在前、ULID 兜底』全序」改为：按今天每次启动都会执行的 RFC-374 回填规则一次回填。启动入口见 `modules/task-execution/application/bootExecutionRecovery.ts:13`，规划见 `modules/task-execution/domain/nodeRunSeqBackfill.ts`。全为 NULL 的任务用初始公式；已有分配序号时，较旧的行排在最小序号之下，较新的行在源高水位之上分配。oracle 在回填后的行上计算选择。理由：这正是当前二进制下一次启动会做的事，迁移后的选择结果因此与今天相同。
 
 ## 9. 历史层与约束策略
 

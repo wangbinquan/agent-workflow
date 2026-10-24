@@ -578,6 +578,32 @@ II-a 交付后向用户提了三项待定事项，用户 2026-10-23 回复「按
 - §6.11「留给 II-b 的事项」第 6 条的 4 处候选缺陷已确认属实，于 2026-10-23 由 `6198ae144` 作为缺陷单独修复（不属于 RFC-395）。
 - 本节开头「II-b 仍是一次交付」有一处例外：O 不随激活包交付。用户 2026-10-23 批准先单独验证并提交 O，它不激活任何新合同，运行行为、API 与持久化字节不变，见下文「进度」。
 
+#### V2 分解（2026-10-24）
+
+V2 覆盖 migration §4 的全部规则与 222 张源表，规模大，拆为公共框架与四个领域包，文件互不相交：
+
+| 包 | 内容 | 落点 |
+| --- | --- | --- |
+| V2-core A | 转换合同与引擎：迁移键、确定性子 ID、目标行校验、拓扑序、暂存库、查找集合、行处置 / chunk / 表 / 制品回执、`ConversionSink`（由 V3 实现）、trace；ContentRef 列 codec；测试 harness 与冻结原始行写入器；各领域包的桩文件与 bootstrap 装配；R1 / V1 的前置小改 | `platform/persistence/migration/conversion/`、`platform/content/contentRefCodec.ts`、`bootstrap/conversionRules.ts` |
+| V2-core B | 173 张原样复用表的通用复制；归档、元数据、身份高水位与种子存在性；§4.7 对齐的 8 张表；222 表覆盖守卫 | `conversion/generic/`、`conversion/alignment/` |
+| V2-T | Task 主体、定义、启动来源、工作区与挂载（§4.1、§4.2、§4.6 第 1–2 条、§4.7 的任务行） | `modules/task-execution/infrastructure/migration/task/` |
+| V2-N | NodeRun 序号、frame 回填（承接 O2 删除的覆盖）、身份（调用 N 的推导）、oracle 选择、输入、checkpoint 与拆表（§4.3） | `modules/task-execution/infrastructure/migration/run/` |
+| V2-C | 澄清逐题拆分、协作门操作、agent 引用关系化、工作流依赖索引、宿主占位删除、apply journal（§4.4 前两条、§4.1 第 6 条） | `modules/{collaboration,resource-catalog,intent}/infrastructure/migration/` |
+| V2-X | 12 张内容引用表、内容发布、历史包与原 ID 索引、家族路由与 writer drain（§4.4 后三条、§4.5） | `platform/content/migration/`、`platform/persistence/migration/archives/` |
+| V2-core C | 两侧端到端集成（含 227 形状与 89 个在途任务的组合），汇总 T18 账本条目 | `tests/` |
+
+顺序：core A → core B ∥ V2-T ∥ V2-N ∥ V2-C ∥ V2-X → core C → V3。
+
+模块相关规则不能放进 `platform/`：RFC-376 的 `platform-to-modules-file-pairs` 只降不升，design §12.1 也规定 platform 不 import modules。因此本节包表中 V2 一行的「主要落点：迁移区」改为三部分：引擎在迁移区；领域规则在各 owner 的 `infrastructure/migration/`；经 `composition/conversion.ts` 由 bootstrap 装配。N 包的「oracle 移入迁移区」相应落在 `modules/task-execution/infrastructure/migration/oracle/`。
+
+开工前的裁定（2026-10-24）：
+
+- 可执行口径由用户决定，见 migration §4 开头的补充。
+- 聚合行输入按 §6.12 不反推（migration §4.3 的更正）；seq 按 RFC-374 启动规则回填（design §8 的更正）。
+- 写者证据只能由多项持久事实共同证明：保留 id、冻结定义中没有同名节点、结构事实，以及可用的独立账本。仅凭节点名或 `rerun_cause` 不成立。
+- 澄清答案与草稿表加 `occurrence`；detached 挂载的 `base_branch` 可为 NULL 或等于 `base_commit`；`requested_source` 无损记录请求事实。三项见 design §6.1、§4 的更正。
+- 每个任务补一行 generation 0。FK 与行规则在 V3 装载时延后，激活前全量校验。测试用冻结的原始行写入器构造 epoch-1 数据，不用 A1 builder。
+
 #### 休眠包与共享账本
 
 休眠包（R1、R2、V1 及后续各包）不修改共享账本：`architecture/counts.json`、`architecture/guard-manifest.json`、provider 分叉、同文件孪生、T18 / T19d / T19f、RFC-376 基线，以及被审消费方清单。这些文件常被其他会话整文件提交，未提交的条目会指向不存在的文件。各包在报告中列出所需条目，由 T18 统一登记；休眠文件的「不可达」由 A 接线消解，不登记。
@@ -593,3 +619,8 @@ II-a 交付后向用户提了三项待定事项，用户 2026-10-23 回复「按
 - O：2026-10-23 开发完成，单独提交为 `5ffdbace7`（675 个路径）。CI 收口两笔：`00e355174` 把守卫与账本改指新结构，`407a7a943` 删除 provider 分叉账本的过期条目。另删除失去最后生产消费方的 `db/query.ts` 与 `services/agent.ts` 门面。启动期 frame 回填（M3）随 D5 删除，其测试意图由 V2 重建。
 - V1：2026-10-23 开发完成。冻结的 epoch-1 共 222 张表（digest `sha256:3f8b275e…`），其中保留 178、转换 31、归档 13。功能审查发现两项阻断：v0.19.0 之前的 SQLite 版本不受支持，而转换器须支持全部已发布版本；三个架构守卫不认冻结文件。
 - 2026-10-24 起并行开发三项：V1 修复轮；R1 / R2 第二轮修复（含 SQLite 重建表边遇到带表名限定的 CHECK 时失败）；N 的 K1 / K3 / K6 纯领域规则（`rs1` 槽位编码、旧行推导、铸行计算，均不接线）。
+- 2026-10-24：上述三项完成，三包写完后整个后端 typecheck 无错误。
+  - V1 修复轮：支持全部 261 个已发布 SQLite 前缀，含 v0.18.18 / v0.18.19 的备份；三个守卫识别冻结文件；删除 6.9 MB 的 `migrations.json`，改为按哈希校验原迁移文件。
+  - R1 / R2 第二轮：epoch-1 的四个摘要不变。
+  - N：只新增文件，未改已有文件。
+- 2026-10-24：V2 分解与裁定完成（见上文「V2 分解」），V2-core A 开发中。

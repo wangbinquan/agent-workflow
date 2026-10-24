@@ -59,6 +59,8 @@ generation pointer 升至 v2（显式 epoch、角色、数据库位置、合同�
 
 ## 4. 关键转换规则
 
+**2026-10-24 补充（可执行与历史的口径，用户 2026-10-24 决定）**：本节的「可执行任务」「在途」指状态为 `pending`、`running`、`awaiting_review`、`awaiting_human`、`interrupted` 的任务，任何无法证明的事实都阻塞迁移。`failed`、`canceled` 为「可重试历史」：无法证明的行记为 `history-only` / `unknown` 并附证据，逐个列入迁移计划；切换后，依赖这些行的恢复或重试被明确拒绝，查看历史不受影响。`done` 为终态历史。
+
 ### 4.1 Task 主体与来源
 
 1. 根据已持久化的判别字段（第 5 条的固定顺序）与冻结 snapshot 识别真实主体；host workflow ID 只是来源线索，不再作为新 catalog 引用。
@@ -99,6 +101,7 @@ generation pointer 升至 v2（显式 epoch、角色、数据库位置、合同�
 - per-repo JSON map 按 `(task_id, worktree_dir_name) → repo_index → repo_key` 映射；`''` 键映射到 `mount_path = ''` 的挂载；`repo_count = 1` 的单值列映射到唯一挂载。无法映射的键记证据，可执行任务阻塞。断言 `worktree_dir_name == mount_path`；不等时在途 iso 任务阻塞、终态记证据。
 - 多仓任务只有单值 `pre_snapshot`（无 map）时记证据，可执行任务阻塞；旧代码「多仓 + 无 map → 在容器根上走单仓回滚」的回落不带入目标。
 - `consumed_upstream_runs_json` 转为 `node_run_inputs`（`input_kind = frame-input`，质量 `legacy-derived`）；JSON 为 NULL 的行 `inputs_recorded = false`。聚合运行的输入由 oracle 计算当时参与的 shard 运行写入，质量 `legacy-derived`。
+  - **2026-10-24 更正**：上句「聚合运行的输入由 oracle 计算……写入」按 plan §6.12 作废（用户 2026-10-23 批准，晚于本文）。存量聚合行不反推当时消费的 shard 集合，其 `consumed_upstream_runs_json` 与其他行一样转为 `frame-input`。
 - 历史运行 `generation_seq = 0`。
 
 ### 4.4 澄清、依赖与内容
