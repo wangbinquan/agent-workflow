@@ -4,6 +4,8 @@
 
 **激活开工**：顺序为 A-1（一个 registry、`tablesOf` 翻到 epoch 2、provider 绑定、测试库基线、roster 定稿）→ A-2+A-4（运行时接线、启动步骤、恢复与 CLI）∥ A-3（合同历史产物与构建）→ M-c ∥ Q-1 → Q-2 ∥ Q-3 → T18（plan §6.13「激活分解」）。A-1 进行中。各包留给 A、M-c、Q 与 T18 的事项已补入 `design/RFC-395-database-target-schema-rebuild/switch-window-handoff.md`。窗口期间工作树里的运行时不可用，全部换表代码在 T18 之前不提交。
 
+**激活实施与修复（同日上午）**：A-1（唯一 registry、`tablesOf` 翻到 epoch 2、provider 绑定、epoch-2 测试基线）、A-2+A-4（安装与首写标记、启动分类、`db migration` 与恢复分流、托管迁移、205 条转换规则与 11 个探针、28 个启动步骤、旧升级代码退役）、A-3（合同历史头与 PostgreSQL 17 catalog、内嵌头、移除 drizzle-kit）、M-c（测试收口）、Q-1（历史行等价投影、`seq` 非空、归档 v3）全部完成。三组静态功能审查发现 6 个阻断、9 个主要问题，修复轮 AF-1、AF-2 已修完，后端、shared、前端 typecheck 全部通过（plan §6.13「激活实施、审查与修复」）。Q-3 与对修复轮的复核进行中，之后集中执行 T18；全部换表代码仍未提交。
+
 ## 2026-10-24 RFC-395 In Progress：II-b 跨域收口（O）已单独上库，休眠包并行修复中
 
 **O 已上库**：用户 2026-10-23 批准把 O 作为不激活的前置交付单独提交，见 `5ffdbace7`。39 处被重塑表的跨域访问已在现有表结构上收口，运行行为、API 与持久化字节不变。CI 收口两笔：`00e355174` 把守卫与账本改指新结构，`407a7a943` 删除 provider 分叉账本的过期条目。进度与例外说明见 [RFC plan §6.13](design/RFC-395-database-target-schema-rebuild/plan.md)。
