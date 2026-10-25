@@ -341,3 +341,12 @@ Basis: plan §6.13 「第二波审查与修复轮」「激活分解」. Full tex
   `modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts`, `modules/development-automation/composition.ts`,
   `modules/collaboration/application/adapters/task-execution-adapter.ts`) and the tests bound to it. Dry run with `tablesOf` flipped
   to epoch 2: 107 in 34 files (`/private/tmp/rfc395-flip/tsc-flip.log`). Shared `tsc`: 0. Frontend `tsc`: 13 (above).
+
+## 2026-10-25 correction (supersedes the "Shared API / observation" item above)
+
+The nullable history variant must not reach user-visible output (design §8 "API 兼容投影合同"; user Q2 of 2026-10-21: equivalent
+projection only; plan §6.13 「第二波审查与修复轮」 correction). History-only and unknown-identity rows stay visible in history reads and
+stay out of execution decisions, but every DTO, WS payload, observation attempt and session view shows the row's original epoch-1
+values, read from its `execution_legacy_evidence` content (`node-run-evidence@2` `sourceValues`) when the target column is NULL.
+`NodeRunHistoryDisplaySchema` and the union in `TaskNodeRunsSchema` are removed; the shared contracts keep `retryIndex` / `scopePath`
+non-null. Owner: Q-1. The 13 frontend diagnostics go away with it.

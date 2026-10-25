@@ -751,6 +751,11 @@ V3（迁移运行与切换）拆为一个合同包与三个并行包，文件互
 
 修复后，后端 typecheck 剩 30 条诊断，全部在激活接线范围内（bootstrap、四个 composition，以及依赖这些接线的测试）。前端有 13 条，来自 `retryIndex` 可为 null，归 Q-1。把 `tablesOf` 翻到 epoch 2 的干跑共 107 条诊断，其中 77 条由翻转引起。
 
+**2026-10-25 更正**：上面「`retryIndex` 可以为 null，历史行显示为未知」一条撤回，它与 design §8「API 兼容投影合同」和用户 2026-10-21 的 Q2（只做等价投影）不符。改为：
+- history-only 与身份未知的行仍在历史读取中可见，也仍不进入执行判断；
+- 所有用户可见的 DTO、WS 载荷、观测记录与会话视图显示该行在 epoch 1 的原值。目标列为 NULL 时，从该行的旧数据证据（`execution_legacy_evidence`，格式 `node-run-evidence@2`，design §5.1「原值进 evidence」）读取；
+- 共享合同保持不变（只有 `NodeRunSchema.seq` 收紧为非空），删除 `NodeRunHistoryDisplaySchema` 与 `TaskNodeRunsSchema` 中的联合类型。由 Q-1 落实，前端的 13 条诊断随之消失。
+
 #### 激活分解（2026-10-25）
 
 激活按下列顺序进行。这一顺序更正「换表窗口分解」中的「M-c → A-1 → …」：M-c 改到 A 之后。
