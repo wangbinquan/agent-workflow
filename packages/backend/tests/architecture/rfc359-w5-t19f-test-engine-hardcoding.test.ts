@@ -82,6 +82,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // 走查）一并删除；蒸馏会话记录改由实时事件 sink 落库，新套件是
   // `rfc367-distill-session-event-sink.test.ts`，走 describeEachProvider、不写死引擎。
   'e2e-sqlite-fixture-lock-contention.test.ts: 3',
+  'epoch1-permission-text-backup.test.ts: 4',
   'fixtures/rfc322-cpu-probe.ts: 1',
   'fixtures/rfc338-blocking-maintenance-worker.ts: 1',
   'fixtures/rfc338-foreground-contention-worker.ts: 1',

@@ -19,6 +19,8 @@ import {
   assertPostgresqlMigrationHead,
   createPostgresqlAdditiveUpgrade,
   createPostgresqlColumnUpgrade,
+  createPostgresqlCodecUpgrade,
+  logicalCodecReplacements,
   logicalColumnAdditions,
   createPostgresqlRetirementUpgrade,
   createPostgresqlCheckUpgrade,
@@ -151,21 +153,24 @@ export async function generatePostgresqlMigrationHistory(
   const replacesIndexPredicates =
     logicalIndexPredicateReplacements(upgrade.from.contract, target.contract).length > 0
   const addsColumns = logicalColumnAdditions(upgrade.from.contract, target.contract).length > 0
-  const step = addsColumns
-    ? createPostgresqlColumnUpgrade(upgrade)
-    : replacesIndexPredicates
-      ? createPostgresqlIndexPredicateUpgrade({ ...upgrade })
-      : replacesOwners
-        ? createPostgresqlOwnershipUpgrade({ ...upgrade })
-        : replacesSourceRevision
-          ? createPostgresqlSourceRevisionUpgrade({ ...upgrade })
-          : retiresTables
-            ? createPostgresqlRetirementUpgrade({ ...upgrade })
-            : replacesChecks
-              ? createPostgresqlCheckUpgrade({ ...upgrade })
-              : addsTables
-                ? createPostgresqlAdditiveUpgrade({ ...upgrade })
-                : createPostgresqlIndexUpgrade({ ...upgrade })
+  const replacesCodecs = logicalCodecReplacements(upgrade.from.contract, target.contract).length > 0
+  const step = replacesCodecs
+    ? createPostgresqlCodecUpgrade(upgrade)
+    : addsColumns
+      ? createPostgresqlColumnUpgrade(upgrade)
+      : replacesIndexPredicates
+        ? createPostgresqlIndexPredicateUpgrade({ ...upgrade })
+        : replacesOwners
+          ? createPostgresqlOwnershipUpgrade({ ...upgrade })
+          : replacesSourceRevision
+            ? createPostgresqlSourceRevisionUpgrade({ ...upgrade })
+            : retiresTables
+              ? createPostgresqlRetirementUpgrade({ ...upgrade })
+              : replacesChecks
+                ? createPostgresqlCheckUpgrade({ ...upgrade })
+                : addsTables
+                  ? createPostgresqlAdditiveUpgrade({ ...upgrade })
+                  : createPostgresqlIndexUpgrade({ ...upgrade })
   const sqlFile = resolve(folder, step.sqlFile)
   const journalFile = resolve(folder, 'meta', `${step.id}.upgrade.json`)
   if (await writeImmutable(sqlFile, renderPostgresqlUpgradeSql(step))) created.push(sqlFile)

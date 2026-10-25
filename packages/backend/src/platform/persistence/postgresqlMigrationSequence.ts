@@ -23,6 +23,7 @@ import {
   digestSchemaContract,
   withCanonicalFragmentCache,
   type LogicalIndexContract,
+  type LogicalCodec,
   type LogicalColumnContract,
   type LogicalSchemaContract,
   type LogicalTableContract,
@@ -124,7 +125,9 @@ export interface PostgresqlCheckReplacement {
 export interface PostgresqlIndexUpgrade {
   /** V4 explicitly retires obsolete whole tables; existing migration artifacts stay immutable. */
   readonly retiredTables?: readonly string[]
-  readonly version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+  readonly version: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+  /** V9 corrects logical codecs without changing either provider's column types. */
+  readonly logicalCodecs?: readonly LogicalCodecReplacement[]
   /** V8 appends columns to existing KEEP tables; old artifacts omit this key. */
   readonly logicalColumns?: readonly LogicalColumnAddition[]
   /** V6 is metadata-only: ownership changes cannot alter any physical row or DDL. */
@@ -170,6 +173,90 @@ export interface LogicalOwnerReplacement {
   readonly tableId: string
   readonly before: OwnerContext
   readonly after: OwnerContext
+}
+
+export interface LogicalCodecReplacement {
+  readonly tableId: string
+  readonly column: string
+  readonly before: LogicalCodec
+  readonly after: LogicalCodec
+}
+
+export function logicalCodecReplacements(
+  from: LogicalSchemaContract,
+  to: LogicalSchemaContract,
+): LogicalCodecReplacement[] {
+  return from.tables.flatMap((table) => {
+    const next = to.tables.find((candidate) => candidate.id === table.id)
+    return table.columns.flatMap((column) => {
+      const after = next?.columns.find((candidate) => candidate.name === column.name)
+      return after && column.logicalCodec !== after.logicalCodec
+        ? [
+            {
+              tableId: table.id,
+              column: column.name,
+              before: column.logicalCodec,
+              after: after.logicalCodec,
+            },
+          ]
+        : []
+    })
+  })
+}
+
+function codecStorage(codec: LogicalCodec): string {
+  switch (codec) {
+    case 'text':
+    case 'text-identity':
+    case 'json-text':
+      return 'text/text'
+    case 'integer':
+    case 'epoch-milliseconds':
+      return 'integer/bigint'
+    case 'boolean':
+      return 'integer/boolean'
+    case 'real':
+      return 'real/double precision'
+    case 'opaque-bytes':
+      return 'blob/bytea'
+  }
+}
+
+function applyLogicalCodecs(
+  contract: LogicalSchemaContract,
+  replacements: readonly LogicalCodecReplacement[],
+): LogicalSchemaContract {
+  if (replacements.length === 0) return contract
+  const pending = new Map(replacements.map((item) => [`${item.tableId}:${item.column}`, item]))
+  requireSequence(pending.size === replacements.length, 'duplicate logical codec replacement')
+  const tables = contract.tables.map((table) => {
+    if (!replacements.some((item) => item.tableId === table.id)) return table
+    requireSequence(
+      table.disposition !== 'ARCHIVE_THEN_OMIT',
+      'codec replacement requires an active table',
+    )
+    const columns = table.columns.map((column) => {
+      const key = `${table.id}:${column.name}`
+      const change = pending.get(key)
+      if (!change) return column
+      requireSequence(
+        column.logicalCodec === change.before && change.before !== change.after,
+        'logical codec replacement source differs',
+      )
+      requireSequence(
+        codecStorage(change.before) === codecStorage(change.after) &&
+          codecStorage(change.after) ===
+            `${column.providerType.sqlite}/${column.providerType.postgresql}`,
+        'logical codec replacement requires provider DDL',
+      )
+      pending.delete(key)
+      return { ...column, logicalCodec: change.after }
+    })
+    return { ...table, columns }
+  })
+  requireSequence(pending.size === 0, 'logical codec replacement names an unknown column')
+  const payload = { ...contractPayload(contract), tables }
+  return { ...payload, digest: digestSchemaContract(payload) }
 }
 
 export function logicalOwnerReplacements(
@@ -1168,6 +1255,66 @@ export function createPostgresqlIndexUpgrade(
   return createPostgresqlUpgrade(input, false, false)
 }
 
+/** Contract-only correction: preserve physical rows, columns, indexes and old artifacts. */
+export function createPostgresqlCodecUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  const { from, to } = input
+  validateVersion(from)
+  validateVersion(to)
+  const logicalCodecs = logicalCodecReplacements(from.contract, to.contract)
+  requireSequence(logicalCodecs.length > 0, 'codec upgrade has no correction')
+  exact(
+    applyLogicalCodecs(from.contract, logicalCodecs),
+    to.contract,
+    'codec-only upgrade changed another contract field',
+  )
+  exact(
+    to.sqliteMigrations.slice(0, from.sqliteMigrations.length),
+    from.sqliteMigrations,
+    'SQLite migration prefix changed',
+  )
+  requireSequence(
+    to.sqliteMigrations.length > from.sqliteMigrations.length,
+    'codec upgrade requires an appended SQLite migration',
+  )
+  const before = from.plan.statements.find(
+    (statement) => statementKey(statement) === 'metadata:contract-row',
+  )
+  const after = to.plan.statements.find(
+    (statement) => statementKey(statement) === 'metadata:contract-row',
+  )
+  requireSequence(before !== undefined && after !== undefined, 'schema contract row is missing')
+  const executableStatements = [contractUpdate(from.plan, to.plan)]
+  const payload = {
+    version: 9 as const,
+    logicalCodecs,
+    id: input.id,
+    sequence: input.sequence,
+    previousEntryDigest: input.previousEntryDigest,
+    from: postgresqlSchemaIdentity(from.plan),
+    to: postgresqlSchemaIdentity(to.plan),
+    logicalIndexes: [],
+    indexAdditions: [],
+    contractRow: { beforeDigest: postgresqlMigrationSqlDigest(before.sql), after },
+    sqliteMigration: {
+      from: from.sqliteMigration,
+      to: to.sqliteMigration,
+      appended: to.sqliteMigrations.slice(from.sqliteMigrations.length),
+    },
+    executableStatements,
+    sqlFile: `${input.id}.sql`,
+    sqlDigest: postgresqlMigrationSqlDigest(renderPostgresqlUpgradeSql({ executableStatements })),
+  }
+  const step = { ...payload, digest: postgresqlMigrationDigest(payload) }
+  exact(
+    applyPostgresqlIndexUpgrade(from, step, input.previousEntryDigest, input.sequence),
+    to,
+    'codec upgrade replay differs from target',
+  )
+  return step
+}
+
 /** Append a reviewed subset predicate; old rows, keys and history are retained. */
 export function createPostgresqlIndexPredicateUpgrade(
   input: PostgresqlUpgradeInput,
@@ -1443,7 +1590,8 @@ function applyPostgresqlIndexUpgrade(
       step.version === 5 ||
       step.version === 6 ||
       step.version === 7 ||
-      step.version === 8) &&
+      step.version === 8 ||
+      step.version === 9) &&
       digest === postgresqlMigrationDigest(payload),
     'upgrade entry digest differs',
   )
@@ -1476,6 +1624,15 @@ function applyPostgresqlIndexUpgrade(
     'retirement does not match upgrade version',
   )
   const logicalColumns = step.logicalColumns ?? []
+  const logicalCodecs = step.logicalCodecs ?? []
+  requireSequence(
+    step.version === 9
+      ? logicalCodecs.length > 0 &&
+          step.logicalIndexes.length === 0 &&
+          step.indexAdditions.length === 0
+      : step.logicalCodecs === undefined,
+    'logical codec correction does not match upgrade version',
+  )
   requireSequence(
     step.version === 8 ? logicalColumns.length > 0 : step.logicalColumns === undefined,
     'column additions do not match upgrade version',
@@ -1513,7 +1670,7 @@ function applyPostgresqlIndexUpgrade(
         ? logicalTables.length > 0 && step.logicalChecks === undefined
         : step.version === 4 || step.version === 8
           ? logicalChecks.length === 0
-          : step.version === 5 || step.version === 6 || step.version === 7
+          : step.version === 5 || step.version === 6 || step.version === 7 || step.version === 9
             ? logicalChecks.length === 0 && logicalTables.length === 0
             : logicalChecks.length > 0,
     'upgrade table additions do not match its version',
@@ -1531,7 +1688,8 @@ function applyPostgresqlIndexUpgrade(
     'upgrade column enum replacements require a value-domain upgrade',
   )
   requireSequence(
-    step.logicalIndexes.length +
+    logicalCodecs.length +
+      step.logicalIndexes.length +
       logicalColumns.length +
       logicalTables.length +
       logicalChecks.length +
@@ -1549,7 +1707,10 @@ function applyPostgresqlIndexUpgrade(
     ),
     logicalSourceRevision,
   )
-  const withColumns = appendLogicalColumns(withTables, logicalColumns)
+  const withColumns = applyLogicalCodecs(
+    appendLogicalColumns(withTables, logicalColumns),
+    logicalCodecs,
+  )
   const expanded = applyLogicalIndexPredicates(
     applyLogicalColumnEnums(
       applyLogicalCheckReplacements(withColumns, logicalChecks),
@@ -1888,31 +2049,34 @@ function resolvePostgresqlRowBridge(
             .slice(from, to)
             .reduce(
               (contract, step) =>
-                applyLogicalOwners(
-                  applyLogicalIndexPredicates(
-                    applyLogicalSourceRevision(
-                      applyLogicalColumnEnums(
-                        applyLogicalCheckReplacements(
-                          appendLogicalIndexes(
-                            appendLogicalColumns(
-                              appendLogicalTables(
-                                retireLogicalTables(contract, step.retiredTables ?? []),
-                                step.logicalTables ?? [],
+                applyLogicalCodecs(
+                  applyLogicalOwners(
+                    applyLogicalIndexPredicates(
+                      applyLogicalSourceRevision(
+                        applyLogicalColumnEnums(
+                          applyLogicalCheckReplacements(
+                            appendLogicalIndexes(
+                              appendLogicalColumns(
+                                appendLogicalTables(
+                                  retireLogicalTables(contract, step.retiredTables ?? []),
+                                  step.logicalTables ?? [],
+                                ),
+                                step.logicalColumns ?? [],
                               ),
+                              step.logicalIndexes,
                               step.logicalColumns ?? [],
                             ),
-                            step.logicalIndexes,
-                            step.logicalColumns ?? [],
+                            step.logicalChecks ?? [],
                           ),
-                          step.logicalChecks ?? [],
+                          step.logicalEnums ?? [],
                         ),
-                        step.logicalEnums ?? [],
+                        step.logicalSourceRevision,
                       ),
-                      step.logicalSourceRevision,
+                      step.logicalIndexPredicates ?? [],
                     ),
-                    step.logicalIndexPredicates ?? [],
+                    step.logicalOwners ?? [],
                   ),
-                  step.logicalOwners ?? [],
+                  step.logicalCodecs ?? [],
                 ),
               source,
             )

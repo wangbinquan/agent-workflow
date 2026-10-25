@@ -289,7 +289,7 @@ const userPermissionGrantsDefinition = owner.table({
   schemaSymbol: 'userPermissionGrants',
   columns: {
     userId: c.id('user_id'),
-    permission: c.jsonText('permission'),
+    permission: c.id('permission'),
     grantedByUserId: c.id('granted_by_user_id', { nullable: true }),
     grantedAt: c.epochMs('granted_at'),
   },

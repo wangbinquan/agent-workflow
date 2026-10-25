@@ -1828,6 +1828,13 @@
       "when": 1792632000000,
       "tag": "0261_rfc396_graph_development",
       "breakpoints": true
+    },
+    {
+      "idx": 261,
+      "version": "6",
+      "when": 1792891189096,
+      "tag": "0262_epoch1_permission_text",
+      "breakpoints": true
     }
   ]
 }

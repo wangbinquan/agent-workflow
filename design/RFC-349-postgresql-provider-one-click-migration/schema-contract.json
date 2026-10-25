@@ -2,7 +2,7 @@
   "activeTableCount": 216,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743",
+  "digest": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
   "sourceProjection": "sqlite",
   "sourceTableCount": 222,
   "tables": [
@@ -63480,7 +63480,7 @@
           "enumValues": [],
           "hasDefault": false,
           "identity": false,
-          "logicalCodec": "json-text",
+          "logicalCodec": "text-identity",
           "name": "permission",
           "nullable": false,
           "primary": true,

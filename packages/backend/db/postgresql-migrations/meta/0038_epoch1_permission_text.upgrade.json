@@ -1,0 +1,74 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c', 216, 6)"
+    },
+    "beforeDigest": "sha256:dd997e890dd4f931b56e9224ae780c088d45d9c7292facdadf47f830b26e14b5"
+  },
+  "digest": "sha256:3b8742a8382e07e7357142bbe64bf17036e046c117432ace2ce6986dabe2f6fd",
+  "executableStatements": [
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c', active_table_count = 216, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:3f8b275e388697cc6d9f5005dc3c9cf9acd70fe97c1bb00407223dfcf4d39743",
+    "planDigest": "sha256:f44eb752fa49d7c4736e5ad3be6516b56862c92297f82aac1e88f437e2654815"
+  },
+  "id": "0038_epoch1_permission_text",
+  "indexAdditions": [],
+  "logicalCodecs": [
+    {
+      "after": "text-identity",
+      "before": "json-text",
+      "column": "permission",
+      "tableId": "user_permission_grants"
+    }
+  ],
+  "logicalIndexes": [],
+  "previousEntryDigest": "sha256:586d35b149283332f3b584cade3d749889168fe8f5635b9809f9a8d900668b6d",
+  "sequence": 38,
+  "sqlDigest": "sha256:8b34b60cf49605c431736da7e5ce94b327197a1c022969fc8e9cde53f9f64b99",
+  "sqlFile": "0038_epoch1_permission_text.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1792891189096,
+        "hash": "5817d6dfbcf8ccc33cff62bf8ca17ef89d01f9566e0bfe284f7bca4504e1a103",
+        "index": 261,
+        "tag": "0262_epoch1_permission_text"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:6c24417c3c131324f58984c307cb2b542a9e73649e3f11e096c7bd711e3f756f",
+      "count": 261,
+      "last": {
+        "folderMillis": 1792632000000,
+        "hash": "e2663a94c3ed31563f44189ee9281351e0fcaa48f01fc77cbe5814ad066e632a",
+        "index": 260,
+        "tag": "0261_rfc396_graph_development"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:244fd7abd517e2200ba21caf1c9b6437303ecaf2c013a93b2d54985b62eac41c",
+      "count": 262,
+      "last": {
+        "folderMillis": 1792891189096,
+        "hash": "5817d6dfbcf8ccc33cff62bf8ca17ef89d01f9566e0bfe284f7bca4504e1a103",
+        "index": 261,
+        "tag": "0262_epoch1_permission_text"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:b865c16370a06f33a96f5fe499f73c70c3e61b5125f7f3dac0303a5c350b6b1c",
+    "planDigest": "sha256:e21bd5a2641061f6be601f842374e1782d2b492dd43ba3386bb6b1729b21a07c"
+  },
+  "version": 9
+}

@@ -383,7 +383,11 @@ export function projectLegacyV2(registry: SchemaRegistry): LogicalSchemaContract
         disposition === 'ARCHIVE_THEN_OMIT' ? { sqlite: name } : { sqlite: name, postgresql: name },
       migrationKey: primaryKey,
       columns: config.columns.map((column) => {
-        const logicalCodec = codecFor(column)
+        // Epoch-1 defect: grants store plain permission keys, unlike agent permission objects.
+        const logicalCodec =
+          name === 'user_permission_grants' && column.name === 'permission'
+            ? 'text-identity'
+            : codecFor(column)
         const defaults = defaultProjection(column)
         return {
           name: column.name,

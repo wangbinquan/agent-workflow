@@ -1699,7 +1699,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc349-schema-contract.test.ts",
       "id": "rfc349-schema-contract",
-      "lines": 208,
+      "lines": 228,
       "mechanism": "source-text",
       "minCorpusFiles": 1000,
       "negativeFixture": true,

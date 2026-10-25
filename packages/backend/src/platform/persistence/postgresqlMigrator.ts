@@ -492,6 +492,8 @@ export async function migratePostgresqlSchema(input: {
     } else {
       let generations = snapshot.activeGenerations
       for (const step of state) {
+        // Contract-only V9 uses this same transaction, receipt and generation update;
+        // its sole executable statement advances the stored schema contract.
         for (const statement of step.executableStatements) {
           let rows: readonly Record<string, unknown>[]
           try {

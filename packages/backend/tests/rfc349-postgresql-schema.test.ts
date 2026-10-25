@@ -152,5 +152,8 @@ describe('RFC-349 PostgreSQL schema projection', () => {
     )
     expect(history.head.plan).toEqual(currentPlan)
     expect(history.head.contract).toEqual(buildLogicalSchemaContract())
+    expect(history.steps.at(-1)?.id).toBe('0038_epoch1_permission_text')
+    expect(history.steps).toHaveLength(38)
+    expect(history.head.sqliteMigrations).toHaveLength(262)
   })
 })

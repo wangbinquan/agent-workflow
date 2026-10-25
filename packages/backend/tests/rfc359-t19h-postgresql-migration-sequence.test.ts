@@ -32,6 +32,7 @@ import {
   createPostgresqlAdditiveUpgrade,
   createPostgresqlCheckUpgrade,
   createPostgresqlColumnUpgrade,
+  createPostgresqlCodecUpgrade,
   planPostgresqlUpgrade,
   postgresqlMigrationDigest,
   postgresqlMigrationSqlDigest,
@@ -187,7 +188,7 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
     )
   })
 
-  test('combined V3 and V8 edges reach the same whole plan as the full ordered chain', () => {
+  test('combined V3, V8 and V9 edges reach the same whole plan as the full ordered chain', () => {
     // RFC-374: V3 keeps its CHECK contract; appended columns use a subsequent V8 edge.
     // Combining each supported segment must still reach the complete current plan.
     const columnIndex = committed.steps.findIndex((step) => step.version === 8)
@@ -201,14 +202,28 @@ describe('RFC-359 T19h exact immutable PostgreSQL history', () => {
     })
     const columns = createPostgresqlColumnUpgrade({
       from: beforeColumns,
-      to: next,
+      to: committed.versions.at(-2)!,
       id: '0002_columns_fixture',
       sequence: 2,
       previousEntryDigest: combined.digest,
     })
-    expect(replayPostgresqlMigrationHistory(committed.root, [combined, columns]).head).toEqual(
-      extended.head,
-    )
+    const codecs = createPostgresqlCodecUpgrade({
+      from: committed.versions.at(-2)!,
+      to: committed.head,
+      id: '0003_codecs_fixture',
+      sequence: 3,
+      previousEntryDigest: columns.digest,
+    })
+    const indexes = createPostgresqlIndexUpgrade({
+      from: committed.head,
+      to: next,
+      id: '0004_indexes_fixture',
+      sequence: 4,
+      previousEntryDigest: codecs.digest,
+    })
+    expect(
+      replayPostgresqlMigrationHistory(committed.root, [combined, columns, codecs, indexes]).head,
+    ).toEqual(extended.head)
     // 反向锁：expand-only 的那一种表达不了这条合并边，而且必须**当场**拒绝而不是
     // 少生成几句 SQL——否则 PostgreSQL 上的值域就会与 SQLite 悄悄走散。
     expect(() =>

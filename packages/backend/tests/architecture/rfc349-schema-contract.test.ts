@@ -18,7 +18,7 @@ import {
   RFC349_ARCHIVE_THEN_OMIT_TABLES,
   RFC349_SOURCE_TABLES,
 } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildLogicalSchemaContract, persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { packageSrcUnits } from './census'
 import { isSchemaDeclarationFile } from './schemaRoles'
 
@@ -32,6 +32,26 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 }
 
 describe('RFC-349 canonical schema contract', () => {
+  test('epoch-1 permission grants use plain primary-key text while agent permissions remain JSON', () => {
+    // Released JSON-codec defect; user decision 2026-10-24: correct epoch 1 now.
+    const grants = contract.tables.find((table) => table.id === 'user_permission_grants')!
+    expect(
+      Object.values(persistenceSchema.tables.find((table) => table.id === grants.id)!.columns).find(
+        (column) => column.name === 'permission',
+      )!.codec,
+    ).toBe('id')
+    expect(grants.columns.find((column) => column.name === 'permission')).toMatchObject({
+      logicalCodec: 'text-identity',
+      primary: true,
+      providerType: { sqlite: 'text', postgresql: 'text' },
+    })
+    expect(
+      contract.tables
+        .find((table) => table.id === 'agents')!
+        .columns.find((column) => column.name === 'permission')!.logicalCodec,
+    ).toBe('json-text')
+  })
+
   test('locks the source, active parity and archive-only counts', () => {
     expect(RFC349_SOURCE_TABLES).toHaveLength(222)
     expect(contract.sourceTableCount).toBe(222)
