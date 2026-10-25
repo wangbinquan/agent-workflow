@@ -137,6 +137,8 @@ Agent / Workgroup / 数字员工 / code-round 允许由引擎编译出内部图�
 
 划线理由（II-0 对原拆分的调整，只改表划分、不改功能）：与生命周期 CAS 同句读写的可变列（工作区根引用、prune 三列、来源终止 fence / effect revision）留在 `tasks`，只把冻结事实拆出，生命周期 CAS 因此保持单语句、单行，不引入新的跨表谓词。若照原拆分把这些列移到从属表，PostgreSQL READ COMMITTED 下跨表谓词没有 EvalPlanQual 重检，所有守卫都得改成锁根；全部改用 SERIALIZABLE 又有实测的高冲突率。这与 §5.1「按写入频率、适用角色与冻结边界拆分」的原则一致。`lifecycle_event_revision` 只由生命周期迁移推进，prune 认领不推进（同今天）。来源终止的 binding / launch revision 是启动时冻结事实，进入 `task_launch_contexts`，并建 `(source_termination_binding, source_termination_launch_rev)` 索引，webhook MR 终止目标查询改为 join；fence / effect revision 只经来源终止的两条路径以 `lifecycle_event_revision` 为键推进，留在 `tasks`。
 
+**2026-10-24 补充（锁顺序）**：上文先锁根的顺序前面还有一步。带执行上下文的写者先写 owner 栅栏（`task_execution_owners` 的 UPDATE，与 epoch 1 所有带 owner 的写者相同），再依次锁 Task 根、Task 从属行、`node_runs`、`node_run_selections`；没有执行上下文的写者从 Task 根开始。涉及多个 Task 的操作在任何更新之前按 task id 顺序取全部根锁。写协议的辅助函数不在调用方已写过栅栏和 `node_runs` 之后再补取根锁。这一顺序由 `modules/task-execution/application/ports/taskAggregateWrite.ts` 导出，并由结构守卫检查。来源：换表窗口第一波的静态功能审查（plan §6.13）。
+
 ### 3.4 任务树
 
 `tasks` 保留树结构列：`parent_task_id`（自引用 FK，`ON DELETE CASCADE`）、`root_task_id`、`invocation_depth`、`branch_started_at`（子树 `max(started_at)` 的物化值，任务列表 keyset 排序与终态维护的 topology revision）。删除只删根行，子树与各任务的从属行（定义、启动来源、工作区、挂载、运行等）全部经 FK 级联删除，语义与今天相同。`task_launch_contexts` 只放启动来源事实（`parent_node_run_id`、lineage、launch origin、触发上下文、调度 / webhook / 事件来源、数字员工来源、平台输入路径、终止绑定），不再承载父子关系。
@@ -293,6 +295,8 @@ Agent 的传递依赖、必选项与闭包顺序沿用当前语义；需要不�
 新增中立 `content_objects` 元数据表与可选 `content_bytes` 字节表（PK `content_id`）。小 prompt 允许 inline；只有实际在多处引用或外置的内容进入对象目录，避免为每条短文本增加 IO。发布状态复用现有 `hosted_object_publications` 的 owner / logical_key / attempt / epoch / pending-ready-releasing-released 语义，迁成中立 `content_publications`。它是同一账本演进，不能再造平行 journal。
 
 `skill_content_entries` 保留 skill / tree / relative path 索引与 live、version、staging、trash 语义，content 改为内容引用；`skill_versions` 保留版本事实。SQLite BLOB / PostgreSQL bytea 只负责字节，文件 / 对象后端继续由 profile 选择；数据库不强制吸收所有大文件。含 BOM、非法 UTF-8、空文件的迁移均按 bytes 比较。
+
+**2026-10-24 补充（转换后的技能存储）**：每棵技能树都带显式的内容引用，不按存在与否推断，也不打包。磁盘上已有的树（live，或已有的 `versions/v<n>/files`）保留 `local-file` 引用，指向它在 app home 下的实际位置；B 证明为 live 根的按名称目录也照此处理。切换不移动目录、不写内容根，撤回因此保持精确。没有目录可指的树（为 `legacy-unbackfilled` 技能合成的 v1，以及数据库部署源的全部树）写成逐路径的 `skill_content_entries`，字节放在 `content_bytes`，不使用 JSON / base64 整包。本地技能绑定按引用类型读取每棵树。
 
 `hosted_task_artifacts`、archive entries、node outputs、doc/review body、development / employee artifact 表是各域业务索引，保留独立角色，只替换内容地址格式。既有对象发布、release重试、引用保持与备份恢复职责都须接到同一个内容机制；清理不能删掉仍被历史或备份持有的对象。
 
