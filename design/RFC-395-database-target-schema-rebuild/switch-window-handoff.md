@@ -257,3 +257,87 @@ Each section quotes the package report's §6 by reference; the full text is in `
 - N-a: re-point `rfc144-merge-state-blind-write-inventory` to `nodeRunWriteProtocol.ts:272` / `:295`.
 - B: rule / lookup version bumps; approval / K-2 acceptance criteria (semantic effects + deciding facts; re-check after freeze and
   after conversion).
+
+# RFC-395 II-b wave 2 and its fix round — collected requests, deltas and ledger entries (input for A, M-c, Q)
+
+Basis: plan §6.13 「第二波审查与修复轮」「激活分解」. Full text: §6 of `/private/tmp/rfc395-wave2-{nb,nb2,p,mb,fu,x4}/report.md` and
+`/private/tmp/rfc395-w2fix-{nb,mb,p,fx}/report.md`. Items closed by a later job are marked "(closed: <job>)".
+
+## For A (A-1 / A-2+A-4 / A-3)
+
+- **Binding and injection (A-2):** one active-generation `HistoryRestrictionPort` provider for N and C (gate journal, open / replay,
+  content recovery, resume / retry, test topology); the profile `ContentStore.read` to the task-execution compositions and the
+  route / resume wiring; no default empty provider (N-b, M-b). The same `historyRestrictions` and the selected content /
+  `reviewArtifacts` to `clarifyDecisionCommand`, `questionDispatchCommand`, `crewstationHumanGateRecovery`, `reviewDecisionCommand`;
+  the local binding from the resource-catalog composition and its `packageContent` (FU; FX: `reviewArtifacts` stays optional locally).
+- **Archive sections (A-2):** `modules/task-execution/composition/taskArchiveMaintenance.ts:44` takes the W0 section reader signature;
+  T / C / N sections share one snapshot transaction; `modules/collaboration/application/adapters/task-execution-adapter.ts:15`
+  implements `load(tx, taskIds) → { owner, rows }` (N-b2); `tests/rfc395-o2-cross-context-ports.test.ts:221-225` follows.
+- **Intent / resource-catalog compositions (A-2):** `modules/intent/composition/apply.ts:104` gets `skillContentLocations` from the
+  resource-catalog public / composition exit (X factory; no new intent → RC infrastructure edge); `:129` and
+  `modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts:89` pass `db` to the local skill owner, through the boot and
+  maintenance lifecycle construction; `RC/composition/resourcePackageMaintenance.ts:13` renames / relocates the legacy-named operation
+  recovery factory (inputs are target envelopes now) (P).
+- **Probes (A-2):** `intent:apply-artifact-envelopes` (Intent `composition/conversion.ts` / `readOnlyProbes`) and the resource-package
+  envelope probe; keep F's two; plus the wave-1 list (T, N-a, C, X, H, F).
+- **Boot (A-4):** TaskExecution normal boot becomes prepare → reap → repair → finalize; the seq backfill step and its report fields go
+  (N-b2); the seq high-water prune runs inside normal prepare, no new step (w2fix-nb); skill-operation recovery runs before journal
+  convergence (P); `modules/development-automation/composition.ts:47-48` re-exports of the retired draining functions go (M-b, H).
+- **Shared API / observation (Q-1 now):** backend session view and observation port carry `retryIndex: number | null` and the history
+  identity (closed: w2fix-nb). The frontend is open: 13 typecheck errors in `packages/frontend/src/routes/tasks.detail.tsx` (10) and
+  `src/components/workgroup/room/WorkgroupRoom.tsx` (3) — consumers must keep null and show unknown, never 1.
+- **Roster / definitions (A-1):** `intent_apply_journal` and `resource_bundle_applies` `reused → target` (definition version 2;
+  `prepared_artifacts_json` default `{"scene":"intent","version":3,"artifacts":[]}` /
+  `{"scene":"resource-package","version":2,"artifacts":[]}`); rules `intent/apply-journal-profile` and
+  `resource-catalog/bundle-applies-profile` now @3; destinations unchanged (P, w2fix-p). X4: `content/catalog@4`, a new
+  `collaboration_gate_operations` lookup dependency and the `v2-content-staged-fallback` decision in the final plan material.
+  N-b, N-b2, M-b, FU, FX, w2fix-nb, w2fix-mb: roster / destinations / rule-version delta 0. M-b's 13 test-fixture destinations
+  (`/private/tmp/rfc395-wave2-mb/fixture-destinations-delta.json`) are in `tests/fixtures/rfc395-column-destinations.json` already.
+
+## For M-c (test closure after A)
+
+- `tests/rfc395-v2-resources-journals.test.ts:8`, `:52` still assert profile-only byte copies and zero archives (P).
+- Old Intent shims: migrate the importers `rfc359-w7-intent-apply-artifact-conformance.test.ts:45`, `rfc370-intent-artifact-content.test.ts:32`,
+  `rfc343-intent-apply-correctness.test.ts:40` and the path assertions `rfc271-intent-skill-plugin-update.test.ts:62`,
+  `tests/architecture/rfc359-w5-artifact-format-portability.test.ts:145`, then delete the two shims (P).
+- `rfc349-code-legacy-facades-postgresql-adapter.test.ts:71`: target positional responses, snapshot transaction, table assertion (M-b).
+- `rfc326-tx-primitives-equivalence.test.ts:189/207/220/233`, `rfc359-t3-action-execution-runners.test.ts:70` (`subjectKind`) (N-b) —
+  check whether still open.
+- Query cost: `nodeActivationSnapshotReader.ts:13` extra task-wide selection read, `runSelection/table/reader.ts:19` whole-task load,
+  `nodeRunQueries.ts:342` whole-aggregate fallback on prompt text / path — keep the query-cost suites' original bounds (M-b).
+- The rolling-upgrade case's same-database toy-task segment runs after a real admitted epoch switch (M-b).
+
+## For Q
+
+- Archive v3 activation and the v2 reader; N's 12-table and C's 13-table sections exist, v3 is not active (N-b, N-b2).
+- Unknown-history DTO / WS / UI (frontend list above).
+- `tests/architecture/architectureReport.ts:403` still registers the retired `services/freshness.ts` (N-b2).
+
+## Ledger entries for T18 (Q-2)
+
+- N-b / N-b2: 13 oracle files `TE/infrastructure/runSelection/oracle/*` → `TE/infrastructure/migration/oracle/*`; retired
+  `services/freshness.ts`, the normal boot seq runner / port / store, the domain seq planner and two runtime checkpoint codecs; new
+  table-selection and archive-section public exits, the shared async lifecycle Tx helper, `TaskExecutionOutcomeSource.subjectKind`;
+  `rfc395-run-selection-boundary-ledger.json`, `rfc395-selection-semantics-ledger.json`, direct-read / write ledgers,
+  `rfc395-node-run-direct-access-inventory.json`, reviewed consumers; D3 / D4 / oracle / boot retirement entries.
+- w2fix-nb: selection-semantics site updates (`runCallWorkflowNode`, `runCodeHostCallNode`, `runScriptNode` family-history sites
+  removed; executable-run restrictions for `freshestPriorRunWithOutput`, `lineageCausesNewestFirst`, `priorDoneGenerationsForRun`,
+  `readPriorAgentSessionId`, `priorFanoutConsumed`, review `planRerun`, resume rollback; `isTargetNodeConsumed` without a from bound);
+  `nodeOutputSlot`, snapshot read and aggregator record-only facts are not legacy fallbacks; candidate digests
+  `/private/tmp/rfc395-w2fix-nb/candidate.json`.
+- P / w2fix-p: two migration codec destinations, two shims to delete, legacy-named recovery → target operation adapter, two probes,
+  the authored tests, rule bumps @1 → @3, two tables reused → target with new defaults, two history-only decision codes, the failed-row
+  archive evidence.
+- M-b / w2fix-mb: `/private/tmp/rfc395-wave2-mb/ledger-delta.json`, `ledger-census.json`, `candidate-final.json`,
+  `/private/tmp/rfc395-w2fix-mb/ledger-entries.json` (reason category `target-model-contract`; `rfc189-wg-round` stale direct-read
+  removed, historical write kept); perf-seed goldens regenerated old → new (MB-F4).
+- FU: three regression tests, composition exits, boot coverage hash `57af536f3353c58e8b53f6f8d1ce53f09194f47ecf6804b8875e6f246ab9c694`.
+- X4: two tests, `content/catalog` 3 → 4, the lookup source dependency, the staged-fallback decision.
+- FX: FX-1 / FX-2 coverage notes on the existing two test files.
+
+## Static state when wave 2 closed (2026-10-25 01:24–01:35)
+
+- Backend `tsc`: 30 diagnostics in 11 files, all in the activation wiring (`src/bootstrap/**`, `modules/intent/composition/apply.ts`,
+  `modules/resource-catalog/composition/postgresqlResourcePackageCatalog.ts`, `modules/development-automation/composition.ts`,
+  `modules/collaboration/application/adapters/task-execution-adapter.ts`) and the tests bound to it. Dry run with `tablesOf` flipped
+  to epoch 2: 107 in 34 files (`/private/tmp/rfc395-flip/tsc-flip.log`). Shared `tsc`: 0. Frontend `tsc`: 13 (above).

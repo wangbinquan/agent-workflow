@@ -1,3 +1,9 @@
+## 2026-10-25 RFC-395 In Progress：II-b 第二波与修复轮完成，激活开工
+
+**第二波完成**（未提交）：N-b（分两次交付）、P、M-b、后续项与 X4 完成，三组静态功能审查共 3 个阻断、15 个主要问题，修复轮四个任务修完，新定原则「执行判断只读可执行行，展示与历史读取保留 history-only 与身份未知的行」（plan §6.13「第二波审查与修复轮」）。后端 typecheck 剩 30 条诊断，全部在激活接线范围内；前端 13 条归 Q-1。
+
+**激活开工**：顺序为 A-1（一个 registry、`tablesOf` 翻到 epoch 2、provider 绑定、测试库基线、roster 定稿）→ A-2+A-4（运行时接线、启动步骤、恢复与 CLI）∥ A-3（合同历史产物与构建）→ M-c ∥ Q-1 → Q-2 ∥ Q-3 → T18（plan §6.13「激活分解」）。A-1 进行中。各包留给 A、M-c、Q 与 T18 的事项已补入 `design/RFC-395-database-target-schema-rebuild/switch-window-handoff.md`。窗口期间工作树里的运行时不可用，全部换表代码在 T18 之前不提交。
+
 ## 2026-10-24 RFC-395 In Progress：II-b 跨域收口（O）已单独上库，休眠包并行修复中
 
 **O 已上库**：用户 2026-10-23 批准把 O 作为不激活的前置交付单独提交，见 `5ffdbace7`。39 处被重塑表的跨域访问已在现有表结构上收口，运行行为、API 与持久化字节不变。CI 收口两笔：`00e355174` 把守卫与账本改指新结构，`407a7a943` 删除 provider 分叉账本的过期条目。进度与例外说明见 [RFC plan §6.13](design/RFC-395-database-target-schema-rebuild/plan.md)。
