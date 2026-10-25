@@ -234,6 +234,8 @@
 | `workgroup_task_state` | task-execution / KEEP；8 | task-execution | 保留 | `workgroup_task_state`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。新增运行期配置 `runtime_config_json, config_revision`，承接 `tasks.workgroup_config_json` 中运行中可编辑的部分；`task_definitions` 只保存启动时不变的部分（mode、workgroup id / name、goal、leader）。 |
 | `workgroups` | task-execution / KEEP；21 | resource-catalog | 保留 | `workgroups`；定义与 roster 归 catalog；成员 ID、角色、顺序与合法可空条件保留，不与运行表混合。 |
 
+**2026-10-24 更正（`node_runs` 的去向）**：上表 `node_runs` 一行漏列了 `node_run_seq_allocations`。没有 seq 的旧运行行按 migration §4.3 回填序号时，转换器会把这些序号登记进 `node_run_seq_allocations`，使分配器高水位覆盖回填值。因此目标 roster 里这张表有两个来源：`node_run_seq_allocations` 与 `node_runs`。这处遗漏是本机只读采样试算在转换干跑时发现的（plan §6.13）。
+
 ## 3. 新增 / 重建目标集合
 
 以下是本 RFC 明确提出的新增实体，不另外计入源表覆盖率：
