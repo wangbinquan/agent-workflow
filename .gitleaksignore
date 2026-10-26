@@ -112,3 +112,10 @@ f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtu
 # 当前行已带 `gitleaks:allow`，此处只钉已推送的历史 commit。
 9a900aaa5709b147838f3ea64420050e28468895:packages/backend/tests/rfc370-development-invalid-body.test.ts:generic-api-key:179
 9a900aaa5709b147838f3ea64420050e28468895:packages/backend/tests/rfc370-digital-employee-invalid-body.test.ts:generic-api-key:192
+# RFC-395 II-b — the frozen epoch-1 provenance manifest maps every released migration
+# file name to its SHA-256. Names containing `auth` / `credentials` / `sentry` make the
+# rules read a content digest as a key; no credential is stored. JSON cannot carry an
+# inline allow, so exempt only these three fingerprints of the activation commit.
+045abf20ae1d36c71f9d0cc0eb138e5664b496ff:packages/backend/src/platform/persistence/migration/epoch1/provenance.json:sentry-access-token:25
+045abf20ae1d36c71f9d0cc0eb138e5664b496ff:packages/backend/src/platform/persistence/migration/epoch1/provenance.json:generic-api-key:133
+045abf20ae1d36c71f9d0cc0eb138e5664b496ff:packages/backend/src/platform/persistence/migration/epoch1/provenance.json:generic-api-key:231
